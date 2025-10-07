@@ -248,7 +248,7 @@ const DocuSignSignature = () => {
                 <li>All work will be performed according to Uptrade Media's standard terms of service</li>
               </ul>
               <p className="mt-4 font-medium">
-                Total Project Investment: <span className="text-[#4bbf39] text-lg">$17,000</span>
+                Total Project Investment: <span className="text-[#4bbf39] text-lg">$17,500</span>
                 <span className="text-green-600"> ($5,000 discount applied)</span>
               </p>
             </div>

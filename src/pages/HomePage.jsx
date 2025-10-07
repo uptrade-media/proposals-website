@@ -20,7 +20,7 @@ const HomePage = () => {
         <section className="text-center text-white px-4 max-w-4xl w-full">
           {/* Logo */}
           <img
-            src={WhiteLogoSvg}
+            src="/whitelogo.svg"
             alt="Uptrade Media"
             className="h-24 md:h-32 mx-auto mb-8 drop-shadow-lg"
           />
