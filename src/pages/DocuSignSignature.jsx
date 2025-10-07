@@ -32,6 +32,7 @@ const DocuSignSignature = () => {
         return `Please fill in the ${field.replace('signer', '').replace(/([A-Z])/g, ' $1').toLowerCase().trim()} field.`
       }
     }
+    // (Optional) simple email/phone checks here
     return null
   }
 
@@ -45,7 +46,6 @@ const DocuSignSignature = () => {
     setIsLoading(true)
 
     try {
-      // Call your backend to create an envelope + recipient view
       const res = await fetch('/.netlify/functions/create-embedded-signing', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -58,8 +58,22 @@ const DocuSignSignature = () => {
         }),
       })
 
-      const data = await res.json()
-      if (!res.ok || data.error) throw new Error(data.error || 'Failed to start DocuSign')
+      // NEW: robust parse
+      let data = {}
+      try {
+        data = await res.json()
+      } catch {
+        throw new Error(`Unexpected response (${res.status})`)
+      }
+
+      // NEW: better error bubble-up
+      if (!res.ok || data.error) {
+        console.error('DocuSign function error:', data)
+        throw new Error(data.error || `Failed to start DocuSign (${res.status})`)
+      }
+
+      // NEW: log the URL prefix to verify it's a Recipient View URL
+      console.log('Signing URL (prefix):', (data.signingUrl || '').slice(0, 120))
 
       setSigningUrl(data.signingUrl) // single-use embedded URL
       setShowSigner(true)
@@ -299,12 +313,21 @@ const DocuSignSignature = () => {
           <div className="bg-white w-full max-w-5xl rounded-xl overflow-hidden shadow-2xl">
             <div className="flex items-center justify-between p-3 border-b">
               <h3 className="font-semibold">Sign the Proposal</h3>
-              <button
-                onClick={() => setShowSigner(false)}
-                className="text-sm text-gray-500 hover:text-gray-800"
-              >
-                Close
-              </button>
+              <div className="flex gap-3">
+                {/* NEW: fallback for cookie-blocked iframes */}
+                <button
+                  onClick={() => window.open(signingUrl, '_blank', 'noopener')}
+                  className="text-sm text-[#4bbf39] hover:underline"
+                >
+                  Open in new tab
+                </button>
+                <button
+                  onClick={() => setShowSigner(false)}
+                  className="text-sm text-gray-500 hover:text-gray-800"
+                >
+                  Close
+                </button>
+              </div>
             </div>
             <iframe
               src={signingUrl}
@@ -312,6 +335,10 @@ const DocuSignSignature = () => {
               className="w-full h-[80vh]"
               allow="clipboard-read; clipboard-write; fullscreen"
             />
+            {/* Optional hint for blocked frames */}
+            <div className="p-2 text-center text-xs text-gray-500 border-t">
+              If the signing screen doesn’t load, click “Open in new tab.”
+            </div>
           </div>
         </div>
       )}
