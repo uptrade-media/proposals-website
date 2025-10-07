@@ -24,6 +24,7 @@ export async function handler(event) {
   if (event.httpMethod !== 'POST') return json(405, { error: 'Method not allowed' })
 
   try {
+    // --- parse body ---
     let payload = {}
     try { payload = JSON.parse(event.body || '{}') } catch { return json(400, { error: 'Invalid JSON body' }) }
 
@@ -34,6 +35,7 @@ export async function handler(event) {
     const signerCompany = (payload.signerCompany || '').trim()
     if (!signerName || !signerEmail) return json(400, { error: 'Missing required fields: signerName and signerEmail' })
 
+    // --- env ---
     const {
       DOCUSIGN_BASE_PATH,
       DOCUSIGN_OAUTH_BASE,
@@ -46,14 +48,26 @@ export async function handler(event) {
       APP_ORIGIN,
     } = process.env
 
-    if (!DOCUSIGN_BASE_PATH || !DOCUSIGN_OAUTH_BASE || !DOCUSIGN_INTEGRATION_KEY || !DOCUSIGN_IMPERSONATED_USER || !DOCUSIGN_PRIVATE_KEY) {
-      return json(500, { error: 'Missing DocuSign env vars. Check DOCUSIGN_* configuration.' })
-    }
-    if (!APP_ORIGIN) return json(500, { error: 'Missing APP_ORIGIN env var (e.g. https://your-site.com)' })
+    // allow inferring origin from request if APP_ORIGIN missing
+    const originFromReq =
+      event.headers.origin ||
+      (event.headers.referer ? new URL(event.headers.referer).origin : undefined) ||
+      (event.headers.host ? `https://${event.headers.host}` : undefined)
 
+    const ORIGIN = APP_ORIGIN || originFromReq
+
+    if (!DOCUSIGN_BASE_PATH || !DOCUSIGN_OAUTH_BASE || !DOCUSIGN_INTEGRATION_KEY || !DOCUSIGN_IMPERSONATED_USER || !DOCUSIGN_PRIVATE_KEY) {
+      return json(500, { error: 'Missing DocuSign env vars. Set DOCUSIGN_* in Netlify.' })
+    }
+    if (!ORIGIN) return json(500, { error: 'Missing APP_ORIGIN and could not infer request origin' })
+
+    console.log('DS base:', DOCUSIGN_BASE_PATH, 'oauth:', DOCUSIGN_OAUTH_BASE)
+    console.log('Using template?', !!DOCUSIGN_TEMPLATE_ID, 'APP_ORIGIN/ORIGIN:', ORIGIN)
+
+    // --- auth (JWT) ---
     const dsApiClient = new docusign.ApiClient()
     dsApiClient.setBasePath(DOCUSIGN_BASE_PATH)
-    dsApiClient.setOAuthBasePath(DOCUSIGN_OAUTH_BASE)
+    dsApiClient.setOAuthBasePath(DOCUSIGN_OAUTH_BASE) // host only, no https://
 
     const jwt = await dsApiClient.requestJWTUserToken(
       DOCUSIGN_INTEGRATION_KEY,
@@ -65,6 +79,7 @@ export async function handler(event) {
     const accessToken = jwt.body.access_token
     dsApiClient.addDefaultHeader('Authorization', `Bearer ${accessToken}`)
 
+    // --- account ---
     const userInfo = await dsApiClient.getUserInfo(accessToken)
     const account = userInfo.accounts.find(a => a.isDefault === true || a.isDefault === 'true') || userInfo.accounts[0]
     const accountId = account?.accountId
@@ -75,9 +90,9 @@ export async function handler(event) {
     let envelopeSummary
 
     if (DOCUSIGN_TEMPLATE_ID) {
-      // Template path
+      // --- Template mode ---
       const signerRole = docusign.TemplateRole.constructFromObject({
-        roleName: 'Signer',
+        roleName: 'Signer',              // MUST match your template role
         name: signerName,
         email: signerEmail,
         clientUserId: signerClientUserId,
@@ -89,13 +104,15 @@ export async function handler(event) {
           ]
         })
       })
+
       const envelopeDefinition = new docusign.EnvelopeDefinition()
       envelopeDefinition.templateId = DOCUSIGN_TEMPLATE_ID
       envelopeDefinition.templateRoles = [signerRole]
       envelopeDefinition.status = 'sent'
+
       envelopeSummary = await envelopesApi.createEnvelope(accountId, { envelopeDefinition })
     } else {
-      // Raw PDF path
+      // --- Raw PDF mode ---
       if (!PROPOSAL_PDF_PATH) return json(500, { error: 'Neither DOCUSIGN_TEMPLATE_ID nor PROPOSAL_PDF_PATH provided' })
       const docPdfBase64 = await readPdfBase64(PROPOSAL_PDF_PATH)
 
@@ -137,22 +154,31 @@ export async function handler(event) {
       envelopeDefinition.documents = [document]
       envelopeDefinition.recipients = docusign.Recipients.constructFromObject({ signers })
       envelopeDefinition.status = 'sent'
+
       envelopeSummary = await envelopesApi.createEnvelope(accountId, { envelopeDefinition })
     }
 
-    // Recipient View
+    console.log('Envelope created:', envelopeSummary.envelopeId)
+
+    // --- embedded recipient view ---
     const viewRequest = new docusign.RecipientViewRequest()
-    viewRequest.returnUrl = `${APP_ORIGIN}/docusign-return`
+    viewRequest.returnUrl = `${ORIGIN}/docusign-return`
     viewRequest.authenticationMethod = 'none'
     viewRequest.email = signerEmail
     viewRequest.userName = signerName
     viewRequest.clientUserId = signerClientUserId
-    // NEW: explicitly allow frames & message origins
-    viewRequest.frameAncestors = [APP_ORIGIN, 'https://apps-d.docusign.com', 'https://app.docusign.com']
-    viewRequest.messageOrigins = [APP_ORIGIN, 'https://apps-d.docusign.com', 'https://app.docusign.com']
 
-    const { url } = await envelopesApi.createRecipientView(accountId, envelopeSummary.envelopeId, { recipientViewRequest: viewRequest })
+    // Allow correct embed/frame origins (demo + prod + your site)
+    viewRequest.frameAncestors = [ORIGIN, 'https://apps-d.docusign.com', 'https://app.docusign.com']
+    viewRequest.messageOrigins = [ORIGIN, 'https://apps-d.docusign.com', 'https://app.docusign.com']
 
+    const { url } = await envelopesApi.createRecipientView(
+      accountId,
+      envelopeSummary.envelopeId,
+      { recipientViewRequest: viewRequest }
+    )
+
+    console.log('Recipient view URL (prefix):', (url || '').slice(0, 80))
     return json(200, { signingUrl: url, envelopeId: envelopeSummary.envelopeId })
   } catch (e) {
     const err = e?.response?.body || e?.response || e

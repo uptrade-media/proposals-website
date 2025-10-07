@@ -1,13 +1,57 @@
 <!doctype html>
 <html lang="en">
   <head>
-    <meta charset="UTF-8" />
+    <meta charset="utf-8" />
+
+    <!-- Icons in /public -->
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <link rel="icon" type="image/x-icon" href="/favicon.ico" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+    <link rel="manifest" href="/site.webmanifest" />
+
+    <!-- Viewport -->
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+
+    <!-- Basic SEO -->
     <title>Uptrade Media Proposals</title>
+    <meta
+      name="description"
+      content="Uptrade Media proposals — embedded DocuSign signing, marketing, media, and design."
+    />
+    <link rel="canonical" href="https://www.uptrademedia.com/" />
+
+    <!-- Social cards (Open Graph / Twitter) -->
+    <meta property="og:title" content="Uptrade Media Proposals" />
+    <meta
+      property="og:description"
+      content="Review and sign proposals securely with embedded DocuSign."
+    />
+    <meta property="og:url" content="https://www.uptrademedia.com/" />
+    <meta property="og:type" content="website" />
+    <meta property="og:image" content="/og-image.jpg" />
+    <meta property="og:image:alt" content="Uptrade Media" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="Uptrade Media Proposals" />
+    <meta
+      name="twitter:description"
+      content="Review and sign proposals securely with embedded DocuSign."
+    />
+    <meta name="twitter:image" content="/og-image.jpg" />
+
+    <!-- PWA / theming (optional but nice) -->
+    <meta name="theme-color" content="#4bbf39" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+
+    <!-- Performance: fonts (allowed by your CSP) -->
+    <link rel="preconnect" href="https://fonts.googleapis.com" crossorigin />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <!-- Load your font family if you use one -->
+    <!-- <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&display=swap" rel="stylesheet" /> -->
+
+    <!-- Do NOT put CSP here; you already set it in /_headers -->
   </head>
   <body>
+    <noscript>This site requires JavaScript to load the proposal and DocuSign.</noscript>
     <div id="root"></div>
     <script type="module" src="/src/main.jsx"></script>
   </body>
