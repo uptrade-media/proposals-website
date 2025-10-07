@@ -1,0 +1,27 @@
+# netlify.toml
+
+[build]
+  command = "vite build"
+  publish = "dist"
+  functions = "netlify/functions"
+
+# --- SPA routing: send all routes to index.html ---
+[[redirects]]
+  from = "/*"
+  to = "/index.html"
+  status = 200
+
+# --- Functions bundling (DocuSign, etc.) ---
+[functions]
+  node_bundler = "esbuild"
+  included_files = ["netlify/functions/assets/**"] # e.g., proposal PDFs if you use Raw PDF mode
+  # If a module should NOT be bundled, list it here:
+  # external_node_modules = []
+
+# --- Local dev convenience (optional) ---
+# Use `netlify dev` so functions run on :8888 and proxy to Vite automatically.
+[dev]
+  framework = "#custom"
+  command = "vite"
+  port = 5173
+  functionsPort = 8888
