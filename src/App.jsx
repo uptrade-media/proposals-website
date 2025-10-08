@@ -1,22 +1,32 @@
+// App.jsx
 import { BrowserRouter as Router, Routes, Route } from 'react-router-dom'
 import { HelmetProvider } from '@dr.pogodin/react-helmet'
 import HomePage from './pages/HomePage'
 import MBFMPage from './pages/MBFMPage'
+import MBFMLogin from './pages/MBFMLogin'
+import Protected from './components/Protected' // <-- add
 import './App.css'
 
-function App() {
+
+export default function App() {
   return (
     <HelmetProvider>
       <Router>
         <div className="min-h-screen bg-white">
           <Routes>
             <Route path="/" element={<HomePage />} />
-            <Route path="/mbfm" element={<MBFMPage />} />
+            <Route path="/mbfm/login" element={<MBFMLogin />} />
+            <Route
+              path="/mbfm"
+              element={
+                <Protected>
+                  <MBFMPage />
+                </Protected>
+              }
+            />
           </Routes>
         </div>
       </Router>
     </HelmetProvider>
   )
 }
-
-export default App

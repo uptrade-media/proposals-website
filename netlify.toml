@@ -5,6 +5,10 @@
   publish = "dist"
   functions = "netlify/functions"
 
+  [[edge_functions]]
+  path = "/mbfm/*"
+  function = "mbfm-auth"
+
 # --- SPA routing: send all routes to index.html ---
 [[redirects]]
   from = "/*"
@@ -21,7 +25,8 @@
 # --- Local dev convenience (optional) ---
 # Use `netlify dev` so functions run on :8888 and proxy to Vite automatically.
 [dev]
-  framework = "#custom"
-  command = "vite"
-  port = 5173
-  functionsPort = 8888
+  framework   = "#custom"
+  command     = "vite"      # what starts your app locally
+  targetPort  = 5173        # the port your app listens on (Vite)
+  port        = 8888        # Netlify's proxy port (you open this in the browser)
+  functionsPort = 9999      # Functions local port (default)
