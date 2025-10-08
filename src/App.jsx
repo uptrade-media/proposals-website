@@ -1,7 +1,6 @@
 // App.jsx
 import { BrowserRouter as Router, Routes, Route } from 'react-router-dom'
 import { HelmetProvider } from '@dr.pogodin/react-helmet'
-import HomePage from './pages/HomePage'
 import MBFMPage from './pages/MBFMPage'
 import MBFMLogin from './pages/MBFMLogin'
 import Protected from './components/Protected' // <-- add
@@ -14,8 +13,8 @@ export default function App() {
       <Router>
         <div className="min-h-screen bg-white">
           <Routes>
-            <Route path="/" element={<HomePage />} />
-            <Route path="/mbfm/login" element={<MBFMLogin />} />
+            <Route path="/" element={<MBFMLogin />} />
+            <Route path="/mbfm/login/" element={<MBFMLogin />} />
             <Route
               path="/mbfm"
               element={
