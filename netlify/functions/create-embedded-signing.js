@@ -1,7 +1,10 @@
 // /netlify/functions/create-embedded-signing.js
 import docusign from 'docusign-esign'
+import crypto from 'node:crypto'
 import fs from 'node:fs/promises'
 import path from 'node:path'
+
+/* ---------------- Utilities ---------------- */
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -10,7 +13,11 @@ const corsHeaders = {
 }
 
 function json(statusCode, body) {
-  return { statusCode, headers: { 'Content-Type': 'application/json', ...corsHeaders }, body: JSON.stringify(body) }
+  return {
+    statusCode,
+    headers: { 'Content-Type': 'application/json', ...corsHeaders },
+    body: JSON.stringify(body),
+  }
 }
 
 async function readPdfBase64(p) {
@@ -19,6 +26,102 @@ async function readPdfBase64(p) {
   return buf.toString('base64')
 }
 
+/** Load the DocuSign private key from env (supports base64 or \n-escaped PEM) */
+function loadDocusignPrivateKey() {
+  let pem = ''
+  if (process.env.DOCUSIGN_PRIVATE_KEY_B64) {
+    pem = Buffer.from(process.env.DOCUSIGN_PRIVATE_KEY_B64, 'base64').toString('utf8')
+  } else if (process.env.DOCUSIGN_PRIVATE_KEY) {
+    // If stored with literal \n sequences in env, convert to real newlines
+    pem = process.env.DOCUSIGN_PRIVATE_KEY.replace(/\\n/g, '\n')
+  }
+
+  if (!pem || !pem.includes('BEGIN') || !pem.includes('PRIVATE KEY')) {
+    throw new Error('DocuSign private key is missing or not in PEM format')
+  }
+
+  // Validate it’s an asymmetric private key (throws if invalid)
+  crypto.createPrivateKey({ key: pem })
+  return pem
+}
+
+/** Resolve OAuth and REST endpoints based on env */
+function resolveDocusignHosts() {
+  const ENV = (process.env.DOCUSIGN_ENV || '').toLowerCase()
+  const explicitOAuth = (process.env.DOCUSIGN_OAUTH_BASE || '').replace(/^https?:\/\//, '')
+  const explicitBasePath = process.env.DOCUSIGN_BASE_PATH // optional (often not needed)
+
+  // Prefer explicit host if given; otherwise use ENV
+  const oAuthBasePath =
+    explicitOAuth || (ENV === 'prod' ? 'account.docusign.com' : 'account-d.docusign.com')
+
+  // Base path will be determined from userInfo.accounts[i].baseUri after auth
+  return { oAuthBasePath, explicitBasePath }
+}
+
+/** Create an authenticated ApiClient via JWT and return { apiClient, accessToken, accountId } */
+async function getAuthenticatedClient() {
+  const {
+    DOCUSIGN_INTEGRATION_KEY,
+    DOCUSIGN_IMPERSONATED_USER,
+  } = process.env
+
+  if (!DOCUSIGN_INTEGRATION_KEY || !DOCUSIGN_IMPERSONATED_USER) {
+    throw new Error('Missing DOCUSIGN_INTEGRATION_KEY or DOCUSIGN_IMPERSONATED_USER')
+  }
+
+  const privateKey = loadDocusignPrivateKey()
+  const { oAuthBasePath } = resolveDocusignHosts()
+
+  const apiClient = new docusign.ApiClient()
+  apiClient.setOAuthBasePath(oAuthBasePath) // host only, no scheme
+
+  // Request JWT user token (1 hour)
+  const jwt = await apiClient.requestJWTUserToken(
+    DOCUSIGN_INTEGRATION_KEY,
+    DOCUSIGN_IMPERSONATED_USER,
+    ['signature', 'impersonation'],
+    privateKey,
+    3600
+  )
+  const accessToken = jwt.body.access_token
+  apiClient.addDefaultHeader('Authorization', `Bearer ${accessToken}`)
+
+  // Get account info; pick default account
+  const userInfo = await apiClient.getUserInfo(accessToken)
+  const account =
+    userInfo.accounts.find(a => a.isDefault === true || a.isDefault === 'true') ||
+    userInfo.accounts[0]
+
+  if (!account?.accountId) throw new Error('Unable to resolve DocuSign accountId')
+
+  // IMPORTANT: set REST base path to the account’s baseUri + /restapi
+  // e.g., https://na2.docusign.net/restapi
+  if (account.baseUri) {
+    apiClient.setBasePath(`${account.baseUri}/restapi`)
+  }
+
+  return { apiClient, accessToken, accountId: account.accountId }
+}
+
+/** Best-effort origin detection; returns normalized origin without trailing slash */
+function resolveOrigin(event) {
+  const {
+    APP_ORIGIN,
+  } = process.env
+
+  const raw =
+    APP_ORIGIN ||
+    event.headers?.origin ||
+    (event.headers?.referer ? new URL(event.headers.referer).origin : undefined) ||
+    (event.headers?.host ? `https://${event.headers.host}` : undefined)
+
+  if (!raw) throw new Error('Missing APP_ORIGIN and could not infer request origin')
+  return raw.replace(/\/+$/, '')
+}
+
+/* ---------------- Lambda Handler ---------------- */
+
 export async function handler(event) {
   if (event.httpMethod === 'OPTIONS') return { statusCode: 200, headers: corsHeaders, body: '' }
   if (event.httpMethod !== 'POST') return json(405, { error: 'Method not allowed' })
@@ -26,7 +129,11 @@ export async function handler(event) {
   try {
     // ---------- Parse body ----------
     let payload = {}
-    try { payload = JSON.parse(event.body || '{}') } catch { return json(400, { error: 'Invalid JSON body' }) }
+    try {
+      payload = JSON.parse(event.body || '{}')
+    } catch {
+      return json(400, { error: 'Invalid JSON body' })
+    }
 
     const signerName = (payload.signerName || '').trim()
     const signerEmail = (payload.signerEmail || '').trim()
@@ -34,59 +141,21 @@ export async function handler(event) {
     const signerPhone = (payload.signerPhone || '').trim()
     const signerCompany = (payload.signerCompany || '').trim()
 
-    if (!signerName || !signerEmail) return json(400, { error: 'Missing required fields: signerName and signerEmail' })
+    if (!signerName || !signerEmail) {
+      return json(400, { error: 'Missing required fields: signerName and signerEmail' })
+    }
 
-    // ---------- Env ----------
     const {
-      DOCUSIGN_BASE_PATH,
-      DOCUSIGN_OAUTH_BASE,
-      DOCUSIGN_INTEGRATION_KEY,
-      DOCUSIGN_IMPERSONATED_USER,
-      DOCUSIGN_PRIVATE_KEY,
       DOCUSIGN_TEMPLATE_ID,
       PROPOSAL_PDF_PATH,
       COUNTERSIGN_EMAIL,
-      APP_ORIGIN,
     } = process.env
 
-    // Infer origin if not set, and STRIP any trailing slash
-    const rawOrigin =
-      APP_ORIGIN ||
-      event.headers.origin ||
-      (event.headers.referer ? new URL(event.headers.referer).origin : undefined) ||
-      (event.headers.host ? `https://${event.headers.host}` : undefined)
+    const ORIGIN = resolveOrigin(event)
 
-    const ORIGIN = (rawOrigin || '').replace(/\/+$/, '')
-    if (!DOCUSIGN_BASE_PATH || !DOCUSIGN_OAUTH_BASE || !DOCUSIGN_INTEGRATION_KEY || !DOCUSIGN_IMPERSONATED_USER || !DOCUSIGN_PRIVATE_KEY) {
-      return json(500, { error: 'Missing DocuSign env vars. Set DOCUSIGN_* in Netlify.' })
-    }
-    if (!ORIGIN) return json(500, { error: 'Missing APP_ORIGIN and could not infer request origin' })
-
-    console.log('DS base:', DOCUSIGN_BASE_PATH, 'oauth:', DOCUSIGN_OAUTH_BASE)
-    console.log('Using template?', !!DOCUSIGN_TEMPLATE_ID, 'APP_ORIGIN/ORIGIN:', ORIGIN)
-
-    // ---------- Auth (JWT) ----------
-    const dsApiClient = new docusign.ApiClient()
-    dsApiClient.setBasePath(DOCUSIGN_BASE_PATH)
-    dsApiClient.setOAuthBasePath(DOCUSIGN_OAUTH_BASE) // host only, no https://
-
-    const jwt = await dsApiClient.requestJWTUserToken(
-      DOCUSIGN_INTEGRATION_KEY,
-      DOCUSIGN_IMPERSONATED_USER,
-      ['signature', 'impersonation'],
-      Buffer.from(DOCUSIGN_PRIVATE_KEY, 'base64'),
-      3600
-    )
-    const accessToken = jwt.body.access_token
-    dsApiClient.addDefaultHeader('Authorization', `Bearer ${accessToken}`)
-
-    // ---------- Account ----------
-    const userInfo = await dsApiClient.getUserInfo(accessToken)
-    const account = userInfo.accounts.find(a => a.isDefault === true || a.isDefault === 'true') || userInfo.accounts[0]
-    const accountId = account?.accountId
-    if (!accountId) return json(500, { error: 'Unable to resolve DocuSign accountId' })
-
-    const envelopesApi = new docusign.EnvelopesApi(dsApiClient)
+    // ---------- Auth ----------
+    const { apiClient, accountId } = await getAuthenticatedClient()
+    const envelopesApi = new docusign.EnvelopesApi(apiClient)
     const signerClientUserId = 'CLIENT_EMBED'
     let envelopeSummary
 
@@ -98,19 +167,7 @@ export async function handler(event) {
         name: signerName,
         email: signerEmail,
         clientUserId: signerClientUserId, // enables embedded signing
-        tabs: docusign.Tabs.constructFromObject({
-          textTabs: [
-            { tabLabel: 'FullName', value: signerName,  locked: true },
-            { tabLabel: 'Title',    value: signerTitle, locked: true },
-            { tabLabel: 'Phone',    value: signerPhone, locked: true },
-            { tabLabel: 'Company',  value: signerCompany, locked: true },
-            { tabLabel: 'Email',    value: signerEmail,  locked: true },
-          ],
-          // Optional: only if you placed a Date Signed field with this exact label in the template
-          dateSignedTabs: [
-            { tabLabel: 'DateSigned', locked: true }
-          ]
-        })
+        // Optional: pass vars into template with tabs if needed via tabs/textTabs here
       })
 
       const envelopeDefinition = new docusign.EnvelopeDefinition()
@@ -121,7 +178,9 @@ export async function handler(event) {
       envelopeSummary = await envelopesApi.createEnvelope(accountId, { envelopeDefinition })
     } else {
       // Raw PDF mode
-      if (!PROPOSAL_PDF_PATH) return json(500, { error: 'Neither DOCUSIGN_TEMPLATE_ID nor PROPOSAL_PDF_PATH provided' })
+      if (!PROPOSAL_PDF_PATH) {
+        return json(500, { error: 'Neither DOCUSIGN_TEMPLATE_ID nor PROPOSAL_PDF_PATH provided' })
+      }
 
       const docPdfBase64 = await readPdfBase64(PROPOSAL_PDF_PATH)
 
@@ -131,32 +190,36 @@ export async function handler(event) {
       document.fileExtension = 'pdf'
       document.documentId = '1'
 
-      // \s1 anchor must exist in your PDF; otherwise switch to absolute coords
+      // Anchor-based signature tab (example)
       const signHere = docusign.SignHere.constructFromObject({
         anchorString: '\\s1',
         anchorUnits: 'pixels',
         anchorYOffset: '0',
         anchorXOffset: '0',
       })
-      const signerTabs = docusign.Tabs.constructFromObject({ signHereTabs: [signHere] })
+      const tabs = docusign.Tabs.constructFromObject({ signHereTabs: [signHere] })
 
       const signer = docusign.Signer.constructFromObject({
         email: signerEmail,
         name: signerName,
         recipientId: '1',
-        clientUserId: signerClientUserId,
+        clientUserId: signerClientUserId, // embedded signing key
         routingOrder: '1',
-        tabs: signerTabs,
+        tabs,
+        // Optional: add custom fields from payload (title/phone/company) into textTabs
       })
 
       const signers = [signer]
+
       if (COUNTERSIGN_EMAIL) {
-        signers.push(docusign.Signer.constructFromObject({
-          email: COUNTERSIGN_EMAIL,
-          name: 'Uptrade Media',
-          recipientId: '2',
-          routingOrder: '2',
-        }))
+        signers.push(
+          docusign.Signer.constructFromObject({
+            email: COUNTERSIGN_EMAIL,
+            name: 'Uptrade Media',
+            recipientId: '2',
+            routingOrder: '2',
+          })
+        )
       }
 
       const envelopeDefinition = new docusign.EnvelopeDefinition()
@@ -168,15 +231,13 @@ export async function handler(event) {
       envelopeSummary = await envelopesApi.createEnvelope(accountId, { envelopeDefinition })
     }
 
-    console.log('Envelope created:', envelopeSummary.envelopeId)
-
     // ---------- Embedded recipient view ----------
     const viewRequest = new docusign.RecipientViewRequest()
-    viewRequest.returnUrl = `${ORIGIN}/docusign-return` // no double slash
+    viewRequest.returnUrl = `${ORIGIN}/docusign-return`
     viewRequest.authenticationMethod = 'none'
-    viewRequest.email = signerEmail          // MUST match the signer above
-    viewRequest.userName = signerName        // MUST match the signer above
-    viewRequest.clientUserId = signerClientUserId // MUST match exactly
+    viewRequest.email = signerEmail
+    viewRequest.userName = signerName
+    viewRequest.clientUserId = signerClientUserId
 
     const { url } = await envelopesApi.createRecipientView(
       accountId,
@@ -186,11 +247,35 @@ export async function handler(event) {
 
     return json(200, { signingUrl: url, envelopeId: envelopeSummary.envelopeId })
   } catch (e) {
-    // SAFE error surface (no circular JSON)
-    const body = e?.response?.body
-    const code = body?.errorCode
-    const msg  = body?.message || e.message || 'DocuSign error'
-    console.error('DocuSign createRecipientView error:', code, msg)
-    return json(500, { error: msg, code })
+    // ---------- Enhanced error logging ----------
+    console.error('=== FULL ERROR DETAILS ===')
+    console.error('Error message:', e.message)
+    console.error('Error name:', e.name)
+    console.error('Status code:', e.response?.statusCode || e.response?.status || e.statusCode)
+    console.error('Response status:', e.response?.status)
+    console.error('Response statusText:', e.response?.statusText)
+
+    let errorBody = null
+    if (e.response) {
+      if (e.response.body) {
+        try {
+          errorBody = typeof e.response.body === 'string'
+            ? JSON.parse(e.response.body)
+            : e.response.body
+        } catch { /* noop */ }
+      } else if (e.response.data) {
+        errorBody = e.response.data
+      }
+    } else {
+      console.error('No response object in error')
+    }
+
+    console.error('Stack:', e.stack)
+    console.error('=========================')
+
+    const code = errorBody?.errorCode || errorBody?.error
+    const msg = errorBody?.message || e.message || 'DocuSign error'
+
+    return json(500, { error: msg, code, details: errorBody })
   }
 }

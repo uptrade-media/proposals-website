@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react'
 import { Button } from '@/components/ui/button'
-import { AlertTriangle, CheckCircle, Loader2, FileText, Shield, Clock, User, Mail, Phone, Building } from 'lucide-react'
+import { AlertTriangle, CheckCircle, Loader2, FileText, Shield, Clock, User, Mail } from 'lucide-react'
 
 const DocuSignSignature = () => {
   const [isLoading, setIsLoading] = useState(false)
@@ -11,13 +11,10 @@ const DocuSignSignature = () => {
   const [signingUrl, setSigningUrl] = useState(null)
   const [showSigner, setShowSigner] = useState(false)
 
-  // Form data state
+  // Simplified form - only what's needed to start signing
   const [formData, setFormData] = useState({
     signerName: '',
-    signerTitle: '',
     signerEmail: '',
-    signerPhone: '',
-    signerCompany: 'Mercedes-Benz of Fort Mitchell Sprinter',
   })
 
   const handleInputChange = (e) => {
@@ -26,13 +23,16 @@ const DocuSignSignature = () => {
   }
 
   const validateForm = () => {
-    const required = ['signerName', 'signerTitle', 'signerEmail', 'signerPhone']
-    for (let field of required) {
-      if (!formData[field].trim()) {
-        return `Please fill in the ${field.replace('signer', '').replace(/([A-Z])/g, ' $1').toLowerCase().trim()} field.`
-      }
+    if (!formData.signerName.trim()) {
+      return 'Please enter your full name.'
     }
-    // (Optional) simple email/phone checks here
+    if (!formData.signerEmail.trim()) {
+      return 'Please enter your email address.'
+    }
+    // Simple email validation
+    if (!/\S+@\S+\.\S+/.test(formData.signerEmail)) {
+      return 'Please enter a valid email address.'
+    }
     return null
   }
 
@@ -52,13 +52,9 @@ const DocuSignSignature = () => {
         body: JSON.stringify({
           signerName: formData.signerName,
           signerEmail: formData.signerEmail,
-          signerTitle: formData.signerTitle,
-          signerPhone: formData.signerPhone,
-          signerCompany: formData.signerCompany,
         }),
       })
 
-      // NEW: robust parse
       let data = {}
       try {
         data = await res.json()
@@ -66,16 +62,14 @@ const DocuSignSignature = () => {
         throw new Error(`Unexpected response (${res.status})`)
       }
 
-      // NEW: better error bubble-up
       if (!res.ok || data.error) {
         console.error('DocuSign function error:', data)
         throw new Error(data.error || `Failed to start DocuSign (${res.status})`)
       }
 
-      // NEW: log the URL prefix to verify it's a Recipient View URL
       console.log('Signing URL (prefix):', (data.signingUrl || '').slice(0, 120))
 
-      setSigningUrl(data.signingUrl) // single-use embedded URL
+      setSigningUrl(data.signingUrl)
       setShowSigner(true)
     } catch (err) {
       setError(err.message || 'Failed to start DocuSign')
@@ -168,9 +162,9 @@ const DocuSignSignature = () => {
             </div>
           )}
 
-          {/* Signatory Information */}
+          {/* Simplified Signatory Information */}
           <div className="mb-8">
-            <h3 className="text-xl font-semibold text-gray-900 mb-6">Signatory Information</h3>
+            <h3 className="text-xl font-semibold text-gray-900 mb-6">Your Information</h3>
             <div className="grid md:grid-cols-2 gap-6">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">
@@ -189,21 +183,6 @@ const DocuSignSignature = () => {
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">
-                  <Building className="h-4 w-4 inline mr-1" />
-                  Title/Position *
-                </label>
-                <input
-                  type="text"
-                  name="signerTitle"
-                  value={formData.signerTitle}
-                  onChange={handleInputChange}
-                  required
-                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#4bbf39] focus:border-transparent"
-                  placeholder="e.g., General Manager"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
                   <Mail className="h-4 w-4 inline mr-1" />
                   Email Address *
                 </label>
@@ -217,36 +196,10 @@ const DocuSignSignature = () => {
                   placeholder="Enter your email"
                 />
               </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  <Phone className="h-4 w-4 inline mr-1" />
-                  Phone Number *
-                </label>
-                <input
-                  type="tel"
-                  name="signerPhone"
-                  value={formData.signerPhone}
-                  onChange={handleInputChange}
-                  required
-                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#4bbf39] focus:border-transparent"
-                  placeholder="Enter your phone number"
-                />
-              </div>
-              <div className="md:col-span-2">
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  <Building className="h-4 w-4 inline mr-1" />
-                  Company
-                </label>
-                <input
-                  type="text"
-                  name="signerCompany"
-                  value={formData.signerCompany}
-                  onChange={handleInputChange}
-                  readOnly
-                  className="w-full px-4 py-3 border border-gray-300 rounded-lg bg-gray-50"
-                />
-              </div>
             </div>
+            <p className="text-sm text-gray-500 mt-3">
+              You'll fill out additional details (title, phone, company) within the DocuSign form.
+            </p>
           </div>
 
           {/* Agreement Terms */}
@@ -286,7 +239,7 @@ const DocuSignSignature = () => {
               {isLoading ? (
                 <>
                   <Loader2 className="h-6 w-6 mr-3 animate-spin" />
-                  Starting DocuSign…
+                  Starting DocuSign...
                 </>
               ) : (
                 <>
@@ -314,7 +267,6 @@ const DocuSignSignature = () => {
             <div className="flex items-center justify-between p-3 border-b">
               <h3 className="font-semibold">Sign the Proposal</h3>
               <div className="flex gap-3">
-                {/* NEW: fallback for cookie-blocked iframes */}
                 <button
                   onClick={() => window.open(signingUrl, '_blank', 'noopener')}
                   className="text-sm text-[#4bbf39] hover:underline"
@@ -335,9 +287,8 @@ const DocuSignSignature = () => {
               className="w-full h-[80vh]"
               allow="clipboard-read; clipboard-write; fullscreen"
             />
-            {/* Optional hint for blocked frames */}
             <div className="p-2 text-center text-xs text-gray-500 border-t">
-              If the signing screen doesn’t load, click “Open in new tab.”
+              If the signing screen doesn't load, click "Open in new tab."
             </div>
           </div>
         </div>

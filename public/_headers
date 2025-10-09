@@ -1,9 +1,0 @@
-/*
-  Content-Security-Policy: default-src 'self'; base-uri 'self'; object-src 'none'; frame-ancestors 'self'; upgrade-insecure-requests; form-action 'self' https://app.docusign.com https://*.docusign.net; img-src 'self' https: data: blob:; media-src 'self' https: data:; font-src 'self' https://fonts.gstatic.com data:; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://assets.calendly.com; script-src 'self' 'unsafe-inline' 'unsafe-eval' blob: https://assets.calendly.com https://*.wistia.com https://*.wistia.net https://app.docusign.com https://*.docusign.net; connect-src 'self' ws: wss: https://api.calendly.com https://*.wistia.com https://*.wistia.net https://app.docusign.com https://*.docusign.net https://api.openai.com; frame-src 'self' https://calendly.com https://assets.calendly.com https://*.wistia.com https://*.wistia.net https://app.docusign.com https://*.docusign.net
-  Strict-Transport-Security: max-age=63072000; includeSubDomains
-  X-Content-Type-Options: nosniff
-  Referrer-Policy: strict-origin-when-cross-origin
-  Permissions-Policy: camera=(), microphone=(), geolocation=(), fullscreen=(), payment=(), usb=(), magnetometer=(), gyroscope=(), accelerometer=()
-
-/mbfm
-  Basic-Auth: mbfm:Revenue2025

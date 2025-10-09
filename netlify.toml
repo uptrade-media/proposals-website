@@ -1,32 +1,41 @@
 # netlify.toml
 
 [build]
-  command = "vite build"
-  publish = "dist"
+  command   = "vite build"
+  publish   = "dist"
   functions = "netlify/functions"
 
-  [[edge_functions]]
-  path = "/mbfm/*"
-  function = "mbfm-auth"
+# ── Production-only security headers (no CSP in dev) ───────────────────────────
+[context.production]
 
-# --- SPA routing: send all routes to index.html ---
+  [[context.production.headers]]
+    for = "/*"
+    [context.production.headers.values]
+      X-Frame-Options = "SAMEORIGIN"
+      Content-Security-Policy = "default-src 'self'; base-uri 'self'; img-src 'self' https: data:; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com data:; script-src 'self' 'unsafe-inline' 'unsafe-eval' blob:; connect-src 'self' https://*.docusign.net https://*.docusign.com https://app.docusign.com; frame-src 'self' https://*.docusign.com https://*.docusign.net https://app.docusign.com; child-src https://*.docusign.com https://*.docusign.net; frame-ancestors 'self'; media-src 'self' https: data:; worker-src 'self' blob:; upgrade-insecure-requests"
+      Strict-Transport-Security = "max-age=63072000; includeSubDomains; preload"
+      X-Content-Type-Options = "nosniff"
+      Referrer-Policy = "strict-origin-when-cross-origin"
+      Permissions-Policy = "camera=(), microphone=(), geolocation=(), payment=(), usb=(), magnetometer=(), gyroscope=(), accelerometer=()"
+
+  [[context.production.headers]]
+    for = "/mbfm"
+    [context.production.headers.values]
+      Basic-Auth = "mbfm:Revenue2025"
+
+# SPA fallback
 [[redirects]]
   from = "/*"
-  to = "/index.html"
+  to   = "/index.html"
   status = 200
 
-# --- Functions bundling (DocuSign, etc.) ---
 [functions]
   node_bundler = "esbuild"
-  included_files = ["netlify/functions/assets/**"] # e.g., proposal PDFs if you use Raw PDF mode
-  # If a module should NOT be bundled, list it here:
-  # external_node_modules = []
+  included_files = ["netlify/functions/assets/**"]
 
-# --- Local dev convenience (optional) ---
-# Use `netlify dev` so functions run on :8888 and proxy to Vite automatically.
 [dev]
-  framework   = "#custom"
-  command     = "vite"      # what starts your app locally
-  targetPort  = 5173        # the port your app listens on (Vite)
-  port        = 8888        # Netlify's proxy port (you open this in the browser)
-  functionsPort = 9999      # Functions local port (default)
+  framework     = "#custom"
+  command       = "vite"
+  targetPort    = 5173
+  port          = 8888
+  functionsPort = 9999

@@ -132,18 +132,14 @@ const MBFMLogin = () => {
     <div className="relative min-h-screen flex items-center justify-center overflow-hidden bg-black">
       {/* Background */}
       <div className="pointer-events-none absolute inset-0">
-        <div className="absolute -top-40 -right-32 h-96 w-96 bg-gradient-to-br from-[#4bbf39]/20 to-[#39bfb0]/10 blur-3xl rounded-full animate-pulse" />
-        <div className="absolute -bottom-48 -left-20 h-[28rem] w-[28rem] bg-gradient-to-tl from-[#39bfb0]/25 to-[#4bbf39]/10 blur-3xl rounded-full animate-pulse [animation-delay:400ms]" />
-        <div
-          className="absolute inset-0 opacity-[0.08] mix-blend-screen"
-          style={{
-            backgroundImage:
-              'linear-gradient(rgba(255,255,255,.15) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,.15) 1px, transparent 1px)',
-            backgroundSize: '28px 28px',
-          }}
-        />
+        {/* Animated gradient orbs */}
+        <div className="absolute -top-40 -right-32 h-96 w-96 bg-gradient-to-br from-[#4bbf39]/20 to-[#39bfb0]/10 blur-3xl rounded-full animate-[pulse_4s_ease-in-out_infinite]" />
+        <div className="absolute -bottom-48 -left-20 h-[28rem] w-[28rem] bg-gradient-to-tl from-[#39bfb0]/25 to-[#4bbf39]/10 blur-3xl rounded-full animate-[pulse_5s_ease-in-out_infinite] [animation-delay:1s]" />
+        
+        {/* Additional floating orbs */}
+        <div className="absolute top-1/3 left-1/4 h-64 w-64 bg-gradient-to-br from-[#4bbf39]/15 to-transparent blur-3xl rounded-full animate-[float_8s_ease-in-out_infinite]" />
+        <div className="absolute bottom-1/4 right-1/4 h-80 w-80 bg-gradient-to-tl from-[#39bfb0]/15 to-transparent blur-3xl rounded-full animate-[float_10s_ease-in-out_infinite] [animation-delay:2s]" />
       </div>
-
       <Card className="relative z-10 w-full max-w-md overflow-hidden border border-white/10 bg-neutral-900/70 backdrop-blur-xl shadow-[0_0_0_1px_rgba(255,255,255,0.06)]">
         {/* Ring overlay: visible but non-interactive, sits below content */}
         <div
@@ -183,7 +179,7 @@ const MBFMLogin = () => {
                   type="email"
                   inputMode="email"
                   autoComplete="username"
-                  placeholder={`you@${ALLOWED_DOMAIN}`}
+                  placeholder={`you@email.com`}
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   required
