@@ -99,8 +99,11 @@ function corsHeaders(event) {
   const isLocal =
     process.env.NETLIFY_LOCAL === 'true' ||
     /^https?:\/\/localhost(:\d+)?$/i.test(reqOrigin)
+  
+  // Allow Netlify preview deployments
+  const isNetlifyPreview = /^https:\/\/[a-z0-9-]+--uptradeproposals\.netlify\.app$/i.test(reqOrigin)
 
-  const origin = isLocal ? (reqOrigin || 'http://localhost:8888') : PROD_ORIGIN
+  const origin = (isLocal || isNetlifyPreview) ? (reqOrigin || 'http://localhost:8888') : PROD_ORIGIN
   return {
     'Cache-Control': 'no-store',
     'Vary': 'Origin',

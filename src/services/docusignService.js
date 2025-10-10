@@ -2,11 +2,11 @@
 // Thin client that ONLY talks to your Netlify Function.
 // No DocuSign secrets/tokens live in the browser.
 
-export async function createEmbeddedSigning(recipient) {
+export async function createEmbeddedSigning(recipient, slug) {
   const res = await fetch('/.netlify/functions/create-embedded-signing', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(recipient),
+    body: JSON.stringify({ ...recipient, slug }),
   });
 
   let data = {};
