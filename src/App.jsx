@@ -1,11 +1,11 @@
-// App.jsx
+// src/App.jsx
 import { BrowserRouter as Router, Routes, Route } from 'react-router-dom'
 import { HelmetProvider } from '@dr.pogodin/react-helmet'
-import MBFMPage from './pages/MBFMPage'
-import MBFMLogin from './pages/MBFMLogin'
-import Protected from './components/Protected' // <-- add
+import LoginPage from './pages/LoginPage'
+import ProposalGate from './pages/ProposalGate'
+import Dashboard from './pages/Dashboard'
+import Protected from './components/Protected'
 import './App.css'
-
 
 export default function App() {
   return (
@@ -13,13 +13,21 @@ export default function App() {
       <Router>
         <div className="min-h-screen bg-white">
           <Routes>
-            <Route path="/" element={<MBFMLogin />} />
-            <Route path="/mbfm/login/" element={<MBFMLogin />} />
+            <Route path="/" element={<LoginPage />} />
+            <Route path="/login" element={<LoginPage />} />
             <Route
-              path="/mbfm"
+              path="/dashboard"
               element={
                 <Protected>
-                  <MBFMPage />
+                  <Dashboard />
+                </Protected>
+              }
+            />
+            <Route
+              path="/p/:slug"
+              element={
+                <Protected>
+                  <ProposalGate />
                 </Protected>
               }
             />

@@ -1,5 +1,6 @@
-import React, { useEffect, useState } from 'react'
-import { useNavigate, useLocation } from 'react-router-dom'
+// src/pages/LoginPage.jsx
+import React, { useEffect, useState, useMemo } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import { Button } from '../components/ui/button'
 import { Input } from '../components/ui/input'
 import { Label } from '../components/ui/label'
@@ -8,13 +9,41 @@ import { Lock, Mail, Eye, EyeOff, ShieldCheck, Loader2, HelpCircle } from 'lucid
 import whitelogo from '../assets/whitelogo.svg'
 
 const BRAND_GRAD = 'from-[#4bbf39] to-[#39bfb0]'
-const ALLOWED_DOMAIN = (import.meta.env.VITE_MBFM_DOMAIN || 'mbfm.com').toLowerCase()
 
-const MBFMLogin = () => {
-  const navigate = useNavigate()
-  const location = useLocation()
-  const params = new URLSearchParams(location.search)
-  const nextPath = params.get('next') || '/mbfm'
+// purely visual; server enforces access
+const BRAND_UI = {
+  default: {
+    title: 'Uptrade Proposals Portal',
+    logo: whitelogo,
+    tagline: 'Secure access for Uptrade Media proposals and approvals',
+  },
+  row94: {
+    title: 'Row 94 — Proposals Portal',
+    logo: whitelogo,
+    tagline: 'Secure access to Row 94 Whiskey proposal',
+  },
+  mbfm: {
+    title: 'MBFM — Proposals Portal',
+    logo: whitelogo,
+    tagline: 'Secure access to MBFM proposal',
+  },
+}
+
+function normalizeErr(e) {
+  const msg = String(e || '').toUpperCase()
+  if (msg.includes('DOMAIN_NOT_ASSIGNED')) return 'This email domain is not allowed.'
+  if (msg.includes('INVALID_PASSWORD'))    return 'Invalid email or password.'
+  if (msg.includes('MISSING_CREDENTIALS')) return 'Enter email and password.'
+  if (msg.includes('AUTH_NOT_CONFIGURED') || msg.includes('SERVER_NOT_CONFIGURED'))
+    return 'Sign-in temporarily unavailable.'
+  return 'Login failed'
+}
+
+export default function LoginPage() {
+  const [params] = useSearchParams()
+  const nextPath = params.get('next') || '/'
+  const brandKey = (params.get('brand') || 'default').toLowerCase()
+  const brand = useMemo(() => BRAND_UI[brandKey] || BRAND_UI.default, [brandKey])
 
   const [showPassword, setShowPassword] = useState(false)
   const [email, setEmail] = useState('')
@@ -37,49 +66,41 @@ const MBFMLogin = () => {
   const [supportMsg, setSupportMsg] = useState('')
 
   useEffect(() => {
-    const saved = localStorage.getItem('mbfm_email')
+    const saved = localStorage.getItem('um_email')
     if (saved) {
       setEmail(saved)
       setRemember(true)
     }
   }, [])
 
-  function isAllowedDomain(e) {
-    const at = e.lastIndexOf('@')
-    const dom = at !== -1 ? e.slice(at + 1).toLowerCase() : ''
-    return dom === ALLOWED_DOMAIN
-  }
-
   async function handleSubmit(e) {
     e.preventDefault()
     setIsSubmitting(true)
     setError('')
-
-    // Generic message but still enforce domain on client
-    if (!isAllowedDomain(email)) {
-      setIsSubmitting(false)
-      setError('User account not found')
-      return
-    }
-
     try {
-      const res = await fetch('/.netlify/functions/mbfm-login', {
+      const res = await fetch('/.netlify/functions/auth-login', {
         method: 'POST',
+        credentials: 'include', // set HttpOnly cookie
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email, password })
+        body: JSON.stringify({ email: email.trim(), password, next: nextPath }),
       })
 
+      let data = {}
+      try { data = await res.json() } catch {}
+
       if (!res.ok) {
-        const data = await res.json().catch(() => ({}))
-        throw new Error(data.error || 'User account not found')
+        throw new Error(data?.error || 'Login failed')
       }
 
-      if (remember) localStorage.setItem('mbfm_email', email)
-      else localStorage.removeItem('mbfm_email')
+      if (remember) localStorage.setItem('um_email', email.trim())
+      else localStorage.removeItem('um_email')
 
-      navigate(nextPath, { replace: true })
+      const redirect = data.redirect || '/'
+      // Full navigation so Edge/headers/cookies apply cleanly
+      window.location.assign(redirect)
     } catch (err) {
-      setError(err.message || 'User account not found')
+      const msg = (err && typeof err === 'object' && 'message' in err) ? err.message : String(err || '')
+      setError(normalizeErr(msg))
       setIsSubmitting(false)
     }
   }
@@ -89,7 +110,8 @@ const MBFMLogin = () => {
     setForgotLoading(true)
     setForgotMsg('')
     try {
-      const res = await fetch('/.netlify/functions/mbfm-forgot', {
+      // adjust to your actual function name if different
+      const res = await fetch('/.netlify/functions/auth-forgot', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email: (forgotEmail || email).trim() })
@@ -98,7 +120,8 @@ const MBFMLogin = () => {
       if (!res.ok) throw new Error(data.error || 'Unable to process request')
       setForgotMsg('If your account exists, we emailed instructions to reset access.')
     } catch (err) {
-      setForgotMsg(err.message || 'Unable to process request')
+      const msg = (err && typeof err === 'object' && 'message' in err) ? err.message : String(err || '')
+      setForgotMsg(msg || 'Unable to process request')
     } finally {
       setForgotLoading(false)
     }
@@ -114,7 +137,7 @@ const MBFMLogin = () => {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           email: (supportEmail || email).trim(),
-          message: supportBody || 'Support request from login screen.'
+          message: supportBody || 'Support request from login screen.',
         })
       })
       const data = await res.json().catch(() => ({}))
@@ -122,7 +145,8 @@ const MBFMLogin = () => {
       setSupportMsg('Thanks — your message was sent. We will get back to you shortly.')
       setSupportBody('')
     } catch (err) {
-      setSupportMsg(err.message || 'Unable to send message')
+      const msg = (err && typeof err === 'object' && 'message' in err) ? err.message : String(err || '')
+      setSupportMsg(msg || 'Unable to send message')
     } finally {
       setSupportLoading(false)
     }
@@ -130,40 +154,35 @@ const MBFMLogin = () => {
 
   return (
     <div className="relative min-h-screen flex items-center justify-center overflow-hidden bg-black">
-      {/* Background */}
+      {/* Background orbs */}
       <div className="pointer-events-none absolute inset-0">
-        {/* Animated gradient orbs */}
         <div className="absolute -top-40 -right-32 h-96 w-96 bg-gradient-to-br from-[#4bbf39]/20 to-[#39bfb0]/10 blur-3xl rounded-full animate-[pulse_4s_ease-in-out_infinite]" />
         <div className="absolute -bottom-48 -left-20 h-[28rem] w-[28rem] bg-gradient-to-tl from-[#39bfb0]/25 to-[#4bbf39]/10 blur-3xl rounded-full animate-[pulse_5s_ease-in-out_infinite] [animation-delay:1s]" />
-        
-        {/* Additional floating orbs */}
         <div className="absolute top-1/3 left-1/4 h-64 w-64 bg-gradient-to-br from-[#4bbf39]/15 to-transparent blur-3xl rounded-full animate-[float_8s_ease-in-out_infinite]" />
         <div className="absolute bottom-1/4 right-1/4 h-80 w-80 bg-gradient-to-tl from-[#39bfb0]/15 to-transparent blur-3xl rounded-full animate-[float_10s_ease-in-out_infinite] [animation-delay:2s]" />
       </div>
+
       <Card className="relative z-10 w-full max-w-md overflow-hidden border border-white/10 bg-neutral-900/70 backdrop-blur-xl shadow-[0_0_0_1px_rgba(255,255,255,0.06)]">
-        {/* Ring overlay: visible but non-interactive, sits below content */}
-        <div
-          aria-hidden="true"
-          className="pointer-events-none absolute -inset-[1px] z-0 rounded-xl opacity-70 [mask:linear-gradient(#000,transparent)]"
-        >
+        {/* Ring overlay */}
+        <div aria-hidden="true" className="pointer-events-none absolute -inset-[1px] z-0 rounded-xl opacity-70 [mask:linear-gradient(#000,transparent)]">
           <div className={`h-full w-full rounded-xl bg-gradient-to-r ${BRAND_GRAD} blur-[10px] opacity-30`} />
         </div>
 
         <CardHeader className="relative z-10 space-y-4 text-center pb-6">
           <div className="flex justify-center">
             <img
-              src={whitelogo}
-              alt="UptradeMedia Logo"
+              src={brand.logo}
+              alt="Brand"
               className="h-14 w-auto drop-shadow-[0_6px_20px_rgba(57,191,176,0.35)] transition-transform duration-300 hover:scale-105"
             />
           </div>
           <CardTitle className="text-3xl font-semibold tracking-tight">
             <span className={`bg-gradient-to-r ${BRAND_GRAD} bg-clip-text text-transparent`}>
-              Uptrade Proposals Portal
+              {brand.title}
             </span>
           </CardTitle>
           <CardDescription className="text-neutral-300/80">
-            Secure access for Uptrade Media proposals and approvals
+            {brand.tagline}
           </CardDescription>
         </CardHeader>
 
@@ -179,7 +198,7 @@ const MBFMLogin = () => {
                   type="email"
                   inputMode="email"
                   autoComplete="username"
-                  placeholder={`you@email.com`}
+                  placeholder="you@company.com"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   required
@@ -242,11 +261,7 @@ const MBFMLogin = () => {
 
             {/* Error */}
             {error && (
-              <div
-                role="alert"
-                aria-live="polite"
-                className="text-sm rounded-lg border border-red-500/30 bg-red-500/10 text-red-200 px-3 py-2"
-              >
+              <div role="alert" aria-live="polite" className="text-sm rounded-lg border border-red-500/30 bg-red-500/10 text-red-200 px-3 py-2">
                 {error}
               </div>
             )}
@@ -275,7 +290,7 @@ const MBFMLogin = () => {
                   <Input
                     id="forgotEmail"
                     type="email"
-                    placeholder={`you@${ALLOWED_DOMAIN}`}
+                    placeholder="you@company.com"
                     value={forgotEmail}
                     onChange={(e) => setForgotEmail(e.target.value)}
                     className="bg-neutral-900/60 border-white/10 text-white"
@@ -310,27 +325,26 @@ const MBFMLogin = () => {
               </div>
             </div>
 
-{/* Contact support row */}
-<div className="flex items-center justify-center gap-2 text-sm mt-2">
-  <button
-    type="button"
-    onClick={() => { setSupportOpen(!supportOpen); setSupportMsg('') }}
-    className="inline-flex items-center gap-1 text-[#39bfb0] hover:opacity-80"
-  >
-    <HelpCircle className="w-4 h-4" />
-    Contact support
-  </button>
+            {/* Contact support row */}
+            <div className="flex items-center justify-center gap-2 text-sm mt-2">
+              <button
+                type="button"
+                onClick={() => { setSupportOpen(!supportOpen); setSupportMsg('') }}
+                className="inline-flex items-center gap-1 text-[#39bfb0] hover:opacity-80"
+              >
+                <HelpCircle className="w-4 h-4" />
+                Contact support
+              </button>
 
-  <span className="text-neutral-500 select-none" aria-hidden="true">·</span>
+              <span className="text-neutral-500 select-none" aria-hidden="true">·</span>
 
-  <a
-    href={`mailto:ramsey@uptrademedia.com?subject=Support%20request&body=Hi%20Uptrade%20Media,%0A%0A`}
-    className="inline-flex text-neutral-400 hover:text-neutral-200"
-  >
-    or email directly
-  </a>
-</div>
-
+              <a
+                href={`mailto:ramsey@uptrademedia.com?subject=Support%20request&body=Hi%20Uptrade%20Media,%0A%0A`}
+                className="inline-flex text-neutral-400 hover:text-neutral-200"
+              >
+                or email directly
+              </a>
+            </div>
 
             {supportOpen && (
               <div className="mt-3 rounded-lg border border-white/10 p-3 bg-neutral-900/60">
@@ -339,7 +353,7 @@ const MBFMLogin = () => {
                   <Input
                     id="supportEmail"
                     type="email"
-                    placeholder={`you@${ALLOWED_DOMAIN}`}
+                    placeholder="you@company.com"
                     value={supportEmail}
                     onChange={(e) => setSupportEmail(e.target.value)}
                     className="bg-neutral-900/60 border-white/10 text-white"
@@ -374,5 +388,3 @@ const MBFMLogin = () => {
     </div>
   )
 }
-
-export default MBFMLogin

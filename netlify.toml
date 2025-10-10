@@ -33,6 +33,11 @@
   node_bundler = "esbuild"
   included_files = ["netlify/functions/assets/**"]
 
+  # Edge guard on proposals only (no dashboard)
+[[edge_functions]]
+  function = "login-auth"
+  path     = "/p/*"
+
 [dev]
   framework     = "#custom"
   command       = "vite"
