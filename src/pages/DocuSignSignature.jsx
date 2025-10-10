@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react'
 import { Button } from '@/components/ui/button'
 import { AlertTriangle, CheckCircle, Loader2, FileText, Shield, Clock, User, Mail } from 'lucide-react'
 
-const DocuSignSignature = () => {
+const DocuSignSignature = ({ slug = 'mbfm' }) => {
   const [isLoading, setIsLoading] = useState(false)
   const [isCompleted, setIsCompleted] = useState(false)
   const [error, setError] = useState(null)
@@ -50,6 +50,7 @@ const DocuSignSignature = () => {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
+          slug: slug,
           signerName: formData.signerName,
           signerEmail: formData.signerEmail,
         }),

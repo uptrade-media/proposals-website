@@ -137,6 +137,7 @@ export async function handler(event) {
 
     const signerName = (payload.signerName || '').trim()
     const signerEmail = (payload.signerEmail || '').trim()
+    const slug = (payload.slug || '').toLowerCase().trim()
     const signerTitle = (payload.signerTitle || '').trim()
     const signerPhone = (payload.signerPhone || '').trim()
     const signerCompany = (payload.signerCompany || '').trim()
@@ -145,8 +146,18 @@ export async function handler(event) {
       return json(400, { error: 'Missing required fields: signerName and signerEmail' })
     }
 
+    // Resolve template by slug
+    const TEMPLATE_MAP = {
+      row94: process.env.DOCUSIGN_TEMPLATE_ID_ROW94,
+      mbfm: process.env.DOCUSIGN_TEMPLATE_ID_MBFM,
+    }
+
+    const templateId = slug ? TEMPLATE_MAP[slug] : null
+    if (slug && !templateId) {
+      return json(400, { error: `TEMPLATE_NOT_FOUND:${slug}` })
+    }
+
     const {
-      DOCUSIGN_TEMPLATE_ID,
       PROPOSAL_PDF_PATH,
       COUNTERSIGN_EMAIL,
     } = process.env
@@ -160,6 +171,7 @@ export async function handler(event) {
     let envelopeSummary
 
     // ---------- Envelope ----------
+    const DOCUSIGN_TEMPLATE_ID = templateId || process.env.DOCUSIGN_TEMPLATE_ID
     if (DOCUSIGN_TEMPLATE_ID) {
       // Template mode
       const signerRole = docusign.TemplateRole.constructFromObject({
