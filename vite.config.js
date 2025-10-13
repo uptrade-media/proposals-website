@@ -22,8 +22,10 @@ export default defineConfig(({ mode }) => {
       alias: {
         '@': path.resolve(process.cwd(), './src'),
       },
-      extensions: ['.mjs', '.js', '.ts', '.jsx', '.tsx', '.json'],
+      extensions: ['.mjs', '.js', '.ts', '.jsx', '.tsx', '.json', '.mdx'],
     },
+
+    assetsInclude: ['**/*.mdx'],
 
     server: {
       port: 5173,

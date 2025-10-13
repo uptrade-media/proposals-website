@@ -17,6 +17,8 @@
       X-Content-Type-Options = "nosniff"
       Referrer-Policy = "strict-origin-when-cross-origin"
       Permissions-Policy = "camera=(), microphone=(), geolocation=(), payment=(), usb=(), magnetometer=(), gyroscope=(), accelerometer=()"
+      X-XSS-Protection = "1; mode=block"
+      X-Permitted-Cross-Domain-Policies = "none"
 
   [[context.production.headers]]
     for = "/mbfm"

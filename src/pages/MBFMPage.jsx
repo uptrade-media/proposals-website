@@ -1,10 +1,9 @@
 import { Button } from '@/components/ui/button'
 import { ArrowLeft, Calendar, DollarSign, Target, TrendingUp, Users, Zap, CheckCircle, ArrowUp, Download, AlertTriangle, Smartphone, Search, Star, Award, Clock, Shield } from 'lucide-react'
 import { Link } from 'react-router-dom'
-import { useState } from 'react'
-import { Helmet } from '@dr.pogodin/react-helmet'
+import { useState, useEffect } from 'react'
 import Navigation from './Navigation'
-import DocuSignSignature from './DocuSignSignature'
+import ProposalSignature from '../components/ProposalSignature'
 import SemrushPDF from '../assets/Semrush-Domain_Overview_(Desktop)-mbfmvans_com-6th_Oct_2025.pdf'
 import PageNotFoundMobile from '../assets/page_not_found_mobile.PNG'
 import HomepageFormattingMobile from '../assets/homepage_formatting_mobile.PNG'
@@ -12,6 +11,14 @@ import LogoPng from '../assets/logo.png'
 
 const MBFMPage = () => {
   const [showBackToTop, setShowBackToTop] = useState(false)
+
+  useEffect(() => {
+    document.title = 'MBFM Sprinter Division Website Redesign Proposal - Uptrade Media'
+    const metaDescription = document.querySelector('meta[name="description"]')
+    if (metaDescription) {
+      metaDescription.setAttribute('content', 'Comprehensive website redesign and digital growth proposal for Mercedes-Benz of Fort Mitchell Vans by Uptrade Media.')
+    }
+  }, [])
 
   const scrollToTop = () => {
     window.scrollTo({ top: 0, behavior: 'smooth' })
@@ -23,11 +30,6 @@ const MBFMPage = () => {
   })
 
   return (
-    <>
-      <Helmet>
-        <title>MBFM Sprinter Division Website Redesign Proposal - Uptrade Media</title>
-        <meta name="description" content="Comprehensive website redesign and digital growth proposal for Mercedes-Benz of Fort Mitchell Vans by Uptrade Media." />
-      </Helmet>
     <div className="min-h-screen bg-white">
       <Navigation />
 
@@ -588,8 +590,16 @@ const MBFMPage = () => {
         </div>
       </section>
 
-      {/* DocuSign Signature Integration */}
-      <DocuSignSignature />
+      {/* Signature Section */}
+      <section className="py-16 bg-gray-50">
+        <div className="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8">
+          <ProposalSignature 
+            proposalId="mbfm-sprinter-2025"
+            proposalTitle="MBFM Sprinter Division Website Redesign Proposal"
+            clientName="Mercedes-Benz of Fort Mitchell"
+          />
+        </div>
+      </section>
 
       {/* Footer */}
       <footer className="bg-gray-900 text-white py-12">
@@ -651,7 +661,6 @@ const MBFMPage = () => {
         </div>
       </footer>
     </div>
-    </>
   )
 }
 

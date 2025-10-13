@@ -1,31 +1,33 @@
 // src/pages/LoginPage.jsx
 import React, { useEffect, useState, useMemo } from 'react'
-import { useSearchParams } from 'react-router-dom'
+import { useSearchParams, useNavigate } from 'react-router-dom'
 import { Button } from '../components/ui/button'
 import { Input } from '../components/ui/input'
 import { Label } from '../components/ui/label'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../components/ui/card'
 import { Lock, Mail, Eye, EyeOff, ShieldCheck, Loader2, HelpCircle } from 'lucide-react'
 import whitelogo from '../assets/whitelogo.svg'
+import useAuthStore from '../lib/auth-store'
+import HyperspaceBackground from '../components/HyperspaceBackground'
 
 const BRAND_GRAD = 'from-[#4bbf39] to-[#39bfb0]'
 
 // purely visual; server enforces access
 const BRAND_UI = {
   default: {
-    title: 'Uptrade Proposals Portal',
+    title: 'Uptrade Portal',
     logo: whitelogo,
-    tagline: 'Secure access for Uptrade Media proposals and approvals',
+    tagline: 'Your secure client hub for projects, reports, and collaboration',
   },
   row94: {
-    title: 'Row 94 — Proposals Portal',
+    title: 'Row 94 — Client Portal',
     logo: whitelogo,
-    tagline: 'Secure access to Row 94 Whiskey proposal',
+    tagline: 'Secure access to your Row 94 Whiskey project',
   },
   mbfm: {
-    title: 'MBFM — Proposals Portal',
+    title: 'MBFM — Client Portal',
     logo: whitelogo,
-    tagline: 'Secure access to MBFM proposal',
+    tagline: 'Secure access to your MBFM project',
   },
 }
 
@@ -34,16 +36,38 @@ function normalizeErr(e) {
   if (msg.includes('DOMAIN_NOT_ASSIGNED')) return 'This email domain is not allowed.'
   if (msg.includes('INVALID_PASSWORD'))    return 'Invalid email or password.'
   if (msg.includes('MISSING_CREDENTIALS')) return 'Enter email and password.'
+  if (msg.includes('MISSING_FIELDS'))      return 'Please fill in all fields.'
+  if (msg.includes('INVALID_EMAIL'))       return 'Please enter a valid email address.'
+  if (msg.includes('PASSWORD_TOO_SHORT'))  return 'Password must be at least 8 characters.'
+  if (msg.includes('EMAIL_EXISTS'))        return 'An account with this email already exists.'
+  if (msg.includes('SIGNUP_FAILED'))       return 'Unable to create account. Please try again.'
   if (msg.includes('AUTH_NOT_CONFIGURED') || msg.includes('SERVER_NOT_CONFIGURED'))
     return 'Sign-in temporarily unavailable.'
-  return 'Login failed'
+  return msg.includes('SIGN') ? 'Sign up failed' : 'Login failed'
 }
 
 export default function LoginPage() {
   const [params] = useSearchParams()
-  const nextPath = params.get('next') || '/'
+  const navigate = useNavigate()
+  const { login: authLogin, signup: authSignup, checkAuth, isAuthenticated, user } = useAuthStore()
+  const nextPath = params.get('next') || '/dashboard'
   const brandKey = (params.get('brand') || 'default').toLowerCase()
   const brand = useMemo(() => BRAND_UI[brandKey] || BRAND_UI.default, [brandKey])
+
+  // Redirect if already authenticated
+  useEffect(() => {
+    if (isAuthenticated && user) {
+      // Determine redirect based on user role
+      let redirect = nextPath
+      if (user.role === 'admin') {
+        redirect = nextPath === '/dashboard' ? '/admin' : nextPath
+      } else if (user.slugs && user.slugs.length > 0) {
+        // Legacy proposal client
+        redirect = `/p/${user.slugs[0]}`
+      }
+      navigate(redirect)
+    }
+  }, [isAuthenticated, user, navigate, nextPath])
 
   const [showPassword, setShowPassword] = useState(false)
   const [email, setEmail] = useState('')
@@ -65,6 +89,19 @@ export default function LoginPage() {
   const [supportLoading, setSupportLoading] = useState(false)
   const [supportMsg, setSupportMsg] = useState('')
 
+  // Load Google Identity Services
+  useEffect(() => {
+    const script = document.createElement('script')
+    script.src = 'https://accounts.google.com/gsi/client'
+    script.async = true
+    script.defer = true
+    document.body.appendChild(script)
+
+    return () => {
+      document.body.removeChild(script)
+    }
+  }, [])
+
   useEffect(() => {
     const saved = localStorage.getItem('um_email')
     if (saved) {
@@ -73,31 +110,107 @@ export default function LoginPage() {
     }
   }, [])
 
+  // Initialize Google Sign-In when script loads
+  useEffect(() => {
+    const initGoogle = () => {
+      if (window.google) {
+        const clientId = import.meta.env.VITE_GOOGLE_CLIENT_ID
+        console.log('[Google OAuth] Client ID:', clientId)
+        
+        if (!clientId) {
+          console.error('[Google OAuth] VITE_GOOGLE_CLIENT_ID is not defined!')
+          return
+        }
+        
+        window.google.accounts.id.initialize({
+          client_id: clientId,
+          callback: handleGoogleResponse
+        })
+        console.log('[Google OAuth] Initialized successfully')
+      }
+    }
+
+    // Try immediately if already loaded
+    if (window.google) {
+      initGoogle()
+    } else {
+      // Wait for script to load
+      const checkGoogle = setInterval(() => {
+        if (window.google) {
+          clearInterval(checkGoogle)
+          initGoogle()
+        }
+      }, 100)
+
+      return () => clearInterval(checkGoogle)
+    }
+  }, [])
+
+  // Handle Google OAuth response
+  async function handleGoogleResponse(response) {
+    console.log('[Google OAuth] Callback received!')
+    setIsSubmitting(true)
+    setError('')
+
+    try {
+      console.log('[Google OAuth] Sending credential to backend...')
+      const res = await fetch('/.netlify/functions/auth-google', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({ credential: response.credential })
+      })
+
+      console.log('[Google OAuth] Backend response status:', res.status)
+      const data = await res.json()
+      console.log('[Google OAuth] Backend response data:', data)
+
+      if (!res.ok) {
+        throw new Error(data.error || 'Google sign-in failed')
+      }
+
+      // Cookie is now set by server, verify and update auth store
+      console.log('[Google OAuth] Verifying session...')
+      const authResult = await checkAuth()
+      console.log('[Google OAuth] Auth check result:', authResult)
+      
+      if (!authResult.success) {
+        throw new Error('Failed to verify session after Google login')
+      }
+      
+      // Redirect based on server response or user role
+      const redirect = data.redirect || nextPath
+      window.location.assign(redirect)
+    } catch (err) {
+      const msg = (err && typeof err === 'object' && 'message' in err) ? err.message : String(err || '')
+      setError(normalizeErr(msg))
+      setIsSubmitting(false)
+    }
+  }
+
   async function handleSubmit(e) {
     e.preventDefault()
     setIsSubmitting(true)
     setError('')
+    
     try {
-      const res = await fetch('/.netlify/functions/auth-login', {
-        method: 'POST',
-        credentials: 'include', // set HttpOnly cookie
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email: email.trim(), password, next: nextPath }),
-      })
-
-      let data = {}
-      try { data = await res.json() } catch {}
-
-      if (!res.ok) {
-        throw new Error(data?.error || 'Login failed')
+      // Remember email if checked
+      if (remember) {
+        localStorage.setItem('um_email', email.trim())
+      } else {
+        localStorage.removeItem('um_email')
       }
 
-      if (remember) localStorage.setItem('um_email', email.trim())
-      else localStorage.removeItem('um_email')
-
-      const redirect = data.redirect || '/'
-      // Full navigation so Edge/headers/cookies apply cleanly
-      window.location.assign(redirect)
+      // Use auth store login (which handles cookie-based auth)
+      const result = await authLogin(email, password, nextPath)
+      
+      if (result.success) {
+        // Navigate using full page reload to ensure edge functions/cookies apply
+        const redirect = result.redirect || nextPath
+        window.location.assign(redirect)
+      } else {
+        throw new Error(result.error || 'Login failed')
+      }
     } catch (err) {
       const msg = (err && typeof err === 'object' && 'message' in err) ? err.message : String(err || '')
       setError(normalizeErr(msg))
@@ -154,15 +267,10 @@ export default function LoginPage() {
 
   return (
     <div className="relative min-h-screen flex items-center justify-center overflow-hidden bg-black">
-      {/* Background orbs */}
-      <div className="pointer-events-none absolute inset-0">
-        <div className="absolute -top-40 -right-32 h-96 w-96 bg-gradient-to-br from-[#4bbf39]/20 to-[#39bfb0]/10 blur-3xl rounded-full animate-[pulse_4s_ease-in-out_infinite]" />
-        <div className="absolute -bottom-48 -left-20 h-[28rem] w-[28rem] bg-gradient-to-tl from-[#39bfb0]/25 to-[#4bbf39]/10 blur-3xl rounded-full animate-[pulse_5s_ease-in-out_infinite] [animation-delay:1s]" />
-        <div className="absolute top-1/3 left-1/4 h-64 w-64 bg-gradient-to-br from-[#4bbf39]/15 to-transparent blur-3xl rounded-full animate-[float_8s_ease-in-out_infinite]" />
-        <div className="absolute bottom-1/4 right-1/4 h-80 w-80 bg-gradient-to-tl from-[#39bfb0]/15 to-transparent blur-3xl rounded-full animate-[float_10s_ease-in-out_infinite] [animation-delay:2s]" />
-      </div>
+      {/* Hyperspace Background */}
+      <HyperspaceBackground />
 
-      <Card className="relative z-10 w-full max-w-md overflow-hidden border border-white/10 bg-neutral-900/70 backdrop-blur-xl shadow-[0_0_0_1px_rgba(255,255,255,0.06)]">
+      <Card className="relative z-20 w-full max-w-md overflow-hidden border border-white/10 bg-neutral-900/70 backdrop-blur-xl shadow-[0_0_0_1px_rgba(255,255,255,0.06)]">
         {/* Ring overlay */}
         <div aria-hidden="true" className="pointer-events-none absolute -inset-[1px] z-0 rounded-xl opacity-70 [mask:linear-gradient(#000,transparent)]">
           <div className={`h-full w-full rounded-xl bg-gradient-to-r ${BRAND_GRAD} blur-[10px] opacity-30`} />
@@ -237,15 +345,16 @@ export default function LoginPage() {
             </div>
 
             {/* Utility row */}
-            <div className="flex items-center justify-between text-sm">
-              <label htmlFor="remember" className="flex items-center gap-2 cursor-pointer select-none">
-                <input
-                  id="remember"
-                  type="checkbox"
-                  checked={remember}
-                  onChange={(e) => setRemember(e.target.checked)}
-                  className="w-4 h-4 rounded border-white/10 bg-neutral-900/80 text-[#39bfb0] focus:ring-[#39bfb0]/30"
-                  disabled={isSubmitting}
+            {(
+              <div className="flex items-center justify-between text-sm">
+                <label htmlFor="remember" className="flex items-center gap-2 cursor-pointer select-none">
+                  <input
+                    id="remember"
+                    type="checkbox"
+                    checked={remember}
+                    onChange={(e) => setRemember(e.target.checked)}
+                    className="w-4 h-4 rounded border-white/10 bg-neutral-900/80 text-[#39bfb0] focus:ring-[#39bfb0]/30"
+                    disabled={isSubmitting}
                 />
                 <span className="text-neutral-300">Remember me</span>
               </label>
@@ -257,7 +366,8 @@ export default function LoginPage() {
               >
                 Forgot password?
               </button>
-            </div>
+              </div>
+            )}
 
             {/* Error */}
             {error && (
@@ -313,7 +423,7 @@ export default function LoginPage() {
               <span>Private access. Encrypted in transit.</span>
             </div>
 
-            {/* Divider */}
+            {/* Divider before bottom sections */}
             <div className="relative my-4">
               <div className="absolute inset-0 flex items-center">
                 <div className="w-full border-t border-white/10" />
@@ -379,10 +489,38 @@ export default function LoginPage() {
               </div>
             )}
           </form>
+
+          {/* Google Sign-In Divider */}
+          <div className="flex items-center my-6">
+            <div className="flex-1 border-t border-white/10" />
+            <span className="px-4 text-sm text-neutral-400">or continue with</span>
+            <div className="flex-1 border-t border-white/10" />
+          </div>
+
+          {/* Google Sign-In Button */}
+          <div className="flex justify-center mb-6">
+            <div 
+              id="g_id_onload"
+              data-client_id={import.meta.env.VITE_GOOGLE_CLIENT_ID}
+              data-context="signin"
+              data-ux_mode="popup"
+              data-auto_prompt="false"
+            ></div>
+            <div 
+              className="g_id_signin"
+              data-type="standard"
+              data-shape="rectangular"
+              data-theme="filled_black"
+              data-text="signin_with"
+              data-size="large"
+              data-logo_alignment="left"
+              data-width="360"
+            ></div>
+          </div>
         </CardContent>
       </Card>
 
-      <div className="absolute bottom-4 left-0 right-0 text-center">
+      <div className="absolute bottom-4 left-0 right-0 text-center z-20">
         <p className="text-neutral-500 text-xs">© {new Date().getFullYear()} Uptrade Media</p>
       </div>
     </div>

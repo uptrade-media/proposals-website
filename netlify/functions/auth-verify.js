@@ -17,11 +17,35 @@ export async function handler(event) {
   try {
     const payload = jwt.verify(token, JWT_SECRET) // throws on bad/expired token
     const email = String(payload.email || payload.sub || '')
-    const slugs = Array.isArray(payload.slugs) ? payload.slugs : []
-
-    if (!email || slugs.length === 0) return json(403, { error: 'NOT_AUTHORIZED' }, event)
-
-    return json(200, { ok: true, user: { email, slugs, exp: payload.exp } }, event)
+    
+    // Handle two types of auth:
+    // 1. Google OAuth (has userId, role, type='google')
+    // 2. Legacy proposal auth (has slugs)
+    
+    if (payload.type === 'google') {
+      // Google OAuth user from database
+      if (!email) return json(403, { error: 'NOT_AUTHORIZED' }, event)
+      
+      return json(200, { 
+        ok: true, 
+        user: { 
+          userId: payload.userId,
+          email,
+          name: payload.name,
+          picture: payload.picture,
+          role: payload.role || 'client',
+          type: 'google',
+          exp: payload.exp 
+        } 
+      }, event)
+    } else {
+      // Legacy proposal client
+      const slugs = Array.isArray(payload.slugs) ? payload.slugs : []
+      
+      if (!email || slugs.length === 0) return json(403, { error: 'NOT_AUTHORIZED' }, event)
+      
+      return json(200, { ok: true, user: { email, slugs, type: 'proposal', exp: payload.exp } }, event)
+    }
   } catch (err) {
     const code = err.name === 'TokenExpiredError' ? 'EXPIRED' : 'BAD_TOKEN'
     return json(401, { error: code }, event)

@@ -1,15 +1,22 @@
 import { Button } from '@/components/ui/button'
 import { ArrowLeft, Calendar, DollarSign, Target, TrendingUp, Users, Zap, CheckCircle, ArrowUp, Download, AlertTriangle, Smartphone, Search, Star, Award, Clock, Shield, BarChart3, Globe, ShoppingCart, Mail, MapPin, Eye } from 'lucide-react'
 import { Link } from 'react-router-dom'
-import { useState } from 'react'
-import { Helmet } from '@dr.pogodin/react-helmet'
+import { useState, useEffect } from 'react'
 import Navigation from './Navigation'
-import Row94DocuSignSignature from './Row94DocuSignSignature'
+import ProposalSignature from '../components/ProposalSignature'
 import SemrushPDF from '../assets/Semrush-Domain_Overview_(Desktop)-row94whiskey_com-9th_Oct_2025.pdf'
 import LogoPng from '../assets/logo.png'
 
 const Row94WhiskeyPage = () => {
   const [showBackToTop, setShowBackToTop] = useState(false)
+
+  useEffect(() => {
+    document.title = 'Row 94 Whiskey Digital Growth Proposal - Uptrade Media'
+    const metaDescription = document.querySelector('meta[name="description"]')
+    if (metaDescription) {
+      metaDescription.setAttribute('content', 'Comprehensive digital growth and compliance optimization proposal for Row 94 Whiskey by Uptrade Media.')
+    }
+  }, [])
 
   const scrollToTop = () => {
     window.scrollTo({ top: 0, behavior: 'smooth' })
@@ -21,11 +28,6 @@ const Row94WhiskeyPage = () => {
   })
 
   return (
-    <>
-      <Helmet>
-        <title>Row 94 Whiskey Digital Growth Proposal - Uptrade Media</title>
-        <meta name="description" content="Comprehensive digital growth and compliance optimization proposal for Row 94 Whiskey by Uptrade Media." />
-      </Helmet>
     <div className="min-h-screen bg-white">
       <Navigation />
 
@@ -925,8 +927,16 @@ const Row94WhiskeyPage = () => {
         </div>
       </section>
 
-      {/* DocuSign Signature Integration */}
-      <Row94DocuSignSignature />
+      {/* Signature Section */}
+      <section className="py-16 bg-gray-50">
+        <div className="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8">
+          <ProposalSignature 
+            proposalId="row94-whiskey-2025"
+            proposalTitle="Row 94 Whiskey Digital Growth Proposal"
+            clientName="Row 94 Whiskey Team"
+          />
+        </div>
+      </section>
 
       {/* Footer */}
       <footer className="bg-black text-white py-12 border-t-4 border-yellow-500">
@@ -988,7 +998,6 @@ const Row94WhiskeyPage = () => {
         </div>
       </footer>
     </div>
-    </>
   )
 }
 
