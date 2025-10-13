@@ -123,8 +123,8 @@ exports.handler = async (event) => {
       isProd ? 'Secure' : ''
     ].filter(Boolean).join('; ')
 
-    // Determine redirect based on role
-    const redirect = userRole === 'admin' ? '/admin' : '/dashboard'
+    // Always redirect to dashboard for now since admin route isn't defined
+    const redirect = '/dashboard'
 
     return {
       statusCode: 200,
