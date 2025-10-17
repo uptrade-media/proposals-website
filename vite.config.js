@@ -54,36 +54,12 @@ export default defineConfig(({ mode }) => {
       chunkSizeWarningLimit: 1000,
       rollupOptions: {
         output: {
-          // Manual chunks to split vendor code more granularly
-          manualChunks: (id) => {
-            // React core libs in one chunk
-            if (id.includes('node_modules/react') || 
-                id.includes('node_modules/react-dom') || 
-                id.includes('node_modules/react-router')) {
-              return 'react-vendor'
-            }
-            
-            // UI library (shadcn/radix) in separate chunk
-            if (id.includes('node_modules/@radix-ui') || 
-                id.includes('node_modules/class-variance-authority') ||
-                id.includes('node_modules/clsx')) {
-              return 'ui-vendor'
-            }
-            
-            // Icons in separate chunk (lucide-react is large)
-            if (id.includes('node_modules/lucide-react')) {
-              return 'icons-vendor'
-            }
-            
-            // Zustand state management
-            if (id.includes('node_modules/zustand')) {
-              return 'state-vendor'
-            }
-            
-            // Other large dependencies
-            if (id.includes('node_modules')) {
-              return 'vendor'
-            }
+          // Simpler manual chunks to avoid dependency ordering issues
+          manualChunks: {
+            // Keep React and UI libs together to prevent forwardRef errors
+            'react-vendor': ['react', 'react-dom', 'react-router-dom'],
+            // Large icon library in separate chunk
+            'icons-vendor': ['lucide-react'],
           },
           // Better file naming for caching
           chunkFileNames: 'assets/js/[name]-[hash].js',

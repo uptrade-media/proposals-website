@@ -1,0 +1,17 @@
+{
+  "name": "Uptrade Media Portal",
+  "short_name": "UM Portal",
+  "description": "Uptrade Media client portal for proposals, projects, and billing",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#4bbf39",
+  "icons": [
+    {
+      "src": "/favicon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}
