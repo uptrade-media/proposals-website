@@ -22,8 +22,13 @@ export function EmptyState({
   title, 
   description, 
   actionLabel, 
-  onAction 
+  onAction,
+  action // Support object format: { label, onClick }
 }) {
+  // Support both formats: separate props or action object
+  const buttonLabel = action?.label || actionLabel
+  const buttonOnClick = action?.onClick || onAction
+
   return (
     <div className="flex flex-col items-center justify-center py-16 px-4 text-center">
       {/* Icon container with brand gradient background */}
@@ -43,14 +48,16 @@ export function EmptyState({
       </p>
 
       {/* Optional CTA button */}
-      {actionLabel && onAction && (
+      {buttonLabel && buttonOnClick && (
         <Button 
-          onClick={onAction}
+          onClick={buttonOnClick}
           className="bg-gradient-to-r from-[#4bbf39] to-[#39bfb0] hover:from-[#3da52e] to-[#2ea899] text-white shadow-lg hover:shadow-xl transition-all duration-200"
         >
-          {actionLabel}
+          {buttonLabel}
         </Button>
       )}
     </div>
   )
 }
+
+export default EmptyState

@@ -8,6 +8,13 @@
 # ── Production-only security headers (no CSP in dev) ───────────────────────────
 [context.production]
 
+  # Cache static assets aggressively
+  [[context.production.headers]]
+    for = "/assets/*"
+    [context.production.headers.values]
+      Cache-Control = "public, max-age=31536000, immutable"
+      X-Content-Type-Options = "nosniff"
+
   [[context.production.headers]]
     for = "/*"
     [context.production.headers.values]
@@ -19,6 +26,8 @@
       Permissions-Policy = "camera=(), microphone=(), geolocation=(), payment=(), usb=(), magnetometer=(), gyroscope=(), accelerometer=()"
       X-XSS-Protection = "1; mode=block"
       X-Permitted-Cross-Domain-Policies = "none"
+      # Enable compression (Netlify does this automatically but explicit is good)
+      Cache-Control = "public, max-age=0, must-revalidate"
 
   [[context.production.headers]]
     for = "/mbfm"

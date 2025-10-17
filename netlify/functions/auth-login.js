@@ -32,7 +32,69 @@ exports.handler = async (event) => {
   const isSafeNext = rawNext.startsWith('/') && rawNext !== '/' && rawNext !== '/login'
   const next = isSafeNext ? rawNext : ''
 
-  // Lookup by domain
+  // 1. Try database-backed user first (admin/client accounts)
+  const { neon } = require('@neondatabase/serverless')
+  if (process.env.DATABASE_URL) {
+    try {
+      const sql = neon(process.env.DATABASE_URL)
+      const users = await sql`
+        SELECT id, email, name, role, password, google_id as "googleId"
+        FROM contacts
+        WHERE email = ${email}
+      `
+      
+      if (users.length > 0) {
+        const user = users[0]
+        
+        // Check if user has a password set (not OAuth-only)
+        if (user.password) {
+          const ok = await bcrypt.compare(password, user.password)
+          if (!ok) return json(401, { error: 'INVALID_PASSWORD' }, event)
+          
+          // Generate JWT token for database user
+          const token = jwt.sign({
+            sub: user.id,
+            userId: user.id,
+            email: user.email,
+            name: user.name,
+            role: user.role || 'client',
+            type: 'database'
+          }, JWT_SECRET, { expiresIn: MAX_AGE })
+          
+          const isDev =
+            process.env.NETLIFY_LOCAL === 'true' ||
+            /localhost|127\.0\.0\.1/.test(event.headers.host || '') ||
+            /:8888$/.test(event.headers.host || '')
+
+          const cookie = [
+            `${encodeURIComponent(COOKIE)}=${encodeURIComponent(token)}`,
+            'HttpOnly',
+            'SameSite=Lax',
+            'Path=/',
+            `Max-Age=${MAX_AGE}`,
+            ...(isDev ? [] : ['Secure']),
+          ].join('; ')
+          
+          // Redirect based on role
+          const redirect = next || (user.role === 'admin' ? '/dashboard' : '/projects')
+          
+          return {
+            statusCode: 200,
+            headers: { 'Set-Cookie': cookie, ...corsHeaders(event) },
+            body: JSON.stringify({ redirect }),
+          }
+        } else if (user.googleId) {
+          // User exists but is OAuth-only
+          return json(400, { error: 'PLEASE_USE_GOOGLE_SIGNIN' }, event)
+        }
+      }
+    } catch (dbErr) {
+      console.error('[auth-login] Database error:', dbErr)
+      // Fall through to domain-mapped login
+    }
+  }
+
+  // 2. Fall back to domain-mapped proposal clients
   const domain = (email.split('@')[1] || '').toLowerCase()
   let entry = DOMAIN_MAP[domain]
 

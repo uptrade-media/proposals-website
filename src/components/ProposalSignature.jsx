@@ -19,13 +19,14 @@ export default function ProposalSignature({ proposalId, proposalTitle, clientNam
 
   const checkSignatureStatus = async () => {
     try {
-      const response = await fetch(`/.netlify/functions/proposals-signature-status?proposalId=${proposalId}`, {
+      const response = await fetch(`/.netlify/functions/proposals-get?id=${proposalId}`, {
         credentials: 'include'
       })
       
       if (response.ok) {
         const data = await response.json()
-        if (data.signed || data.status === 'pending_counter_signature' || data.fullyExecuted) {
+        // Check if proposal has signature data
+        if (data.proposal?.signedAt || data.proposal?.status === 'accepted') {
           setSigned(true)
         }
       }

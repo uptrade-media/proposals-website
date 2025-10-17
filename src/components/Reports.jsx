@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -41,6 +41,7 @@ import {
 } from 'lucide-react'
 import useReportsStore from '@/lib/reports-store'
 import useAuthStore from '@/lib/auth-store'
+import LighthouseReport from '@/components/LighthouseReport'
 
 const Reports = () => {
   const { user } = useAuthStore()
@@ -65,6 +66,7 @@ const Reports = () => {
     clearError 
   } = useReportsStore()
   
+  const hasFetchedRef = useRef(false)
   const [activeTab, setActiveTab] = useState('overview')
   const [dateFilters, setDateFilters] = useState({
     start_date: '',
@@ -72,10 +74,23 @@ const Reports = () => {
   })
   const [activityDays, setActivityDays] = useState(30)
 
+  // Fetch initial data only once
   useEffect(() => {
+    if (hasFetchedRef.current) return
+    
+    console.log('[Reports] Fetching initial data')
+    hasFetchedRef.current = true
     fetchOverviewReport()
     fetchActivityReport(activityDays)
-  }, [fetchOverviewReport, fetchActivityReport, activityDays])
+  }, [])
+  
+  // Refetch activity report when days change
+  useEffect(() => {
+    if (hasFetchedRef.current && activityDays) {
+      console.log('[Reports] Refetching activity report for', activityDays, 'days')
+      fetchActivityReport(activityDays)
+    }
+  }, [activityDays])
 
   const handleDateFilterChange = (field, value) => {
     setDateFilters(prev => ({
@@ -158,11 +173,12 @@ const Reports = () => {
       )}
 
       <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-        <TabsList className="grid w-full grid-cols-4">
+        <TabsList className="grid w-full grid-cols-5">
           <TabsTrigger value="overview">Overview</TabsTrigger>
           <TabsTrigger value="projects">Projects</TabsTrigger>
           <TabsTrigger value="financial">Financial</TabsTrigger>
           <TabsTrigger value="activity">Activity</TabsTrigger>
+          <TabsTrigger value="lighthouse">Lighthouse</TabsTrigger>
         </TabsList>
 
         <TabsContent value="overview" className="space-y-6">
@@ -730,6 +746,10 @@ const Reports = () => {
               )}
             </>
           )}
+        </TabsContent>
+
+        <TabsContent value="lighthouse" className="space-y-6">
+          <LighthouseReport projectId={null} />
         </TabsContent>
       </Tabs>
     </div>

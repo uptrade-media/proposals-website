@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -26,15 +26,19 @@ import {
   Mail,
   Download,
   Settings,
-  Shield
+  Shield,
+  BookOpen
 } from 'lucide-react'
 import useAuthStore from '@/lib/auth-store'
-import axios from 'axios'
+import api from '@/lib/api'
+import BlogManagement from './BlogManagement'
 
 export default function Admin() {
   const { user } = useAuthStore()
   const [activeTab, setActiveTab] = useState('proposals')
   const [isLoading, setIsLoading] = useState(false)
+  const hasFetchedClientsRef = useRef(false)
+  const hasFetchedProposalsRef = useRef(false)
 
   // Proposals state
   const [proposals, setProposals] = useState([])
@@ -94,21 +98,27 @@ export default function Admin() {
     )
   }
 
-  // Fetch clients on mount
+  // Fetch clients on mount - only once
   useEffect(() => {
+    if (hasFetchedClientsRef.current) return
+    
+    console.log('[Admin] Fetching clients')
+    hasFetchedClientsRef.current = true
     fetchClients()
   }, [])
 
-  // Fetch proposals when tab changes
+  // Fetch proposals when tab changes - only once per tab
   useEffect(() => {
-    if (activeTab === 'proposals') {
+    if (activeTab === 'proposals' && !hasFetchedProposalsRef.current) {
+      console.log('[Admin] Fetching proposals')
+      hasFetchedProposalsRef.current = true
       fetchProposals()
     }
   }, [activeTab])
 
   const fetchClients = async () => {
     try {
-      const response = await axios.get('/.netlify/functions/admin-clients-list')
+      const response = await api.get('/.netlify/functions/admin-clients-list')
       setClients(response.data.clients || [])
     } catch (err) {
       console.error('Failed to fetch clients:', err)
@@ -123,14 +133,19 @@ export default function Admin() {
     setIsLoading(true)
 
     try {
-      const response = await axios.post('/.netlify/functions/admin-proposal-create', {
+      // First get the contact ID by email
+      const contactResponse = await api.get(`/.netlify/functions/admin-clients-get?email=${proposalForm.clientEmail}`)
+      const contactId = contactResponse.data.client.id
+
+      const response = await api.post('/.netlify/functions/proposals-create', {
+        contactId,
         title: proposalForm.title,
-        clientEmail: proposalForm.clientEmail,
         mdxContent: proposalForm.mdxContent,
-        slug: proposalForm.slug
+        slug: proposalForm.slug,
+        status: 'draft'
       })
 
-      toast.success('Proposal created and notification sent!')
+      toast.success('Proposal created successfully!')
       setIsProposalDialogOpen(false)
       setProposalForm({ title: '', clientEmail: '', mdxContent: '', slug: '' })
       
@@ -145,7 +160,7 @@ export default function Admin() {
 
   const fetchProposals = async () => {
     try {
-      const response = await axios.get('/.netlify/functions/admin-proposals-list')
+      const response = await api.get('/.netlify/functions/proposals-list')
       setProposals(response.data.proposals || [])
     } catch (err) {
       console.error('Failed to fetch proposals:', err)
@@ -160,12 +175,16 @@ export default function Admin() {
     setIsLoading(true)
 
     try {
-      const response = await axios.post('/.netlify/functions/admin-invoice-create', {
-        clientEmail: invoiceForm.clientEmail,
+      // First get the contact ID by email
+      const contactResponse = await api.get(`/.netlify/functions/admin-clients-get?email=${invoiceForm.clientEmail}`)
+      const contactId = contactResponse.data.client.id
+
+      const response = await api.post('/.netlify/functions/invoices-create', {
+        contactId,
+        projectId: invoiceForm.projectId || null,
         amount: parseFloat(invoiceForm.amount),
         dueDate: invoiceForm.dueDate,
-        description: invoiceForm.description,
-        projectId: invoiceForm.projectId
+        description: invoiceForm.description
       })
 
       toast.success('Invoice created and sent to client!')
@@ -184,7 +203,7 @@ export default function Admin() {
     setIsLoading(true)
 
     try {
-      const response = await axios.post('/.netlify/functions/admin-message-send', {
+      const response = await api.post('/.netlify/functions/admin-message-send', {
         clientEmail: messageForm.clientEmail,
         subject: messageForm.subject,
         message: messageForm.message
@@ -211,7 +230,7 @@ export default function Admin() {
       formData.append('clientEmail', fileUpload.clientEmail)
       formData.append('category', fileUpload.category)
 
-      const response = await axios.post('/.netlify/functions/admin-file-upload', formData, {
+      const response = await api.post('/.netlify/functions/admin-file-upload', formData, {
         headers: { 'Content-Type': 'multipart/form-data' }
       })
 
@@ -231,7 +250,7 @@ export default function Admin() {
     setIsLoading(true)
 
     try {
-      const response = await axios.post('/.netlify/functions/admin-client-create', {
+      const response = await api.post('/.netlify/functions/admin-client-create', {
         name: clientForm.name,
         email: clientForm.email,
         company: clientForm.company
@@ -276,11 +295,12 @@ export default function Admin() {
         </CardHeader>
         <CardContent>
           <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-        <TabsList className="grid w-full grid-cols-5">
+        <TabsList className="grid w-full grid-cols-6">
           <TabsTrigger value="proposals">Proposals</TabsTrigger>
           <TabsTrigger value="invoices">Invoices</TabsTrigger>
           <TabsTrigger value="messages">Messages</TabsTrigger>
           <TabsTrigger value="files">Files</TabsTrigger>
+          <TabsTrigger value="blog">Blog</TabsTrigger>
           <TabsTrigger value="clients">Clients</TabsTrigger>
         </TabsList>
 
@@ -879,6 +899,11 @@ export default function Admin() {
               </div>
             </CardContent>
           </Card>
+        </TabsContent>
+
+        {/* Blog Tab */}
+        <TabsContent value="blog" className="space-y-4">
+          <BlogManagement />
         </TabsContent>
       </Tabs>
         </CardContent>

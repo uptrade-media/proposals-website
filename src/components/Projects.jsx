@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import ProposalTemplate from './ProposalTemplate'
 import { Button } from '@/components/ui/button'
@@ -24,11 +24,12 @@ import {
   Eye,
   Edit,
   Loader2,
-  Send
+  Send,
+  Trash2
 } from 'lucide-react'
 import useProjectsStore from '@/lib/projects-store'
 import useAuthStore from '@/lib/auth-store'
-import axios from 'axios'
+import api from '@/lib/api'
 import { ProjectSkeleton } from './skeletons/ProjectSkeleton'
 
 const Projects = () => {
@@ -44,6 +45,7 @@ const Projects = () => {
     clearError 
   } = useProjectsStore()
   
+  const hasFetchedRef = useRef(false)
   const [selectedProject, setSelectedProject] = useState(null)
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false)
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false)
@@ -63,23 +65,31 @@ const Projects = () => {
   const [isProposalDialogOpen, setIsProposalDialogOpen] = useState(false)
   const [proposalForm, setProposalForm] = useState({
     title: '',
-    clientEmail: '',
+    description: '',
+    contactId: '',
     mdxContent: '',
     slug: ''
   })
   const [deleteDialog, setDeleteDialog] = useState({ open: false, id: null, title: '' })
+  const [deleteProposalDialog, setDeleteProposalDialog] = useState({ open: false, id: null, title: '' })
 
+  // Fetch data only once on mount
   useEffect(() => {
+    if (hasFetchedRef.current) return
+    
+    console.log('[Projects] Fetching initial data')
+    hasFetchedRef.current = true
+    
     fetchProjects()
     if (isAdmin) {
       fetchProposals()
       fetchClients()
     }
-  }, [fetchProjects, isAdmin])
+  }, []) // Empty dependency array - only run once
 
   const fetchProposals = async () => {
     try {
-      const response = await axios.get('/.netlify/functions/admin-proposals-list')
+      const response = await api.get('/.netlify/functions/proposals-list')
       setProposals(response.data.proposals || [])
     } catch (err) {
       console.error('Failed to fetch proposals:', err)
@@ -88,7 +98,7 @@ const Projects = () => {
 
   const fetchClients = async () => {
     try {
-      const response = await axios.get('/.netlify/functions/admin-clients-list')
+      const response = await api.get('/.netlify/functions/admin-clients-list')
       setClients(response.data.clients || [])
     } catch (err) {
       console.error('Failed to fetch clients:', err)
@@ -99,21 +109,41 @@ const Projects = () => {
     e.preventDefault()
 
     try {
-      const response = await axios.post('/.netlify/functions/admin-proposal-create', {
+      const response = await api.post('/.netlify/functions/proposals-create', {
         title: proposalForm.title,
-        clientEmail: proposalForm.clientEmail,
+        description: proposalForm.description,
+        contactId: proposalForm.contactId,
         mdxContent: proposalForm.mdxContent,
         slug: proposalForm.slug
       })
 
       toast.success('Proposal created and notification sent!')
       setIsProposalDialogOpen(false)
-      setProposalForm({ title: '', clientEmail: '', mdxContent: '', slug: '' })
+      setProposalForm({ title: '', description: '', contactId: '', mdxContent: '', slug: '' })
       
       // Refresh proposals list
       fetchProposals()
     } catch (err) {
       toast.error(err.response?.data?.error || 'Failed to create proposal')
+    }
+  }
+
+  const handleDeleteProposal = async () => {
+    if (!deleteProposalDialog.id) return
+
+    try {
+      const response = await api.delete(`/.netlify/functions/proposals-delete?id=${deleteProposalDialog.id}`)
+      
+      if (response.data.success) {
+        toast.success('Proposal deleted successfully!')
+        fetchProposals()
+      }
+    } catch (err) {
+      console.error('Failed to delete proposal:', err)
+      const errorMessage = err.response?.data?.error || 'Failed to delete proposal'
+      toast.error(errorMessage)
+    } finally {
+      setDeleteProposalDialog({ open: false, id: null, title: '' })
     }
   }
 
@@ -162,6 +192,7 @@ const Projects = () => {
 
   const resetForm = () => {
     setFormData({
+      contactId: '',
       title: '',
       description: '',
       status: 'planning',
@@ -236,8 +267,10 @@ const Projects = () => {
 
   // If viewing a proposal, show the proposal template
   if (viewingProposal) {
+    const proposal = proposals.find(p => p.id === viewingProposal)
     return (
       <ProposalTemplate 
+        proposal={proposal}
         proposalId={viewingProposal} 
         onBack={() => setViewingProposal(null)} 
       />
@@ -273,6 +306,25 @@ const Projects = () => {
                     <AlertDescription>{error}</AlertDescription>
                   </Alert>
                 )}
+                
+                <div className="space-y-2">
+                  <Label htmlFor="contactId">Client *</Label>
+                  <Select
+                    value={formData.contactId}
+                    onValueChange={(value) => handleFormChange('contactId', value)}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select a client" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {clients.map((client) => (
+                        <SelectItem key={client.id} value={client.id}>
+                          {client.name} ({client.email})
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
                 
                 <div className="space-y-2">
                   <Label htmlFor="title">Project Title *</Label>
@@ -341,7 +393,7 @@ const Projects = () => {
                   </Button>
                   <Button 
                     type="submit" 
-                    disabled={isLoading || !formData.title}
+                    disabled={isLoading || !formData.contactId || !formData.title}
                     className="bg-gradient-to-r from-[#4bbf39] to-[#39bfb0] hover:from-[#3da832] hover:to-[#2da89a]"
                   >
                     {isLoading ? (
@@ -360,18 +412,7 @@ const Projects = () => {
         )}
       </div>
 
-      {/* Success/Error Messages */}
-      {successMessage && (
-        <Alert className="bg-green-50 border-green-200">
-          <CheckCircle className="h-4 w-4 text-green-600" />
-          <AlertDescription className="text-green-800">{successMessage}</AlertDescription>
-        </Alert>
-      )}
-      {adminError && (
-        <Alert variant="destructive">
-          <AlertDescription>{adminError}</AlertDescription>
-        </Alert>
-      )}
+      {/* Success/Error Messages removed - now using toast notifications */}
 
       {/* Admin View with Tabs */}
       {isAdmin ? (
@@ -494,17 +535,28 @@ const Projects = () => {
                         </div>
 
                         <div className="space-y-2">
-                          <Label htmlFor="clientEmail">Client Email</Label>
+                          <Label htmlFor="proposalDescription">Description</Label>
+                          <Textarea
+                            id="proposalDescription"
+                            placeholder="Brief description of the proposal (shown in the list)"
+                            value={proposalForm.description}
+                            onChange={(e) => setProposalForm({ ...proposalForm, description: e.target.value })}
+                            rows={2}
+                          />
+                        </div>
+
+                        <div className="space-y-2">
+                          <Label htmlFor="contactId">Client</Label>
                           <Select
-                            value={proposalForm.clientEmail}
-                            onValueChange={(value) => setProposalForm({ ...proposalForm, clientEmail: value })}
+                            value={proposalForm.contactId}
+                            onValueChange={(value) => setProposalForm({ ...proposalForm, contactId: value })}
                           >
                             <SelectTrigger>
                               <SelectValue placeholder="Select a client" />
                             </SelectTrigger>
                             <SelectContent>
                               {clients.map((client) => (
-                                <SelectItem key={client.id} value={client.email}>
+                                <SelectItem key={client.id} value={client.id}>
                                   {client.name} ({client.email})
                                 </SelectItem>
                               ))}
@@ -576,7 +628,7 @@ const Projects = () => {
                         <div className="flex-1">
                           <h4 className="font-medium">{proposal.title}</h4>
                           <p className="text-sm text-gray-500">
-                            {proposal.client_name} ({proposal.client_email})
+                            {proposal.description || `${proposal.client_name} (${proposal.client_email})`}
                           </p>
                         </div>
                         <div className="flex items-center gap-2">
@@ -590,6 +642,18 @@ const Projects = () => {
                           >
                             <Eye className="w-3 h-3 mr-1" />
                             View
+                          </Button>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => setDeleteProposalDialog({ 
+                              open: true, 
+                              id: proposal.id, 
+                              title: proposal.title 
+                            })}
+                            className="text-red-600 hover:text-red-700 hover:bg-red-50"
+                          >
+                            <Trash2 className="w-3 h-3" />
                           </Button>
                         </div>
                       </div>
@@ -815,7 +879,7 @@ const Projects = () => {
         </DialogContent>
       </Dialog>
 
-      {/* Confirm Delete Dialog */}
+      {/* Confirm Delete Project Dialog */}
       <ConfirmDialog
         open={deleteDialog.open}
         onOpenChange={(open) => setDeleteDialog({ open, id: null, title: '' })}
@@ -823,6 +887,16 @@ const Projects = () => {
         description={`Are you sure you want to delete "${deleteDialog.title}"? This action cannot be undone and will permanently delete all associated data.`}
         confirmText="Delete Project"
         onConfirm={() => handleDeleteProject(deleteDialog.id)}
+      />
+
+      {/* Confirm Delete Proposal Dialog */}
+      <ConfirmDialog
+        open={deleteProposalDialog.open}
+        onOpenChange={(open) => setDeleteProposalDialog({ open, id: null, title: '' })}
+        title="Delete Proposal"
+        description={`Are you sure you want to delete "${deleteProposalDialog.title}"? This action cannot be undone. Note: Signed or executed proposals cannot be deleted.`}
+        confirmText="Delete Proposal"
+        onConfirm={handleDeleteProposal}
       />
     </div>
   )

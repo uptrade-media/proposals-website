@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -24,26 +24,207 @@ import {
   Eye,
   Share2
 } from 'lucide-react'
+import jsPDF from 'jspdf'
+import html2canvas from 'html2canvas'
 import useProjectsStore from '@/lib/projects-store'
 import useAuthStore from '@/lib/auth-store'
+import ProposalSignature from './ProposalSignature'
 
-const ProposalTemplate = ({ proposalId, onBack }) => {
+const ProposalTemplate = ({ proposal: proposalProp, proposalId, onBack }) => {
   const { user } = useAuthStore()
-  const { proposals, fetchProposals } = useProjectsStore()
-  const [proposal, setProposal] = useState(null)
+  const [proposal, setProposal] = useState(proposalProp || null)
   const [showBackToTop, setShowBackToTop] = useState(false)
+  const [exportingPDF, setExportingPDF] = useState(false)
+  const proposalRef = useRef(null)
+
+  const handleExportPDF = async () => {
+    if (!proposal) return
+    
+    setExportingPDF(true)
+    try {
+      const pdf = new jsPDF('p', 'mm', 'a4')
+      const pageWidth = 210
+      const pageHeight = 297
+      const margin = 20
+      const contentWidth = pageWidth - (margin * 2)
+      let yPos = margin
+      
+      // Helper to add page if needed
+      const checkAddPage = (neededSpace = 10) => {
+        if (yPos + neededSpace > pageHeight - margin) {
+          pdf.addPage()
+          yPos = margin
+        }
+      }
+      
+      // Title
+      pdf.setFontSize(24)
+      pdf.setTextColor(75, 191, 57) // Green
+      pdf.text(proposal.title || 'Proposal', margin, yPos)
+      yPos += 15
+      
+      // Client info
+      pdf.setFontSize(12)
+      pdf.setTextColor(100, 100, 100)
+      if (user?.name) {
+        pdf.text(`Prepared for: ${user.name}`, margin, yPos)
+        yPos += 7
+      }
+      if (user?.company) {
+        pdf.text(`Company: ${user.company}`, margin, yPos)
+        yPos += 7
+      }
+      yPos += 5
+      
+      // Status
+      pdf.setFontSize(10)
+      pdf.setTextColor(75, 191, 57)
+      pdf.text(`Status: ${proposal.status?.toUpperCase() || 'DRAFT'}`, pageWidth - margin - 40, margin)
+      
+      // Divider line
+      pdf.setDrawColor(220, 220, 220)
+      pdf.line(margin, yPos, pageWidth - margin, yPos)
+      yPos += 10
+      
+      // Content section
+      pdf.setFontSize(11)
+      pdf.setTextColor(51, 51, 51)
+      
+      // Parse and add MDX content (simplified)
+      const content = mbfmProposalContent
+      
+      if (content.overview) {
+        checkAddPage(20)
+        pdf.setFontSize(14)
+        pdf.setTextColor(75, 191, 57)
+        pdf.text('Overview', margin, yPos)
+        yPos += 8
+        
+        pdf.setFontSize(10)
+        pdf.setTextColor(51, 51, 51)
+        const overviewLines = pdf.splitTextToSize(content.overview, contentWidth)
+        overviewLines.forEach(line => {
+          checkAddPage(7)
+          pdf.text(line, margin, yPos)
+          yPos += 6
+        })
+        yPos += 5
+      }
+      
+      // Goals
+      if (content.goals?.length > 0) {
+        checkAddPage(20)
+        pdf.setFontSize(14)
+        pdf.setTextColor(75, 191, 57)
+        pdf.text('Goals', margin, yPos)
+        yPos += 8
+        
+        pdf.setFontSize(10)
+        pdf.setTextColor(51, 51, 51)
+        content.goals.forEach((goal, idx) => {
+          checkAddPage(7)
+          const goalText = pdf.splitTextToSize(`${idx + 1}. ${goal}`, contentWidth - 10)
+          goalText.forEach(line => {
+            pdf.text(line, margin + 5, yPos)
+            yPos += 6
+          })
+        })
+        yPos += 5
+      }
+      
+      // Deliverables
+      if (content.deliverables?.length > 0) {
+        checkAddPage(20)
+        pdf.setFontSize(14)
+        pdf.setTextColor(75, 191, 57)
+        pdf.text('Deliverables', margin, yPos)
+        yPos += 8
+        
+        pdf.setFontSize(10)
+        pdf.setTextColor(51, 51, 51)
+        content.deliverables.forEach(item => {
+          checkAddPage(12)
+          pdf.setFont(undefined, 'bold')
+          pdf.text(item.title, margin + 5, yPos)
+          yPos += 6
+          
+          pdf.setFont(undefined, 'normal')
+          const descLines = pdf.splitTextToSize(item.description, contentWidth - 10)
+          descLines.forEach(line => {
+            checkAddPage(6)
+            pdf.text(line, margin + 5, yPos)
+            yPos += 5
+          })
+          yPos += 3
+        })
+        yPos += 5
+      }
+      
+      // Investment
+      if (content.investment) {
+        checkAddPage(30)
+        pdf.setFontSize(14)
+        pdf.setTextColor(75, 191, 57)
+        pdf.text('Investment', margin, yPos)
+        yPos += 10
+        
+        pdf.setFontSize(16)
+        pdf.setTextColor(51, 51, 51)
+        pdf.setFont(undefined, 'bold')
+        pdf.text(content.investment, margin + 5, yPos)
+        pdf.setFont(undefined, 'normal')
+        yPos += 10
+      }
+      
+      // Signature section
+      if (proposal.signedAt) {
+        checkAddPage(40)
+        yPos += 10
+        pdf.setDrawColor(220, 220, 220)
+        pdf.line(margin, yPos, pageWidth - margin, yPos)
+        yPos += 10
+        
+        pdf.setFontSize(12)
+        pdf.setTextColor(75, 191, 57)
+        pdf.text('Signature', margin, yPos)
+        yPos += 8
+        
+        pdf.setFontSize(10)
+        pdf.setTextColor(51, 51, 51)
+        pdf.text(`Signed by: ${user?.name || 'Client'}`, margin, yPos)
+        yPos += 6
+        pdf.text(`Date: ${new Date(proposal.signedAt).toLocaleDateString()}`, margin, yPos)
+        yPos += 10
+        
+        // Note about signature
+        pdf.setFontSize(8)
+        pdf.setTextColor(100, 100, 100)
+        pdf.text('(Digital signature captured - see original document for signature image)', margin, yPos)
+      }
+      
+      // Footer
+      pdf.setFontSize(8)
+      pdf.setTextColor(150, 150, 150)
+      const footerY = pageHeight - 10
+      pdf.text('Generated by Uptrade Media Portal', margin, footerY)
+      pdf.text(new Date().toLocaleString(), pageWidth - margin - 40, footerY)
+      
+      // Download
+      pdf.save(`${proposal.title.replace(/[^a-z0-9]/gi, '_')}.pdf`)
+    } catch (error) {
+      console.error('PDF export failed:', error)
+      alert('Failed to export PDF. Please try again.')
+    } finally {
+      setExportingPDF(false)
+    }
+  }
 
   useEffect(() => {
-    if (proposalId) {
-      // Find the proposal in the store or fetch it
-      const foundProposal = proposals.find(p => p.id === parseInt(proposalId))
-      if (foundProposal) {
-        setProposal(foundProposal)
-      } else {
-        fetchProposals()
-      }
+    // If proposal is passed as prop, use it directly
+    if (proposalProp) {
+      setProposal(proposalProp)
     }
-  }, [proposalId, proposals, fetchProposals])
+  }, [proposalProp])
 
   useEffect(() => {
     const handleScroll = () => {
@@ -134,19 +315,26 @@ const ProposalTemplate = ({ proposalId, onBack }) => {
             <Share2 className="w-4 h-4 mr-2" />
             Share
           </Button>
-          <Button variant="outline" size="sm">
+          <Button 
+            variant="outline" 
+            size="sm" 
+            onClick={handleExportPDF}
+            disabled={exportingPDF}
+          >
             <Download className="w-4 h-4 mr-2" />
-            Export PDF
+            {exportingPDF ? 'Exporting...' : 'Export PDF'}
           </Button>
         </div>
       </div>
 
-      {/* Proposal Header */}
-      <Card className="mb-8">
-        <CardHeader className="bg-gradient-to-r from-[#4bbf39]/5 to-[#39bfb0]/5">
-          <div className="flex items-center justify-between">
-            <div>
-              <CardTitle className="text-2xl mb-2">{mbfmProposalContent.title}</CardTitle>
+      {/* Proposal Content - wrapped in ref for PDF export */}
+      <div ref={proposalRef}>
+        {/* Proposal Header */}
+        <Card className="mb-8">
+          <CardHeader className="bg-gradient-to-r from-[#4bbf39]/5 to-[#39bfb0]/5">
+            <div className="flex items-center justify-between">
+              <div>
+                <CardTitle className="text-2xl mb-2">{mbfmProposalContent.title}</CardTitle>
               <CardDescription className="text-lg">
                 Prepared for: {mbfmProposalContent.client}
               </CardDescription>
@@ -353,28 +541,17 @@ const ProposalTemplate = ({ proposalId, onBack }) => {
         </CardContent>
       </Card>
 
-      {/* Call to Action */}
-      <Card className="mb-8 bg-gradient-to-r from-[#4bbf39]/10 to-[#39bfb0]/10">
-        <CardContent className="p-8 text-center">
-          <h3 className="text-2xl font-bold text-gray-900 mb-4">Ready to Transform Your Digital Presence?</h3>
-          <p className="text-lg text-gray-700 mb-6">
-            Every day you wait is revenue lost to competitors. Let's fix your mobile experience and dominate local search.
-          </p>
-          <div className="flex flex-col sm:flex-row gap-4 justify-center">
-            <Button 
-              size="lg" 
-              className="bg-gradient-to-r from-[#4bbf39] to-[#39bfb0] hover:from-[#3da832] hover:to-[#2da89a]"
-            >
-              <CheckCircle className="w-5 h-5 mr-2" />
-              Approve This Proposal
-            </Button>
-            <Button size="lg" variant="outline">
-              <Calendar className="w-5 h-5 mr-2" />
-              Schedule a Call
-            </Button>
-          </div>
-        </CardContent>
-      </Card>
+      {/* Signature Section */}
+      {proposal && (
+        <ProposalSignature 
+          proposalId={proposal.id}
+          proposalTitle={proposal.title}
+          clientName={user?.name}
+          clientEmail={user?.email}
+        />
+      )}
+      </div>
+      {/* End of PDF export content */}
 
       {/* Back to Top Button */}
       {showBackToTop && (

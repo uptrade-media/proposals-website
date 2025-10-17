@@ -68,7 +68,7 @@ export async function handler(event) {
 
     // Parse request body
     const body = JSON.parse(event.body || '{}')
-    const { name, email, company } = body
+    const { name, email, company, phone, website, source } = body
 
     // Validate required fields
     if (!name || !email) {
@@ -119,6 +119,9 @@ export async function handler(event) {
       email: email.toLowerCase(),
       name,
       company: company || null,
+      phone: phone || null,
+      website: website || null,
+      source: source || null,
       role: 'client',
       accountSetup: 'false', // Client needs to set up account
       password: null, // No password yet
@@ -138,11 +141,15 @@ export async function handler(event) {
 
     // Send account setup email
     if (RESEND_API_KEY) {
+      console.log('[admin-clients-create] Resend API key is configured')
+      console.log('[admin-clients-create] RESEND_FROM_EMAIL:', RESEND_FROM_EMAIL)
+      console.log('[admin-clients-create] PORTAL_URL:', PORTAL_URL)
       try {
         const resend = new Resend(RESEND_API_KEY)
         const setupUrl = `${PORTAL_URL}/account-setup?token=${magicToken}`
         
-        await resend.emails.send({
+        console.log('[admin-clients-create] Sending email to:', contact.email)
+        const emailResult = await resend.emails.send({
           from: RESEND_FROM_EMAIL,
           to: contact.email,
           subject: 'Welcome to Uptrade Media Portal - Set Up Your Account',
@@ -309,11 +316,15 @@ export async function handler(event) {
           `
         })
 
-        console.log(`Account setup email sent to ${contact.email}`)
+        console.log(`[admin-clients-create] Email send result:`, JSON.stringify(emailResult))
+        console.log(`[admin-clients-create] Account setup email sent to ${contact.email}`)
       } catch (emailError) {
-        console.error('Failed to send account setup email:', emailError)
+        console.error('[admin-clients-create] Failed to send account setup email:', emailError)
+        console.error('[admin-clients-create] Error details:', emailError.message, emailError.stack)
         // Don't fail the request if email fails
       }
+    } else {
+      console.warn('[admin-clients-create] RESEND_API_KEY not configured, skipping email')
     }
 
     return {

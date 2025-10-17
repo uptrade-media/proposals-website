@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import Sidebar from './Sidebar'
 import Dashboard from './Dashboard'
 import Reports from './Reports'
@@ -6,6 +6,8 @@ import Projects from './Projects'
 import Files from './Files'
 import Messages from './Messages'
 import Billing from './Billing'
+import ClientManagement from './ClientManagement'
+import EmailManager from '@/pages/EmailManager'
 import UptradeLoading from './UptradeLoading'
 import useAuthStore from '@/lib/auth-store'
 import { Menu, X } from 'lucide-react'
@@ -14,17 +16,17 @@ import { Button } from '@/components/ui/button'
 const MainLayout = () => {
   const [activeSection, setActiveSection] = useState('dashboard')
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false)
-  const { user, checkAuth, isLoading } = useAuthStore()
+  const { user, isLoading } = useAuthStore()
 
-  useEffect(() => {
-    // Check authentication on mount (only once)
-    checkAuth()
-  }, []) // Empty dependency array - only run once on mount
+  // Debug logging
+  console.log('[MainLayout] Render', { activeSection, isLoading, hasUser: !!user, userEmail: user?.email })
+
+  // No need to check auth here - App.jsx and Protected.jsx already handle it
 
   const renderContent = () => {
     switch (activeSection) {
       case 'dashboard':
-        return <Dashboard />
+        return <Dashboard onNavigate={setActiveSection} />
       case 'reports':
         return <Reports />
       case 'projects':
@@ -35,8 +37,12 @@ const MainLayout = () => {
         return <Messages />
       case 'billing':
         return <Billing />
+      case 'clients':
+        return <ClientManagement />
+      case 'email':
+        return <EmailManager />
       default:
-        return <Dashboard />
+        return <Dashboard onNavigate={setActiveSection} />
     }
   }
 
@@ -78,10 +84,10 @@ const MainLayout = () => {
       {isMobileSidebarOpen && (
         <>
           <div
-            className="lg:hidden fixed inset-0 bg-black bg-opacity-50 z-40"
+            className="lg:hidden fixed inset-0 bg-black/50 z-[100]"
             onClick={() => setIsMobileSidebarOpen(false)}
           />
-          <aside className="lg:hidden fixed inset-y-0 left-0 w-64 bg-white border-r z-50 overflow-y-auto">
+          <aside className="lg:hidden fixed inset-y-0 left-0 w-64 bg-white border-r shadow-xl z-[101] overflow-y-auto">
             <Sidebar
               activeSection={activeSection}
               onSectionChange={(section) => {

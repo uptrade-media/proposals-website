@@ -9,10 +9,12 @@ const MAX_AGE = 7 * 24 * 60 * 60 // 7 days in seconds
 
 exports.handler = async (event) => {
   // CORS headers
+  const origin = event.headers.origin || 'http://localhost:8888'
   const headers = {
-    'Access-Control-Allow-Origin': '*',
+    'Access-Control-Allow-Origin': origin,
     'Access-Control-Allow-Headers': 'Content-Type',
     'Access-Control-Allow-Methods': 'POST, OPTIONS',
+    'Access-Control-Allow-Credentials': 'true',
     'Content-Type': 'application/json',
   }
 
@@ -124,7 +126,7 @@ exports.handler = async (event) => {
     ].filter(Boolean).join('; ')
 
     // Always redirect to dashboard for now since admin route isn't defined
-    const redirect = '/dashboard'
+    const redirect = userRole === 'admin' ? '/admin' : '/dashboard'
 
     return {
       statusCode: 200,

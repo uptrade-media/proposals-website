@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -27,6 +27,7 @@ import {
 import useBillingStore from '@/lib/billing-store'
 import useProjectsStore from '@/lib/projects-store'
 import useAuthStore from '@/lib/auth-store'
+import api from '@/lib/api'
 
 const Billing = () => {
   const { user } = useAuthStore()
@@ -51,11 +52,14 @@ const Billing = () => {
     clearError 
   } = useBillingStore()
   
+  const hasFetchedRef = useRef(false)
   const [activeTab, setActiveTab] = useState('overview')
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false)
   const [selectedInvoice, setSelectedInvoice] = useState(null)
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false)
+  const [clients, setClients] = useState([])
   const [formData, setFormData] = useState({
+    contactId: '',
     project_id: '',
     amount: '',
     tax_rate: '0',
@@ -65,12 +69,29 @@ const Billing = () => {
   })
   const [statusFilter, setStatusFilter] = useState('')
 
+  // Fetch initial data only once
   useEffect(() => {
+    if (hasFetchedRef.current) return
+    
+    console.log('[Billing] Fetching initial data')
+    hasFetchedRef.current = true
     fetchProjects()
     fetchBillingSummary()
     fetchInvoices()
     fetchOverdueInvoices()
-  }, [fetchProjects, fetchBillingSummary, fetchInvoices, fetchOverdueInvoices])
+    if (isAdmin) {
+      fetchClients()
+    }
+  }, [])
+
+  const fetchClients = async () => {
+    try {
+      const response = await api.get('/.netlify/functions/admin-clients-list')
+      setClients(response.data.clients || [])
+    } catch (err) {
+      console.error('Failed to fetch clients:', err)
+    }
+  }
 
   const handleFormChange = (field, value) => {
     setFormData(prev => ({
@@ -85,6 +106,7 @@ const Billing = () => {
 
   const resetForm = () => {
     setFormData({
+      contactId: '',
       project_id: '',
       amount: '',
       tax_rate: '0',
@@ -98,9 +120,12 @@ const Billing = () => {
     e.preventDefault()
     
     const invoiceData = {
-      ...formData,
+      contactId: formData.contactId,
+      projectId: formData.project_id || null,
       amount: parseFloat(formData.amount),
-      tax_rate: parseFloat(formData.tax_rate)
+      taxRate: parseFloat(formData.tax_rate),
+      dueDate: formData.due_date,
+      description: formData.description || null
     }
     
     const result = await createInvoice(invoiceData)
@@ -153,8 +178,8 @@ const Billing = () => {
   }
 
   const filteredInvoices = statusFilter 
-    ? invoices.filter(invoice => invoice.status === statusFilter)
-    : invoices
+    ? (invoices || []).filter(invoice => invoice.status === statusFilter)
+    : (invoices || [])
 
   const getStatusIcon = (status) => {
     switch (status) {
@@ -202,13 +227,32 @@ const Billing = () => {
                 )}
                 
                 <div className="space-y-2">
-                  <Label htmlFor="project_id">Project *</Label>
+                  <Label htmlFor="contactId">Client *</Label>
+                  <Select 
+                    value={formData.contactId} 
+                    onValueChange={(value) => handleFormChange('contactId', value)}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select client" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {clients.map((client) => (
+                        <SelectItem key={client.id} value={client.id}>
+                          {client.name} ({client.email})
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                
+                <div className="space-y-2">
+                  <Label htmlFor="project_id">Project (Optional)</Label>
                   <Select 
                     value={formData.project_id} 
                     onValueChange={(value) => handleFormChange('project_id', value)}
                   >
                     <SelectTrigger>
-                      <SelectValue placeholder="Select project" />
+                      <SelectValue placeholder="Select project (optional)" />
                     </SelectTrigger>
                     <SelectContent>
                       {projects.map((project) => (
@@ -280,7 +324,7 @@ const Billing = () => {
                   </Button>
                   <Button 
                     type="submit" 
-                    disabled={isLoading || !formData.project_id || !formData.amount || !formData.due_date}
+                    disabled={isLoading || !formData.contactId || !formData.amount || !formData.due_date}
                     className="bg-gradient-to-r from-[#4bbf39] to-[#39bfb0] hover:from-[#3da832] hover:to-[#2da89a]"
                   >
                     {isLoading ? (
@@ -536,7 +580,7 @@ const Billing = () => {
         </TabsContent>
 
         <TabsContent value="overdue" className="space-y-4">
-          {overdueInvoices.length === 0 ? (
+          {(!overdueInvoices || overdueInvoices.length === 0) ? (
             <Card>
               <CardContent className="flex flex-col items-center justify-center py-12">
                 <CheckCircle className="h-12 w-12 text-green-400 mb-4" />
@@ -551,11 +595,11 @@ const Billing = () => {
               <Alert>
                 <AlertTriangle className="h-4 w-4" />
                 <AlertDescription>
-                  You have {overdueInvoices.length} overdue invoice{overdueInvoices.length !== 1 ? 's' : ''} requiring attention.
+                  You have {(overdueInvoices || []).length} overdue invoice{(overdueInvoices || []).length !== 1 ? 's' : ''} requiring attention.
                 </AlertDescription>
               </Alert>
               
-              {overdueInvoices.map((invoice) => (
+              {(overdueInvoices || []).map((invoice) => (
                 <Card key={invoice.id} className="border-red-200 bg-red-50">
                   <CardContent className="p-6">
                     <div className="flex items-center justify-between">

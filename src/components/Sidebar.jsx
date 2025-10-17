@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { 
@@ -12,26 +13,49 @@ import {
   Menu,
   X,
   User,
+  Users,
   FolderOpen,
-  Shield
+  Shield,
+  Mail,
+  LineChart
 } from 'lucide-react'
 import useAuthStore from '@/lib/auth-store'
+import useReportsStore from '@/lib/reports-store'
 
 const Sidebar = ({ activeSection, onSectionChange, isMobile = false }) => {
   const [isCollapsed, setIsCollapsed] = useState(false)
+  const navigate = useNavigate()
   const { user, logout } = useAuthStore()
+  const { getUnreadAuditsCount } = useReportsStore()
+
+  const unreadAudits = getUnreadAuditsCount()
 
   const navigationItems = [
-    { id: 'dashboard', label: 'Dashboard', icon: Home, badge: null },
-    { id: 'projects', label: 'Projects', icon: FileText, badge: '2' },
-    { id: 'files', label: 'Files', icon: FolderOpen, badge: null },
-    { id: 'messages', label: 'Messages', icon: MessageSquare, badge: '3' },
-    { id: 'billing', label: 'Billing', icon: DollarSign, badge: '1' },
-    { id: 'reports', label: 'Reports', icon: BarChart3, badge: null },
+    { id: 'dashboard', label: 'Dashboard', icon: Home, badge: null, route: null },
+    { id: 'audits', label: 'Audits', icon: LineChart, badge: unreadAudits > 0 ? unreadAudits.toString() : null, route: '/audits' },
+    { id: 'projects', label: 'Projects', icon: FileText, badge: '2', route: null },
+    { id: 'files', label: 'Files', icon: FolderOpen, badge: null, route: null },
+    { id: 'messages', label: 'Messages', icon: MessageSquare, badge: '3', route: null },
+    { id: 'billing', label: 'Billing', icon: DollarSign, badge: '1', route: null },
+    { id: 'reports', label: 'Reports', icon: BarChart3, badge: null, route: null },
   ]
 
-  // Admin features are now integrated into each section
-  // No separate admin menu item needed
+  // Admin-only navigation items
+  const adminItems = user?.role === 'admin' ? [
+    { id: 'clients', label: 'Clients', icon: Users, badge: null, route: null },
+    { id: 'email', label: 'Email Manager', icon: Mail, badge: null, route: null },
+  ] : []
+
+  // Combine navigation items
+  const allNavigationItems = [...navigationItems, ...adminItems]
+
+  const handleNavigation = (item) => {
+    if (item.route) {
+      navigate(item.route)
+    } else {
+      onSectionChange(item.id)
+    }
+  }
 
   const handleLogout = async () => {
     await logout()
@@ -89,7 +113,7 @@ const Sidebar = ({ activeSection, onSectionChange, isMobile = false }) => {
 
       {/* Navigation */}
       <nav className="flex-1 p-4 space-y-1">
-        {navigationItems.map((item) => {
+        {allNavigationItems.map((item) => {
           const Icon = item.icon
           const isActive = activeSection === item.id
           
@@ -102,7 +126,7 @@ const Sidebar = ({ activeSection, onSectionChange, isMobile = false }) => {
                   ? 'bg-[#4bbf39]/10 text-[#4bbf39] hover:bg-[#4bbf39]/20' 
                   : 'hover:bg-gray-100'
               }`}
-              onClick={() => onSectionChange(item.id)}
+              onClick={() => handleNavigation(item)}
             >
               <Icon className={`h-4 w-4 ${isCollapsed ? '' : 'mr-3'}`} />
               {!isCollapsed && (

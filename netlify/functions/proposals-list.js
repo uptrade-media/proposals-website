@@ -94,7 +94,7 @@ export async function handler(event) {
       whereConditions.push(eq(schema.proposals.status, status))
     }
 
-    // Fetch proposals
+    // Fetch proposals with activity
     const proposals = await db.query.proposals.findMany({
       where: whereConditions.length > 0 ? and(...whereConditions) : undefined,
       orderBy: [desc(schema.proposals.createdAt)],
@@ -114,42 +114,54 @@ export async function handler(event) {
             title: true,
             status: true
           }
-        }
+        },
+        activity: true
       }
     })
 
-    // Format response (exclude MDX content for list view)
-    const formattedProposals = proposals.map(p => ({
-      id: p.id,
-      slug: p.slug,
-      title: p.title,
-      status: p.status,
-      totalAmount: p.totalAmount ? parseFloat(p.totalAmount) : null,
-      validUntil: p.validUntil,
-      signedAt: p.signedAt,
-      adminSignedAt: p.adminSignedAt,
-      fullyExecutedAt: p.fullyExecutedAt,
-      createdAt: p.createdAt,
-      updatedAt: p.updatedAt,
-      // Include contact info for admin view
-      ...(payload.role === 'admin' && p.contact ? {
-        contact: {
-          id: p.contact.id,
-          name: p.contact.name,
-          email: p.contact.email,
-          company: p.contact.company,
-          avatar: p.contact.avatar
-        }
-      } : {}),
-      // Include project info if linked
-      ...(p.project ? {
-        project: {
-          id: p.project.id,
-          title: p.project.title,
-          status: p.project.status
-        }
-      } : {})
-    }))
+    // Format response with activity counts
+    const formattedProposals = proposals.map(p => {
+      const viewCount = p.activity?.filter(a => a.action === 'viewed').length || 0
+      const signCount = p.activity?.filter(a => a.action === 'signed').length || 0
+      
+      return {
+        id: p.id,
+        slug: p.slug,
+        title: p.title,
+        description: p.description,
+        status: p.status,
+        version: p.version,
+        totalAmount: p.totalAmount ? parseFloat(p.totalAmount) : null,
+        validUntil: p.validUntil,
+        sentAt: p.sentAt,
+        viewedAt: p.viewedAt,
+        viewCount,
+        signCount,
+        signedAt: p.signedAt,
+        adminSignedAt: p.adminSignedAt,
+        fullyExecutedAt: p.fullyExecutedAt,
+        createdAt: p.createdAt,
+        updatedAt: p.updatedAt,
+        // Include contact info for admin view
+        ...(payload.role === 'admin' && p.contact ? {
+          contact: {
+            id: p.contact.id,
+            name: p.contact.name,
+            email: p.contact.email,
+            company: p.contact.company,
+            avatar: p.contact.avatar
+          }
+        } : {}),
+        // Include project info if linked
+        ...(p.project ? {
+          project: {
+            id: p.project.id,
+            title: p.project.title,
+            status: p.project.status
+          }
+        } : {})
+      }
+    })
 
     return {
       statusCode: 200,

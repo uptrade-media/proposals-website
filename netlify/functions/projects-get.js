@@ -97,6 +97,31 @@ export async function handler(event) {
             avatar: true
           }
         },
+        milestones: {
+          orderBy: [desc(schema.projectMilestones.order)],
+          columns: {
+            id: true,
+            title: true,
+            description: true,
+            status: true,
+            dueDate: true,
+            completedAt: true,
+            order: true,
+            createdAt: true
+          }
+        },
+        members: {
+          with: {
+            member: {
+              columns: {
+                id: true,
+                name: true,
+                email: true,
+                avatar: true
+              }
+            }
+          }
+        },
         proposals: {
           orderBy: [desc(schema.proposals.createdAt)],
           columns: {
@@ -203,6 +228,28 @@ export async function handler(event) {
         company: project.contact.company,
         avatar: project.contact.avatar
       } : null,
+      milestones: project.milestones.map(m => ({
+        id: m.id,
+        title: m.title,
+        description: m.description,
+        status: m.status,
+        dueDate: m.dueDate,
+        completedAt: m.completedAt,
+        order: m.order,
+        createdAt: m.createdAt
+      })),
+      members: project.members.map(m => ({
+        id: m.id,
+        memberId: m.memberId,
+        role: m.role,
+        joinedAt: m.joinedAt,
+        member: m.member ? {
+          id: m.member.id,
+          name: m.member.name,
+          email: m.member.email,
+          avatar: m.member.avatar
+        } : null
+      })),
       proposals: project.proposals.map(p => ({
         id: p.id,
         slug: p.slug,

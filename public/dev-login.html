@@ -1,0 +1,120 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Dev Login</title>
+  <style>
+    body {
+      font-family: system-ui, -apple-system, sans-serif;
+      max-width: 600px;
+      margin: 100px auto;
+      padding: 20px;
+      background: #f5f5f5;
+    }
+    .card {
+      background: white;
+      padding: 30px;
+      border-radius: 8px;
+      box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+    }
+    h1 {
+      margin: 0 0 10px;
+      color: #333;
+    }
+    p {
+      color: #666;
+      margin: 0 0 20px;
+    }
+    button {
+      background: linear-gradient(to right, #4bbf39, #39bfb0);
+      color: white;
+      border: none;
+      padding: 12px 24px;
+      border-radius: 6px;
+      font-size: 16px;
+      font-weight: 600;
+      cursor: pointer;
+      width: 100%;
+    }
+    button:hover {
+      opacity: 0.9;
+    }
+    button:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+    .message {
+      margin-top: 15px;
+      padding: 10px;
+      border-radius: 4px;
+      font-size: 14px;
+    }
+    .success {
+      background: #d4edda;
+      color: #155724;
+      border: 1px solid #c3e6cb;
+    }
+    .error {
+      background: #f8d7da;
+      color: #721c24;
+      border: 1px solid #f5c6cb;
+    }
+    .info {
+      background: #d1ecf1;
+      color: #0c5460;
+      border: 1px solid #bee5eb;
+      margin-bottom: 20px;
+    }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <h1>🔧 Development Login</h1>
+    <p>Quick admin login for local development (localhost only)</p>
+    
+    <div class="message info">
+      <strong>Note:</strong> This will log you in as <strong>ramsey@uptrademedia.com</strong> (Admin)
+    </div>
+    
+    <button id="loginBtn" onclick="devLogin()">
+      Login as Admin
+    </button>
+    
+    <div id="message"></div>
+  </div>
+
+  <script>
+    async function devLogin() {
+      const btn = document.getElementById('loginBtn')
+      const msg = document.getElementById('message')
+      
+      btn.disabled = true
+      btn.textContent = 'Logging in...'
+      msg.innerHTML = ''
+      
+      try {
+        const response = await fetch('/.netlify/functions/dev-login', {
+          method: 'POST',
+          credentials: 'include'
+        })
+        
+        const data = await response.json()
+        
+        if (response.ok) {
+          msg.innerHTML = '<div class="message success">✓ Logged in successfully! Redirecting...</div>'
+          setTimeout(() => {
+            window.location.href = '/dashboard'
+          }, 1000)
+        } else {
+          throw new Error(data.error || 'Login failed')
+        }
+      } catch (err) {
+        msg.innerHTML = `<div class="message error">✗ ${err.message}</div>`
+        btn.disabled = false
+        btn.textContent = 'Login as Admin'
+      }
+    }
+  </script>
+</body>
+</html>

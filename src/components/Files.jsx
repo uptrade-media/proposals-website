@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -53,6 +53,7 @@ const Files = () => {
     clearError 
   } = useFilesStore()
   
+  const hasFetchedRef = useRef(false)
   const [selectedProject, setSelectedProject] = useState(null)
   const [isUploadDialogOpen, setIsUploadDialogOpen] = useState(false)
   const [selectedFiles, setSelectedFiles] = useState([])
@@ -62,10 +63,15 @@ const Files = () => {
   const [dragOver, setDragOver] = useState(false)
   const [deleteDialog, setDeleteDialog] = useState({ open: false, file: null })
 
+  // Fetch initial data only once
   useEffect(() => {
+    if (hasFetchedRef.current) return
+    
+    console.log('[Files] Fetching initial data')
+    hasFetchedRef.current = true
     fetchProjects()
     fetchCategories()
-  }, [fetchProjects, fetchCategories])
+  }, [])
 
   useEffect(() => {
     if (projects.length > 0 && !selectedProject) {

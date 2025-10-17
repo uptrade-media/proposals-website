@@ -1,5 +1,5 @@
 import { create } from 'zustand'
-import axios from 'axios'
+import api from './api'
 
 const useProjectsStore = create((set, get) => ({
   projects: [],
@@ -17,7 +17,7 @@ const useProjectsStore = create((set, get) => ({
     set({ isLoading: true, error: null })
     
     try {
-      const response = await axios.get('/.netlify/functions/projects-list')
+      const response = await api.get('/.netlify/functions/projects-list')
       set({ 
         projects: response.data.projects || [],
         isLoading: false 
@@ -38,7 +38,7 @@ const useProjectsStore = create((set, get) => ({
     set({ isLoading: true, error: null })
     
     try {
-      const response = await axios.get(`/.netlify/functions/projects-get/${projectId}`)
+      const response = await api.get(`/.netlify/functions/projects-get/${projectId}`)
       set({ 
         currentProject: response.data.project,
         isLoading: false 
@@ -59,7 +59,7 @@ const useProjectsStore = create((set, get) => ({
     set({ isLoading: true, error: null })
     
     try {
-      const response = await axios.post('/.netlify/functions/projects-create', projectData)
+      const response = await api.post('/.netlify/functions/projects-create', projectData)
       
       // Add new project to the list
       set(state => ({ 
@@ -83,7 +83,7 @@ const useProjectsStore = create((set, get) => ({
     set({ isLoading: true, error: null })
     
     try {
-      const response = await axios.put(`/.netlify/functions/projects-update/${projectId}`, projectData)
+      const response = await api.put(`/.netlify/functions/projects-update/${projectId}`, projectData)
       
       // Update project in the list
       set(state => ({
@@ -113,7 +113,7 @@ const useProjectsStore = create((set, get) => ({
     
     try {
       const params = projectId ? `?projectId=${projectId}` : ''
-      const response = await axios.get(`/.netlify/functions/proposals-list${params}`)
+      const response = await api.get(`/.netlify/functions/proposals-list${params}`)
       set({ 
         proposals: response.data.proposals || [],
         isLoading: false 
@@ -134,7 +134,7 @@ const useProjectsStore = create((set, get) => ({
     set({ isLoading: true, error: null })
     
     try {
-      const response = await axios.post('/.netlify/functions/proposals-create', proposalData)
+      const response = await api.post('/.netlify/functions/proposals-create', proposalData)
       
       // Add new proposal to the list
       set(state => ({ 
@@ -158,7 +158,7 @@ const useProjectsStore = create((set, get) => ({
     set({ isLoading: true, error: null })
     
     try {
-      const response = await axios.get(`/.netlify/functions/proposals-get/${proposalId}`)
+      const response = await api.get(`/.netlify/functions/proposals-get/${proposalId}`)
       set({ 
         currentProposal: response.data.proposal,
         isLoading: false 
@@ -179,7 +179,7 @@ const useProjectsStore = create((set, get) => ({
     set({ isLoading: true, error: null })
     
     try {
-      const response = await axios.put(`/.netlify/functions/proposals-update/${proposalId}`, proposalData)
+      const response = await api.put(`/.netlify/functions/proposals-update/${proposalId}`, proposalData)
       
       // Update proposal in the list
       set(state => ({
@@ -208,7 +208,7 @@ const useProjectsStore = create((set, get) => ({
     set({ isLoading: true, error: null })
     
     try {
-      const response = await axios.post(`/.netlify/functions/proposals-accept/${proposalId}`)
+      const response = await api.post(`/.netlify/functions/proposals-accept/${proposalId}`)
       
       // Update proposal in the list
       set(state => ({

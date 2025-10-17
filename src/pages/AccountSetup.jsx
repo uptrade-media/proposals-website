@@ -7,7 +7,7 @@ import { Input } from '../components/ui/input'
 import { Label } from '../components/ui/label'
 import { Alert, AlertDescription } from '../components/ui/alert'
 import { Loader2, KeyRound, Mail, Eye, EyeOff, Lock } from 'lucide-react'
-import axios from 'axios'
+import api from '@/lib/api'
 import useAuthStore from '../lib/auth-store'
 import HyperspaceBackground from '../components/HyperspaceBackground'
 import whitelogo from '../assets/whitelogo.svg'
@@ -41,7 +41,7 @@ export default function AccountSetup() {
 
   const validateToken = async () => {
     try {
-      const res = await axios.post('/.netlify/functions/auth-validate-setup-token', { token })
+      const res = await api.post('/.netlify/functions/auth-validate-setup-token', { token })
       setTokenData(res.data)
       setIsValidating(false)
     } catch (err) {
@@ -68,7 +68,7 @@ export default function AccountSetup() {
     setIsSubmitting(true)
 
     try {
-      const res = await axios.post('/.netlify/functions/auth-complete-setup', {
+      const res = await api.post('/.netlify/functions/auth-complete-setup', {
         token,
         password,
         method: 'password'
@@ -89,7 +89,7 @@ export default function AccountSetup() {
     setError('')
 
     try {
-      const res = await axios.post('/.netlify/functions/auth-complete-setup', {
+      const res = await api.post('/.netlify/functions/auth-complete-setup', {
         token,
         googleCredential: credentialResponse.credential,
         method: 'google'

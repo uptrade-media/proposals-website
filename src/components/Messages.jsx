@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -47,6 +47,7 @@ const Messages = () => {
     clearError 
   } = useMessagesStore()
   
+  const hasFetchedRef = useRef(false)
   const [activeTab, setActiveTab] = useState('inbox')
   const [isComposeDialogOpen, setIsComposeDialogOpen] = useState(false)
   const [selectedConversation, setSelectedConversation] = useState(null)
@@ -59,12 +60,17 @@ const Messages = () => {
   const [replyContent, setReplyContent] = useState('')
   const [searchTerm, setSearchTerm] = useState('')
 
+  // Fetch initial data only once
   useEffect(() => {
+    if (hasFetchedRef.current) return
+    
+    console.log('[Messages] Fetching initial data')
+    hasFetchedRef.current = true
     fetchProjects()
     fetchContacts()
     fetchConversations()
     fetchMessages()
-  }, [fetchProjects, fetchContacts, fetchConversations, fetchMessages])
+  }, [])
 
   const handleComposeFormChange = (field, value) => {
     setComposeForm(prev => ({

@@ -4,7 +4,7 @@ import { useNavigate, useSearchParams } from 'react-router-dom'
 import { Card, CardContent } from '../components/ui/card'
 import { Alert, AlertDescription } from '../components/ui/alert'
 import { Loader2 } from 'lucide-react'
-import axios from 'axios'
+import api from '@/lib/api'
 
 export default function MagicLogin() {
   const [searchParams] = useSearchParams()
@@ -28,7 +28,7 @@ export default function MagicLogin() {
 
   const authenticateWithMagicLink = async (token, redirect) => {
     try {
-      const res = await axios.post('/.netlify/functions/auth-magic-login', { token })
+      const res = await api.post('/.netlify/functions/auth-magic-login', { token })
       
       setStatus('success')
       

@@ -1,5 +1,5 @@
 import { create } from 'zustand'
-import axios from 'axios'
+import api from './api'
 
 const useFilesStore = create((set, get) => ({
   files: [],
@@ -18,7 +18,7 @@ const useFilesStore = create((set, get) => ({
   // Fetch file categories
   fetchCategories: async () => {
     try {
-      const response = await axios.get('/files/categories')
+      const response = await api.get('/files/categories')
       set({ categories: response.data.categories })
       return { success: true, data: response.data }
     } catch (error) {
@@ -39,7 +39,7 @@ const useFilesStore = create((set, get) => ({
       if (filters.isPublic !== undefined) params.append('isPublic', filters.isPublic)
       
       const url = `/.netlify/functions/files-list${params.toString() ? `?${params.toString()}` : ''}`
-      const response = await axios.get(url)
+      const response = await api.get(url)
       
       set({ 
         files: response.data.files || [],
@@ -71,7 +71,7 @@ const useFilesStore = create((set, get) => ({
         reader.readAsDataURL(file)
       })
       
-      const response = await axios.post('/.netlify/functions/files-upload', {
+      const response = await api.post('/.netlify/functions/files-upload', {
         filename: file.name,
         mimeType: file.type,
         fileSize: file.size,
@@ -142,7 +142,7 @@ const useFilesStore = create((set, get) => ({
     set({ isLoading: true, error: null })
     
     try {
-      const response = await axios.get(`/.netlify/functions/files-download/${fileId}`, {
+      const response = await api.get(`/.netlify/functions/files-download/${fileId}`, {
         responseType: 'blob'
       })
       
@@ -173,7 +173,7 @@ const useFilesStore = create((set, get) => ({
     set({ isLoading: true, error: null })
     
     try {
-      const response = await axios.put(`/files/${fileId}`, fileData)
+      const response = await api.put(`/files/${fileId}`, fileData)
       
       // Update file in the list
       set(state => ({
@@ -199,7 +199,7 @@ const useFilesStore = create((set, get) => ({
     set({ isLoading: true, error: null })
     
     try {
-      await axios.delete(`/.netlify/functions/files-delete/${fileId}`)
+      await api.delete(`/.netlify/functions/files-delete/${fileId}`)
       
       // Remove file from the list
       set(state => ({

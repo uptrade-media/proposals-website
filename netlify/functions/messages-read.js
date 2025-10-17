@@ -63,12 +63,12 @@ export async function handler(event) {
   try {
     const payload = jwt.verify(token, JWT_SECRET)
     
-    // Only Google OAuth users can mark messages as read
-    if (payload.type !== 'google') {
+    // Verify user is authenticated (accept all auth types: google, password, email, etc)
+    if (!payload.userId && !payload.email) {
       return {
         statusCode: 403,
         headers,
-        body: JSON.stringify({ error: 'Only authenticated users can mark messages as read' })
+        body: JSON.stringify({ error: 'Invalid session' })
       }
     }
 

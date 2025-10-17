@@ -1,6 +1,7 @@
 // netlify/functions/proposals-sign.js (CommonJS)
-const { getStore } = require('@netlify/blobs')
 const { Resend } = require('resend')
+const { neon } = require('@neondatabase/serverless')
+const jwt = require('jsonwebtoken')
 
 const corsHeaders = (event) => ({
   'Access-Control-Allow-Origin': event.headers.origin || '*',
@@ -160,6 +161,8 @@ const sendFullyExecutedContract = async (proposalData) => {
 }
 
 exports.handler = async (event) => {
+  console.log('=== PROPOSALS-SIGN START ===')
+  
   // Handle CORS preflight
   if (event.httpMethod === 'OPTIONS') {
     return {
@@ -173,6 +176,7 @@ exports.handler = async (event) => {
   }
 
   try {
+    console.log('Parsing request body...')
     // Parse request body
     const { 
       proposalId, 
@@ -184,47 +188,64 @@ exports.handler = async (event) => {
       isAdminSignature = false 
     } = JSON.parse(event.body || '{}')
 
+    console.log('Request data:', { proposalId, proposalTitle, signedBy, clientEmail, isAdminSignature })
+
     if (!proposalId || !signature || !signedAt) {
+      console.error('Validation failed: Missing required fields')
       return json(400, { error: 'Missing required fields' }, event)
     }
 
-    const store = getStore('signed-contracts')
-    const contractKey = `${proposalId}.json`
+    // Connect to database
+    console.log('Connecting to database...')
+    const sql = neon(process.env.DATABASE_URL)
     
-    // Get existing contract data if it exists
-    let contractData
-    try {
-      contractData = await store.getJSON(contractKey)
-    } catch (error) {
-      // Contract doesn't exist yet (first signature)
-      contractData = null
+    // Get existing proposal
+    console.log('Fetching proposal from database...')
+    const proposals = await sql`
+      SELECT id, title, status, signed_at, admin_signed_at
+      FROM proposals
+      WHERE id = ${proposalId}
+    `
+    
+    if (proposals.length === 0) {
+      console.error('Proposal not found:', proposalId)
+      return json(404, { error: 'Proposal not found' }, event)
     }
+    
+    const proposal = proposals[0]
+    console.log('Proposal found:', { id: proposal.id, status: proposal.status })
 
     if (isAdminSignature) {
+      console.log('Admin counter-signature flow')
       // Admin is counter-signing
-      if (!contractData || !contractData.clientSignature) {
+      if (!proposal.signed_at) {
+        console.error('Client signature required first')
         return json(400, { 
           error: 'Client must sign first before admin counter-signature' 
         }, event)
       }
 
-      // Add admin signature
-      contractData.adminSignature = signature
-      contractData.adminSignedAt = signedAt
-      contractData.adminSignedBy = signedBy || 'Uptrade Media'
-      contractData.status = 'fully_executed'
-      contractData.fullyExecutedAt = new Date().toISOString()
-
-      // Store updated contract
-      await store.setJSON(contractKey, contractData)
+      // Update proposal with admin signature
+      console.log('Saving admin signature to database...')
+      await sql`
+        UPDATE proposals
+        SET 
+          admin_signed_at = ${signedAt},
+          fully_executed_at = NOW(),
+          status = 'signed',
+          updated_at = NOW()
+        WHERE id = ${proposalId}
+      `
+      console.log('Admin signature saved successfully')
 
       // Send fully executed contract to both parties
+      console.log('Sending fully executed contract emails...')
       await sendFullyExecutedContract({
         proposalId,
         proposalTitle,
-        clientName: contractData.clientSignedBy,
-        clientEmail: contractData.clientEmail,
-        clientSignature: contractData.clientSignature,
+        clientName: signedBy,
+        clientEmail: clientEmail,
+        clientSignature: signature,
         adminSignature: signature
       })
 
@@ -236,31 +257,36 @@ exports.handler = async (event) => {
       }, event)
 
     } else {
+      console.log('Client signature flow')
       // Client is signing (first signature)
-      contractData = {
-        proposalId,
-        proposalTitle,
-        clientSignature: signature,
-        clientSignedAt: signedAt,
-        clientSignedBy: signedBy || 'Client',
-        clientEmail: clientEmail || 'unknown@example.com',
-        status: 'pending_counter_signature',
-        createdAt: new Date().toISOString(),
-        ipAddress: event.headers['x-forwarded-for'] || event.headers['client-ip'] || 'unknown',
-        userAgent: event.headers['user-agent'] || 'unknown'
-      }
-
-      // Store contract with client signature only
-      await store.setJSON(contractKey, contractData)
+      
+      // Update proposal with client signature
+      console.log('Saving client signature to database...')
+      await sql`
+        UPDATE proposals
+        SET 
+          signed_at = ${signedAt},
+          status = 'signed',
+          updated_at = NOW()
+        WHERE id = ${proposalId}
+      `
+      console.log('Client signature saved successfully')
 
       // Send email to admin for counter-signature
-      await sendAdminCounterSignatureEmail({
-        proposalId,
-        proposalTitle,
-        clientName: signedBy || 'Client',
-        clientEmail: clientEmail || 'unknown@example.com',
-        clientSignature: signature
-      })
+      console.log('Sending admin counter-signature email...')
+      try {
+        await sendAdminCounterSignatureEmail({
+          proposalId,
+          proposalTitle,
+          clientName: signedBy || 'Client',
+          clientEmail: clientEmail || 'unknown@example.com',
+          clientSignature: signature
+        })
+        console.log('Email sent successfully!')
+      } catch (emailError) {
+        console.error('Failed to send email:', emailError)
+        // Don't fail the request if email fails
+      }
 
       return json(200, { 
         success: true,
@@ -272,7 +298,10 @@ exports.handler = async (event) => {
     }
 
   } catch (error) {
-    console.error('Proposal signing error:', error)
+    console.error('=== ERROR IN PROPOSALS-SIGN ===')
+    console.error('Error type:', error.constructor.name)
+    console.error('Error message:', error.message)
+    console.error('Error stack:', error.stack)
     return json(500, { 
       error: 'Failed to process signature',
       message: error.message 

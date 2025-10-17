@@ -5,7 +5,15 @@ import { drizzle } from 'drizzle-orm/neon-http'
 import { eq } from 'drizzle-orm'
 import { Client, Environment } from 'square'
 import { Resend } from 'resend'
+import { RateLimiterMemory } from 'rate-limiter-flexible'
 import * as schema from '../../src/db/schema.ts'
+
+// Rate limiter: 5 payment attempts per minute per user
+const rateLimiter = new RateLimiterMemory({
+  points: 5,
+  duration: 60, // 60 seconds
+  blockDurationMs: 60000 // block for 60 seconds after limit exceeded
+})
 
 const COOKIE_NAME = process.env.SESSION_COOKIE_NAME || 'um_session'
 const JWT_SECRET = process.env.AUTH_JWT_SECRET
@@ -60,6 +68,24 @@ export async function handler(event) {
 
   try {
     const payload = jwt.verify(token, JWT_SECRET)
+
+    // Check rate limit per user
+    try {
+      await rateLimiter.consume(payload.userId || payload.email)
+    } catch (rateLimitError) {
+      if (rateLimitError.isFirstInDuration) {
+        // Just started consuming
+      } else {
+        return {
+          statusCode: 429,
+          headers,
+          body: JSON.stringify({ 
+            error: 'Too many payment attempts. Please wait before trying again.',
+            retryAfter: Math.ceil(rateLimitError.msBeforeNext / 1000)
+          })
+        }
+      }
+    }
 
     // Parse request body
     const body = JSON.parse(event.body || '{}')

@@ -73,7 +73,8 @@ export async function handler(event) {
         userId: user.id,
         email: user.email,
         role: user.role,
-        name: user.name
+        name: user.name,
+        type: user.googleId ? 'google' : 'email'
       },
       JWT_SECRET,
       { expiresIn: '7d' }

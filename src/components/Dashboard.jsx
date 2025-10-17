@@ -2,6 +2,9 @@ import { useState, useEffect, useRef, useCallback } from 'react'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
 import { 
   FileText, 
   MessageSquare, 
@@ -14,17 +17,24 @@ import {
   Calendar,
   Bell,
   Shield,
-  Plus
+  Plus,
+  UserPlus,
+  Loader2
 } from 'lucide-react'
 import useAuthStore from '@/lib/auth-store'
-import axios from 'axios'
+import api from '@/lib/api'
 import UptradeLoading from './UptradeLoading'
+import { toast } from '@/lib/toast'
 
-const Dashboard = () => {
+const Dashboard = ({ onNavigate }) => {
+  console.log('[Dashboard] Component mounting')
+  
   const { user } = useAuthStore()
   const isAdmin = user?.role === 'admin'
-  const hasFetchedRef = useRef(false)
-  const [isLoading, setIsLoading] = useState(true)
+  const lastUserIdRef = useRef(null)
+  const [isLoading, setIsLoading] = useState(false)
+  
+  console.log('[Dashboard] After useState', { isLoading })
   const [dashboardData, setDashboardData] = useState({
     projects: [],
     recentMessages: [],
@@ -34,117 +44,201 @@ const Dashboard = () => {
     activeProposals: 0
   })
 
-  const fetchAdminStats = useCallback(async () => {
-    try {
-      // Fetch admin overview data
-      const [clientsRes, proposalsRes] = await Promise.all([
-        axios.get('/.netlify/functions/admin-clients-list').catch(err => ({ data: { clients: [] } })),
-        axios.get('/.netlify/functions/admin-proposals-list').catch(err => ({ data: { proposals: [] } }))
-      ])
+  // Add client dialog state
+  const [isAddClientOpen, setIsAddClientOpen] = useState(false)
+  const [isAddingClient, setIsAddingClient] = useState(false)
+  const [newClient, setNewClient] = useState({
+    name: '',
+    email: '',
+    company: ''
+  })
 
-      setDashboardData({
-        projects: proposalsRes.data.proposals?.slice(0, 2) || [],
-        recentMessages: [],
-        pendingInvoices: [],
-        notifications: [],
-        totalClients: clientsRes.data.clients?.length || 0,
-        activeProposals: proposalsRes.data.proposals?.filter(p => p.status === 'sent').length || 0
-      })
-    } catch (err) {
-      console.error('Failed to fetch admin stats:', err)
-      // Set empty data on error to prevent infinite loops
-      setDashboardData({
-        projects: [],
-        recentMessages: [],
-        pendingInvoices: [],
-        notifications: [],
-        totalClients: 0,
-        activeProposals: 0
-      })
-    }
-  }, [])
-
-  const fetchClientData = useCallback(async () => {
-    // Mock data for client view
-    setDashboardData({
-      projects: [
-        {
-          id: 1,
-          title: 'Website Redesign',
-          status: 'in_progress',
-          progress: 75,
-          dueDate: '2024-11-15'
-        },
-        {
-          id: 2,
-          title: 'SEO Optimization',
-          status: 'review',
-          progress: 90,
-          dueDate: '2024-10-30'
-        }
-      ],
-      recentMessages: [
-        {
-          id: 1,
-          subject: 'Project Update',
-          sender: 'Uptrade Media Team',
-          timestamp: '2 hours ago',
-          unread: true
-        },
-        {
-          id: 2,
-          subject: 'Invoice #1234',
-          sender: 'Billing Department',
-          timestamp: '1 day ago',
-          unread: false
-        }
-      ],
-      pendingInvoices: [
-        {
-          id: 1,
-          invoiceNumber: 'INV-2024-001',
-          amount: 2500.00,
-          dueDate: '2024-11-01',
-          status: 'pending'
-        }
-      ],
-      notifications: [
-        {
-          id: 1,
-          message: 'New proposal available for review',
-          type: 'info',
-          timestamp: '1 hour ago'
-        },
-        {
-          id: 2,
-          message: 'Payment due in 3 days',
-          type: 'warning',
-          timestamp: '2 hours ago'
-        }
-      ]
-    })
-  }, [])
-
-  // Fetch data on mount - only once
+  // Fetch data when user changes (but not on every render)
   useEffect(() => {
-    if (!user || hasFetchedRef.current) return
+    if (!user) {
+      console.log('[Dashboard] No user yet, waiting...')
+      return
+    }
     
-    hasFetchedRef.current = true
+    // Only fetch if user actually changed (compare by ID, not object reference)
+    const currentUserId = user.id || user.email
+    if (lastUserIdRef.current === currentUserId) {
+      console.log('[Dashboard] User unchanged, skipping fetch')
+      return
+    }
+    
+    console.log('[Dashboard] Loading data for user:', user.email)
+    lastUserIdRef.current = currentUserId
+    setIsLoading(true)
     
     const loadData = async () => {
       try {
         if (user.role === 'admin') {
-          await fetchAdminStats()
+          console.log('[Dashboard] Loading admin stats')
+          // Fetch admin overview data
+          try {
+            const [clientsRes, proposalsRes] = await Promise.all([
+              api.get('/.netlify/functions/admin-clients-list').catch(err => {
+                console.warn('[Dashboard] Failed to fetch clients:', err.message)
+                return { data: { clients: [] } }
+              }),
+              api.get('/.netlify/functions/proposals-list').catch(err => {
+                console.warn('[Dashboard] Failed to fetch proposals:', err.message)
+                return { data: { proposals: [] } }
+              })
+            ])
+
+            console.log('[Dashboard] Admin data loaded:', {
+              clients: clientsRes.data.clients?.length,
+              proposals: proposalsRes.data.proposals?.length
+            })
+            
+            setDashboardData({
+              projects: proposalsRes.data.proposals?.slice(0, 2) || [],
+              recentMessages: [],
+              pendingInvoices: [],
+              notifications: [],
+              totalClients: clientsRes.data.clients?.length || 0,
+              activeProposals: proposalsRes.data.proposals?.filter(p => p.status === 'sent').length || 0
+            })
+          } catch (err) {
+            console.error('[Dashboard] Failed to fetch admin stats:', err)
+            // Set empty data on error to prevent infinite loops
+            setDashboardData({
+              projects: [],
+              recentMessages: [],
+              pendingInvoices: [],
+              notifications: [],
+              totalClients: 0,
+              activeProposals: 0
+            })
+          }
         } else {
-          await fetchClientData()
+          console.log('[Dashboard] Loading client data (mock)')
+          // Mock data for client view
+          setDashboardData({
+            projects: [
+              {
+                id: 1,
+                title: 'Website Redesign',
+                status: 'in_progress',
+                progress: 75,
+                dueDate: '2024-11-15'
+              },
+              {
+                id: 2,
+                title: 'SEO Optimization',
+                status: 'review',
+                progress: 90,
+                dueDate: '2024-10-30'
+              }
+            ],
+            recentMessages: [
+              {
+                id: 1,
+                subject: 'Project Update',
+                sender: 'Uptrade Media Team',
+                timestamp: '2 hours ago',
+                unread: true
+              },
+              {
+                id: 2,
+                subject: 'Invoice #1234',
+                sender: 'Billing Department',
+                timestamp: '1 day ago',
+                unread: false
+              }
+            ],
+            pendingInvoices: [
+              {
+                id: 1,
+                invoiceNumber: 'INV-2024-001',
+                amount: 2500.00,
+                dueDate: '2024-11-01',
+                status: 'pending'
+              }
+            ],
+            notifications: [
+              {
+                id: 1,
+                message: 'New proposal available for review',
+                type: 'info',
+                timestamp: '1 hour ago'
+              },
+              {
+                id: 2,
+                message: 'Payment due in 3 days',
+                type: 'warning',
+                timestamp: '2 hours ago'
+              }
+            ]
+          })
         }
+      } catch (error) {
+        console.error('[Dashboard] Error loading data:', error)
       } finally {
         setIsLoading(false)
       }
     }
     
     loadData()
-  }, [user?.id]) // Only depend on user ID, not the entire user object
+  }, [user]) // Re-run when user changes, but ref prevents unnecessary fetches
+
+  // Handle add client
+  const handleAddClient = async () => {
+    if (!newClient.name || !newClient.email) {
+      toast.error('Please fill in name and email')
+      return
+    }
+
+    setIsAddingClient(true)
+    try {
+      const response = await api.post('/.netlify/functions/admin-clients-create', {
+        name: newClient.name,
+        email: newClient.email,
+        company: newClient.company || null
+      })
+
+      toast.success(`Client ${newClient.name} added successfully! They will receive an account setup email.`)
+      
+      // Reset form and close dialog
+      setNewClient({ name: '', email: '', company: '' })
+      setIsAddClientOpen(false)
+      
+      // Refresh dashboard data
+      if (user) {
+        lastUserIdRef.current = null // Force refresh
+        const currentUserId = user.id || user.email
+        lastUserIdRef.current = currentUserId
+        setIsLoading(true)
+        
+        try {
+          const [clientsRes, proposalsRes] = await Promise.all([
+            api.get('/.netlify/functions/admin-clients-list'),
+            api.get('/.netlify/functions/proposals-list')
+          ])
+
+          setDashboardData({
+            projects: proposalsRes.data.proposals?.slice(0, 2) || [],
+            recentMessages: [],
+            pendingInvoices: [],
+            notifications: [],
+            totalClients: clientsRes.data.clients?.length || 0,
+            activeProposals: proposalsRes.data.proposals?.filter(p => p.status === 'sent').length || 0
+          })
+        } catch (err) {
+          console.error('[Dashboard] Failed to refresh after adding client:', err)
+        } finally {
+          setIsLoading(false)
+        }
+      }
+    } catch (error) {
+      console.error('[Dashboard] Error adding client:', error)
+      toast.error(error.response?.data?.error || 'Failed to add client')
+    } finally {
+      setIsAddingClient(false)
+    }
+  }
 
   const getStatusColor = (status) => {
     switch (status) {
@@ -174,14 +268,37 @@ const Dashboard = () => {
     }
   }
 
+  // Debug logging
+  console.log('[Dashboard Render]', { isLoading, hasUser: !!user, userId: user?.userId, email: user?.email, role: user?.role })
+
   // Show loading only once on initial load
   if (isLoading) {
+    console.log('[Dashboard] Showing loading spinner')
     return (
       <div className="fixed inset-0 z-50 flex items-center justify-center bg-white/80 backdrop-blur-sm">
         <UptradeLoading />
       </div>
     )
   }
+
+  // If no user, show message (shouldn't happen with Protected route, but just in case)
+  if (!user) {
+    console.log('[Dashboard] No user, showing waiting message')
+    return (
+      <div className="flex items-center justify-center min-h-screen">
+        <Card className="max-w-md">
+          <CardHeader>
+            <CardTitle>Loading...</CardTitle>
+            <CardDescription>
+              Verifying your session. If this persists, please log in again.
+            </CardDescription>
+          </CardHeader>
+        </Card>
+      </div>
+    )
+  }
+  
+  console.log('[Dashboard] Rendering main dashboard content')
 
   return (
     <div className="space-y-6">
@@ -190,7 +307,7 @@ const Dashboard = () => {
         <div className="flex items-center justify-between">
           <div>
             <h1 className="text-2xl font-bold mb-2">
-              Welcome back, {user?.first_name}!
+              Welcome back{user?.name ? `, ${user.name.split(' ')[0]}` : ''}!
             </h1>
             <p className="text-white/90">
               {isAdmin ? "Manage clients, proposals, and invoices from your admin dashboard." : "Here's what's happening with your projects today."}
@@ -236,7 +353,7 @@ const Dashboard = () => {
             </Card>
           </>
         )}
-        <Card>
+        <Card className="cursor-pointer hover:shadow-lg transition-shadow" onClick={() => onNavigate?.('projects')}>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Active Projects</CardTitle>
             <FileText className="h-4 w-4 text-muted-foreground" />
@@ -249,7 +366,7 @@ const Dashboard = () => {
           </CardContent>
         </Card>
 
-        <Card>
+        <Card className="cursor-pointer hover:shadow-lg transition-shadow" onClick={() => onNavigate?.('messages')}>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Unread Messages</CardTitle>
             <MessageSquare className="h-4 w-4 text-muted-foreground" />
@@ -264,7 +381,7 @@ const Dashboard = () => {
           </CardContent>
         </Card>
 
-        <Card>
+        <Card className="cursor-pointer hover:shadow-lg transition-shadow" onClick={() => onNavigate?.('billing')}>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Pending Invoices</CardTitle>
             <DollarSign className="h-4 w-4 text-muted-foreground" />
@@ -290,6 +407,93 @@ const Dashboard = () => {
           </CardContent>
         </Card>
       </div>
+
+      {/* Quick Actions for Admin */}
+      {isAdmin && (
+        <Card>
+          <CardHeader>
+            <CardTitle>Quick Actions</CardTitle>
+            <CardDescription>
+              Common administrative tasks
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="flex flex-wrap gap-3">
+              <Dialog open={isAddClientOpen} onOpenChange={setIsAddClientOpen}>
+                <DialogTrigger asChild>
+                  <Button>
+                    <UserPlus className="w-4 h-4 mr-2" />
+                    Add New Client
+                  </Button>
+                </DialogTrigger>
+                <DialogContent>
+                  <DialogHeader>
+                    <DialogTitle>Add New Client</DialogTitle>
+                    <DialogDescription>
+                      Create a new client account. They will receive an email to set up their account.
+                    </DialogDescription>
+                  </DialogHeader>
+                  <div className="space-y-4 py-4">
+                    <div className="space-y-2">
+                      <Label htmlFor="name">Full Name *</Label>
+                      <Input
+                        id="name"
+                        placeholder="John Doe"
+                        value={newClient.name}
+                        onChange={(e) => setNewClient({ ...newClient, name: e.target.value })}
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="email">Email *</Label>
+                      <Input
+                        id="email"
+                        type="email"
+                        placeholder="john@example.com"
+                        value={newClient.email}
+                        onChange={(e) => setNewClient({ ...newClient, email: e.target.value })}
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="company">Company (Optional)</Label>
+                      <Input
+                        id="company"
+                        placeholder="Acme Inc."
+                        value={newClient.company}
+                        onChange={(e) => setNewClient({ ...newClient, company: e.target.value })}
+                      />
+                    </div>
+                  </div>
+                  <DialogFooter>
+                    <Button
+                      variant="outline"
+                      onClick={() => {
+                        setIsAddClientOpen(false)
+                        setNewClient({ name: '', email: '', company: '' })
+                      }}
+                      disabled={isAddingClient}
+                    >
+                      Cancel
+                    </Button>
+                    <Button onClick={handleAddClient} disabled={isAddingClient}>
+                      {isAddingClient ? (
+                        <>
+                          <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                          Adding...
+                        </>
+                      ) : (
+                        <>
+                          <UserPlus className="w-4 h-4 mr-2" />
+                          Add Client
+                        </>
+                      )}
+                    </Button>
+                  </DialogFooter>
+                </DialogContent>
+              </Dialog>
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Active Projects */}
@@ -326,7 +530,7 @@ const Dashboard = () => {
                 </div>
               </div>
             ))}
-            <Button variant="outline" className="w-full">
+            <Button variant="outline" className="w-full" onClick={() => onNavigate?.('projects')}>
               View All Projects
             </Button>
           </CardContent>
@@ -355,7 +559,7 @@ const Dashboard = () => {
                 </div>
               </div>
             ))}
-            <Button variant="outline" className="w-full">
+            <Button variant="outline" className="w-full" onClick={() => onNavigate?.('messages')}>
               View All Messages
             </Button>
           </CardContent>

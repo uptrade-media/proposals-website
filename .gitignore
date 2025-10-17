@@ -137,3 +137,9 @@ dist
 
 # Local Netlify folder
 .netlify
+
+# Documentation and process scripts (internal use only)
+/*.md
+/scripts/*.cjs
+/scripts/*.mjs
+

@@ -155,7 +155,8 @@ export async function handler(event) {
         userId: updatedContact.id,
         email: updatedContact.email,
         role: updatedContact.role,
-        name: updatedContact.name
+        name: updatedContact.name,
+        type: updateData.googleId ? 'google' : 'password'
       },
       JWT_SECRET,
       { expiresIn: '7d' }

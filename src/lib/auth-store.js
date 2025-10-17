@@ -1,5 +1,9 @@
 import { create } from 'zustand'
 
+// Global flag to prevent multiple simultaneous auth checks
+let isCheckingAuth = false
+let authCheckPromise = null
+
 // Cookie-based auth (no tokens in localStorage)
 const useAuthStore = create((set, get) => ({
   user: null,
@@ -27,35 +31,54 @@ const useAuthStore = create((set, get) => ({
 
   // Check if user is authenticated (verify cookie)
   checkAuth: async () => {
+    // If already checking, return the existing promise
+    if (isCheckingAuth && authCheckPromise) {
+      console.log('[AuthStore] Auth check already in progress, returning existing promise');
+      return authCheckPromise
+    }
+    
+    console.log('[AuthStore] Checking authentication');
+    isCheckingAuth = true
     set({ isLoading: true, error: null })
     
-    try {
-      const response = await fetch('/.netlify/functions/auth-verify', {
-        credentials: 'include'
-      })
-      
-      if (!response.ok) {
-        get().clearAuth()
-        set({ isLoading: false })
-        return { success: false }
-      }
+    authCheckPromise = (async () => {
+      try {
+        const response = await fetch('/.netlify/functions/auth-verify', {
+          credentials: 'include'
+        })
+        
+        if (!response.ok) {
+          console.log('[AuthStore] Auth verification failed with status:', response.status);
+          get().clearAuth()
+          set({ isLoading: false })
+          return { success: false }
+        }
 
-      const data = await response.json()
-      
-      if (data.ok && data.user) {
-        get().setUser(data.user)
-        set({ isLoading: false })
-        return { success: true, user: data.user }
-      } else {
+        const data = await response.json()
+        
+        if (data.ok && data.user) {
+          console.log('[AuthStore] Auth verification successful, user:', data.user.email);
+          get().setUser(data.user)
+          set({ isLoading: false })
+          return { success: true, user: data.user }
+        } else {
+          console.log('[AuthStore] Auth verification response missing user data');
+          get().clearAuth()
+          set({ isLoading: false })
+          return { success: false }
+        }
+      } catch (error) {
+        console.error('[AuthStore] Auth verification error:', error);
         get().clearAuth()
-        set({ isLoading: false })
-        return { success: false }
+        set({ isLoading: false, error: error.message })
+        return { success: false, error: error.message }
+      } finally {
+        isCheckingAuth = false
+        authCheckPromise = null
       }
-    } catch (error) {
-      get().clearAuth()
-      set({ isLoading: false, error: error.message })
-      return { success: false, error: error.message }
-    }
+    })()
+    
+    return authCheckPromise
   },
 
   // Login function (cookie-based via Netlify function)

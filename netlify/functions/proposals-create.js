@@ -81,6 +81,7 @@ export async function handler(event) {
       contactId,
       projectId,
       title,
+      description,
       mdxContent,
       status = 'draft',
       totalAmount,
@@ -156,11 +157,23 @@ export async function handler(event) {
       projectId: projectId || null,
       slug: proposalSlug,
       title,
+      description: description || null,
       mdxContent,
       status,
       totalAmount: totalAmount ? String(totalAmount) : null,
       validUntil: validUntil ? new Date(validUntil) : null
     }).returning()
+
+    // Log activity: proposal created
+    await db.insert(schema.proposalActivity).values({
+      proposalId: proposal.id,
+      action: 'created',
+      performedBy: payload.userId,
+      metadata: JSON.stringify({
+        status,
+        timestamp: new Date().toISOString()
+      })
+    }).catch(err => console.error('Error logging proposal creation:', err))
 
     // Format response
     const formattedProposal = {

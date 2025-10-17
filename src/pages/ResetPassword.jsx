@@ -7,7 +7,7 @@ import { Input } from '../components/ui/input'
 import { Label } from '../components/ui/label'
 import { Alert, AlertDescription } from '../components/ui/alert'
 import { Loader2, Eye, EyeOff, Lock, CheckCircle2 } from 'lucide-react'
-import axios from 'axios'
+import api from '@/lib/api'
 
 export default function ResetPassword() {
   const [searchParams] = useSearchParams()
@@ -37,7 +37,7 @@ export default function ResetPassword() {
 
   const validateToken = async () => {
     try {
-      const res = await axios.post('/.netlify/functions/auth-validate-reset-token', { token })
+      const res = await api.post('/.netlify/functions/auth-validate-reset-token', { token })
       setTokenData(res.data)
       setIsValidating(false)
     } catch (err) {
@@ -64,7 +64,7 @@ export default function ResetPassword() {
     setIsSubmitting(true)
 
     try {
-      const res = await axios.post('/.netlify/functions/auth-reset-password', {
+      const res = await api.post('/.netlify/functions/auth-reset-password', {
         token,
         newPassword
       })

@@ -74,35 +74,73 @@ export async function handler(event) {
     const sql = neon(DATABASE_URL)
     const db = drizzle(sql, { schema })
 
-    // Fetch user's projects
-    // Admins see all projects, clients see only their own
+    // Get query parameters for filtering and sorting
+    const queryParams = event.queryStringParameters || {}
+    const status = queryParams.status
+    const sortBy = queryParams.sortBy || 'updated'
+    const limit = Math.min(parseInt(queryParams.limit) || 50, 100)
+    const offset = parseInt(queryParams.offset) || 0
+
+    // Fetch user's projects with relationships
     let projects
-    
+
     if (payload.role === 'admin') {
       // Admin sees all projects
       projects = await db.query.projects.findMany({
-        orderBy: [desc(schema.projects.createdAt)],
+        orderBy: [desc(schema.projects.updatedAt)],
         with: {
-          contact: {
-            columns: {
-              id: true,
-              name: true,
-              email: true,
-              company: true
+          contact: true,
+          milestones: true,
+          members: {
+            with: {
+              member: true
             }
-          }
+          },
+          invoices: true,
+          files: true
         }
       })
     } else {
       // Client sees only their projects
       projects = await db.query.projects.findMany({
         where: eq(schema.projects.contactId, payload.userId),
-        orderBy: [desc(schema.projects.createdAt)]
+        orderBy: [desc(schema.projects.updatedAt)],
+        with: {
+          milestones: true,
+          members: {
+            with: {
+              member: true
+            }
+          },
+          invoices: true,
+          files: true
+        }
       })
     }
 
+    // Apply status filter
+    if (status) {
+      projects = projects.filter(p => p.status === status)
+    }
+
+    // Apply sorting
+    if (sortBy === 'created') {
+      projects.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))
+    } else if (sortBy === 'title') {
+      projects.sort((a, b) => a.title.localeCompare(b.title))
+    } else if (sortBy === 'dueDate') {
+      projects.sort((a, b) => {
+        if (!a.endDate) return 1
+        if (!b.endDate) return -1
+        return new Date(b.endDate) - new Date(a.endDate)
+      })
+    }
+
+    // Apply pagination
+    const paginatedProjects = projects.slice(offset, offset + limit)
+
     // Format response
-    const formattedProjects = projects.map(p => ({
+    const formattedProjects = paginatedProjects.map(p => ({
       id: p.id,
       title: p.title,
       description: p.description,
@@ -112,6 +150,10 @@ export async function handler(event) {
       endDate: p.endDate,
       createdAt: p.createdAt,
       updatedAt: p.updatedAt,
+      milestoneCount: p.milestones?.length || 0,
+      memberCount: p.members?.length || 0,
+      invoiceCount: p.invoices?.length || 0,
+      fileCount: p.files?.length || 0,
       // Include contact info for admin view
       ...(payload.role === 'admin' && p.contact ? {
         contact: {
@@ -128,7 +170,12 @@ export async function handler(event) {
       headers,
       body: JSON.stringify({
         projects: formattedProjects,
-        total: formattedProjects.length
+        pagination: {
+          limit,
+          offset,
+          total: projects.length,
+          returned: formattedProjects.length
+        }
       })
     }
 

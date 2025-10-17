@@ -1,5 +1,5 @@
 import { create } from 'zustand'
-import axios from 'axios'
+import api from './api'
 
 const useBillingStore = create((set, get) => ({
   invoices: [],
@@ -30,7 +30,7 @@ const useBillingStore = create((set, get) => ({
       if (filters.projectId) params.append('projectId', filters.projectId)
       
       const url = `/.netlify/functions/invoices-list${params.toString() ? `?${params.toString()}` : ''}`
-      const response = await axios.get(url)
+      const response = await api.get(url)
       
       set({ 
         invoices: response.data.invoices,
@@ -55,7 +55,7 @@ const useBillingStore = create((set, get) => ({
     try {
       // fetchInvoice currently uses the list endpoint
       // Individual invoice fetch can be added later if needed
-      const response = await axios.get(`/.netlify/functions/invoices-list`)
+      const response = await api.get(`/.netlify/functions/invoices-list`)
       const invoice = response.data.invoices.find(inv => inv.id === invoiceId)
       
       if (!invoice) {
@@ -83,7 +83,7 @@ const useBillingStore = create((set, get) => ({
     set({ isLoading: true, error: null })
     
     try {
-      const response = await axios.post('/.netlify/functions/invoices-create', invoiceData)
+      const response = await api.post('/.netlify/functions/invoices-create', invoiceData)
       
       // Add new invoice to the list
       set(state => ({ 
@@ -107,7 +107,7 @@ const useBillingStore = create((set, get) => ({
     set({ isLoading: true, error: null })
     
     try {
-      const response = await axios.put(`/invoices/${invoiceId}`, invoiceData)
+      const response = await api.put(`/invoices/${invoiceId}`, invoiceData)
       
       // Update invoice in the list
       set(state => ({
@@ -136,7 +136,7 @@ const useBillingStore = create((set, get) => ({
     set({ isLoading: true, error: null })
     
     try {
-      const response = await axios.post(`/invoices/${invoiceId}/mark-paid`)
+      const response = await api.post(`/invoices/${invoiceId}/mark-paid`)
       
       // Update invoice in the list
       set(state => ({
@@ -168,7 +168,7 @@ const useBillingStore = create((set, get) => ({
     set({ isLoading: true, error: null })
     
     try {
-      const response = await axios.get('/billing/summary')
+      const response = await api.get('/billing/summary')
       set({ 
         summary: response.data.summary,
         isLoading: false 
@@ -188,7 +188,7 @@ const useBillingStore = create((set, get) => ({
   // Fetch overdue invoices
   fetchOverdueInvoices: async () => {
     try {
-      const response = await axios.get('/billing/overdue')
+      const response = await api.get('/billing/overdue')
       set({ overdueInvoices: response.data.overdue_invoices })
       
       return { success: true, data: response.data }
@@ -271,7 +271,7 @@ const useBillingStore = create((set, get) => ({
     set({ isLoading: true, error: null })
     
     try {
-      const response = await axios.post('/.netlify/functions/invoices-pay', {
+      const response = await api.post('/.netlify/functions/invoices-pay', {
         invoiceId,
         sourceId: paymentData.sourceId
       })

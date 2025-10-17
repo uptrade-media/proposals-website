@@ -1,5 +1,5 @@
 import { create } from 'zustand'
-import axios from 'axios'
+import api from './api'
 
 const useMessagesStore = create((set, get) => ({
   messages: [],
@@ -31,7 +31,7 @@ const useMessagesStore = create((set, get) => ({
       if (filters.unreadOnly) params.append('unreadOnly', 'true')
       
       const url = `/.netlify/functions/messages-list${params.toString() ? `?${params.toString()}` : ''}`
-      const response = await axios.get(url)
+      const response = await api.get(url)
       
       // Calculate unread count
       const unreadCount = response.data.messages.filter(m => !m.readAt).length
@@ -58,7 +58,7 @@ const useMessagesStore = create((set, get) => ({
     set({ isLoading: true, error: null })
     
     try {
-      const response = await axios.get(`/.netlify/functions/messages-thread/${messageId}`)
+      const response = await api.get(`/.netlify/functions/messages-thread/${messageId}`)
       set({ 
         currentMessage: response.data.thread,
         isLoading: false 
@@ -80,7 +80,7 @@ const useMessagesStore = create((set, get) => ({
     set({ isLoading: true, error: null })
     
     try {
-      const response = await axios.post('/.netlify/functions/messages-send', messageData)
+      const response = await api.post('/.netlify/functions/messages-send', messageData)
       
       // Refresh messages list
       await get().fetchMessages()
@@ -103,7 +103,7 @@ const useMessagesStore = create((set, get) => ({
     set({ isLoading: true, error: null })
     
     try {
-      const response = await axios.post('/.netlify/functions/messages-send', {
+      const response = await api.post('/.netlify/functions/messages-send', {
         parentId,
         recipientId,
         content
@@ -130,7 +130,7 @@ const useMessagesStore = create((set, get) => ({
   // Mark message as read
   markAsRead: async (messageId) => {
     try {
-      await axios.post(`/.netlify/functions/messages-read/${messageId}`)
+      await api.post(`/.netlify/functions/messages-read/${messageId}`)
       
       // Update message in the list
       set(state => ({
@@ -159,7 +159,7 @@ const useMessagesStore = create((set, get) => ({
   // Fetch unread count
   fetchUnreadCount: async () => {
     try {
-      const response = await axios.get('/messages/unread-count')
+      const response = await api.get('/messages/unread-count')
       set({ unreadCount: response.data.unread_count })
       return { success: true, data: response.data }
     } catch (error) {
@@ -173,7 +173,7 @@ const useMessagesStore = create((set, get) => ({
     set({ isLoading: true, error: null })
     
     try {
-      const response = await axios.get('/messages/conversations')
+      const response = await api.get('/messages/conversations')
       set({ 
         conversations: response.data.conversations,
         isLoading: false 
@@ -192,7 +192,7 @@ const useMessagesStore = create((set, get) => ({
   // Fetch contacts
   fetchContacts: async () => {
     try {
-      const response = await axios.get('/users/contacts')
+      const response = await api.get('/users/contacts')
       set({ contacts: response.data.contacts })
       return { success: true, data: response.data }
     } catch (error) {
@@ -209,7 +209,7 @@ const useMessagesStore = create((set, get) => ({
     try {
       // This would need a specific endpoint or filtering logic
       // For now, we'll filter from all messages
-      const response = await axios.get(`/messages?page=${page}&per_page=50`)
+      const response = await api.get(`/messages?page=${page}&per_page=50`)
       
       // Filter messages for this conversation
       const conversationMessages = response.data.messages.filter(msg => 

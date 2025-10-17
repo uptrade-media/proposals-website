@@ -30,9 +30,9 @@ export async function handler(event) {
     }
   }
 
-  // Get proposal slug or ID from path
-  const identifier = event.path.split('/').pop()
-  if (!identifier) {
+  // Get proposal slug or ID from query parameter or path
+  const identifier = event.queryStringParameters?.id || event.path.split('/').pop()
+  if (!identifier || identifier === 'proposals-get') {
     return {
       statusCode: 400,
       headers,
@@ -61,19 +61,25 @@ export async function handler(event) {
   }
 
   try {
-    const payload = jwt.verify(token, JWT_SECRET)
+    console.log('=== PROPOSALS-GET START ===')
+    console.log('Identifier:', identifier)
     
-    // Only support Google OAuth users
-    if (payload.type !== 'google') {
+    const payload = jwt.verify(token, JWT_SECRET)
+    console.log('User payload:', { userId: payload.userId, role: payload.role, type: payload.type })
+    
+    // Verify user is authenticated (accept all auth types: google, password, email, etc)
+    if (!payload.userId && !payload.email) {
+      console.error('Invalid session token')
       return {
         statusCode: 403,
         headers,
-        body: JSON.stringify({ error: 'Only Google OAuth users can access proposals' })
+        body: JSON.stringify({ error: 'Invalid session' })
       }
     }
 
     // Connect to database
     if (!DATABASE_URL) {
+      console.error('DATABASE_URL not configured')
       return {
         statusCode: 500,
         headers,
@@ -81,10 +87,12 @@ export async function handler(event) {
       }
     }
 
+    console.log('Connecting to database...')
     const sql = neon(DATABASE_URL)
     const db = drizzle(sql, { schema })
 
     // Fetch proposal by slug or ID
+    console.log('Querying proposal...')
     const proposal = await db.query.proposals.findFirst({
       where: or(
         eq(schema.proposals.slug, identifier),
@@ -108,6 +116,19 @@ export async function handler(event) {
             status: true,
             startDate: true,
             endDate: true
+          }
+        },
+        activity: {
+          orderBy: (activity) => [activity.createdAt],
+          with: {
+            performer: {
+              columns: {
+                id: true,
+                name: true,
+                email: true,
+                avatar: true
+              }
+            }
           }
         }
       }
@@ -136,10 +157,15 @@ export async function handler(event) {
       id: proposal.id,
       slug: proposal.slug,
       title: proposal.title,
+      description: proposal.description,
       mdxContent: proposal.mdxContent,
       status: proposal.status,
+      version: proposal.version,
       totalAmount: proposal.totalAmount ? parseFloat(proposal.totalAmount) : null,
       validUntil: proposal.validUntil,
+      sentAt: proposal.sentAt,
+      viewedAt: proposal.viewedAt,
+      clientEmail: proposal.clientEmail,
       signedAt: proposal.signedAt,
       adminSignedAt: proposal.adminSignedAt,
       fullyExecutedAt: proposal.fullyExecutedAt,
@@ -159,7 +185,20 @@ export async function handler(event) {
         status: proposal.project.status,
         startDate: proposal.project.startDate,
         endDate: proposal.project.endDate
-      } : null
+      } : null,
+      activity: proposal.activity?.map(a => ({
+        id: a.id,
+        action: a.action,
+        performedBy: a.performedBy,
+        performer: a.performer ? {
+          id: a.performer.id,
+          name: a.performer.name,
+          email: a.performer.email,
+          avatar: a.performer.avatar
+        } : null,
+        metadata: a.metadata ? JSON.parse(a.metadata) : null,
+        createdAt: a.createdAt
+      })) || []
     }
 
     return {
@@ -169,7 +208,10 @@ export async function handler(event) {
     }
 
   } catch (error) {
-    console.error('Error fetching proposal:', error)
+    console.error('=== ERROR IN PROPOSALS-GET ===')
+    console.error('Error type:', error.constructor.name)
+    console.error('Error message:', error.message)
+    console.error('Error stack:', error.stack)
     
     if (error.name === 'JsonWebTokenError' || error.name === 'TokenExpiredError') {
       return {

@@ -76,7 +76,7 @@ export async function handler(event) {
 
     // Parse request body
     const body = JSON.parse(event.body || '{}')
-    const { name, company, role, password } = body
+    const { name, company, phone, website, source, role, password } = body
 
     // Connect to database
     if (!DATABASE_URL) {
@@ -112,6 +112,18 @@ export async function handler(event) {
 
     if (company !== undefined) {
       updates.company = company
+    }
+
+    if (phone !== undefined) {
+      updates.phone = phone
+    }
+
+    if (website !== undefined) {
+      updates.website = website
+    }
+
+    if (source !== undefined) {
+      updates.source = source
     }
 
     if (role !== undefined) {
@@ -152,6 +164,9 @@ export async function handler(event) {
       email: updatedClient.email,
       name: updatedClient.name,
       company: updatedClient.company,
+      phone: updatedClient.phone,
+      website: updatedClient.website,
+      source: updatedClient.source,
       role: updatedClient.role,
       accountSetup: updatedClient.accountSetup,
       hasGoogleAuth: !!updatedClient.googleId,

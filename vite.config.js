@@ -50,13 +50,49 @@ export default defineConfig(({ mode }) => {
       outDir: 'dist',
       assetsDir: 'assets',
       sourcemap: !isProd,
+      // Increase chunk size warning limit (we'll optimize below)
+      chunkSizeWarningLimit: 1000,
       rollupOptions: {
         output: {
-          manualChunks: {
-            vendor: ['react', 'react-dom', 'react-router-dom'],
+          // Manual chunks to split vendor code more granularly
+          manualChunks: (id) => {
+            // React core libs in one chunk
+            if (id.includes('node_modules/react') || 
+                id.includes('node_modules/react-dom') || 
+                id.includes('node_modules/react-router')) {
+              return 'react-vendor'
+            }
+            
+            // UI library (shadcn/radix) in separate chunk
+            if (id.includes('node_modules/@radix-ui') || 
+                id.includes('node_modules/class-variance-authority') ||
+                id.includes('node_modules/clsx')) {
+              return 'ui-vendor'
+            }
+            
+            // Icons in separate chunk (lucide-react is large)
+            if (id.includes('node_modules/lucide-react')) {
+              return 'icons-vendor'
+            }
+            
+            // Zustand state management
+            if (id.includes('node_modules/zustand')) {
+              return 'state-vendor'
+            }
+            
+            // Other large dependencies
+            if (id.includes('node_modules')) {
+              return 'vendor'
+            }
           },
+          // Better file naming for caching
+          chunkFileNames: 'assets/js/[name]-[hash].js',
+          entryFileNames: 'assets/js/[name]-[hash].js',
+          assetFileNames: 'assets/[ext]/[name]-[hash].[ext]',
         },
       },
+      // Enable minification with esbuild (faster than terser, no extra dep)
+      minify: 'esbuild',
     },
 
     // Some libs reference process.env in the browser; this avoids undefined errors.

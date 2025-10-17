@@ -33,6 +33,7 @@ const BRAND_UI = {
 
 function normalizeErr(e) {
   const msg = String(e || '').toUpperCase()
+  if (msg.includes('PLEASE_USE_GOOGLE_SIGNIN')) return 'This account uses Google Sign-In. Please use the "Sign in with Google" button.'
   if (msg.includes('DOMAIN_NOT_ASSIGNED')) return 'This email domain is not allowed.'
   if (msg.includes('INVALID_PASSWORD'))    return 'Invalid email or password.'
   if (msg.includes('MISSING_CREDENTIALS')) return 'Enter email and password.'
@@ -169,20 +170,27 @@ export default function LoginPage() {
         throw new Error(data.error || 'Google sign-in failed')
       }
 
-      // Cookie is now set by server, verify and update auth store
-      console.log('[Google OAuth] Verifying session...')
-      const authResult = await checkAuth()
-      console.log('[Google OAuth] Auth check result:', authResult)
+      // Backend set the session cookie and returned user + redirect
+      console.log('[Google OAuth] Login successful, updating auth store...')
       
-      if (!authResult.success) {
-        throw new Error('Failed to verify session after Google login')
+      // Update auth store with user data
+      if (data.user) {
+        useAuthStore.setState({
+          user: data.user,
+          isAuthenticated: true,
+          error: null,
+          isLoading: false
+        })
       }
       
-      // Redirect based on server response or user role
+      // Redirect to dashboard or next path
       const redirect = data.redirect || nextPath
-      window.location.assign(redirect)
+      console.log('[Google OAuth] Redirecting to:', redirect)
+      setIsSubmitting(false)
+      navigate(redirect)
     } catch (err) {
       const msg = (err && typeof err === 'object' && 'message' in err) ? err.message : String(err || '')
+      console.error('[Google OAuth] Error:', msg)
       setError(normalizeErr(msg))
       setIsSubmitting(false)
     }
@@ -205,9 +213,10 @@ export default function LoginPage() {
       const result = await authLogin(email, password, nextPath)
       
       if (result.success) {
-        // Navigate using full page reload to ensure edge functions/cookies apply
+        // Navigate using React Router
         const redirect = result.redirect || nextPath
-        window.location.assign(redirect)
+        console.log('[Login] Redirecting to:', redirect)
+        navigate(redirect)
       } else {
         throw new Error(result.error || 'Login failed')
       }
@@ -269,6 +278,16 @@ export default function LoginPage() {
     <div className="relative min-h-screen flex items-center justify-center overflow-hidden bg-black">
       {/* Hyperspace Background */}
       <HyperspaceBackground />
+
+      {/* Logout Button - Top Right */}
+      {isAuthenticated && (
+        <button
+          onClick={() => useAuthStore.getState().logout()}
+          className="absolute top-6 right-6 z-30 px-4 py-2 text-sm font-medium text-neutral-300 hover:text-white bg-neutral-800/50 hover:bg-neutral-700/50 border border-white/10 rounded-lg transition-all duration-200"
+        >
+          Logout
+        </button>
+      )}
 
       <Card className="relative z-20 w-full max-w-md overflow-hidden border border-white/10 bg-neutral-900/70 backdrop-blur-xl shadow-[0_0_0_1px_rgba(255,255,255,0.06)]">
         {/* Ring overlay */}

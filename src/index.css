@@ -1,0 +1,77 @@
+/* Print styles for PDF export */
+@media print {
+  /* Hide all UI chrome */
+  button, 
+  nav, 
+  aside,
+  .fixed,
+  [class*="sidebar"],
+  [class*="back-to-top"] {
+    display: none !important;
+  }
+  
+  /* Full width for content */
+  .max-w-4xl {
+    max-width: 100% !important;
+  }
+  
+  /* Clean white background */
+  body, html {
+    background: white !important;
+    color: black !important;
+  }
+  
+  /* Remove all shadows and effects */
+  * {
+    box-shadow: none !important;
+    text-shadow: none !important;
+    border-radius: 0 !important;
+  }
+  
+  /* Better page breaks */
+  .card, 
+  section {
+    page-break-inside: avoid;
+    break-inside: avoid;
+  }
+  
+  /* Ensure text is readable */
+  h1, h2, h3, h4, h5, h6 {
+    color: #111 !important;
+    page-break-after: avoid;
+  }
+  
+  p, li {
+    color: #333 !important;
+  }
+  
+  /* Force backgrounds to white */
+  .bg-gradient-to-r,
+  [class*="bg-"] {
+    background: white !important;
+    border: 1px solid #ddd !important;
+  }
+  
+  /* Print links as text */
+  a {
+    text-decoration: none !important;
+    color: inherit !important;
+  }
+  
+  /* Signature section */
+  canvas {
+    border: 1px solid #333 !important;
+  }
+}
+
+/* Print-specific title page */
+@media print {
+  @page {
+    margin: 1.5cm;
+    size: A4;
+  }
+  
+  @page :first {
+    margin-top: 2cm;
+  }
+}
