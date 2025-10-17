@@ -18,12 +18,13 @@ export async function handler(event) {
     const payload = jwt.verify(token, JWT_SECRET) // throws on bad/expired token
     const email = String(payload.email || payload.sub || '')
     
-    // Handle two types of auth:
-    // 1. Google OAuth (has userId, role, type='google')
-    // 2. Legacy proposal auth (has slugs)
+    // Handle three types of auth:
+    // 1. Google OAuth (type='google')
+    // 2. Database user with password (type='database')
+    // 3. Legacy proposal auth (has slugs)
     
-    if (payload.type === 'google') {
-      // Google OAuth user from database
+    if (payload.type === 'google' || payload.type === 'database') {
+      // Google OAuth or database user from contacts table
       if (!email) return json(403, { error: 'NOT_AUTHORIZED' }, event)
       
       return json(200, { 
@@ -34,7 +35,7 @@ export async function handler(event) {
           name: payload.name,
           picture: payload.picture,
           role: payload.role || 'client',
-          type: 'google',
+          type: payload.type,
           exp: payload.exp 
         } 
       }, event)
