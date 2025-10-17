@@ -9,6 +9,7 @@ import Billing from './Billing'
 import ClientManagement from './ClientManagement'
 import EmailManager from '@/pages/EmailManager'
 import Admin from './Admin'
+import Audits from '@/pages/Audits'
 import UptradeLoading from './UptradeLoading'
 import useAuthStore from '@/lib/auth-store'
 import { Menu, X } from 'lucide-react'
@@ -28,6 +29,8 @@ const MainLayout = () => {
     switch (activeSection) {
       case 'dashboard':
         return <Dashboard onNavigate={setActiveSection} />
+      case 'audits':
+        return <Audits />
       case 'reports':
         return <Reports />
       case 'projects':

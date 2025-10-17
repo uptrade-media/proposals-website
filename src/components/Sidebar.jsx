@@ -32,7 +32,7 @@ const Sidebar = ({ activeSection, onSectionChange, isMobile = false }) => {
 
   const navigationItems = [
     { id: 'dashboard', label: 'Dashboard', icon: Home, badge: null, route: null },
-    { id: 'audits', label: 'Audits', icon: LineChart, badge: unreadAudits > 0 ? unreadAudits.toString() : null, route: '/audits' },
+    { id: 'audits', label: 'Audits', icon: LineChart, badge: unreadAudits > 0 ? unreadAudits.toString() : null, route: null },
     { id: 'projects', label: 'Projects', icon: FileText, badge: '2', route: null },
     { id: 'files', label: 'Files', icon: FolderOpen, badge: null, route: null },
     { id: 'messages', label: 'Messages', icon: MessageSquare, badge: '3', route: null },
