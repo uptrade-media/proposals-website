@@ -62,8 +62,8 @@ export async function handler(event) {
       }
     }
 
-    const db = neon(DATABASE_URL)
-    const drizzleDb = drizzle(db, { schema })
+    const sqlClient = neon(DATABASE_URL)
+    const db = drizzle(sqlClient, { schema })
 
     // Parse date range from query params
     const params = new URLSearchParams(event.queryStringParameters || {})
@@ -80,43 +80,43 @@ export async function handler(event) {
     const metrics = {}
 
     // Total active projects
-    const projectsQuery = payload.role === 'admin'
-      ? sql`SELECT COUNT(*) as count FROM ${schema.projects} WHERE status = 'active'`
-      : sql`SELECT COUNT(*) as count FROM ${schema.projects} WHERE status = 'active' AND contact_id = ${payload.userId}`
-    
-    const projectsResult = await db(projectsQuery)
+    const projectsResult = await db.execute(
+      payload.role === 'admin'
+        ? sql`SELECT COUNT(*) as count FROM projects WHERE status = 'active'`
+        : sql`SELECT COUNT(*) as count FROM projects WHERE status = 'active' AND contact_id = ${payload.userId}`
+    )
     metrics.activeProjects = parseInt(projectsResult[0]?.count || 0)
 
     // Total pending proposals
-    const proposalsQuery = payload.role === 'admin'
-      ? sql`SELECT COUNT(*) as count FROM ${schema.proposals} WHERE status = 'sent'`
-      : sql`SELECT COUNT(*) as count FROM ${schema.proposals} WHERE status = 'sent' AND contact_id = ${payload.userId}`
-    
-    const proposalsResult = await db(proposalsQuery)
+    const proposalsResult = await db.execute(
+      payload.role === 'admin'
+        ? sql`SELECT COUNT(*) as count FROM proposals WHERE status = 'sent'`
+        : sql`SELECT COUNT(*) as count FROM proposals WHERE status = 'sent' AND contact_id = ${payload.userId}`
+    )
     metrics.pendingProposals = parseInt(proposalsResult[0]?.count || 0)
 
     // Total pending invoices amount
-    const invoicesQuery = payload.role === 'admin'
-      ? sql`SELECT COALESCE(SUM(CAST(total_amount AS DECIMAL)), 0) as total FROM ${schema.invoices} WHERE status = 'pending'`
-      : sql`SELECT COALESCE(SUM(CAST(total_amount AS DECIMAL)), 0) as total FROM ${schema.invoices} WHERE status = 'pending' AND contact_id = ${payload.userId}`
-    
-    const invoicesResult = await db(invoicesQuery)
+    const invoicesResult = await db.execute(
+      payload.role === 'admin'
+        ? sql`SELECT COALESCE(SUM(CAST(total_amount AS DECIMAL)), 0) as total FROM invoices WHERE status = 'pending'`
+        : sql`SELECT COALESCE(SUM(CAST(total_amount AS DECIMAL)), 0) as total FROM invoices WHERE status = 'pending' AND contact_id = ${payload.userId}`
+    )
     metrics.pendingInvoices = parseFloat(invoicesResult[0]?.total || 0)
 
     // Total revenue (paid invoices)
-    const revenueQuery = payload.role === 'admin'
-      ? sql`SELECT COALESCE(SUM(CAST(total_amount AS DECIMAL)), 0) as total FROM ${schema.invoices} WHERE status = 'paid' AND paid_at >= ${startDate.toISOString()}`
-      : sql`SELECT COALESCE(SUM(CAST(total_amount AS DECIMAL)), 0) as total FROM ${schema.invoices} WHERE status = 'paid' AND contact_id = ${payload.userId} AND paid_at >= ${startDate.toISOString()}`
-    
-    const revenueResult = await db(revenueQuery)
+    const revenueResult = await db.execute(
+      payload.role === 'admin'
+        ? sql`SELECT COALESCE(SUM(CAST(total_amount AS DECIMAL)), 0) as total FROM invoices WHERE status = 'paid' AND paid_at >= ${startDate.toISOString()}`
+        : sql`SELECT COALESCE(SUM(CAST(total_amount AS DECIMAL)), 0) as total FROM invoices WHERE status = 'paid' AND contact_id = ${payload.userId} AND paid_at >= ${startDate.toISOString()}`
+    )
     metrics.revenue = parseFloat(revenueResult[0]?.total || 0)
 
     // Unread messages count
-    const messagesQuery = payload.role === 'admin'
-      ? sql`SELECT COUNT(*) as count FROM ${schema.messages} WHERE sender = 'client' AND read_at IS NULL`
-      : sql`SELECT COUNT(*) as count FROM ${schema.messages} WHERE contact_id = ${payload.userId} AND sender = 'team' AND read_at IS NULL`
-    
-    const messagesResult = await db(messagesQuery)
+    const messagesResult = await db.execute(
+      payload.role === 'admin'
+        ? sql`SELECT COUNT(*) as count FROM messages WHERE sender_id != recipient_id AND read_at IS NULL`
+        : sql`SELECT COUNT(*) as count FROM messages WHERE recipient_id = ${payload.userId} AND read_at IS NULL`
+    )
     metrics.unreadMessages = parseInt(messagesResult[0]?.count || 0)
 
     // Recent activity (last 7 days)
@@ -124,56 +124,38 @@ export async function handler(event) {
     activityStartDate.setDate(activityStartDate.getDate() - 7)
 
     // Projects activity
-    const recentProjectsQuery = payload.role === 'admin'
-      ? sql`SELECT COUNT(*) as count FROM ${schema.projects} WHERE updated_at >= ${activityStartDate.toISOString()}`
-      : sql`SELECT COUNT(*) as count FROM ${schema.projects} WHERE contact_id = ${payload.userId} AND updated_at >= ${activityStartDate.toISOString()}`
-    
-    const recentProjectsResult = await db(recentProjectsQuery)
+    const recentProjectsResult = await db.execute(
+      payload.role === 'admin'
+        ? sql`SELECT COUNT(*) as count FROM projects WHERE updated_at >= ${activityStartDate.toISOString()}`
+        : sql`SELECT COUNT(*) as count FROM projects WHERE contact_id = ${payload.userId} AND updated_at >= ${activityStartDate.toISOString()}`
+    )
     metrics.recentProjectActivity = parseInt(recentProjectsResult[0]?.count || 0)
 
     // Messages activity
-    const recentMessagesQuery = payload.role === 'admin'
-      ? sql`SELECT COUNT(*) as count FROM ${schema.messages} WHERE created_at >= ${activityStartDate.toISOString()}`
-      : sql`SELECT COUNT(*) as count FROM ${schema.messages} WHERE contact_id = ${payload.userId} AND created_at >= ${activityStartDate.toISOString()}`
-    
-    const recentMessagesResult = await db(recentMessagesQuery)
+    const recentMessagesResult = await db.execute(
+      payload.role === 'admin'
+        ? sql`SELECT COUNT(*) as count FROM messages WHERE created_at >= ${activityStartDate.toISOString()}`
+        : sql`SELECT COUNT(*) as count FROM messages WHERE sender_id = ${payload.userId} OR recipient_id = ${payload.userId} AND created_at >= ${activityStartDate.toISOString()}`
+    )
     metrics.recentMessages = parseInt(recentMessagesResult[0]?.count || 0)
 
     // Project status breakdown
-    const statusBreakdownQuery = payload.role === 'admin'
-      ? sql`
-          SELECT status, COUNT(*) as count 
-          FROM ${schema.projects} 
-          GROUP BY status
-        `
-      : sql`
-          SELECT status, COUNT(*) as count 
-          FROM ${schema.projects} 
-          WHERE contact_id = ${payload.userId}
-          GROUP BY status
-        `
-    
-    const statusBreakdownResult = await db(statusBreakdownQuery)
+    const statusBreakdownResult = await db.execute(
+      payload.role === 'admin'
+        ? sql`SELECT status, COUNT(*) as count FROM projects GROUP BY status`
+        : sql`SELECT status, COUNT(*) as count FROM projects WHERE contact_id = ${payload.userId} GROUP BY status`
+    )
     metrics.projectStatusBreakdown = statusBreakdownResult.map(row => ({
       status: row.status,
       count: parseInt(row.count)
     }))
 
     // Invoice status breakdown
-    const invoiceBreakdownQuery = payload.role === 'admin'
-      ? sql`
-          SELECT status, COUNT(*) as count, COALESCE(SUM(CAST(total_amount AS DECIMAL)), 0) as total
-          FROM ${schema.invoices}
-          GROUP BY status
-        `
-      : sql`
-          SELECT status, COUNT(*) as count, COALESCE(SUM(CAST(total_amount AS DECIMAL)), 0) as total
-          FROM ${schema.invoices}
-          WHERE contact_id = ${payload.userId}
-          GROUP BY status
-        `
-    
-    const invoiceBreakdownResult = await db(invoiceBreakdownQuery)
+    const invoiceBreakdownResult = await db.execute(
+      payload.role === 'admin'
+        ? sql`SELECT status, COUNT(*) as count, COALESCE(SUM(CAST(total_amount AS DECIMAL)), 0) as total FROM invoices GROUP BY status`
+        : sql`SELECT status, COUNT(*) as count, COALESCE(SUM(CAST(total_amount AS DECIMAL)), 0) as total FROM invoices WHERE contact_id = ${payload.userId} GROUP BY status`
+    )
     metrics.invoiceStatusBreakdown = invoiceBreakdownResult.map(row => ({
       status: row.status,
       count: parseInt(row.count),
@@ -182,17 +164,15 @@ export async function handler(event) {
 
     // Monthly revenue trend (last 6 months) - admin only
     if (payload.role === 'admin') {
-      const monthlyRevenueQuery = sql`
+      const monthlyRevenueResult = await db.execute(sql`
         SELECT 
           DATE_TRUNC('month', paid_at) as month,
           COALESCE(SUM(CAST(total_amount AS DECIMAL)), 0) as total
-        FROM ${schema.invoices}
+        FROM invoices
         WHERE status = 'paid' AND paid_at >= NOW() - INTERVAL '6 months'
         GROUP BY DATE_TRUNC('month', paid_at)
         ORDER BY month ASC
-      `
-      
-      const monthlyRevenueResult = await db(monthlyRevenueQuery)
+      `)
       metrics.monthlyRevenue = monthlyRevenueResult.map(row => ({
         month: row.month,
         total: parseFloat(row.total)

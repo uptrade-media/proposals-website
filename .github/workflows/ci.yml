@@ -22,8 +22,6 @@ jobs:
       
       - name: Setup pnpm
         uses: pnpm/action-setup@v4
-        with:
-          version: 10.4.1
       
       - name: Get pnpm store directory
         id: pnpm-cache
@@ -71,8 +69,6 @@ jobs:
       
       - name: Setup pnpm
         uses: pnpm/action-setup@v4
-        with:
-          version: 10.4.1
       
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
@@ -91,8 +87,6 @@ jobs:
       
       - name: Setup pnpm
         uses: pnpm/action-setup@v4
-        with:
-          version: 10.4.1
       
       - name: Audit dependencies
         run: pnpm audit --prod
@@ -115,8 +109,6 @@ jobs:
       
       - name: Setup pnpm
         uses: pnpm/action-setup@v4
-        with:
-          version: 10.4.1
       
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
