@@ -14,7 +14,6 @@ const AccountSetup = lazy(() => import('./pages/AccountSetup'))
 const MagicLogin = lazy(() => import('./pages/MagicLogin'))
 const ResetPassword = lazy(() => import('./pages/ResetPassword'))
 const ProposalGate = lazy(() => import('./components/ProposalGate'))
-const Admin = lazy(() => import('./components/Admin'))
 const Audits = lazy(() => import('./pages/Audits'))
 const AuditDetail = lazy(() => import('./pages/AuditDetail'))
 
@@ -85,14 +84,6 @@ export default function App() {
               element={
                 <Protected>
                   <Dashboard />
-                </Protected>
-              }
-            />
-            <Route
-              path="/admin"
-              element={
-                <Protected>
-                  <Admin />
                 </Protected>
               }
             />

@@ -17,7 +17,8 @@ import {
   FolderOpen,
   Shield,
   Mail,
-  LineChart
+  LineChart,
+  BookOpen
 } from 'lucide-react'
 import useAuthStore from '@/lib/auth-store'
 import useReportsStore from '@/lib/reports-store'
@@ -42,8 +43,8 @@ const Sidebar = ({ activeSection, onSectionChange, isMobile = false }) => {
 
   // Admin-only navigation items
   const adminItems = user?.role === 'admin' ? [
-    { id: 'admin', label: 'Admin Panel', icon: Shield, badge: null, route: null },
     { id: 'clients', label: 'Clients', icon: Users, badge: null, route: null },
+    { id: 'blog', label: 'Blog', icon: BookOpen, badge: null, route: null },
     { id: 'email', label: 'Email Manager', icon: Mail, badge: null, route: null },
   ] : []
 

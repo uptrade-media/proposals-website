@@ -8,7 +8,7 @@ import Messages from './Messages'
 import Billing from './Billing'
 import ClientManagement from './ClientManagement'
 import EmailManager from '@/pages/EmailManager'
-import Admin from './Admin'
+import BlogManagement from './BlogManagement'
 import Audits from '@/pages/Audits'
 import UptradeLoading from './UptradeLoading'
 import useAuthStore from '@/lib/auth-store'
@@ -43,10 +43,10 @@ const MainLayout = () => {
         return <Billing />
       case 'clients':
         return <ClientManagement />
+      case 'blog':
+        return <BlogManagement />
       case 'email':
         return <EmailManager />
-      case 'admin':
-        return <Admin />
       default:
         return <Dashboard onNavigate={setActiveSection} />
     }
