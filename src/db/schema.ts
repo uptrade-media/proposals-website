@@ -450,3 +450,88 @@ export const webVitalsRelations = relations(webVitals, ({ one }) => ({
   })
 }))
 
+// ========================================
+// EMAIL CAMPAIGNS
+// ========================================
+export const campaigns = pgTable('campaigns', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  type: text('type').notNull(), // 'one_off', 'newsletter', 'drip'
+  name: text('name').notNull(),
+  mailboxId: uuid('mailbox_id'), // For future mailbox rotation feature
+  status: text('status').default('draft'), // draft, scheduled, active, paused, completed, cancelled
+  scheduledStart: timestamp('scheduled_start'),
+  windowStartLocal: integer('window_start_local').default(9), // 9 AM local time
+  windowEndLocal: integer('window_end_local').default(17), // 5 PM local time
+  dailyCap: integer('daily_cap').default(100),
+  warmupPercent: integer('warmup_percent').default(0), // 0-100
+  goalUrl: text('goal_url'), // Track conversions
+  daypartEnabled: boolean('daypart_enabled').default(false),
+  createdAt: timestamp('created_at').defaultNow(),
+  updatedAt: timestamp('updated_at').defaultNow()
+})
+
+export const campaignSteps = pgTable('campaign_steps', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  campaignId: uuid('campaign_id').notNull().references(() => campaigns.id, { onDelete: 'cascade' }),
+  stepIndex: integer('step_index').notNull().default(0), // 0 for initial, 1+ for follow-ups
+  delayDays: integer('delay_days').default(0), // Days after previous step
+  subjectOverride: text('subject_override'), // Override campaign subject
+  htmlOverride: text('html_override'), // Override campaign HTML
+  createdAt: timestamp('created_at').defaultNow()
+})
+
+export const recipients = pgTable('recipients', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  campaignId: uuid('campaign_id').notNull().references(() => campaigns.id, { onDelete: 'cascade' }),
+  contactId: uuid('contact_id').notNull().references(() => contacts.id, { onDelete: 'cascade' }),
+  stepIndex: integer('step_index').default(0), // Current step in sequence
+  status: text('status').default('queued'), // queued, sent, opened, clicked, bounced, unsubscribed, failed
+  unsubscribeToken: text('unsubscribe_token').notNull().unique(),
+  sentAt: timestamp('sent_at'),
+  openedAt: timestamp('opened_at'),
+  clickedAt: timestamp('clicked_at'),
+  bouncedAt: timestamp('bounced_at'),
+  unsubscribedAt: timestamp('unsubscribed_at'),
+  createdAt: timestamp('created_at').defaultNow()
+})
+
+export const clientActivity = pgTable('client_activity', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  contactId: uuid('contact_id').notNull().references(() => contacts.id, { onDelete: 'cascade' }),
+  activityType: text('activity_type').notNull(), // email_campaign_created, email_sent, email_opened, etc.
+  description: text('description'),
+  metadata: text('metadata'), // JSON for additional data
+  createdAt: timestamp('created_at').defaultNow()
+})
+
+// Campaign Relations
+export const campaignsRelations = relations(campaigns, ({ many }) => ({
+  steps: many(campaignSteps),
+  recipients: many(recipients)
+}))
+
+export const campaignStepsRelations = relations(campaignSteps, ({ one }) => ({
+  campaign: one(campaigns, {
+    fields: [campaignSteps.campaignId],
+    references: [campaigns.id]
+  })
+}))
+
+export const recipientsRelations = relations(recipients, ({ one }) => ({
+  campaign: one(campaigns, {
+    fields: [recipients.campaignId],
+    references: [campaigns.id]
+  }),
+  contact: one(contacts, {
+    fields: [recipients.contactId],
+    references: [contacts.id]
+  })
+}))
+
+export const clientActivityRelations = relations(clientActivity, ({ one }) => ({
+  contact: one(contacts, {
+    fields: [clientActivity.contactId],
+    references: [contacts.id]
+  })
+}))
+

@@ -103,6 +103,9 @@ export default function App() {
                 </Protected>
               }
             />
+            
+            {/* Redirect old /admin route to dashboard */}
+            <Route path="/admin" element={<Navigate to="/dashboard" replace />} />
 
           </Routes>
         </Suspense>

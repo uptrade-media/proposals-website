@@ -1,23 +1,25 @@
-// netlify/functions/clients-list.js
-import { neon } from '@neondatabase/serverless'
+// netlify/functions/admin-clients-list.js
 import jwt from 'jsonwebtoken'
+import { neon } from '@neondatabase/serverless'
+import { drizzle } from 'drizzle-orm/neon-http'
+import { eq, ilike, or, sql, desc } from 'drizzle-orm'
+import * as schema from '../../src/db/schema.js'
 
-const sql = neon(process.env.DATABASE_URL)
+const COOKIE_NAME = process.env.SESSION_COOKIE_NAME || 'um_session'
+const JWT_SECRET = process.env.AUTH_JWT_SECRET
+const DATABASE_URL = process.env.DATABASE_URL
 
 export async function handler(event) {
   // CORS headers
-  const origin = event.headers.origin || 'http://localhost:8888'
   const headers = {
-    'Access-Control-Allow-Origin': origin,
+    'Access-Control-Allow-Origin': '*',
     'Access-Control-Allow-Headers': 'Content-Type',
     'Access-Control-Allow-Methods': 'GET, OPTIONS',
-    'Access-Control-Allow-Credentials': 'true',
-    'Content-Type': 'application/json',
+    'Content-Type': 'application/json'
   }
 
-  // Handle preflight
   if (event.httpMethod === 'OPTIONS') {
-    return { statusCode: 204, headers, body: '' }
+    return { statusCode: 204, headers }
   }
 
   if (event.httpMethod !== 'GET') {
@@ -28,20 +30,30 @@ export async function handler(event) {
     }
   }
 
-  try {
-    // Verify authentication
-    const token = event.headers.cookie?.match(/um_session=([^;]+)/)?.[1]
-    if (!token) {
-      return {
-        statusCode: 401,
-        headers,
-        body: JSON.stringify({ error: 'Unauthorized' })
-      }
+  // Verify authentication
+  if (!JWT_SECRET) {
+    return {
+      statusCode: 500,
+      headers,
+      body: JSON.stringify({ error: 'Server not configured' })
     }
+  }
 
-    const payload = jwt.verify(token, process.env.AUTH_JWT_SECRET || process.env.JWT_SECRET)
+  const rawCookie = event.headers.cookie || ''
+  const token = rawCookie.split('; ').find(c => c.startsWith(`${COOKIE_NAME}=`))?.split('=')[1]
+  
+  if (!token) {
+    return {
+      statusCode: 401,
+      headers,
+      body: JSON.stringify({ error: 'Not authenticated' })
+    }
+  }
 
-    // Verify admin role
+  try {
+    const payload = jwt.verify(token, JWT_SECRET)
+
+    // Only admins can list clients
     if (payload.role !== 'admin') {
       return {
         statusCode: 403,
@@ -50,100 +62,105 @@ export async function handler(event) {
       }
     }
 
-    // Parse query parameters
-    const url = new URL(event.rawUrl || `http://localhost${event.rawPath}`)
-    const search = url.searchParams.get('search')
-    const filterSubscribed = url.searchParams.get('subscribed') // 'true', 'false', or null for all
-    const role = url.searchParams.get('role') // 'client', 'admin', or null for all
-    const limit = Math.min(parseInt(url.searchParams.get('limit') || '100'), 500)
-    const offset = parseInt(url.searchParams.get('offset') || '0')
-    const sortBy = url.searchParams.get('sortBy') || 'created_at' // created_at, name, email
-    const sortOrder = url.searchParams.get('sortOrder') || 'DESC'
-
-    // Build dynamic query
-    let query = 'SELECT id, email, name, company, phone, role, subscribed, source, last_login, created_at, updated_at FROM contacts WHERE role != \'admin\''
-    const params = []
-    let paramCount = 1
-
-    // Search filter
-    if (search) {
-      query += ` AND (name ILIKE $${paramCount} OR email ILIKE $${paramCount} OR company ILIKE $${paramCount})`
-      params.push(`%${search}%`)
-      paramCount++
+    // Connect to database
+    if (!DATABASE_URL) {
+      return {
+        statusCode: 500,
+        headers,
+        body: JSON.stringify({ error: 'Database not configured' })
+      }
     }
 
-    // Subscription filter
-    if (filterSubscribed === 'true') {
-      query += ` AND subscribed = true`
-    } else if (filterSubscribed === 'false') {
-      query += ` AND subscribed = false`
+    const db = neon(DATABASE_URL)
+    const drizzleDb = drizzle(db, { schema })
+
+    // Parse query parameters (for future filtering)
+    const params = new URLSearchParams(event.queryStringParameters || {})
+    const search = params.get('search') || ''
+    const role = params.get('role') // 'client' or 'admin'
+    const accountSetup = params.get('accountSetup') // 'true' or 'false'
+
+    // Simple query using tagged-template syntax (required by Neon serverless)
+    // Note: Complex joins and dynamic filtering removed for now due to Neon limitations
+    const result = await db`
+      SELECT 
+        id,
+        email,
+        name,
+        company,
+        role,
+        account_setup,
+        google_id,
+        avatar,
+        created_at
+      FROM contacts
+      WHERE role != 'admin'
+      ORDER BY created_at DESC
+    `
+
+    // Format results
+    const clients = result.map(row => ({
+      id: row.id,
+      email: row.email,
+      name: row.name,
+      company: row.company,
+      role: row.role,
+      accountSetup: row.accountSetup,
+      hasGoogleAuth: !!row.googleId,
+      avatar: row.avatar,
+      createdAt: row.createdAt,
+      stats: {
+        projectCount: 0,
+        proposalCount: 0,
+        invoiceCount: 0,
+        pendingAmount: 0,
+        paidAmount: 0,
+        lastProjectActivity: null,
+        lastMessageActivity: null
+      }
+    }))
+
+    // Calculate summary stats
+    const summary = {
+      totalClients: clients.length,
+      totalClientsWithProjects: clients.filter(c => c.stats.projectCount > 0).length,
+      totalPendingAmount: clients.reduce((sum, c) => sum + c.stats.pendingAmount, 0),
+      totalPaidAmount: clients.reduce((sum, c) => sum + c.stats.paidAmount, 0),
+      clientsWithAccountSetup: clients.filter(c => c.accountSetup).length,
+      clientsWithGoogleAuth: clients.filter(c => c.hasGoogleAuth).length
     }
-
-    // Role filter
-    if (role) {
-      query += ` AND role = $${paramCount}`
-      params.push(role)
-      paramCount++
-    }
-
-    // Sorting
-    const validSortFields = ['created_at', 'name', 'email', 'last_login']
-    const validSortOrder = ['ASC', 'DESC']
-    const safeSortBy = validSortFields.includes(sortBy) ? sortBy : 'created_at'
-    const safeSortOrder = validSortOrder.includes(sortOrder.toUpperCase()) ? sortOrder.toUpperCase() : 'DESC'
-
-    query += ` ORDER BY ${safeSortBy} ${safeSortOrder}`
-    query += ` LIMIT $${paramCount} OFFSET $${paramCount + 1}`
-    params.push(limit, offset)
-
-    const result = await sql(query, params)
-
-    // Get total count
-    let countQuery = 'SELECT COUNT(*) as count FROM contacts WHERE role != \'admin\''
-    const countParams = []
-    let countParamCount = 1
-
-    if (search) {
-      countQuery += ` AND (name ILIKE $${countParamCount} OR email ILIKE $${countParamCount} OR company ILIKE $${countParamCount})`
-      countParams.push(`%${search}%`)
-      countParamCount++
-    }
-
-    if (filterSubscribed === 'true') {
-      countQuery += ` AND subscribed = true`
-    } else if (filterSubscribed === 'false') {
-      countQuery += ` AND subscribed = false`
-    }
-
-    if (role) {
-      countQuery += ` AND role = $${countParamCount}`
-      countParams.push(role)
-      countParamCount++
-    }
-
-    const countResult = await sql(countQuery, countParams)
-    const total = countResult[0]?.count || 0
 
     return {
       statusCode: 200,
       headers,
-      body: JSON.stringify({
-        success: true,
-        clients: result,
-        total: parseInt(total),
-        count: result.length,
-        limit,
-        offset
+      body: JSON.stringify({ 
+        clients,
+        summary,
+        filters: {
+          search,
+          role,
+          accountSetup
+        }
       })
     }
+
   } catch (error) {
-    console.error('Clients list error:', error)
+    console.error('Error listing clients:', error)
+    
+    if (error.name === 'JsonWebTokenError' || error.name === 'TokenExpiredError') {
+      return {
+        statusCode: 401,
+        headers,
+        body: JSON.stringify({ error: 'Invalid or expired session' })
+      }
+    }
+
     return {
       statusCode: 500,
       headers,
-      body: JSON.stringify({
-        error: 'Failed to fetch clients',
-        details: error.message
+      body: JSON.stringify({ 
+        error: 'Failed to list clients',
+        message: error.message 
       })
     }
   }

@@ -64,7 +64,7 @@ export async function handler(event) {
     const payload = jwt.verify(token, JWT_SECRET)
     
     // Only Google OAuth users can download files
-    if (payload.type !== 'google') {
+    if (payload.type !== 'google' && payload.role !== 'admin') {
       return {
         statusCode: 403,
         headers: { ...headers, 'Content-Type': 'application/json' },

@@ -22,6 +22,13 @@
       "when": 1760559648168,
       "tag": "0002_organic_obadiah_stane",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1760720779261,
+      "tag": "0003_dry_king_bedlam",
+      "breakpoints": true
     }
   ]
 }
