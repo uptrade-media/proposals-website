@@ -5,7 +5,7 @@ import { drizzle } from 'drizzle-orm/neon-http'
 import { eq, desc } from 'drizzle-orm'
 import { Client, Environment } from 'square'
 import { Resend } from 'resend'
-import * as schema from '../../src/db/schema.ts'
+import * as schema from '../../src/db/schema.js'
 
 const COOKIE_NAME = process.env.SESSION_COOKIE_NAME || 'um_session'
 const JWT_SECRET = process.env.AUTH_JWT_SECRET

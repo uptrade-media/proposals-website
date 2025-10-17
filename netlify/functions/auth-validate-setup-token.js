@@ -3,7 +3,7 @@ import jwt from 'jsonwebtoken'
 import { neon } from '@neondatabase/serverless'
 import { drizzle } from 'drizzle-orm/neon-http'
 import { eq } from 'drizzle-orm'
-import * as schema from '../../src/db/schema.ts'
+import * as schema from '../../src/db/schema.js'
 
 const JWT_SECRET = process.env.AUTH_JWT_SECRET
 const DATABASE_URL = process.env.DATABASE_URL

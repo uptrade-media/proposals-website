@@ -185,7 +185,9 @@ const useReportsStore = create((set, get) => ({
     set({ isLoading: true, error: null })
     
     try {
+      console.log('[reports-store] Fetching audits...')
       const response = await api.get('/.netlify/functions/audits-list')
+      console.log('[reports-store] Audits response:', response.data)
       set({ 
         audits: response.data.audits || [],
         isLoading: false 
@@ -193,7 +195,9 @@ const useReportsStore = create((set, get) => ({
       
       return { success: true, data: response.data }
     } catch (error) {
-      const errorMessage = error.response?.data?.error || 'Failed to fetch audits'
+      console.error('[reports-store] Error fetching audits:', error)
+      console.error('[reports-store] Error response:', error.response)
+      const errorMessage = error.response?.data?.error || error.message || 'Failed to fetch audits'
       set({ 
         isLoading: false, 
         error: errorMessage 

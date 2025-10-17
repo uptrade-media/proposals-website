@@ -8,6 +8,7 @@ import Messages from './Messages'
 import Billing from './Billing'
 import ClientManagement from './ClientManagement'
 import EmailManager from '@/pages/EmailManager'
+import Admin from './Admin'
 import UptradeLoading from './UptradeLoading'
 import useAuthStore from '@/lib/auth-store'
 import { Menu, X } from 'lucide-react'
@@ -41,6 +42,8 @@ const MainLayout = () => {
         return <ClientManagement />
       case 'email':
         return <EmailManager />
+      case 'admin':
+        return <Admin />
       default:
         return <Dashboard onNavigate={setActiveSection} />
     }

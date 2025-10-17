@@ -6,7 +6,7 @@ import { eq } from 'drizzle-orm'
 import { Client, Environment } from 'square'
 import { Resend } from 'resend'
 import { RateLimiterMemory } from 'rate-limiter-flexible'
-import * as schema from '../../src/db/schema.ts'
+import * as schema from '../../src/db/schema.js'
 
 // Rate limiter: 5 payment attempts per minute per user
 const rateLimiter = new RateLimiterMemory({

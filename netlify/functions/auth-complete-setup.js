@@ -4,7 +4,7 @@ import bcrypt from 'bcryptjs'
 import { neon } from '@neondatabase/serverless'
 import { drizzle } from 'drizzle-orm/neon-http'
 import { eq } from 'drizzle-orm'
-import * as schema from '../../src/db/schema.ts'
+import * as schema from '../../src/db/schema.js'
 import { OAuth2Client } from 'google-auth-library'
 
 const JWT_SECRET = process.env.AUTH_JWT_SECRET

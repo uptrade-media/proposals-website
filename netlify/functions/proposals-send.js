@@ -2,7 +2,7 @@ import jwt from 'jsonwebtoken'
 import { neon } from '@neondatabase/serverless'
 import { drizzle } from 'drizzle-orm/neon-http'
 import { eq } from 'drizzle-orm'
-import * as schema from '../../src/db/schema.ts'
+import * as schema from '../../src/db/schema.js'
 import { Resend } from 'resend'
 
 const COOKIE_NAME = process.env.SESSION_COOKIE_NAME || 'um_session'

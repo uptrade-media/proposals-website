@@ -125,8 +125,8 @@ exports.handler = async (event) => {
       isProd ? 'Secure' : ''
     ].filter(Boolean).join('; ')
 
-    // Always redirect to dashboard for now since admin route isn't defined
-    const redirect = userRole === 'admin' ? '/admin' : '/dashboard'
+    // All users use unified dashboard with role-based sidebar
+    const redirect = '/dashboard'
 
     return {
       statusCode: 200,

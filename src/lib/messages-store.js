@@ -173,32 +173,33 @@ const useMessagesStore = create((set, get) => ({
     set({ isLoading: true, error: null })
     
     try {
-      const response = await api.get('/messages/conversations')
+      const response = await api.get('/.netlify/functions/messages-conversations')
       set({ 
-        conversations: response.data.conversations,
+        conversations: response.data.conversations || [],
         isLoading: false 
       })
       return { success: true, data: response.data }
     } catch (error) {
-      const errorMessage = error.response?.data?.error || 'Failed to fetch conversations'
+      console.error('[Messages Store] Failed to fetch conversations:', error)
       set({ 
-        isLoading: false, 
-        error: errorMessage 
+        conversations: [],
+        isLoading: false,
+        error: error.response?.data?.error || 'Failed to fetch conversations'
       })
-      return { success: false, error: errorMessage }
+      return { success: false, error: error.response?.data?.error || 'Failed to fetch conversations' }
     }
   },
 
   // Fetch contacts
   fetchContacts: async () => {
     try {
-      const response = await api.get('/users/contacts')
-      set({ contacts: response.data.contacts })
+      const response = await api.get('/.netlify/functions/messages-contacts')
+      set({ contacts: response.data.contacts || [] })
       return { success: true, data: response.data }
     } catch (error) {
-      const errorMessage = error.response?.data?.error || 'Failed to fetch contacts'
-      set({ error: errorMessage })
-      return { success: false, error: errorMessage }
+      console.error('[Messages Store] Failed to fetch contacts:', error)
+      set({ contacts: [], error: error.response?.data?.error || 'Failed to fetch contacts' })
+      return { success: false, error: error.response?.data?.error || 'Failed to fetch contacts' }
     }
   },
 

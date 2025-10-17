@@ -4,7 +4,7 @@ import { neon } from '@neondatabase/serverless'
 import { drizzle } from 'drizzle-orm/neon-http'
 import { eq } from 'drizzle-orm'
 import { Resend } from 'resend'
-import * as schema from '../../src/db/schema.ts'
+import * as schema from '../../src/db/schema.js'
 
 const SQUARE_WEBHOOK_SIGNATURE_KEY = process.env.SQUARE_WEBHOOK_SIGNATURE_KEY
 const DATABASE_URL = process.env.DATABASE_URL

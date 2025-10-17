@@ -4,7 +4,7 @@ import { neon } from '@neondatabase/serverless'
 import { drizzle } from 'drizzle-orm/neon-http'
 import { eq } from 'drizzle-orm'
 import bcrypt from 'bcryptjs'
-import * as schema from '../../src/db/schema.ts'
+import * as schema from '../../src/db/schema.js'
 
 const COOKIE_NAME = process.env.SESSION_COOKIE_NAME || 'um_session'
 const JWT_SECRET = process.env.AUTH_JWT_SECRET

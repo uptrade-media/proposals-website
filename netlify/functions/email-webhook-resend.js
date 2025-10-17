@@ -6,7 +6,7 @@ import crypto from 'crypto'
 import { neon } from '@neondatabase/serverless'
 import { drizzle } from 'drizzle-orm/neon-http'
 import { and, eq } from 'drizzle-orm'
-import * as schema from '../../src/db/schema.ts'
+import * as schema from '../../src/db/schema.js'
 
 const DATABASE_URL = process.env.DATABASE_URL
 const RESEND_WEBHOOK_SECRET = process.env.RESEND_WEBHOOK_SECRET

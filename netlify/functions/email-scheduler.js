@@ -5,7 +5,7 @@
 import { neon } from '@neondatabase/serverless'
 import { drizzle } from 'drizzle-orm/neon-http'
 import { and, eq, isNull, lte, gte, count, sql } from 'drizzle-orm'
-import * as schema from '../../src/db/schema.ts'
+import * as schema from '../../src/db/schema.js'
 import { Resend } from 'resend'
 
 const DATABASE_URL = process.env.DATABASE_URL
