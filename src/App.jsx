@@ -3,6 +3,7 @@ import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-d
 import { useEffect, useState, useRef, lazy, Suspense } from 'react'
 import Protected from './components/Protected'
 import useAuthStore from './lib/auth-store'
+import UptradeLoading from './components/UptradeLoading'
 import './App.css'
 
 // Eager load critical routes (login, dashboard)
@@ -16,16 +17,9 @@ const ResetPassword = lazy(() => import('./pages/ResetPassword'))
 const ProposalGate = lazy(() => import('./components/ProposalGate'))
 const Audits = lazy(() => import('./pages/Audits'))
 const AuditDetail = lazy(() => import('./pages/AuditDetail'))
-
-// Loading fallback component
-const PageLoader = () => (
-  <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-    <div className="text-center">
-      <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-[#4bbf39] mx-auto mb-4"></div>
-      <p className="text-gray-600">Loading...</p>
-    </div>
-  </div>
-)
+const Auth2FASetup = lazy(() => import('./pages/Auth2FASetup'))
+const Auth2FAVerify = lazy(() => import('./pages/Auth2FAVerify'))
+const UserProfile = lazy(() => import('./pages/UserProfile'))
 
 export default function App() {
   const { isAuthenticated, checkAuth, isLoading } = useAuthStore()
@@ -68,7 +62,7 @@ export default function App() {
   return (
     <Router>
       <div className="min-h-screen bg-white">
-        <Suspense fallback={<PageLoader />}>
+        <Suspense fallback={<UptradeLoading />}>
           <Routes>
             <Route 
               path="/" 
@@ -77,6 +71,8 @@ export default function App() {
             <Route path="/login" element={<LoginPage />} />
             <Route path="/account-setup" element={<AccountSetup />} />
             <Route path="/auth/magic" element={<MagicLogin />} />
+            <Route path="/auth/setup-2fa" element={<Auth2FASetup />} />
+            <Route path="/auth/verify-2fa" element={<Auth2FAVerify />} />
             <Route path="/reset-password" element={<ResetPassword />} />
             <Route path="/p/:slug" element={<ProposalGate />} />
             <Route
@@ -100,6 +96,14 @@ export default function App() {
               element={
                 <Protected>
                   <AuditDetail />
+                </Protected>
+              }
+            />
+            <Route
+              path="/profile"
+              element={
+                <Protected>
+                  <UserProfile />
                 </Protected>
               }
             />

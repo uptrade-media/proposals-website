@@ -21,6 +21,12 @@ export const contacts = pgTable('contacts', {
   notes: text('notes'), // Internal notes
   tags: text('tags'), // JSON array of tags
   source: text('source'), // How they found us
+  // Two-Factor Authentication
+  totpSecret: text('totp_secret'), // Base32-encoded TOTP secret
+  totpEnabled: boolean('totp_enabled').default(false),
+  backupCodes: text('backup_codes'), // JSON array of one-time codes
+  twoFaMethod: text('two_fa_method').default('totp'), // 'totp' or 'sms' (for future)
+  last2FaCheck: timestamp('last_2fa_check'),
   createdAt: timestamp('created_at').defaultNow(),
   updatedAt: timestamp('updated_at').defaultNow()
 })

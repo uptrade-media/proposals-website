@@ -213,10 +213,18 @@ export default function LoginPage() {
       const result = await authLogin(email, password, nextPath)
       
       if (result.success) {
-        // Navigate using React Router
-        const redirect = result.redirect || nextPath
-        console.log('[Login] Redirecting to:', redirect)
-        navigate(redirect)
+        // Check if 2FA is required
+        if (result.requiresMfa) {
+          console.log('[Login] 2FA required, redirecting to verification page')
+          setIsSubmitting(false)
+          navigate('/auth/verify-2fa')
+        } else {
+          // Navigate using React Router
+          const redirect = result.redirect || nextPath
+          console.log('[Login] Redirecting to:', redirect)
+          setIsSubmitting(false)
+          navigate(redirect)
+        }
       } else {
         throw new Error(result.error || 'Login failed')
       }

@@ -141,14 +141,10 @@ export async function handler(event) {
 
     // Send account setup email
     if (RESEND_API_KEY) {
-      console.log('[admin-clients-create] Resend API key is configured')
-      console.log('[admin-clients-create] RESEND_FROM_EMAIL:', RESEND_FROM_EMAIL)
-      console.log('[admin-clients-create] PORTAL_URL:', PORTAL_URL)
       try {
         const resend = new Resend(RESEND_API_KEY)
         const setupUrl = `${PORTAL_URL}/account-setup?token=${magicToken}`
         
-        console.log('[admin-clients-create] Sending email to:', contact.email)
         const emailResult = await resend.emails.send({
           from: RESEND_FROM_EMAIL,
           to: contact.email,
@@ -315,9 +311,6 @@ export async function handler(event) {
             </html>
           `
         })
-
-        console.log(`[admin-clients-create] Email send result:`, JSON.stringify(emailResult))
-        console.log(`[admin-clients-create] Account setup email sent to ${contact.email}`)
       } catch (emailError) {
         console.error('[admin-clients-create] Failed to send account setup email:', emailError)
         console.error('[admin-clients-create] Error details:', emailError.message, emailError.stack)

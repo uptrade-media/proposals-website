@@ -61,11 +61,7 @@ export async function handler(event) {
   }
 
   try {
-    console.log('=== PROPOSALS-GET START ===')
-    console.log('Identifier:', identifier)
-    
     const payload = jwt.verify(token, JWT_SECRET)
-    console.log('User payload:', { userId: payload.userId, role: payload.role, type: payload.type })
     
     // Verify user is authenticated (accept all auth types: google, password, email, etc)
     if (!payload.userId && !payload.email) {
@@ -87,12 +83,10 @@ export async function handler(event) {
       }
     }
 
-    console.log('Connecting to database...')
     const sql = neon(DATABASE_URL)
     const db = drizzle(sql, { schema })
 
     // Fetch proposal by slug or ID
-    console.log('Querying proposal...')
     const proposal = await db.query.proposals.findFirst({
       where: or(
         eq(schema.proposals.slug, identifier),

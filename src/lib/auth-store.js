@@ -110,6 +110,13 @@ const useAuthStore = create((set, get) => ({
         return { success: false, error: errorMessage }
       }
 
+      // Check if 2FA is required
+      if (data.requiresMfa) {
+        console.log('[AuthStore] 2FA required for login')
+        set({ isLoading: false })
+        return { success: true, requiresMfa: true }
+      }
+
       // Cookie is set by server, fetch user data
       await get().checkAuth()
       

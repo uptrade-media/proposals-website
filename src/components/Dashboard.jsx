@@ -19,12 +19,19 @@ import {
   Shield,
   Plus,
   UserPlus,
-  Loader2
+  Loader2,
+  AlertTriangle
 } from 'lucide-react'
 import useAuthStore from '@/lib/auth-store'
 import api from '@/lib/api'
 import UptradeLoading from './UptradeLoading'
 import { toast } from '@/lib/toast'
+import { DashboardSkeleton, StatsSkeleton, ListSkeleton } from './DashboardSkeleton'
+import { ProjectsEmptyState, MessagesEmptyState, InvoicesEmptyState } from './DashboardEmptyState'
+import { HelpIcon } from './Tooltip'
+import ActivityTimeline from './ActivityTimeline'
+import UpcomingDeadlines from './UpcomingDeadlines'
+import TrendIndicators from './TrendIndicators'
 
 const Dashboard = ({ onNavigate }) => {
   console.log('[Dashboard] Component mounting')
@@ -499,69 +506,87 @@ const Dashboard = ({ onNavigate }) => {
         {/* Active Projects */}
         <Card>
           <CardHeader>
-            <CardTitle>Active Projects</CardTitle>
+            <CardTitle className="flex items-center gap-2">
+              Active Projects
+              <HelpIcon text="Projects created from accepted proposals" />
+            </CardTitle>
             <CardDescription>
               Your current projects and their status
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
-            {dashboardData.projects.map((project) => (
-              <div key={project.id} className="flex items-center justify-between p-4 border rounded-lg">
-                <div className="flex items-center space-x-3">
-                  {getStatusIcon(project.status)}
-                  <div>
-                    <h4 className="font-medium">{project.title}</h4>
-                    <p className="text-sm text-gray-500">Due: {project.dueDate}</p>
-                  </div>
-                </div>
-                <div className="flex items-center space-x-2">
-                  <Badge className={getStatusColor(project.status)}>
-                    {project.status.replace('_', ' ')}
-                  </Badge>
-                  <div className="text-right">
-                    <div className="text-sm font-medium">{project.progress}%</div>
-                    <div className="w-16 bg-gray-200 rounded-full h-2">
-                      <div 
-                        className="bg-[#4bbf39] h-2 rounded-full" 
-                        style={{ width: `${project.progress}%` }}
-                      ></div>
+            {dashboardData.projects.length === 0 ? (
+              <ProjectsEmptyState onAction={() => onNavigate?.('projects')} />
+            ) : (
+              <>
+                {dashboardData.projects.map((project) => (
+                  <div key={project.id} className="flex items-center justify-between p-4 border rounded-lg hover:bg-gray-50 transition-colors">
+                    <div className="flex items-center space-x-3">
+                      {getStatusIcon(project.status)}
+                      <div>
+                        <h4 className="font-medium">{project.title}</h4>
+                        <p className="text-sm text-gray-500">Due: {project.dueDate}</p>
+                      </div>
+                    </div>
+                    <div className="flex items-center space-x-2">
+                      <Badge className={getStatusColor(project.status)}>
+                        {project.status.replace('_', ' ')}
+                      </Badge>
+                      <div className="text-right">
+                        <div className="text-sm font-medium">{project.progress}%</div>
+                        <div className="w-16 bg-gray-200 rounded-full h-2">
+                          <div 
+                            className="bg-[#4bbf39] h-2 rounded-full" 
+                            style={{ width: `${project.progress}%` }}
+                          ></div>
+                        </div>
+                      </div>
                     </div>
                   </div>
-                </div>
-              </div>
-            ))}
-            <Button variant="outline" className="w-full" onClick={() => onNavigate?.('projects')}>
-              View All Projects
-            </Button>
+                ))}
+                <Button variant="outline" className="w-full" onClick={() => onNavigate?.('projects')}>
+                  View All Projects
+                </Button>
+              </>
+            )}
           </CardContent>
         </Card>
 
         {/* Recent Messages */}
         <Card>
           <CardHeader>
-            <CardTitle>Recent Messages</CardTitle>
+            <CardTitle className="flex items-center gap-2">
+              Recent Messages
+              <HelpIcon text="Messages from your Uptrade Media team about your projects" />
+            </CardTitle>
             <CardDescription>
               Latest communications from your team
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
-            {dashboardData.recentMessages.map((message) => (
-              <div key={message.id} className="flex items-start space-x-3 p-3 border rounded-lg">
-                <div className={`w-2 h-2 rounded-full mt-2 ${message.unread ? 'bg-[#4bbf39]' : 'bg-gray-300'}`}></div>
-                <div className="flex-1">
-                  <div className="flex items-center justify-between">
-                    <h4 className={`font-medium ${message.unread ? 'text-gray-900' : 'text-gray-600'}`}>
-                      {message.subject}
-                    </h4>
-                    <span className="text-xs text-gray-500">{message.timestamp}</span>
+            {dashboardData.recentMessages.length === 0 ? (
+              <MessagesEmptyState onAction={() => onNavigate?.('messages')} />
+            ) : (
+              <>
+                {dashboardData.recentMessages.map((message) => (
+                  <div key={message.id} className="flex items-start space-x-3 p-3 border rounded-lg hover:bg-gray-50 transition-colors">
+                    <div className={`w-2 h-2 rounded-full mt-2 ${message.unread ? 'bg-[#4bbf39]' : 'bg-gray-300'}`}></div>
+                    <div className="flex-1">
+                      <div className="flex items-center justify-between">
+                        <h4 className={`font-medium ${message.unread ? 'text-gray-900' : 'text-gray-600'}`}>
+                          {message.subject}
+                        </h4>
+                        <span className="text-xs text-gray-500">{message.timestamp}</span>
+                      </div>
+                      <p className="text-sm text-gray-500">{message.sender}</p>
+                    </div>
                   </div>
-                  <p className="text-sm text-gray-500">{message.sender}</p>
-                </div>
-              </div>
-            ))}
-            <Button variant="outline" className="w-full" onClick={() => onNavigate?.('messages')}>
-              View All Messages
-            </Button>
+                ))}
+                <Button variant="outline" className="w-full" onClick={() => onNavigate?.('messages')}>
+                  View All Messages
+                </Button>
+              </>
+            )}
           </CardContent>
         </Card>
       </div>
@@ -594,31 +619,47 @@ const Dashboard = ({ onNavigate }) => {
         {/* Pending Invoices */}
         <Card>
           <CardHeader>
-            <CardTitle className="flex items-center">
-              <DollarSign className="w-5 h-5 mr-2" />
+            <CardTitle className="flex items-center gap-2">
+              <DollarSign className="w-5 h-5" />
               Pending Invoices
+              <HelpIcon text="Invoices due for payment" />
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-3">
-            {dashboardData.pendingInvoices.map((invoice) => (
-              <div key={invoice.id} className="flex items-center justify-between p-4 border rounded-lg">
-                <div>
-                  <h4 className="font-medium">{invoice.invoiceNumber}</h4>
-                  <p className="text-sm text-gray-500">Due: {invoice.dueDate}</p>
-                </div>
-                <div className="text-right">
-                  <div className="text-lg font-bold">${invoice.amount.toFixed(2)}</div>
-                  <Badge variant="outline" className="text-yellow-600 border-yellow-600">
-                    {invoice.status}
-                  </Badge>
-                </div>
-              </div>
-            ))}
-            <Button variant="outline" className="w-full">
-              View All Invoices
-            </Button>
+            {dashboardData.pendingInvoices.length === 0 ? (
+              <InvoicesEmptyState onAction={() => onNavigate?.('billing')} />
+            ) : (
+              <>
+                {dashboardData.pendingInvoices.map((invoice) => (
+                  <div key={invoice.id} className="flex items-center justify-between p-4 border rounded-lg hover:bg-gray-50 transition-colors">
+                    <div>
+                      <h4 className="font-medium">{invoice.invoiceNumber}</h4>
+                      <p className="text-sm text-gray-500">Due: {invoice.dueDate}</p>
+                    </div>
+                    <div className="text-right">
+                      <div className="text-lg font-bold">${invoice.amount.toFixed(2)}</div>
+                      <Badge variant="outline" className="text-yellow-600 border-yellow-600">
+                        {invoice.status}
+                      </Badge>
+                    </div>
+                  </div>
+                ))}
+                <Button variant="outline" className="w-full" onClick={() => onNavigate?.('billing')}>
+                  View All Invoices
+                </Button>
+              </>
+            )}
           </CardContent>
         </Card>
+
+        {/* PHASE 1: Trends and Indicators */}
+        <TrendIndicators period="month" />
+
+        {/* PHASE 1: Upcoming Deadlines */}
+        <UpcomingDeadlines limit={8} />
+
+        {/* PHASE 1: Activity Timeline */}
+        <ActivityTimeline limit={15} />
       </div>
     </div>
   )

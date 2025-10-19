@@ -161,8 +161,6 @@ const sendFullyExecutedContract = async (proposalData) => {
 }
 
 exports.handler = async (event) => {
-  console.log('=== PROPOSALS-SIGN START ===')
-  
   // Handle CORS preflight
   if (event.httpMethod === 'OPTIONS') {
     return {
@@ -176,7 +174,6 @@ exports.handler = async (event) => {
   }
 
   try {
-    console.log('Parsing request body...')
     // Parse request body
     const { 
       proposalId, 
@@ -188,19 +185,15 @@ exports.handler = async (event) => {
       isAdminSignature = false 
     } = JSON.parse(event.body || '{}')
 
-    console.log('Request data:', { proposalId, proposalTitle, signedBy, clientEmail, isAdminSignature })
-
     if (!proposalId || !signature || !signedAt) {
       console.error('Validation failed: Missing required fields')
       return json(400, { error: 'Missing required fields' }, event)
     }
 
     // Connect to database
-    console.log('Connecting to database...')
     const sql = neon(process.env.DATABASE_URL)
     
     // Get existing proposal
-    console.log('Fetching proposal from database...')
     const proposals = await sql`
       SELECT id, title, status, signed_at, admin_signed_at
       FROM proposals
@@ -213,10 +206,8 @@ exports.handler = async (event) => {
     }
     
     const proposal = proposals[0]
-    console.log('Proposal found:', { id: proposal.id, status: proposal.status })
 
     if (isAdminSignature) {
-      console.log('Admin counter-signature flow')
       // Admin is counter-signing
       if (!proposal.signed_at) {
         console.error('Client signature required first')
@@ -226,7 +217,6 @@ exports.handler = async (event) => {
       }
 
       // Update proposal with admin signature
-      console.log('Saving admin signature to database...')
       await sql`
         UPDATE proposals
         SET 
@@ -236,10 +226,8 @@ exports.handler = async (event) => {
           updated_at = NOW()
         WHERE id = ${proposalId}
       `
-      console.log('Admin signature saved successfully')
 
       // Send fully executed contract to both parties
-      console.log('Sending fully executed contract emails...')
       await sendFullyExecutedContract({
         proposalId,
         proposalTitle,
@@ -257,11 +245,9 @@ exports.handler = async (event) => {
       }, event)
 
     } else {
-      console.log('Client signature flow')
       // Client is signing (first signature)
       
       // Update proposal with client signature
-      console.log('Saving client signature to database...')
       await sql`
         UPDATE proposals
         SET 
@@ -270,10 +256,8 @@ exports.handler = async (event) => {
           updated_at = NOW()
         WHERE id = ${proposalId}
       `
-      console.log('Client signature saved successfully')
 
       // Send email to admin for counter-signature
-      console.log('Sending admin counter-signature email...')
       try {
         await sendAdminCounterSignatureEmail({
           proposalId,
@@ -282,9 +266,8 @@ exports.handler = async (event) => {
           clientEmail: clientEmail || 'unknown@example.com',
           clientSignature: signature
         })
-        console.log('Email sent successfully!')
       } catch (emailError) {
-        console.error('Failed to send email:', emailError)
+        console.error('Failed to send counter-signature email:', emailError)
         // Don't fail the request if email fails
       }
 
