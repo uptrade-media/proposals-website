@@ -14,8 +14,8 @@ export default function EmailManager() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-3xl font-bold">Email Manager</h1>
-        <p className="text-gray-600 mt-1">Send campaigns, newsletters, and track engagement</p>
+        <h1 className="text-3xl font-bold text-[var(--text-primary)]">Email Manager</h1>
+        <p className="text-[var(--text-secondary)] mt-1">Send campaigns, newsletters, and track engagement</p>
       </div>
 
       <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">

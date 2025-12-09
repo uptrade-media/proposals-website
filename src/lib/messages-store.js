@@ -156,15 +156,19 @@ const useMessagesStore = create((set, get) => ({
     }
   },
 
-  // Fetch unread count
+  // Fetch unread count (uses messages list to calculate)
   fetchUnreadCount: async () => {
     try {
-      const response = await api.get('/messages/unread-count')
-      set({ unreadCount: response.data.unread_count })
-      return { success: true, data: response.data }
+      // Use the messages list endpoint to get unread count
+      const response = await api.get('/.netlify/functions/messages-list')
+      const messages = response.data.messages || []
+      const unreadCount = messages.filter(m => !m.readAt && !m.read_at).length
+      set({ unreadCount })
+      return { success: true, count: unreadCount }
     } catch (error) {
-      const errorMessage = error.response?.data?.error || 'Failed to fetch unread count'
-      return { success: false, error: errorMessage }
+      // Silently fail - don't show error for notification count
+      console.error('Failed to fetch unread count:', error)
+      return { success: false, error: error.message }
     }
   },
 

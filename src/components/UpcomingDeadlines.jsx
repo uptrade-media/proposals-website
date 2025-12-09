@@ -69,7 +69,7 @@ export function UpcomingDeadlines({ limit = 10 }) {
         </CardHeader>
         <CardContent>
           <div className="text-center py-8">
-            <p className="text-gray-500">{error}</p>
+            <p className="text-[var(--text-secondary)]">{error}</p>
             <button
               onClick={fetchDeadlines}
               className="mt-3 text-sm text-blue-600 hover:underline"
@@ -90,12 +90,12 @@ export function UpcomingDeadlines({ limit = 10 }) {
       <CardContent>
         {loading ? (
           <div className="flex items-center justify-center py-8">
-            <Loader2 className="w-5 h-5 animate-spin text-gray-400" />
+            <Loader2 className="w-5 h-5 animate-spin text-[var(--text-tertiary)]" />
           </div>
         ) : deadlines.length === 0 ? (
           <div className="text-center py-8">
-            <Calendar className="w-12 h-12 text-gray-300 mx-auto mb-3" />
-            <p className="text-gray-500">No upcoming deadlines</p>
+            <Calendar className="w-12 h-12 text-[var(--text-tertiary)] mx-auto mb-3" />
+            <p className="text-[var(--text-secondary)]">No upcoming deadlines</p>
           </div>
         ) : (
           <div className="space-y-3">
@@ -120,7 +120,7 @@ export function UpcomingDeadlines({ limit = 10 }) {
                           {deadline.name}
                         </p>
                       </div>
-                      <div className="flex items-center gap-2 text-xs text-gray-600">
+                      <div className="flex items-center gap-2 text-xs text-[var(--text-secondary)]">
                         <span className="capitalize">{deadline.item_type}</span>
                         <span>•</span>
                         <span>

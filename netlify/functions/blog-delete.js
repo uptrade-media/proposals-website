@@ -1,8 +1,5 @@
 // netlify/functions/blog-delete.js
-import { neon } from '@neondatabase/serverless'
-import jwt from 'jsonwebtoken'
-
-const sql = neon(process.env.DATABASE_URL)
+import { createSupabaseAdmin, getUserFromCookie } from './utils/supabase.js'
 
 export async function handler(event) {
   // CORS headers
@@ -30,8 +27,9 @@ export async function handler(event) {
 
   try {
     // Verify authentication
-    const token = event.headers.cookie?.match(/um_session=([^;]+)/)?.[1]
-    if (!token) {
+    const { user, contact, error: authError } = await getUserFromCookie(event)
+    
+    if (authError || !user || !contact) {
       return {
         statusCode: 401,
         headers,
@@ -39,10 +37,8 @@ export async function handler(event) {
       }
     }
 
-    const payload = jwt.verify(token, process.env.AUTH_JWT_SECRET || process.env.JWT_SECRET)
-
     // Verify admin role
-    if (payload.role !== 'admin') {
+    if (contact.role !== 'admin') {
       return {
         statusCode: 403,
         headers,
@@ -61,19 +57,24 @@ export async function handler(event) {
     }
 
     // Soft delete - mark as archived
-    const result = await sql`
-      UPDATE blog_posts
-      SET status = 'archived', updated_at = NOW()
-      WHERE id = ${id}
-      RETURNING id
-    `
+    const supabase = createSupabaseAdmin()
+    
+    const { data, error: deleteError } = await supabase
+      .from('blog_posts')
+      .update({ status: 'archived' })
+      .eq('id', id)
+      .select('id')
+      .single()
 
-    if (result.length === 0) {
-      return {
-        statusCode: 404,
-        headers,
-        body: JSON.stringify({ error: 'Blog post not found' })
+    if (deleteError) {
+      if (deleteError.code === 'PGRST116') {
+        return {
+          statusCode: 404,
+          headers,
+          body: JSON.stringify({ error: 'Blog post not found' })
+        }
       }
+      throw deleteError
     }
 
     return {

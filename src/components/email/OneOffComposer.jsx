@@ -200,7 +200,7 @@ export default function OneOffComposer() {
                     <div className="flex items-center justify-between p-3 border rounded-lg bg-blue-50">
                       <div>
                         <p className="font-medium">{selectedContact.name}</p>
-                        <p className="text-sm text-gray-600">{selectedContact.email}</p>
+                        <p className="text-sm text-[var(--text-secondary)]">{selectedContact.email}</p>
                       </div>
                       <Button
                         variant="outline"
@@ -224,10 +224,10 @@ export default function OneOffComposer() {
                             <button
                               key={contact.id}
                               onClick={() => selectContact(contact)}
-                              className="w-full p-3 text-left hover:bg-gray-100 border-b last:border-b-0"
+                              className="w-full p-3 text-left hover:bg-[var(--surface-secondary)] border-b last:border-b-0"
                             >
                               <p className="font-medium">{contact.name}</p>
-                              <p className="text-sm text-gray-600">{contact.email}</p>
+                              <p className="text-sm text-[var(--text-secondary)]">{contact.email}</p>
                             </button>
                           ))}
                         </div>
@@ -244,7 +244,7 @@ export default function OneOffComposer() {
                       <SelectValue placeholder="Select mailbox" />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="default">Default (portal@uptrademedia.com)</SelectItem>
+                      <SelectItem value="default">Default (portal@send.uptrademedia.com)</SelectItem>
                       <SelectItem value="outreach">Outreach (outreach@uptrademedia.com)</SelectItem>
                     </SelectContent>
                   </Select>
@@ -370,9 +370,9 @@ export default function OneOffComposer() {
               </CardHeader>
               <CardContent>
                 <div className="space-y-4">
-                  <div className="p-4 bg-gray-50 rounded-lg border">
-                    <p className="text-xs text-gray-600 mb-2">To: {selectedContact?.email || '(no recipient selected)'}</p>
-                    <p className="text-xs text-gray-600 mb-2">From: {selectedMailbox || '(no mailbox selected)'}</p>
+                  <div className="p-4 bg-[var(--surface-secondary)] rounded-lg border">
+                    <p className="text-xs text-[var(--text-secondary)] mb-2">To: {selectedContact?.email || '(no recipient selected)'}</p>
+                    <p className="text-xs text-[var(--text-secondary)] mb-2">From: {selectedMailbox || '(no mailbox selected)'}</p>
                     <p className="font-bold text-sm mb-4">{subject || '(no subject)'}</p>
                     <div
                       className="prose prose-sm max-w-none bg-white p-4 rounded"
@@ -396,14 +396,14 @@ export default function OneOffComposer() {
           </CardHeader>
           <CardContent className="space-y-4">
             {followUps.length === 0 ? (
-              <p className="text-sm text-gray-500">No follow-ups yet</p>
+              <p className="text-sm text-[var(--text-secondary)]">No follow-ups yet</p>
             ) : (
               <div className="space-y-2">
                 {followUps.map((fu) => (
-                  <div key={fu.id} className="flex items-center justify-between p-2 bg-gray-50 rounded">
+                  <div key={fu.id} className="flex items-center justify-between p-2 bg-[var(--surface-secondary)] rounded">
                     <div className="text-sm">
                       <Badge>F{fu.stepIndex}</Badge>
-                      <p className="mt-1 text-xs text-gray-600">+{fu.delayDays} days</p>
+                      <p className="mt-1 text-xs text-[var(--text-secondary)]">+{fu.delayDays} days</p>
                     </div>
                     <Button
                       variant="ghost"
@@ -468,7 +468,7 @@ export default function OneOffComposer() {
               </DialogContent>
             </Dialog>
 
-            <div className="text-xs text-gray-500 p-2 bg-gray-50 rounded">
+            <div className="text-xs text-[var(--text-secondary)] p-2 bg-[var(--surface-secondary)] rounded">
               <p className="font-medium">Auto-cancel rules:</p>
               <ul className="mt-1 space-y-1 list-disc list-inside">
                 <li>Any reply detected</li>

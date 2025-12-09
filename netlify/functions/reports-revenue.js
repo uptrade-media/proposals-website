@@ -1,19 +1,11 @@
 // netlify/functions/reports-revenue.js
-import jwt from 'jsonwebtoken'
-import { neon } from '@neondatabase/serverless'
-import { drizzle } from 'drizzle-orm/neon-http'
-import { sql } from 'drizzle-orm'
-import * as schema from '../../src/db/schema.js'
-
-const COOKIE_NAME = process.env.SESSION_COOKIE_NAME || 'um_session'
-const JWT_SECRET = process.env.AUTH_JWT_SECRET
-const DATABASE_URL = process.env.DATABASE_URL
+import { createSupabaseAdmin, getAuthenticatedUser } from './utils/supabase.js'
 
 export async function handler(event) {
   // CORS headers
   const headers = {
     'Access-Control-Allow-Origin': '*',
-    'Access-Control-Allow-Headers': 'Content-Type',
+    'Access-Control-Allow-Headers': 'Content-Type, Authorization',
     'Access-Control-Allow-Methods': 'GET, OPTIONS',
     'Content-Type': 'application/json'
   }
@@ -30,31 +22,20 @@ export async function handler(event) {
     }
   }
 
-  // Verify authentication
-  if (!JWT_SECRET) {
-    return {
-      statusCode: 500,
-      headers,
-      body: JSON.stringify({ error: 'Server not configured' })
-    }
-  }
-
-  const rawCookie = event.headers.cookie || ''
-  const token = rawCookie.split('; ').find(c => c.startsWith(`${COOKIE_NAME}=`))?.split('=')[1]
-  
-  if (!token) {
-    return {
-      statusCode: 401,
-      headers,
-      body: JSON.stringify({ error: 'Not authenticated' })
-    }
-  }
-
   try {
-    const payload = jwt.verify(token, JWT_SECRET)
+    // Verify authentication via Supabase
+    const { user, contact, error: authError } = await getAuthenticatedUser(event)
+    
+    if (authError || !user) {
+      return {
+        statusCode: 401,
+        headers,
+        body: JSON.stringify({ error: 'Not authenticated' })
+      }
+    }
 
     // Only admins can access revenue reports
-    if (payload.role !== 'admin') {
+    if (contact?.role !== 'admin') {
       return {
         statusCode: 403,
         headers,
@@ -62,16 +43,7 @@ export async function handler(event) {
       }
     }
 
-    // Connect to database
-    if (!DATABASE_URL) {
-      return {
-        statusCode: 500,
-        headers,
-        body: JSON.stringify({ error: 'Database not configured' })
-      }
-    }
-
-    const db = neon(DATABASE_URL)
+    const supabase = createSupabaseAdmin()
 
     // Parse query parameters
     const params = new URLSearchParams(event.queryStringParameters || {})
@@ -79,169 +51,228 @@ export async function handler(event) {
     const groupBy = params.get('groupBy') || 'month' // 'day', 'week', 'month', 'year'
 
     // Calculate date range
-    let dateFilter = ''
+    let dateStart = null
     const now = new Date()
     
     switch (period) {
       case 'month':
-        const monthStart = new Date(now.getFullYear(), now.getMonth(), 1)
-        dateFilter = `AND paid_at >= '${monthStart.toISOString()}'`
+        dateStart = new Date(now.getFullYear(), now.getMonth(), 1)
         break
       case 'quarter':
-        const quarterStart = new Date(now.getFullYear(), Math.floor(now.getMonth() / 3) * 3, 1)
-        dateFilter = `AND paid_at >= '${quarterStart.toISOString()}'`
+        dateStart = new Date(now.getFullYear(), Math.floor(now.getMonth() / 3) * 3, 1)
         break
       case 'year':
-        const yearStart = new Date(now.getFullYear(), 0, 1)
-        dateFilter = `AND paid_at >= '${yearStart.toISOString()}'`
+        dateStart = new Date(now.getFullYear(), 0, 1)
         break
       case 'all':
-        dateFilter = ''
+        dateStart = null
         break
     }
 
-    // Revenue summary
-    const summaryQuery = sql`
-      SELECT 
-        COUNT(*) as invoice_count,
-        COALESCE(SUM(CAST(total_amount AS DECIMAL)), 0) as total_revenue,
-        COALESCE(AVG(CAST(total_amount AS DECIMAL)), 0) as avg_invoice_amount,
-        COALESCE(MIN(CAST(total_amount AS DECIMAL)), 0) as min_invoice_amount,
-        COALESCE(MAX(CAST(total_amount AS DECIMAL)), 0) as max_invoice_amount,
-        COALESCE(SUM(CAST(tax_amount AS DECIMAL)), 0) as total_tax
-      FROM ${schema.invoices}
-      WHERE status = 'paid' ${dateFilter}
-    `
+    // Revenue summary - use Supabase query
+    let summaryQuery = supabase
+      .from('invoices')
+      .select('total_amount, tax_amount')
+      .eq('status', 'paid')
     
-    const summaryResult = await db(summaryQuery.strings[0])
+    if (dateStart) {
+      summaryQuery = summaryQuery.gte('paid_at', dateStart.toISOString())
+    }
+    
+    const { data: paidInvoices, error: summaryError } = await summaryQuery
+    
+    if (summaryError) {
+      console.error('Summary query error:', summaryError)
+      throw new Error('Failed to fetch invoice summary')
+    }
+    
+    // Calculate summary from results
     const summary = {
-      invoiceCount: parseInt(summaryResult[0]?.invoice_count || 0),
-      totalRevenue: parseFloat(summaryResult[0]?.total_revenue || 0),
-      avgInvoiceAmount: parseFloat(summaryResult[0]?.avg_invoice_amount || 0),
-      minInvoiceAmount: parseFloat(summaryResult[0]?.min_invoice_amount || 0),
-      maxInvoiceAmount: parseFloat(summaryResult[0]?.max_invoice_amount || 0),
-      totalTax: parseFloat(summaryResult[0]?.total_tax || 0)
+      invoiceCount: paidInvoices?.length || 0,
+      totalRevenue: paidInvoices?.reduce((sum, inv) => sum + parseFloat(inv.total_amount || 0), 0) || 0,
+      avgInvoiceAmount: paidInvoices?.length > 0 
+        ? paidInvoices.reduce((sum, inv) => sum + parseFloat(inv.total_amount || 0), 0) / paidInvoices.length 
+        : 0,
+      minInvoiceAmount: paidInvoices?.length > 0 
+        ? Math.min(...paidInvoices.map(inv => parseFloat(inv.total_amount || 0)))
+        : 0,
+      maxInvoiceAmount: paidInvoices?.length > 0 
+        ? Math.max(...paidInvoices.map(inv => parseFloat(inv.total_amount || 0)))
+        : 0,
+      totalTax: paidInvoices?.reduce((sum, inv) => sum + parseFloat(inv.tax_amount || 0), 0) || 0
     }
 
-    // Revenue trend over time
-    let trendDateTrunc = 'month'
-    switch (groupBy) {
-      case 'day':
-        trendDateTrunc = 'day'
-        break
-      case 'week':
-        trendDateTrunc = 'week'
-        break
-      case 'month':
-        trendDateTrunc = 'month'
-        break
-      case 'year':
-        trendDateTrunc = 'year'
-        break
+    // Revenue trend over time - fetch invoices with paid_at
+    let trendQuery = supabase
+      .from('invoices')
+      .select('paid_at, total_amount')
+      .eq('status', 'paid')
+      .not('paid_at', 'is', null)
+      .order('paid_at', { ascending: true })
+    
+    if (dateStart) {
+      trendQuery = trendQuery.gte('paid_at', dateStart.toISOString())
     }
-
-    const trendQuery = `
-      SELECT 
-        DATE_TRUNC('${trendDateTrunc}', paid_at) as period,
-        COUNT(*) as invoice_count,
-        COALESCE(SUM(CAST(total_amount AS DECIMAL)), 0) as revenue
-      FROM invoices
-      WHERE status = 'paid' ${dateFilter}
-      GROUP BY DATE_TRUNC('${trendDateTrunc}', paid_at)
-      ORDER BY period ASC
-    `
     
-    const trendResult = await db(trendQuery)
-    const trend = trendResult.map(row => ({
-      period: row.period,
-      invoiceCount: parseInt(row.invoice_count),
-      revenue: parseFloat(row.revenue)
+    const { data: trendInvoices, error: trendError } = await trendQuery
+    
+    // Group by period
+    const trendMap = new Map()
+    if (trendInvoices) {
+      for (const inv of trendInvoices) {
+        const date = new Date(inv.paid_at)
+        let periodKey
+        
+        switch (groupBy) {
+          case 'day':
+            periodKey = date.toISOString().split('T')[0]
+            break
+          case 'week':
+            const weekStart = new Date(date)
+            weekStart.setDate(date.getDate() - date.getDay())
+            periodKey = weekStart.toISOString().split('T')[0]
+            break
+          case 'year':
+            periodKey = `${date.getFullYear()}-01-01`
+            break
+          default: // month
+            periodKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-01`
+        }
+        
+        if (!trendMap.has(periodKey)) {
+          trendMap.set(periodKey, { invoiceCount: 0, revenue: 0 })
+        }
+        const entry = trendMap.get(periodKey)
+        entry.invoiceCount++
+        entry.revenue += parseFloat(inv.total_amount || 0)
+      }
+    }
+    
+    const trend = Array.from(trendMap.entries()).map(([period, data]) => ({
+      period,
+      invoiceCount: data.invoiceCount,
+      revenue: data.revenue
     }))
 
-    // Revenue by project
-    const projectRevenueQuery = `
-      SELECT 
-        p.id,
-        p.name,
-        COUNT(i.id) as invoice_count,
-        COALESCE(SUM(CAST(i.total_amount AS DECIMAL)), 0) as total_revenue
-      FROM projects p
-      LEFT JOIN invoices i ON i.project_id = p.id AND i.status = 'paid' ${dateFilter}
-      GROUP BY p.id, p.name
-      HAVING COALESCE(SUM(CAST(i.total_amount AS DECIMAL)), 0) > 0
-      ORDER BY total_revenue DESC
-      LIMIT 10
-    `
+    // Revenue by project - fetch projects with their invoices
+    let projectQuery = supabase
+      .from('invoices')
+      .select('project_id, total_amount, projects!inner(id, name)')
+      .eq('status', 'paid')
     
-    const projectRevenueResult = await db(projectRevenueQuery)
-    const revenueByProject = projectRevenueResult.map(row => ({
-      projectId: row.id,
-      projectName: row.name,
-      invoiceCount: parseInt(row.invoice_count),
-      totalRevenue: parseFloat(row.total_revenue)
-    }))
+    if (dateStart) {
+      projectQuery = projectQuery.gte('paid_at', dateStart.toISOString())
+    }
+    
+    const { data: projectInvoices, error: projectError } = await projectQuery
+    
+    // Group by project
+    const projectMap = new Map()
+    if (projectInvoices) {
+      for (const inv of projectInvoices) {
+        if (!inv.projects) continue
+        const key = inv.projects.id
+        if (!projectMap.has(key)) {
+          projectMap.set(key, { 
+            projectId: inv.projects.id, 
+            projectName: inv.projects.name, 
+            invoiceCount: 0, 
+            totalRevenue: 0 
+          })
+        }
+        const entry = projectMap.get(key)
+        entry.invoiceCount++
+        entry.totalRevenue += parseFloat(inv.total_amount || 0)
+      }
+    }
+    
+    const revenueByProject = Array.from(projectMap.values())
+      .sort((a, b) => b.totalRevenue - a.totalRevenue)
+      .slice(0, 10)
 
     // Revenue by client
-    const clientRevenueQuery = `
-      SELECT 
-        c.id,
-        c.name,
-        c.company,
-        COUNT(i.id) as invoice_count,
-        COALESCE(SUM(CAST(i.total_amount AS DECIMAL)), 0) as total_revenue
-      FROM contacts c
-      LEFT JOIN invoices i ON i.contact_id = c.id AND i.status = 'paid' ${dateFilter}
-      GROUP BY c.id, c.name, c.company
-      HAVING COALESCE(SUM(CAST(i.total_amount AS DECIMAL)), 0) > 0
-      ORDER BY total_revenue DESC
-      LIMIT 10
-    `
+    let clientQuery = supabase
+      .from('invoices')
+      .select('contact_id, total_amount, contacts!inner(id, name, company)')
+      .eq('status', 'paid')
     
-    const clientRevenueResult = await db(clientRevenueQuery)
-    const revenueByClient = clientRevenueResult.map(row => ({
-      contactId: row.id,
-      contactName: row.name,
-      company: row.company,
-      invoiceCount: parseInt(row.invoice_count),
-      totalRevenue: parseFloat(row.total_revenue)
-    }))
+    if (dateStart) {
+      clientQuery = clientQuery.gte('paid_at', dateStart.toISOString())
+    }
+    
+    const { data: clientInvoices, error: clientError } = await clientQuery
+    
+    // Group by client
+    const clientMap = new Map()
+    if (clientInvoices) {
+      for (const inv of clientInvoices) {
+        if (!inv.contacts) continue
+        const key = inv.contacts.id
+        if (!clientMap.has(key)) {
+          clientMap.set(key, { 
+            contactId: inv.contacts.id, 
+            contactName: inv.contacts.name, 
+            company: inv.contacts.company,
+            invoiceCount: 0, 
+            totalRevenue: 0 
+          })
+        }
+        const entry = clientMap.get(key)
+        entry.invoiceCount++
+        entry.totalRevenue += parseFloat(inv.total_amount || 0)
+      }
+    }
+    
+    const revenueByClient = Array.from(clientMap.values())
+      .sort((a, b) => b.totalRevenue - a.totalRevenue)
+      .slice(0, 10)
 
     // Outstanding invoices (pending/overdue)
-    const outstandingQuery = `
-      SELECT 
-        COUNT(*) as count,
-        COALESCE(SUM(CAST(total_amount AS DECIMAL)), 0) as total,
-        COUNT(CASE WHEN due_date < NOW() THEN 1 END) as overdue_count,
-        COALESCE(SUM(CASE WHEN due_date < NOW() THEN CAST(total_amount AS DECIMAL) ELSE 0 END), 0) as overdue_total
-      FROM invoices
-      WHERE status = 'pending'
-    `
+    const { data: pendingInvoices, error: pendingError } = await supabase
+      .from('invoices')
+      .select('total_amount, due_date')
+      .eq('status', 'pending')
     
-    const outstandingResult = await db(outstandingQuery)
+    const nowDate = new Date()
     const outstanding = {
-      pendingCount: parseInt(outstandingResult[0]?.count || 0),
-      pendingTotal: parseFloat(outstandingResult[0]?.total || 0),
-      overdueCount: parseInt(outstandingResult[0]?.overdue_count || 0),
-      overdueTotal: parseFloat(outstandingResult[0]?.overdue_total || 0)
+      pendingCount: pendingInvoices?.length || 0,
+      pendingTotal: pendingInvoices?.reduce((sum, inv) => sum + parseFloat(inv.total_amount || 0), 0) || 0,
+      overdueCount: pendingInvoices?.filter(inv => inv.due_date && new Date(inv.due_date) < nowDate).length || 0,
+      overdueTotal: pendingInvoices
+        ?.filter(inv => inv.due_date && new Date(inv.due_date) < nowDate)
+        .reduce((sum, inv) => sum + parseFloat(inv.total_amount || 0), 0) || 0
     }
 
-    // Payment method breakdown (from Square data)
-    const paymentMethodQuery = `
-      SELECT 
-        COALESCE(square_payment_id IS NOT NULL, false) as has_square_payment,
-        COUNT(*) as count,
-        COALESCE(SUM(CAST(total_amount AS DECIMAL)), 0) as total
-      FROM invoices
-      WHERE status = 'paid' ${dateFilter}
-      GROUP BY has_square_payment
-    `
+    // Payment method breakdown
+    let paymentQuery = supabase
+      .from('invoices')
+      .select('square_payment_id, total_amount')
+      .eq('status', 'paid')
     
-    const paymentMethodResult = await db(paymentMethodQuery)
-    const paymentMethods = paymentMethodResult.map(row => ({
-      method: row.has_square_payment ? 'Square' : 'Other',
-      count: parseInt(row.count),
-      total: parseFloat(row.total)
-    }))
+    if (dateStart) {
+      paymentQuery = paymentQuery.gte('paid_at', dateStart.toISOString())
+    }
+    
+    const { data: paymentInvoices, error: paymentError } = await paymentQuery
+    
+    const squarePayments = paymentInvoices?.filter(inv => inv.square_payment_id) || []
+    const otherPayments = paymentInvoices?.filter(inv => !inv.square_payment_id) || []
+    
+    const paymentMethods = []
+    if (squarePayments.length > 0) {
+      paymentMethods.push({
+        method: 'Square',
+        count: squarePayments.length,
+        total: squarePayments.reduce((sum, inv) => sum + parseFloat(inv.total_amount || 0), 0)
+      })
+    }
+    if (otherPayments.length > 0) {
+      paymentMethods.push({
+        method: 'Other',
+        count: otherPayments.length,
+        total: otherPayments.reduce((sum, inv) => sum + parseFloat(inv.total_amount || 0), 0)
+      })
+    }
 
     return {
       statusCode: 200,
@@ -261,14 +292,6 @@ export async function handler(event) {
 
   } catch (error) {
     console.error('Error fetching revenue report:', error)
-    
-    if (error.name === 'JsonWebTokenError' || error.name === 'TokenExpiredError') {
-      return {
-        statusCode: 401,
-        headers,
-        body: JSON.stringify({ error: 'Invalid or expired session' })
-      }
-    }
 
     return {
       statusCode: 500,

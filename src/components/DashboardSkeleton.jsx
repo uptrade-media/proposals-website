@@ -10,14 +10,14 @@ export function CardSkeleton() {
     <Card className="animate-pulse">
       <CardHeader className="pb-3">
         <div className="flex items-center justify-between">
-          <div className="h-5 w-32 bg-gray-200 rounded"></div>
-          <div className="h-4 w-4 bg-gray-200 rounded"></div>
+          <div className="h-5 w-32 bg-[var(--surface-tertiary)] rounded"></div>
+          <div className="h-4 w-4 bg-[var(--surface-tertiary)] rounded"></div>
         </div>
       </CardHeader>
       <CardContent>
         <div className="space-y-2">
-          <div className="h-8 w-24 bg-gray-200 rounded"></div>
-          <div className="h-3 w-48 bg-gray-100 rounded"></div>
+          <div className="h-8 w-24 bg-[var(--surface-tertiary)] rounded"></div>
+          <div className="h-3 w-48 bg-[var(--surface-secondary)] rounded"></div>
         </div>
       </CardContent>
     </Card>
@@ -39,16 +39,16 @@ export function ListSkeleton() {
   return (
     <Card className="animate-pulse">
       <CardHeader className="pb-3">
-        <div className="h-5 w-40 bg-gray-200 rounded"></div>
+        <div className="h-5 w-40 bg-[var(--surface-tertiary)] rounded"></div>
       </CardHeader>
       <CardContent className="space-y-3">
         {[...Array(3)].map((_, i) => (
           <div key={i} className="space-y-2 p-3 border rounded-lg">
             <div className="flex items-center justify-between">
-              <div className="h-4 w-32 bg-gray-200 rounded"></div>
-              <div className="h-4 w-16 bg-gray-100 rounded"></div>
+              <div className="h-4 w-32 bg-[var(--surface-tertiary)] rounded"></div>
+              <div className="h-4 w-16 bg-[var(--surface-secondary)] rounded"></div>
             </div>
-            <div className="h-3 w-48 bg-gray-100 rounded"></div>
+            <div className="h-3 w-48 bg-[var(--surface-secondary)] rounded"></div>
           </div>
         ))}
       </CardContent>
@@ -69,7 +69,7 @@ export function DashboardSkeleton() {
   return (
     <div className="space-y-6 animate-pulse">
       {/* Welcome section skeleton */}
-      <div className="bg-gray-200 rounded-lg p-6 h-24"></div>
+      <div className="bg-[var(--surface-tertiary)] rounded-lg p-6 h-24"></div>
       
       {/* Stats skeleton */}
       <StatsSkeleton />

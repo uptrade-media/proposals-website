@@ -7,7 +7,7 @@ function Skeleton({
   return (
     <div
       data-slot="skeleton"
-      className={cn("bg-accent animate-pulse rounded-md", className)}
+      className={cn("bg-[var(--glass-bg-inset)] animate-pulse rounded-[var(--radius-md)]", className)}
       {...props} />
   );
 }

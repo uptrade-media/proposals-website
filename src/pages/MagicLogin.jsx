@@ -2,8 +2,8 @@
 import { useEffect, useState } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { Card, CardContent } from '../components/ui/card'
-import { Alert, AlertDescription } from '../components/ui/alert'
-import { Loader2 } from 'lucide-react'
+import { Loader2, CheckCircle2, XCircle, ArrowRight } from 'lucide-react'
+import { Button } from '../components/ui/button'
 import api from '@/lib/api'
 
 export default function MagicLogin() {
@@ -44,49 +44,62 @@ export default function MagicLogin() {
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-green-50 to-blue-50">
-      <Card className="w-full max-w-md">
-        <CardContent className="pt-6">
+    <div className="min-h-screen flex items-center justify-center bg-[var(--surface-primary)] relative overflow-hidden p-4">
+      {/* Subtle gradient orbs */}
+      <div className="absolute inset-0 overflow-hidden pointer-events-none">
+        <div className="absolute -top-1/4 -right-1/4 w-1/2 h-1/2 bg-[var(--brand-primary)] opacity-[0.08] blur-[120px] rounded-full" />
+        <div className="absolute -bottom-1/4 -left-1/4 w-1/2 h-1/2 bg-[var(--brand-secondary)] opacity-[0.08] blur-[120px] rounded-full" />
+      </div>
+
+      <Card className="relative w-full max-w-md bg-[var(--glass-bg)] backdrop-blur-xl border-[var(--glass-border)] shadow-[var(--shadow-lg)]">
+        <CardContent className="pt-8 pb-8">
           {status === 'validating' && (
             <div className="flex flex-col items-center text-center space-y-4">
-              <Loader2 className="h-12 w-12 animate-spin text-green-600" />
+              <div className="h-16 w-16 rounded-full bg-[var(--brand-primary)]/10 flex items-center justify-center">
+                <Loader2 className="h-8 w-8 animate-spin text-[var(--brand-primary)]" />
+              </div>
               <div>
-                <h2 className="text-xl font-semibold mb-2">Logging you in...</h2>
-                <p className="text-muted-foreground text-sm">Please wait while we authenticate your session</p>
+                <h2 className="text-xl font-semibold text-[var(--text-primary)] mb-2">Logging you in...</h2>
+                <p className="text-[var(--text-secondary)] text-sm">Please wait while we authenticate your session</p>
               </div>
             </div>
           )}
 
           {status === 'success' && (
             <div className="flex flex-col items-center text-center space-y-4">
-              <div className="h-12 w-12 rounded-full bg-green-100 flex items-center justify-center">
-                <svg className="h-6 w-6 text-green-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                </svg>
+              <div className="h-16 w-16 rounded-full bg-[var(--accent-success)]/10 flex items-center justify-center">
+                <CheckCircle2 className="h-8 w-8 text-[var(--accent-success)]" />
               </div>
               <div>
-                <h2 className="text-xl font-semibold mb-2">Success!</h2>
-                <p className="text-muted-foreground text-sm">Redirecting you now...</p>
+                <h2 className="text-xl font-semibold text-[var(--text-primary)] mb-2">Welcome back!</h2>
+                <p className="text-[var(--text-secondary)] text-sm">Redirecting to your dashboard...</p>
               </div>
+              <Loader2 className="h-5 w-5 animate-spin text-[var(--brand-primary)]" />
             </div>
           )}
 
           {status === 'error' && (
-            <div className="space-y-4">
-              <Alert variant="destructive">
-                <AlertDescription>{error}</AlertDescription>
-              </Alert>
-              <div className="text-center">
-                <p className="text-sm text-muted-foreground mb-4">
-                  Your login link may have expired or is invalid.
-                </p>
-                <button
-                  onClick={() => navigate('/login')}
-                  className="text-green-600 hover:text-green-700 font-medium text-sm"
-                >
-                  Return to Login →
-                </button>
+            <div className="flex flex-col items-center text-center space-y-6">
+              <div className="h-16 w-16 rounded-full bg-[var(--accent-error)]/10 flex items-center justify-center">
+                <XCircle className="h-8 w-8 text-[var(--accent-error)]" />
               </div>
+              <div>
+                <h2 className="text-xl font-semibold text-[var(--text-primary)] mb-2">Link Expired</h2>
+                <p className="text-[var(--text-secondary)] text-sm mb-4">
+                  {error}
+                </p>
+                <p className="text-[var(--text-tertiary)] text-sm">
+                  Magic links expire after 24 hours for security. Please request a new one from the login page.
+                </p>
+              </div>
+              <Button
+                onClick={() => navigate('/login')}
+                variant="glass-primary"
+                className="w-full"
+              >
+                Back to Login
+                <ArrowRight className="ml-2 h-4 w-4" />
+              </Button>
             </div>
           )}
         </CardContent>

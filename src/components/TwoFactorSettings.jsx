@@ -111,8 +111,8 @@ export default function TwoFactorSettings({ userEmail }) {
   if (loading) {
     return (
       <div className="p-6 text-center">
-        <RefreshCw className="w-6 h-6 animate-spin mx-auto text-blue-400 mb-2" />
-        <p className="text-slate-400">Loading 2FA settings...</p>
+        <RefreshCw className="w-6 h-6 animate-spin mx-auto text-[var(--brand-primary)] mb-2" />
+        <p className="text-[var(--text-secondary)]">Loading 2FA settings...</p>
       </div>
     )
   }
@@ -121,11 +121,11 @@ export default function TwoFactorSettings({ userEmail }) {
     <div className="space-y-6">
       {/* Header */}
       <div>
-        <h3 className="text-lg font-semibold text-white flex items-center gap-2 mb-2">
-          <Lock className="w-5 h-5 text-blue-400" />
+        <h3 className="text-lg font-semibold text-[var(--text-primary)] flex items-center gap-2 mb-2">
+          <Lock className="w-5 h-5 text-[var(--brand-primary)]" />
           Two-Factor Authentication
         </h3>
-        <p className="text-slate-400 text-sm">
+        <p className="text-[var(--text-secondary)] text-sm">
           Add an extra layer of security to your account by requiring a second verification method when
           logging in.
         </p>
@@ -133,38 +133,38 @@ export default function TwoFactorSettings({ userEmail }) {
 
       {/* Error Alert */}
       {error && (
-        <div className="bg-red-900/20 border border-red-700 rounded-lg p-4 flex gap-3">
-          <AlertCircle className="w-5 h-5 text-red-400 flex-shrink-0 mt-0.5" />
-          <p className="text-red-200 text-sm">{error}</p>
+        <div className="bg-[var(--accent-error)]/10 border border-[var(--accent-error)]/30 rounded-xl p-4 flex gap-3">
+          <AlertCircle className="w-5 h-5 text-[var(--accent-error)] flex-shrink-0 mt-0.5" />
+          <p className="text-[var(--accent-error)] text-sm">{error}</p>
         </div>
       )}
 
       {/* Success Message */}
       {successMessage && (
-        <div className="bg-green-900/20 border border-green-700 rounded-lg p-4 flex gap-3">
-          <Check className="w-5 h-5 text-green-400 flex-shrink-0 mt-0.5" />
-          <p className="text-green-200 text-sm">{successMessage}</p>
+        <div className="bg-[var(--accent-success)]/10 border border-[var(--accent-success)]/30 rounded-xl p-4 flex gap-3">
+          <Check className="w-5 h-5 text-[var(--accent-success)] flex-shrink-0 mt-0.5" />
+          <p className="text-[var(--accent-success)] text-sm">{successMessage}</p>
         </div>
       )}
 
       {/* Status Card */}
-      <div className="bg-slate-800 rounded-lg border border-slate-700 p-6">
+      <div className="bg-[var(--glass-bg)] backdrop-blur-xl rounded-xl border border-[var(--glass-border)] p-6">
         <div className="flex items-start justify-between mb-4">
           <div>
-            <h4 className="font-semibold text-white flex items-center gap-2">
+            <h4 className="font-semibold text-[var(--text-primary)] flex items-center gap-2">
               {twoFaStatus?.totpEnabled ? (
                 <>
-                  <Check className="w-5 h-5 text-green-400" />
+                  <Check className="w-5 h-5 text-[var(--accent-success)]" />
                   Two-Factor Authentication is Enabled
                 </>
               ) : (
                 <>
-                  <X className="w-5 h-5 text-slate-400" />
+                  <X className="w-5 h-5 text-[var(--text-tertiary)]" />
                   Two-Factor Authentication is Disabled
                 </>
               )}
             </h4>
-            <p className="text-slate-400 text-sm mt-1">
+            <p className="text-[var(--text-secondary)] text-sm mt-1">
               {twoFaStatus?.totpEnabled
                 ? 'Your account is protected with 2FA.'
                 : 'Enable 2FA to secure your account.'}
@@ -173,8 +173,8 @@ export default function TwoFactorSettings({ userEmail }) {
           <span
             className={`px-3 py-1 rounded-full text-xs font-semibold ${
               twoFaStatus?.totpEnabled
-                ? 'bg-green-900/30 text-green-300'
-                : 'bg-slate-700 text-slate-300'
+                ? 'bg-[var(--accent-success)]/20 text-[var(--accent-success)]'
+                : 'bg-[var(--surface-tertiary)] text-[var(--text-secondary)]'
             }`}
           >
             {twoFaStatus?.totpEnabled ? 'Active' : 'Inactive'}
@@ -183,18 +183,18 @@ export default function TwoFactorSettings({ userEmail }) {
 
         {/* Backup Codes Info */}
         {twoFaStatus?.totpEnabled && (
-          <div className="mt-4 p-4 bg-slate-900 rounded border border-slate-600">
-            <p className="text-slate-300 text-sm mb-2">
+          <div className="mt-4 p-4 bg-[var(--surface-secondary)] rounded-xl border border-[var(--glass-border)]">
+            <p className="text-[var(--text-primary)] text-sm mb-2">
               <strong>Backup Codes Available:</strong> {twoFaStatus?.backupCodesAvailable}
             </p>
             {twoFaStatus?.warnings?.lowBackupCodes && (
-              <p className="text-amber-300 text-sm flex items-start gap-2">
+              <p className="text-[var(--accent-warning)] text-sm flex items-start gap-2">
                 <AlertCircle className="w-4 h-4 flex-shrink-0 mt-0.5" />
                 Running low on backup codes. Consider regenerating them.
               </p>
             )}
             {twoFaStatus?.warnings?.noBackupCodes && (
-              <p className="text-red-300 text-sm flex items-start gap-2">
+              <p className="text-[var(--accent-error)] text-sm flex items-start gap-2">
                 <AlertCircle className="w-4 h-4 flex-shrink-0 mt-0.5" />
                 You have no backup codes left. Regenerate immediately.
               </p>
@@ -208,7 +208,7 @@ export default function TwoFactorSettings({ userEmail }) {
         {!twoFaStatus?.totpEnabled ? (
           <button
             onClick={handleSetup}
-            className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-medium transition-colors"
+            className="px-4 py-2 bg-[var(--brand-primary)] hover:bg-[var(--brand-secondary)] text-white rounded-xl font-medium transition-colors"
           >
             Enable 2FA
           </button>
@@ -221,7 +221,7 @@ export default function TwoFactorSettings({ userEmail }) {
                 setPassword('')
                 setPasswordError(null)
               }}
-              className="px-4 py-2 bg-slate-700 hover:bg-slate-600 text-white rounded-lg font-medium transition-colors flex items-center gap-2"
+              className="px-4 py-2 bg-[var(--surface-tertiary)] hover:bg-[var(--glass-border)] text-[var(--text-primary)] rounded-xl font-medium transition-colors flex items-center gap-2"
             >
               <RefreshCw className="w-4 h-4" />
               Regenerate Backup Codes
@@ -233,7 +233,7 @@ export default function TwoFactorSettings({ userEmail }) {
                 setPassword('')
                 setPasswordError(null)
               }}
-              className="px-4 py-2 bg-red-700 hover:bg-red-800 text-white rounded-lg font-medium transition-colors flex items-center gap-2"
+              className="px-4 py-2 bg-[var(--accent-error)] hover:bg-[var(--accent-error)]/80 text-white rounded-xl font-medium transition-colors flex items-center gap-2"
             >
               <Trash2 className="w-4 h-4" />
               Disable 2FA
@@ -244,13 +244,13 @@ export default function TwoFactorSettings({ userEmail }) {
 
       {/* Backup Codes Display Modal */}
       {backupCodesToShow && (
-        <div className="bg-slate-800 rounded-lg border border-slate-700 p-6">
-          <h4 className="font-semibold text-white mb-4">Your New Backup Codes</h4>
-          <div className="bg-slate-900 rounded-lg p-4 mb-4 space-y-2 max-h-48 overflow-y-auto">
+        <div className="bg-[var(--glass-bg)] backdrop-blur-xl rounded-xl border border-[var(--glass-border)] p-6">
+          <h4 className="font-semibold text-[var(--text-primary)] mb-4">Your New Backup Codes</h4>
+          <div className="bg-[var(--surface-secondary)] rounded-xl p-4 mb-4 space-y-2 max-h-48 overflow-y-auto">
             {backupCodesToShow.map((code, index) => (
               <div key={index} className="flex items-center gap-3 font-mono text-sm">
-                <span className="text-slate-500">{index + 1}.</span>
-                <code className="flex-1 text-slate-200">{code}</code>
+                <span className="text-[var(--text-tertiary)]">{index + 1}.</span>
+                <code className="flex-1 text-[var(--text-primary)]">{code}</code>
               </div>
             ))}
           </div>
@@ -261,7 +261,7 @@ export default function TwoFactorSettings({ userEmail }) {
                 navigator.clipboard.writeText(text)
                 alert('Codes copied to clipboard!')
               }}
-              className="flex-1 px-3 py-2 bg-slate-700 hover:bg-slate-600 text-white rounded font-medium transition-colors"
+              className="flex-1 px-3 py-2 bg-[var(--surface-tertiary)] hover:bg-[var(--glass-border)] text-[var(--text-primary)] rounded-xl font-medium transition-colors"
             >
               Copy
             </button>
@@ -275,13 +275,13 @@ export default function TwoFactorSettings({ userEmail }) {
                 element.click()
                 document.body.removeChild(element)
               }}
-              className="flex-1 px-3 py-2 bg-slate-700 hover:bg-slate-600 text-white rounded font-medium transition-colors"
+              className="flex-1 px-3 py-2 bg-[var(--surface-tertiary)] hover:bg-[var(--glass-border)] text-[var(--text-primary)] rounded-xl font-medium transition-colors"
             >
               Download
             </button>
             <button
               onClick={() => setBackupCodesToShow(null)}
-              className="flex-1 px-3 py-2 bg-slate-700 hover:bg-slate-600 text-white rounded font-medium transition-colors"
+              className="flex-1 px-3 py-2 bg-[var(--surface-tertiary)] hover:bg-[var(--glass-border)] text-[var(--text-primary)] rounded-xl font-medium transition-colors"
             >
               Done
             </button>
@@ -291,24 +291,24 @@ export default function TwoFactorSettings({ userEmail }) {
 
       {/* Password Modal */}
       {showModal && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
-          <div className="bg-slate-800 rounded-lg border border-slate-700 p-6 max-w-md w-full">
-            <h3 className="text-lg font-semibold text-white mb-4">
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 z-50">
+          <div className="bg-[var(--glass-bg)] backdrop-blur-xl rounded-2xl border border-[var(--glass-border)] p-6 max-w-md w-full shadow-[var(--shadow-lg)]">
+            <h3 className="text-lg font-semibold text-[var(--text-primary)] mb-4">
               {modalType === 'regenerate'
                 ? 'Regenerate Backup Codes'
                 : 'Disable Two-Factor Authentication'}
             </h3>
 
-            <p className="text-slate-300 text-sm mb-4">
+            <p className="text-[var(--text-secondary)] text-sm mb-4">
               {modalType === 'regenerate'
                 ? 'Enter your password to regenerate your backup codes.'
                 : 'Enter your password to disable 2FA. This will make your account less secure.'}
             </p>
 
             {passwordError && (
-              <div className="bg-red-900/20 border border-red-700 rounded-lg p-3 mb-4 flex gap-2">
-                <AlertCircle className="w-4 h-4 text-red-400 flex-shrink-0 mt-0.5" />
-                <p className="text-red-200 text-sm">{passwordError}</p>
+              <div className="bg-[var(--accent-error)]/10 border border-[var(--accent-error)]/30 rounded-xl p-3 mb-4 flex gap-2">
+                <AlertCircle className="w-4 h-4 text-[var(--accent-error)] flex-shrink-0 mt-0.5" />
+                <p className="text-[var(--accent-error)] text-sm">{passwordError}</p>
               </div>
             )}
 
@@ -320,7 +320,7 @@ export default function TwoFactorSettings({ userEmail }) {
                 setPassword(e.target.value)
                 setPasswordError(null)
               }}
-              className="w-full px-3 py-2 bg-slate-900 border border-slate-600 rounded-lg text-white focus:outline-none focus:border-blue-500 mb-4"
+              className="w-full px-4 py-3 bg-[var(--surface-secondary)] border border-[var(--glass-border)] rounded-xl text-[var(--text-primary)] placeholder:text-[var(--text-tertiary)] focus:outline-none focus:ring-2 focus:ring-[var(--brand-primary)]/50 focus:border-[var(--brand-primary)] mb-4 transition-all"
             />
 
             <div className="flex gap-3">
@@ -330,7 +330,7 @@ export default function TwoFactorSettings({ userEmail }) {
                   setPassword('')
                   setPasswordError(null)
                 }}
-                className="flex-1 px-3 py-2 bg-slate-700 hover:bg-slate-600 text-white rounded-lg font-medium transition-colors"
+                className="flex-1 px-3 py-2.5 bg-[var(--surface-tertiary)] hover:bg-[var(--glass-border)] text-[var(--text-primary)] rounded-xl font-medium transition-colors"
               >
                 Cancel
               </button>
@@ -339,10 +339,10 @@ export default function TwoFactorSettings({ userEmail }) {
                   modalType === 'regenerate' ? handleRegenerateBackupCodes : handleDisable2FA
                 }
                 disabled={submitting || !password}
-                className={`flex-1 px-3 py-2 rounded-lg font-medium transition-colors ${
+                className={`flex-1 px-3 py-2.5 rounded-xl font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${
                   modalType === 'regenerate'
-                    ? 'bg-blue-600 hover:bg-blue-700 disabled:bg-slate-600 text-white'
-                    : 'bg-red-600 hover:bg-red-700 disabled:bg-slate-600 text-white'
+                    ? 'bg-[var(--brand-primary)] hover:bg-[var(--brand-secondary)] text-white'
+                    : 'bg-[var(--accent-error)] hover:bg-[var(--accent-error)]/80 text-white'
                 }`}
               >
                 {submitting ? 'Processing...' : modalType === 'regenerate' ? 'Regenerate' : 'Disable'}

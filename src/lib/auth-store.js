@@ -1,10 +1,11 @@
 import { create } from 'zustand'
+import { supabase, getCurrentUser, getSession, signOut } from './supabase-auth'
 
 // Global flag to prevent multiple simultaneous auth checks
 let isCheckingAuth = false
 let authCheckPromise = null
 
-// Cookie-based auth (no tokens in localStorage)
+// Supabase Auth integration
 const useAuthStore = create((set, get) => ({
   user: null,
   isAuthenticated: false,
@@ -29,7 +30,7 @@ const useAuthStore = create((set, get) => ({
     })
   },
 
-  // Check if user is authenticated (verify cookie)
+  // Check if user is authenticated (verify Supabase session + fetch contacts data)
   checkAuth: async () => {
     // If already checking, return the existing promise
     if (isCheckingAuth && authCheckPromise) {
@@ -43,26 +44,26 @@ const useAuthStore = create((set, get) => ({
     
     authCheckPromise = (async () => {
       try {
-        const response = await fetch('/.netlify/functions/auth-verify', {
-          credentials: 'include'
-        })
+        // Check Supabase session
+        const { data: { session }, error: sessionError } = await getSession()
         
-        if (!response.ok) {
-          console.log('[AuthStore] Auth verification failed with status:', response.status);
+        if (sessionError || !session) {
+          console.log('[AuthStore] No active Supabase session');
           get().clearAuth()
           set({ isLoading: false })
           return { success: false }
         }
 
-        const data = await response.json()
+        // Fetch user data from contacts table
+        const contactUser = await getCurrentUser()
         
-        if (data.ok && data.user) {
-          console.log('[AuthStore] Auth verification successful, user:', data.user.email);
-          get().setUser(data.user)
+        if (contactUser) {
+          console.log('[AuthStore] Auth verification successful, user:', contactUser.email);
+          get().setUser(contactUser)
           set({ isLoading: false })
-          return { success: true, user: data.user }
+          return { success: true, user: contactUser }
         } else {
-          console.log('[AuthStore] Auth verification response missing user data');
+          console.log('[AuthStore] No matching contact found for auth user');
           get().clearAuth()
           set({ isLoading: false })
           return { success: false }
@@ -134,13 +135,10 @@ const useAuthStore = create((set, get) => ({
     }
   },
 
-  // Logout function (clears cookie via server)
+  // Logout function (signs out from Supabase)
   logout: async () => {
     try {
-      await fetch('/.netlify/functions/auth-logout', {
-        method: 'POST',
-        credentials: 'include'
-      })
+      await signOut()
     } catch (error) {
       console.error('Logout error:', error)
     }

@@ -33,17 +33,17 @@ export function EmptyState({
     <div className="flex flex-col items-center justify-center py-16 px-4 text-center">
       {/* Icon container with brand gradient background */}
       <div className="relative mb-6">
-        <div className="absolute inset-0 bg-gradient-to-br from-[#4bbf39]/20 to-[#39bfb0]/20 rounded-full blur-xl" />
-        <div className="relative rounded-full bg-gradient-to-br from-gray-50 to-gray-100 p-6">
-          {Icon && <Icon className="h-12 w-12 text-gray-400" />}
+        <div className="absolute inset-0 bg-[var(--brand-primary)]/20 rounded-full blur-xl" />
+        <div className="relative rounded-full bg-[var(--glass-bg)] backdrop-blur-xl border border-[var(--glass-border)] p-6">
+          {Icon && <Icon className="h-12 w-12 text-[var(--text-secondary)]" />}
         </div>
       </div>
 
       {/* Text content */}
-      <h3 className="text-xl font-semibold text-gray-900 mb-2">
+      <h3 className="text-xl font-semibold text-[var(--text-primary)] mb-2">
         {title}
       </h3>
-      <p className="text-sm text-gray-500 mb-8 max-w-md leading-relaxed">
+      <p className="text-sm text-[var(--text-secondary)] mb-8 max-w-md leading-relaxed">
         {description}
       </p>
 
@@ -51,7 +51,7 @@ export function EmptyState({
       {buttonLabel && buttonOnClick && (
         <Button 
           onClick={buttonOnClick}
-          className="bg-gradient-to-r from-[#4bbf39] to-[#39bfb0] hover:from-[#3da52e] to-[#2ea899] text-white shadow-lg hover:shadow-xl transition-all duration-200"
+          variant="glass-primary"
         >
           {buttonLabel}
         </Button>

@@ -75,3 +75,244 @@
     margin-top: 2cm;
   }
 }
+
+/* ================================================
+   LIQUID GLASS DESIGN SYSTEM
+   iOS 26 / Apple Design Language
+   ================================================ */
+
+@import "tailwindcss";
+
+/* ------------------------------------------------
+   LIGHT THEME (Default)
+   ------------------------------------------------ */
+:root {
+  /* Page background */
+  --surface-page: #f5f5f7;
+  --surface-page-secondary: #ffffff;
+  
+  /* Glass surfaces */
+  --glass-bg: rgba(255, 255, 255, 0.72);
+  --glass-bg-hover: rgba(255, 255, 255, 0.82);
+  --glass-bg-elevated: rgba(255, 255, 255, 0.88);
+  --glass-bg-inset: rgba(0, 0, 0, 0.03);
+  
+  /* Glass borders */
+  --glass-border: rgba(0, 0, 0, 0.06);
+  --glass-border-strong: rgba(0, 0, 0, 0.12);
+  --glass-ring: rgba(0, 0, 0, 0.08);
+  
+  /* Text colors */
+  --text-primary: rgba(0, 0, 0, 0.88);
+  --text-secondary: rgba(0, 0, 0, 0.55);
+  --text-tertiary: rgba(0, 0, 0, 0.35);
+  --text-inverted: rgba(255, 255, 255, 0.95);
+  
+  /* Inverted surface (for tooltips, etc) */
+  --surface-inverted: rgba(28, 28, 30, 0.95);
+  
+  /* Accent colors (Apple palette) */
+  --accent-blue: #007AFF;
+  --accent-blue-hover: #0066D6;
+  --accent-green: #34C759;
+  --accent-green-hover: #2DB14E;
+  --accent-orange: #FF9500;
+  --accent-orange-hover: #E68600;
+  --accent-red: #FF3B30;
+  --accent-red-hover: #E6352B;
+  --accent-purple: #AF52DE;
+  --accent-pink: #FF2D55;
+  --accent-teal: #5AC8FA;
+  --accent-yellow: #FFCC00;
+  
+  /* Brand colors */
+  --brand-primary: #4bbf39;
+  --brand-secondary: #39bfb0;
+  
+  /* Semantic colors */
+  --color-success: var(--accent-green);
+  --color-warning: var(--accent-orange);
+  --color-error: var(--accent-red);
+  --color-info: var(--accent-blue);
+  
+  /* Shadows */
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.04);
+  --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.06);
+  --shadow-lg: 0 8px 24px rgba(0, 0, 0, 0.08);
+  --shadow-xl: 0 16px 48px rgba(0, 0, 0, 0.10);
+  --shadow-glass: 0 8px 32px rgba(0, 0, 0, 0.06), 
+                  inset 0 0 0 0.5px rgba(255, 255, 255, 0.5);
+  --shadow-glass-elevated: 0 12px 40px rgba(0, 0, 0, 0.10),
+                           inset 0 0 0 0.5px rgba(255, 255, 255, 0.6);
+  
+  /* Blur amounts */
+  --blur-sm: 8px;
+  --blur-md: 16px;
+  --blur-lg: 24px;
+  --blur-xl: 40px;
+  
+  /* Border radius */
+  --radius-xs: 4px;
+  --radius-sm: 8px;
+  --radius-md: 12px;
+  --radius-lg: 16px;
+  --radius-xl: 22px;
+  --radius-2xl: 28px;
+  --radius-full: 9999px;
+  
+  /* Transitions */
+  --transition-fast: 150ms ease;
+  --transition-normal: 250ms ease;
+  --transition-slow: 400ms ease;
+  --transition-spring: 400ms cubic-bezier(0.34, 1.56, 0.64, 1);
+  
+  /* Spacing (4px base) */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 20px;
+  --space-6: 24px;
+  --space-8: 32px;
+  --space-10: 40px;
+  --space-12: 48px;
+  --space-16: 64px;
+
+  /* Color scheme for native elements */
+  color-scheme: light;
+}
+
+/* ------------------------------------------------
+   DARK THEME
+   ------------------------------------------------ */
+.dark {
+  /* Page background */
+  --surface-page: #000000;
+  --surface-page-secondary: #1c1c1e;
+  
+  /* Glass surfaces */
+  --glass-bg: rgba(44, 44, 46, 0.72);
+  --glass-bg-hover: rgba(58, 58, 60, 0.78);
+  --glass-bg-elevated: rgba(58, 58, 60, 0.88);
+  --glass-bg-inset: rgba(255, 255, 255, 0.04);
+  
+  /* Glass borders */
+  --glass-border: rgba(255, 255, 255, 0.08);
+  --glass-border-strong: rgba(255, 255, 255, 0.15);
+  --glass-ring: rgba(255, 255, 255, 0.1);
+  
+  /* Text colors */
+  --text-primary: rgba(255, 255, 255, 0.92);
+  --text-secondary: rgba(255, 255, 255, 0.55);
+  --text-tertiary: rgba(255, 255, 255, 0.35);
+  --text-inverted: rgba(0, 0, 0, 0.88);
+  
+  /* Inverted surface (for tooltips, etc) */
+  --surface-inverted: rgba(250, 250, 250, 0.95);
+  
+  /* Shadows (more subtle in dark mode) */
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.2);
+  --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.25);
+  --shadow-lg: 0 8px 24px rgba(0, 0, 0, 0.3);
+  --shadow-xl: 0 16px 48px rgba(0, 0, 0, 0.4);
+  --shadow-glass: 0 8px 32px rgba(0, 0, 0, 0.25), 
+                  inset 0 0 0 0.5px rgba(255, 255, 255, 0.1);
+  --shadow-glass-elevated: 0 12px 40px rgba(0, 0, 0, 0.35),
+                           inset 0 0 0 0.5px rgba(255, 255, 255, 0.12);
+  
+  /* Color scheme for native elements */
+  color-scheme: dark;
+}
+
+/* ------------------------------------------------
+   BASE STYLES
+   ------------------------------------------------ */
+html {
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+}
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'SF Pro Display', 
+               'Helvetica Neue', Helvetica, Arial, sans-serif;
+  background-color: var(--surface-page);
+  color: var(--text-primary);
+  transition: background-color var(--transition-normal), 
+              color var(--transition-normal);
+}
+
+/* ------------------------------------------------
+   GLASS UTILITIES
+   ------------------------------------------------ */
+.glass {
+  background: var(--glass-bg);
+  backdrop-filter: blur(var(--blur-lg));
+  -webkit-backdrop-filter: blur(var(--blur-lg));
+  border: 0.5px solid var(--glass-border);
+  box-shadow: var(--shadow-glass);
+}
+
+.glass-elevated {
+  background: var(--glass-bg-elevated);
+  backdrop-filter: blur(var(--blur-xl));
+  -webkit-backdrop-filter: blur(var(--blur-xl));
+  border: 0.5px solid var(--glass-border);
+  box-shadow: var(--shadow-glass-elevated);
+}
+
+.glass-inset {
+  background: var(--glass-bg-inset);
+  border: 0.5px solid var(--glass-border);
+}
+
+/* ------------------------------------------------
+   FOCUS STATES
+   ------------------------------------------------ */
+.focus-ring:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px var(--accent-blue),
+              0 0 0 6px rgba(0, 122, 255, 0.2);
+}
+
+/* ------------------------------------------------
+   SCROLLBAR STYLING
+   ------------------------------------------------ */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--glass-border-strong);
+  border-radius: var(--radius-full);
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--text-tertiary);
+}
+
+/* ------------------------------------------------
+   REDUCED MOTION
+   ------------------------------------------------ */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+/* ------------------------------------------------
+   SELECTION
+   ------------------------------------------------ */
+::selection {
+  background: var(--accent-blue);
+  color: white;
+}

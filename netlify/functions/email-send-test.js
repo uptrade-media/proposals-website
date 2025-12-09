@@ -43,7 +43,7 @@ export async function handler(event) {
     // Send test email
     const fromEmail = process.env.SENDING_DOMAIN 
       ? `portal@${process.env.SENDING_DOMAIN}`
-      : 'portal@uptrademedia.com'
+      : 'portal@send.uptrademedia.com'
 
     const response = await resend.emails.send({
       from: fromEmail,

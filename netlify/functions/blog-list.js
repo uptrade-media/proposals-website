@@ -1,14 +1,12 @@
 // netlify/functions/blog-list.js
-import { neon } from '@neondatabase/serverless'
-
-const sql = neon(process.env.DATABASE_URL)
+import { createSupabaseAdmin } from './utils/supabase.js'
 
 export async function handler(event) {
   // CORS headers
   const origin = event.headers.origin || 'http://localhost:8888'
   const headers = {
     'Access-Control-Allow-Origin': origin,
-    'Access-Control-Allow-Headers': 'Content-Type',
+    'Access-Control-Allow-Headers': 'Content-Type, Authorization',
     'Access-Control-Allow-Methods': 'GET, OPTIONS',
     'Access-Control-Allow-Credentials': 'true',
     'Content-Type': 'application/json',
@@ -28,32 +26,42 @@ export async function handler(event) {
   }
 
   try {
+    // Use service role to bypass RLS - frontend controls access
+    const supabase = createSupabaseAdmin()
+    
     const url = new URL(event.rawUrl || `http://localhost${event.rawPath}`)
     const status = url.searchParams.get('status') || 'published'
     const category = url.searchParams.get('category')
     const limit = Math.min(parseInt(url.searchParams.get('limit') || '50'), 100)
     const offset = parseInt(url.searchParams.get('offset') || '0')
 
-    let query = 'SELECT * FROM blog_posts WHERE status = $1'
-    const params = [status]
+    let query = supabase
+      .from('blog_posts')
+      .select('*')
+      .eq('status', status)
+      .order('published_at', { ascending: false })
+      .range(offset, offset + limit - 1)
 
     if (category) {
-      query += ` AND category = $${params.length + 1}`
-      params.push(category)
+      query = query.eq('category', category)
     }
 
-    query += ` ORDER BY published_at DESC LIMIT $${params.length + 1} OFFSET $${params.length + 2}`
-    params.push(limit, offset)
+    const { data, error } = await query
 
-    const result = await sql(query, params)
+    if (error) {
+      console.error('[Blog API] Database error:', error)
+      throw error
+    }
+
+    console.log('[Blog API] Found', data?.length || 0, 'blog posts with status:', status)
 
     return {
       statusCode: 200,
       headers,
       body: JSON.stringify({
         success: true,
-        posts: result,
-        total: result.length
+        posts: data || [],
+        total: data?.length || 0
       })
     }
   } catch (error) {

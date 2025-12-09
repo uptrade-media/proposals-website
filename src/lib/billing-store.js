@@ -209,9 +209,9 @@ const useBillingStore = create((set, get) => ({
       case 'overdue':
         return 'bg-red-100 text-red-800 border-red-200'
       case 'cancelled':
-        return 'bg-gray-100 text-gray-800 border-gray-200'
+        return 'bg-[var(--surface-secondary)] text-[var(--text-secondary)] border-[var(--glass-border)]'
       default:
-        return 'bg-gray-100 text-gray-800 border-gray-200'
+        return 'bg-[var(--surface-secondary)] text-[var(--text-secondary)] border-[var(--glass-border)]'
     }
   },
 

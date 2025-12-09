@@ -2,31 +2,23 @@ import { pgTable, uuid, text, timestamp, boolean, decimal, integer } from 'drizz
 import { relations } from 'drizzle-orm'
 
 // ========================================
-// CONTACTS (Users)
+// CONTACTS (User Profiles)
 // ========================================
+// This table extends Supabase auth.users with business-specific fields
+// auth_user_id references auth.users(id) managed by Supabase Auth
 export const contacts = pgTable('contacts', {
   id: uuid('id').defaultRandom().primaryKey(),
+  authUserId: uuid('auth_user_id').unique(), // References auth.users(id) - null for pre-migration users
   email: text('email').notNull().unique(),
   name: text('name'),
   company: text('company'),
   phone: text('phone'),
   website: text('website'), // Client's business website URL
   role: text('role').default('client'), // 'client' or 'admin'
-  accountSetup: text('account_setup').default('false'), // Using text for boolean
-  googleId: text('google_id'),
-  avatar: text('avatar'),
-  password: text('password'),
   subscribed: boolean('subscribed').default(true), // Newsletter subscription
-  lastLogin: timestamp('last_login'),
   notes: text('notes'), // Internal notes
   tags: text('tags'), // JSON array of tags
   source: text('source'), // How they found us
-  // Two-Factor Authentication
-  totpSecret: text('totp_secret'), // Base32-encoded TOTP secret
-  totpEnabled: boolean('totp_enabled').default(false),
-  backupCodes: text('backup_codes'), // JSON array of one-time codes
-  twoFaMethod: text('two_fa_method').default('totp'), // 'totp' or 'sms' (for future)
-  last2FaCheck: timestamp('last_2fa_check'),
   createdAt: timestamp('created_at').defaultNow(),
   updatedAt: timestamp('updated_at').defaultNow()
 })
@@ -199,6 +191,11 @@ export const blogPosts = pgTable('blog_posts', {
   readingTime: integer('reading_time').default(5),
   metaTitle: text('meta_title'),
   metaDescription: text('meta_description'),
+  ogTitle: text('og_title'), // Open Graph title for social media
+  ogDescription: text('og_description'), // Open Graph description
+  focusKeyphrase: text('focus_keyphrase'), // Primary SEO keyphrase
+  internalLinks: text('internal_links'), // JSON array of suggested internal links
+  schemaMarkup: text('schema_markup'), // JSON-LD schema.org markup
   status: text('status').default('draft'), // 'draft', 'published', 'archived'
   featured: boolean('featured').default(false),
   publishedAt: timestamp('published_at'),

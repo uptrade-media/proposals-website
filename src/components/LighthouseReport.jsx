@@ -84,7 +84,7 @@ const LighthouseReport = ({ projectId }) => {
     return (
       <Card>
         <CardContent className="pt-6">
-          <p className="text-gray-500">Select a project to view Lighthouse audits</p>
+          <p className="text-[var(--text-secondary)]">Select a project to view Lighthouse audits</p>
         </CardContent>
       </Card>
     )
@@ -140,7 +140,7 @@ const LighthouseReport = ({ projectId }) => {
               <Label htmlFor="device-type">Device Type</Label>
               <select
                 id="device-type"
-                className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm"
+                className="w-full px-3 py-2 border border-[var(--glass-border)] rounded-md text-sm bg-[var(--glass-bg)]"
                 value={deviceType}
                 onChange={e => setDeviceType(e.target.value)}
                 disabled={isRunning}
@@ -169,7 +169,7 @@ const LighthouseReport = ({ projectId }) => {
               </Button>
             </div>
           </div>
-          <p className="text-sm text-gray-600">
+          <p className="text-sm text-[var(--text-secondary)]">
             Audits may take 1-3 minutes. You'll receive an email when complete.
           </p>
         </CardContent>
@@ -246,7 +246,7 @@ const LighthouseReport = ({ projectId }) => {
                     </Badge>
                   </div>
                   <p className="text-2xl font-bold">{formatLighthouseMetric(latestAudit.metrics?.[metric.key], metric.unit)}</p>
-                  <p className="text-xs text-gray-500 mt-1">Unit: {metric.unit}</p>
+                  <p className="text-xs text-[var(--text-tertiary)] mt-1">Unit: {metric.unit}</p>
                 </div>
               ))}
             </div>
@@ -266,13 +266,13 @@ const LighthouseReport = ({ projectId }) => {
               {audits.map(audit => (
                 <div
                   key={audit.id}
-                  className="p-3 border rounded-lg hover:bg-gray-50 cursor-pointer transition"
+                  className="p-3 border rounded-lg hover:bg-[var(--surface-secondary)] cursor-pointer transition"
                   onClick={() => setSelectedAudit(selectedAudit?.id === audit.id ? null : audit)}
                 >
                   <div className="flex items-center justify-between">
                     <div className="flex-1">
                       <p className="font-medium text-sm">{audit.targetUrl}</p>
-                      <p className="text-xs text-gray-500">
+                      <p className="text-xs text-[var(--text-tertiary)]">
                         {new Date(audit.completedAt || audit.createdAt).toLocaleString()}
                       </p>
                     </div>
@@ -317,8 +317,8 @@ const LighthouseReport = ({ projectId }) => {
         <Card className="border-dashed">
           <CardContent className="pt-6">
             <div className="text-center py-8">
-              <Zap className="w-12 h-12 text-gray-400 mx-auto mb-4" />
-              <p className="text-gray-600">No audits yet. Run your first Lighthouse audit above.</p>
+              <Zap className="w-12 h-12 text-[var(--text-tertiary)] mx-auto mb-4" />
+              <p className="text-[var(--text-secondary)]">No audits yet. Run your first Lighthouse audit above.</p>
             </div>
           </CardContent>
         </Card>

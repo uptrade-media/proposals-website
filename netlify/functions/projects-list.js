@@ -1,16 +1,17 @@
 // netlify/functions/projects-list.js
+// Migrated to Supabase from Neon/Drizzle
 import jwt from 'jsonwebtoken'
-import { neon } from '@neondatabase/serverless'
-import { drizzle } from 'drizzle-orm/neon-http'
-import { eq, desc } from 'drizzle-orm'
-import * as schema from '../../src/db/schema.js'
+import { createClient } from '@supabase/supabase-js'
 
 const COOKIE_NAME = process.env.SESSION_COOKIE_NAME || 'um_session'
 const JWT_SECRET = process.env.AUTH_JWT_SECRET
-const DATABASE_URL = process.env.DATABASE_URL
+
+const supabase = createClient(
+  process.env.SUPABASE_URL,
+  process.env.SUPABASE_SERVICE_ROLE_KEY
+)
 
 export async function handler(event) {
-  // CORS headers
   const headers = {
     'Access-Control-Allow-Origin': '*',
     'Access-Control-Allow-Headers': 'Content-Type',
@@ -30,7 +31,6 @@ export async function handler(event) {
     }
   }
 
-  // Verify authentication
   if (!JWT_SECRET) {
     return {
       statusCode: 500,
@@ -53,8 +53,8 @@ export async function handler(event) {
   try {
     const payload = jwt.verify(token, JWT_SECRET)
     
-    // Allow Google OAuth users and admins with role-based access
-    if (payload.type !== 'google' && payload.role !== 'admin') {
+    // Allow authenticated users with role-based access
+    if (!payload.userId && !payload.email) {
       return {
         statusCode: 403,
         headers,
@@ -62,107 +62,80 @@ export async function handler(event) {
       }
     }
 
-    // Connect to database
-    if (!DATABASE_URL) {
-      return {
-        statusCode: 500,
-        headers,
-        body: JSON.stringify({ error: 'Database not configured' })
-      }
-    }
-
-    const sql = neon(DATABASE_URL)
-    const db = drizzle(sql, { schema })
-
-    // Get query parameters for filtering and sorting
+    // Get query parameters for filtering
     const queryParams = event.queryStringParameters || {}
-    const status = queryParams.status
-    const sortBy = queryParams.sortBy || 'updated'
-    const limit = Math.min(parseInt(queryParams.limit) || 50, 100)
-    const offset = parseInt(queryParams.offset) || 0
+    const { status, contactId, limit: limitParam, offset: offsetParam } = queryParams
+    const limit = Math.min(parseInt(limitParam) || 50, 100)
+    const offset = parseInt(offsetParam) || 0
 
-    // Fetch user's projects with relationships
-    let projects
+    // Build query
+    let query = supabase
+      .from('projects')
+      .select(`
+        *,
+        contact:contacts!projects_contact_id_fkey (
+          id,
+          name,
+          email,
+          company,
+          avatar
+        ),
+        proposals (
+          id,
+          title,
+          status,
+          total_amount
+        )
+      `)
+      .order('updated_at', { ascending: false })
+      .range(offset, offset + limit - 1)
 
-    if (payload.role === 'admin') {
-      // Admin sees all projects
-      projects = await db.query.projects.findMany({
-        orderBy: [desc(schema.projects.updatedAt)],
-        with: {
-          contact: true,
-          milestones: true,
-          members: {
-            with: {
-              member: true
-            }
-          },
-          invoices: true,
-          files: true
-        }
-      })
-    } else {
-      // Client sees only their projects
-      projects = await db.query.projects.findMany({
-        where: eq(schema.projects.contactId, payload.userId),
-        orderBy: [desc(schema.projects.updatedAt)],
-        with: {
-          milestones: true,
-          members: {
-            with: {
-              member: true
-            }
-          },
-          invoices: true,
-          files: true
-        }
-      })
+    // Filter by user role
+    if (payload.role !== 'admin') {
+      query = query.eq('contact_id', payload.userId)
+    } else if (contactId) {
+      query = query.eq('contact_id', contactId)
     }
 
-    // Apply status filter
     if (status) {
-      projects = projects.filter(p => p.status === status)
+      query = query.eq('status', status)
     }
 
-    // Apply sorting
-    if (sortBy === 'created') {
-      projects.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))
-    } else if (sortBy === 'title') {
-      projects.sort((a, b) => a.title.localeCompare(b.title))
-    } else if (sortBy === 'dueDate') {
-      projects.sort((a, b) => {
-        if (!a.endDate) return 1
-        if (!b.endDate) return -1
-        return new Date(b.endDate) - new Date(a.endDate)
-      })
-    }
+    const { data: projects, error, count } = await query
 
-    // Apply pagination
-    const paginatedProjects = projects.slice(offset, offset + limit)
+    if (error) {
+      console.error('Supabase error:', error)
+      throw error
+    }
 
     // Format response
-    const formattedProjects = paginatedProjects.map(p => ({
+    const formattedProjects = (projects || []).map(p => ({
       id: p.id,
       title: p.title,
       description: p.description,
       status: p.status,
       budget: p.budget ? parseFloat(p.budget) : null,
-      startDate: p.startDate,
-      endDate: p.endDate,
-      createdAt: p.createdAt,
-      updatedAt: p.updatedAt,
-      milestoneCount: p.milestones?.length || 0,
-      memberCount: p.members?.length || 0,
-      invoiceCount: p.invoices?.length || 0,
-      fileCount: p.files?.length || 0,
+      startDate: p.start_date,
+      endDate: p.end_date,
+      createdAt: p.created_at,
+      updatedAt: p.updated_at,
       // Include contact info for admin view
       ...(payload.role === 'admin' && p.contact ? {
         contact: {
           id: p.contact.id,
           name: p.contact.name,
           email: p.contact.email,
-          company: p.contact.company
+          company: p.contact.company,
+          avatar: p.contact.avatar
         }
-      } : {})
+      } : {}),
+      // Include proposals summary
+      proposals: (p.proposals || []).map(prop => ({
+        id: prop.id,
+        title: prop.title,
+        status: prop.status,
+        totalAmount: prop.total_amount ? parseFloat(prop.total_amount) : null
+      }))
     }))
 
     return {
@@ -170,12 +143,9 @@ export async function handler(event) {
       headers,
       body: JSON.stringify({
         projects: formattedProjects,
-        pagination: {
-          limit,
-          offset,
-          total: projects.length,
-          returned: formattedProjects.length
-        }
+        total: formattedProjects.length,
+        offset,
+        limit
       })
     }
 

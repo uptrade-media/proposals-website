@@ -5,28 +5,23 @@ import { Button } from '../components/ui/button'
 import { Input } from '../components/ui/input'
 import { Label } from '../components/ui/label'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../components/ui/card'
-import { Lock, Mail, Eye, EyeOff, ShieldCheck, Loader2, HelpCircle } from 'lucide-react'
-import whitelogo from '../assets/whitelogo.svg'
+import { Lock, Mail, Eye, EyeOff, ShieldCheck, Loader2, HelpCircle, ChevronRight } from 'lucide-react'
+const logo = '/logo.svg'
 import useAuthStore from '../lib/auth-store'
-import HyperspaceBackground from '../components/HyperspaceBackground'
-
-const BRAND_GRAD = 'from-[#4bbf39] to-[#39bfb0]'
+import { signInWithGoogle } from '../lib/supabase-auth'
 
 // purely visual; server enforces access
 const BRAND_UI = {
   default: {
     title: 'Uptrade Portal',
-    logo: whitelogo,
     tagline: 'Your secure client hub for projects, reports, and collaboration',
   },
   row94: {
     title: 'Row 94 — Client Portal',
-    logo: whitelogo,
     tagline: 'Secure access to your Row 94 Whiskey project',
   },
   mbfm: {
     title: 'MBFM — Client Portal',
-    logo: whitelogo,
     tagline: 'Secure access to your MBFM project',
   },
 }
@@ -90,18 +85,29 @@ export default function LoginPage() {
   const [supportLoading, setSupportLoading] = useState(false)
   const [supportMsg, setSupportMsg] = useState('')
 
-  // Load Google Identity Services
-  useEffect(() => {
-    const script = document.createElement('script')
-    script.src = 'https://accounts.google.com/gsi/client'
-    script.async = true
-    script.defer = true
-    document.body.appendChild(script)
-
-    return () => {
-      document.body.removeChild(script)
+  // Handle Google Sign-In with Supabase
+  async function handleGoogleSignIn() {
+    setIsSubmitting(true)
+    setError('')
+    
+    try {
+      console.log('[Supabase Auth] Initiating Google sign-in...')
+      const { error: signInError } = await signInWithGoogle()
+      
+      if (signInError) {
+        console.error('[Supabase Auth] Sign-in error:', signInError)
+        throw signInError
+      }
+      
+      // Supabase will redirect to /auth/callback
+      // AuthCallback.jsx will handle the rest
+    } catch (err) {
+      const msg = err?.message || String(err || 'Google sign-in failed')
+      console.error('[Supabase Auth] Error:', msg)
+      setError(normalizeErr(msg))
+      setIsSubmitting(false)
     }
-  }, [])
+  }
 
   useEffect(() => {
     const saved = localStorage.getItem('um_email')
@@ -110,91 +116,6 @@ export default function LoginPage() {
       setRemember(true)
     }
   }, [])
-
-  // Initialize Google Sign-In when script loads
-  useEffect(() => {
-    const initGoogle = () => {
-      if (window.google) {
-        const clientId = import.meta.env.VITE_GOOGLE_CLIENT_ID
-        console.log('[Google OAuth] Client ID:', clientId)
-        
-        if (!clientId) {
-          console.error('[Google OAuth] VITE_GOOGLE_CLIENT_ID is not defined!')
-          return
-        }
-        
-        window.google.accounts.id.initialize({
-          client_id: clientId,
-          callback: handleGoogleResponse
-        })
-        console.log('[Google OAuth] Initialized successfully')
-      }
-    }
-
-    // Try immediately if already loaded
-    if (window.google) {
-      initGoogle()
-    } else {
-      // Wait for script to load
-      const checkGoogle = setInterval(() => {
-        if (window.google) {
-          clearInterval(checkGoogle)
-          initGoogle()
-        }
-      }, 100)
-
-      return () => clearInterval(checkGoogle)
-    }
-  }, [])
-
-  // Handle Google OAuth response
-  async function handleGoogleResponse(response) {
-    console.log('[Google OAuth] Callback received!')
-    setIsSubmitting(true)
-    setError('')
-
-    try {
-      console.log('[Google OAuth] Sending credential to backend...')
-      const res = await fetch('/.netlify/functions/auth-google', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        credentials: 'include',
-        body: JSON.stringify({ credential: response.credential })
-      })
-
-      console.log('[Google OAuth] Backend response status:', res.status)
-      const data = await res.json()
-      console.log('[Google OAuth] Backend response data:', data)
-
-      if (!res.ok) {
-        throw new Error(data.error || 'Google sign-in failed')
-      }
-
-      // Backend set the session cookie and returned user + redirect
-      console.log('[Google OAuth] Login successful, updating auth store...')
-      
-      // Update auth store with user data
-      if (data.user) {
-        useAuthStore.setState({
-          user: data.user,
-          isAuthenticated: true,
-          error: null,
-          isLoading: false
-        })
-      }
-      
-      // Redirect to dashboard or next path
-      const redirect = data.redirect || nextPath
-      console.log('[Google OAuth] Redirecting to:', redirect)
-      setIsSubmitting(false)
-      navigate(redirect)
-    } catch (err) {
-      const msg = (err && typeof err === 'object' && 'message' in err) ? err.message : String(err || '')
-      console.error('[Google OAuth] Error:', msg)
-      setError(normalizeErr(msg))
-      setIsSubmitting(false)
-    }
-  }
 
   async function handleSubmit(e) {
     e.preventDefault()
@@ -283,51 +204,85 @@ export default function LoginPage() {
   }
 
   return (
-    <div className="relative min-h-screen flex items-center justify-center overflow-hidden bg-black">
-      {/* Hyperspace Background */}
-      <HyperspaceBackground />
+    <div className="relative min-h-screen flex items-center justify-center bg-[var(--surface-primary)] transition-colors duration-300">
+      {/* Subtle gradient background */}
+      <div className="absolute inset-0 overflow-hidden">
+        <div className="absolute -top-1/2 -left-1/2 w-full h-full bg-gradient-to-br from-[var(--brand-primary)]/5 to-transparent rounded-full blur-3xl" />
+        <div className="absolute -bottom-1/2 -right-1/2 w-full h-full bg-gradient-to-tl from-[var(--brand-secondary)]/5 to-transparent rounded-full blur-3xl" />
+      </div>
 
       {/* Logout Button - Top Right */}
       {isAuthenticated && (
-        <button
+        <Button
+          variant="glass"
+          size="sm"
           onClick={() => useAuthStore.getState().logout()}
-          className="absolute top-6 right-6 z-30 px-4 py-2 text-sm font-medium text-neutral-300 hover:text-white bg-neutral-800/50 hover:bg-neutral-700/50 border border-white/10 rounded-lg transition-all duration-200"
+          className="absolute top-6 right-6 z-30"
         >
           Logout
-        </button>
+        </Button>
       )}
 
-      <Card className="relative z-20 w-full max-w-md overflow-hidden border border-white/10 bg-neutral-900/70 backdrop-blur-xl shadow-[0_0_0_1px_rgba(255,255,255,0.06)]">
-        {/* Ring overlay */}
-        <div aria-hidden="true" className="pointer-events-none absolute -inset-[1px] z-0 rounded-xl opacity-70 [mask:linear-gradient(#000,transparent)]">
-          <div className={`h-full w-full rounded-xl bg-gradient-to-r ${BRAND_GRAD} blur-[10px] opacity-30`} />
-        </div>
-
-        <CardHeader className="relative z-10 space-y-4 text-center pb-6">
+      <Card className="relative z-20 w-full max-w-md mx-4">
+        <CardHeader className="space-y-4 text-center pb-2">
+          {/* Logo */}
           <div className="flex justify-center">
             <img
-              src={brand.logo}
-              alt="Brand"
-              className="h-14 w-auto drop-shadow-[0_6px_20px_rgba(57,191,176,0.35)] transition-transform duration-300 hover:scale-105"
+              src={logo}
+              alt="Uptrade Media"
+              className="h-14 w-14"
             />
           </div>
-          <CardTitle className="text-3xl font-semibold tracking-tight">
-            <span className={`bg-gradient-to-r ${BRAND_GRAD} bg-clip-text text-transparent`}>
+          
+          <div className="space-y-2">
+            <CardTitle className="text-2xl font-semibold text-[var(--text-primary)]">
               {brand.title}
-            </span>
-          </CardTitle>
-          <CardDescription className="text-neutral-300/80">
-            {brand.tagline}
-          </CardDescription>
+            </CardTitle>
+            <CardDescription className="text-[var(--text-secondary)]">
+              {brand.tagline}
+            </CardDescription>
+          </div>
         </CardHeader>
 
-        <CardContent className="relative z-10">
-          <form onSubmit={handleSubmit} className="space-y-5" noValidate>
+        <CardContent className="pt-2">
+          {/* Google Sign-In Button - Primary */}
+          <Button
+            type="button"
+            onClick={handleGoogleSignIn}
+            disabled={isSubmitting}
+            className="w-full h-12 bg-[var(--surface-primary)] hover:bg-[var(--glass-bg-hover)] text-[var(--text-primary)] border border-[var(--glass-border-strong)] font-medium shadow-[var(--shadow-sm)] transition-all duration-200 mb-6"
+          >
+            {isSubmitting ? (
+              <span className="inline-flex items-center gap-2">
+                <Loader2 className="h-5 w-5 animate-spin" />
+                Signing in…
+              </span>
+            ) : (
+              <span className="inline-flex items-center gap-3">
+                <svg className="w-5 h-5" viewBox="0 0 24 24">
+                  <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
+                  <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
+                  <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"/>
+                  <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/>
+                </svg>
+                Continue with Google
+              </span>
+            )}
+          </Button>
+
+          {/* Divider */}
+          <div className="flex items-center gap-4 mb-6">
+            <div className="flex-1 h-px bg-[var(--glass-border)]" />
+            <span className="text-xs font-medium text-[var(--text-tertiary)] uppercase tracking-wider">or</span>
+            <div className="flex-1 h-px bg-[var(--glass-border)]" />
+          </div>
+
+          <form onSubmit={handleSubmit} className="space-y-4" noValidate>
             {/* Email */}
             <div className="space-y-2">
-              <Label htmlFor="email" className="text-neutral-200">Email</Label>
-              <div className="relative group">
-                <Mail className="absolute left-3 top-1/2 -translate-y-1/2 text-neutral-500 w-5 h-5 group-focus-within:text-[#39bfb0]" />
+              <Label htmlFor="email">Email</Label>
+              <div className="relative">
+                <Mail className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--text-tertiary)] w-4 h-4" />
                 <Input
                   id="email"
                   type="email"
@@ -338,16 +293,16 @@ export default function LoginPage() {
                   onChange={(e) => setEmail(e.target.value)}
                   required
                   disabled={isSubmitting}
-                  className="pl-11 bg-neutral-900/60 border-white/10 text-white placeholder:text-neutral-500 focus-visible:ring-2 focus-visible:ring-[#39bfb0]/30 focus-visible:border-[#39bfb0] transition-all"
+                  className="pl-10"
                 />
               </div>
             </div>
 
             {/* Password */}
             <div className="space-y-2">
-              <Label htmlFor="password" className="text-neutral-200">Password</Label>
-              <div className="relative group">
-                <Lock className="absolute left-3 top-1/2 -translate-y-1/2 text-neutral-500 w-5 h-5 group-focus-within:text-[#39bfb0]" />
+              <Label htmlFor="password">Password</Label>
+              <div className="relative">
+                <Lock className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--text-tertiary)] w-4 h-4" />
                 <Input
                   id="password"
                   type={showPassword ? 'text' : 'password'}
@@ -357,48 +312,46 @@ export default function LoginPage() {
                   onChange={(e) => setPassword(e.target.value)}
                   required
                   disabled={isSubmitting}
-                  className="pl-11 pr-11 bg-neutral-900/60 border-white/10 text-white placeholder:text-neutral-500 focus-visible:ring-2 focus-visible:ring-[#39bfb0]/30 focus-visible:border-[#39bfb0] transition-all"
+                  className="pl-10 pr-10"
                 />
                 <button
                   type="button"
                   aria-label={showPassword ? 'Hide password' : 'Show password'}
                   onClick={() => setShowPassword(!showPassword)}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-neutral-500 hover:text-neutral-300 transition-colors"
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-[var(--text-tertiary)] hover:text-[var(--text-secondary)] transition-colors"
                   disabled={isSubmitting}
                 >
-                  {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
+                  {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                 </button>
               </div>
             </div>
 
             {/* Utility row */}
-            {(
-              <div className="flex items-center justify-between text-sm">
-                <label htmlFor="remember" className="flex items-center gap-2 cursor-pointer select-none">
-                  <input
-                    id="remember"
-                    type="checkbox"
-                    checked={remember}
-                    onChange={(e) => setRemember(e.target.checked)}
-                    className="w-4 h-4 rounded border-white/10 bg-neutral-900/80 text-[#39bfb0] focus:ring-[#39bfb0]/30"
-                    disabled={isSubmitting}
+            <div className="flex items-center justify-between text-sm">
+              <label htmlFor="remember" className="flex items-center gap-2 cursor-pointer select-none">
+                <input
+                  id="remember"
+                  type="checkbox"
+                  checked={remember}
+                  onChange={(e) => setRemember(e.target.checked)}
+                  className="w-4 h-4 rounded border-[var(--glass-border-strong)] bg-[var(--glass-bg)] text-[var(--brand-primary)] focus:ring-[var(--brand-primary)]/30"
+                  disabled={isSubmitting}
                 />
-                <span className="text-neutral-300">Remember me</span>
+                <span className="text-[var(--text-secondary)]">Remember me</span>
               </label>
 
               <button
                 type="button"
                 onClick={() => { setForgotOpen(!forgotOpen); setForgotMsg('') }}
-                className="text-[#39bfb0] hover:opacity-80 transition-opacity"
+                className="text-[var(--brand-primary)] hover:text-[var(--brand-secondary)] transition-colors font-medium"
               >
                 Forgot password?
               </button>
-              </div>
-            )}
+            </div>
 
             {/* Error */}
             {error && (
-              <div role="alert" aria-live="polite" className="text-sm rounded-lg border border-red-500/30 bg-red-500/10 text-red-200 px-3 py-2">
+              <div role="alert" aria-live="polite" className="text-sm rounded-[var(--radius-md)] border border-[var(--accent-red)]/20 bg-[var(--accent-red)]/10 text-[var(--accent-red)] px-3 py-2">
                 {error}
               </div>
             )}
@@ -407,7 +360,7 @@ export default function LoginPage() {
             <Button
               type="submit"
               disabled={isSubmitting}
-              className={`w-full py-6 font-semibold rounded-lg shadow-lg transition-all duration-300 hover:shadow-[0_10px_35px_rgba(57,191,176,0.35)] active:scale-[0.99] bg-gradient-to-r ${BRAND_GRAD}`}
+              className="w-full h-11 bg-gradient-to-r from-[var(--brand-primary)] to-[var(--brand-secondary)] hover:opacity-90 text-white font-medium shadow-[var(--shadow-md)] transition-all duration-200"
             >
               {isSubmitting ? (
                 <span className="inline-flex items-center gap-2">
@@ -415,140 +368,109 @@ export default function LoginPage() {
                   Signing in…
                 </span>
               ) : (
-                'Sign in'
+                <span className="inline-flex items-center gap-2">
+                  Sign in
+                  <ChevronRight className="w-4 h-4" />
+                </span>
               )}
             </Button>
 
             {/* Forgot password panel */}
             {forgotOpen && (
-              <div className="mt-3 rounded-lg border border-white/10 p-3 bg-neutral-900/60">
+              <div className="mt-3 rounded-[var(--radius-lg)] border border-[var(--glass-border)] p-4 bg-[var(--glass-bg-inset)]">
                 <form onSubmit={submitForgot} className="space-y-3">
-                  <Label htmlFor="forgotEmail" className="text-neutral-200">Account email</Label>
+                  <Label htmlFor="forgotEmail">Account email</Label>
                   <Input
                     id="forgotEmail"
                     type="email"
                     placeholder="you@company.com"
                     value={forgotEmail}
                     onChange={(e) => setForgotEmail(e.target.value)}
-                    className="bg-neutral-900/60 border-white/10 text-white"
                   />
                   <Button
                     type="submit"
                     disabled={forgotLoading}
-                    className={`w-full ${forgotLoading ? 'opacity-80' : ''} bg-gradient-to-r ${BRAND_GRAD}`}
+                    className="w-full bg-gradient-to-r from-[var(--brand-primary)] to-[var(--brand-secondary)]"
                   >
                     {forgotLoading ? 'Sending…' : 'Send reset instructions'}
                   </Button>
-                  {forgotMsg && <p className="text-xs text-neutral-300">{forgotMsg}</p>}
+                  {forgotMsg && <p className="text-xs text-[var(--text-secondary)]">{forgotMsg}</p>}
                 </form>
               </div>
             )}
+          </form>
 
-            {/* Trust / privacy note */}
-            <div className="flex items-center justify-center gap-2 text-xs text-neutral-400 pt-1">
-              <ShieldCheck className="w-4 h-4 text-[#39bfb0]" />
-              <span>Private access. Encrypted in transit.</span>
-            </div>
+          {/* Trust / privacy note */}
+          <div className="flex items-center justify-center gap-2 text-xs text-[var(--text-tertiary)] mt-6">
+            <ShieldCheck className="w-4 h-4 text-[var(--brand-primary)]" />
+            <span>Private & secure. Encrypted in transit.</span>
+          </div>
 
-            {/* Divider before bottom sections */}
-            <div className="relative my-4">
-              <div className="absolute inset-0 flex items-center">
-                <div className="w-full border-t border-white/10" />
-              </div>
-              <div className="relative flex justify-center">
-                <span className="px-3 text-[11px] uppercase tracking-widest text-neutral-500 bg-neutral-900/70">
-                  Uptrade Media
-                </span>
-              </div>
-            </div>
+          {/* Divider */}
+          <div className="my-6 h-px bg-[var(--glass-border)]" />
 
-            {/* Contact support row */}
-            <div className="flex items-center justify-center gap-2 text-sm mt-2">
-              <button
-                type="button"
-                onClick={() => { setSupportOpen(!supportOpen); setSupportMsg('') }}
-                className="inline-flex items-center gap-1 text-[#39bfb0] hover:opacity-80"
-              >
-                <HelpCircle className="w-4 h-4" />
-                Contact support
-              </button>
+          {/* Contact support row */}
+          <div className="flex items-center justify-center gap-3 text-sm">
+            <button
+              type="button"
+              onClick={() => { setSupportOpen(!supportOpen); setSupportMsg('') }}
+              className="inline-flex items-center gap-1.5 text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-colors"
+            >
+              <HelpCircle className="w-4 h-4" />
+              Need help?
+            </button>
 
-              <span className="text-neutral-500 select-none" aria-hidden="true">·</span>
+            <span className="text-[var(--glass-border-strong)]" aria-hidden="true">•</span>
 
-              <a
-                href={`mailto:ramsey@uptrademedia.com?subject=Support%20request&body=Hi%20Uptrade%20Media,%0A%0A`}
-                className="inline-flex text-neutral-400 hover:text-neutral-200"
-              >
-                or email directly
-              </a>
-            </div>
+            <a
+              href="mailto:ramsey@uptrademedia.com?subject=Support%20request"
+              className="text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-colors"
+            >
+              Email support
+            </a>
+          </div>
 
-            {supportOpen && (
-              <div className="mt-3 rounded-lg border border-white/10 p-3 bg-neutral-900/60">
-                <form onSubmit={submitSupport} className="space-y-3">
-                  <Label htmlFor="supportEmail" className="text-neutral-200">Your email</Label>
+          {supportOpen && (
+            <div className="mt-4 rounded-[var(--radius-lg)] border border-[var(--glass-border)] p-4 bg-[var(--glass-bg-inset)]">
+              <form onSubmit={submitSupport} className="space-y-3">
+                <div className="space-y-2">
+                  <Label htmlFor="supportEmail">Your email</Label>
                   <Input
                     id="supportEmail"
                     type="email"
                     placeholder="you@company.com"
                     value={supportEmail}
                     onChange={(e) => setSupportEmail(e.target.value)}
-                    className="bg-neutral-900/60 border-white/10 text-white"
                   />
-                  <Label htmlFor="supportBody" className="text-neutral-200">Message</Label>
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="supportBody">Message</Label>
                   <textarea
                     id="supportBody"
-                    rows={4}
+                    rows={3}
                     value={supportBody}
                     onChange={(e) => setSupportBody(e.target.value)}
                     placeholder="Tell us what you need help with…"
-                    className="w-full rounded-md bg-neutral-900/60 border border-white/10 p-2 text-white"
+                    className="w-full rounded-[var(--radius-md)] bg-[var(--glass-bg)] border border-[var(--glass-border)] p-3 text-sm text-[var(--text-primary)] placeholder:text-[var(--text-tertiary)] focus:outline-none focus:ring-2 focus:ring-[var(--accent-primary)]/30 focus:border-[var(--accent-primary)] transition-all"
                   />
-                  <Button
-                    type="submit"
-                    disabled={supportLoading}
-                    className={`w-full ${supportLoading ? 'opacity-80' : ''} bg-gradient-to-r ${BRAND_GRAD}`}
-                  >
-                    {supportLoading ? 'Sending…' : 'Send message'}
-                  </Button>
-                  {supportMsg && <p className="text-xs text-neutral-300">{supportMsg}</p>}
-                </form>
-              </div>
-            )}
-          </form>
-
-          {/* Google Sign-In Divider */}
-          <div className="flex items-center my-6">
-            <div className="flex-1 border-t border-white/10" />
-            <span className="px-4 text-sm text-neutral-400">or continue with</span>
-            <div className="flex-1 border-t border-white/10" />
-          </div>
-
-          {/* Google Sign-In Button */}
-          <div className="flex justify-center mb-6">
-            <div 
-              id="g_id_onload"
-              data-client_id={import.meta.env.VITE_GOOGLE_CLIENT_ID}
-              data-context="signin"
-              data-ux_mode="popup"
-              data-auto_prompt="false"
-            ></div>
-            <div 
-              className="g_id_signin"
-              data-type="standard"
-              data-shape="rectangular"
-              data-theme="filled_black"
-              data-text="signin_with"
-              data-size="large"
-              data-logo_alignment="left"
-              data-width="360"
-            ></div>
-          </div>
+                </div>
+                <Button
+                  type="submit"
+                  disabled={supportLoading}
+                  className="w-full bg-gradient-to-r from-[var(--brand-primary)] to-[var(--brand-secondary)]"
+                >
+                  {supportLoading ? 'Sending…' : 'Send message'}
+                </Button>
+                {supportMsg && <p className="text-xs text-[var(--text-secondary)]">{supportMsg}</p>}
+              </form>
+            </div>
+          )}
         </CardContent>
       </Card>
 
-      <div className="absolute bottom-4 left-0 right-0 text-center z-20">
-        <p className="text-neutral-500 text-xs">© {new Date().getFullYear()} Uptrade Media</p>
+      {/* Footer */}
+      <div className="absolute bottom-6 left-0 right-0 text-center z-20">
+        <p className="text-[var(--text-tertiary)] text-xs">© {new Date().getFullYear()} Uptrade Media</p>
       </div>
     </div>
   )

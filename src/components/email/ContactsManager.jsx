@@ -81,7 +81,7 @@ export default function ContactsManager() {
         </CardHeader>
         <CardContent>
           <div className="text-center py-12">
-            <p className="text-gray-500">No contacts yet. Import a CSV to get started.</p>
+            <p className="text-[var(--text-secondary)]">No contacts yet. Import a CSV to get started.</p>
           </div>
         </CardContent>
       </Card>

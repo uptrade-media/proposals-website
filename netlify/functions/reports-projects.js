@@ -1,19 +1,11 @@
 // netlify/functions/reports-projects.js
-import jwt from 'jsonwebtoken'
-import { neon } from '@neondatabase/serverless'
-import { drizzle } from 'drizzle-orm/neon-http'
-import { sql } from 'drizzle-orm'
-import * as schema from '../../src/db/schema.js'
-
-const COOKIE_NAME = process.env.SESSION_COOKIE_NAME || 'um_session'
-const JWT_SECRET = process.env.AUTH_JWT_SECRET
-const DATABASE_URL = process.env.DATABASE_URL
+import { createSupabaseAdmin, getAuthenticatedUser } from './utils/supabase.js'
 
 export async function handler(event) {
   // CORS headers
   const headers = {
     'Access-Control-Allow-Origin': '*',
-    'Access-Control-Allow-Headers': 'Content-Type',
+    'Access-Control-Allow-Headers': 'Content-Type, Authorization',
     'Access-Control-Allow-Methods': 'GET, OPTIONS',
     'Content-Type': 'application/json'
   }
@@ -30,231 +22,274 @@ export async function handler(event) {
     }
   }
 
-  // Verify authentication
-  if (!JWT_SECRET) {
-    return {
-      statusCode: 500,
-      headers,
-      body: JSON.stringify({ error: 'Server not configured' })
-    }
-  }
-
-  const rawCookie = event.headers.cookie || ''
-  const token = rawCookie.split('; ').find(c => c.startsWith(`${COOKIE_NAME}=`))?.split('=')[1]
-  
-  if (!token) {
-    return {
-      statusCode: 401,
-      headers,
-      body: JSON.stringify({ error: 'Not authenticated' })
-    }
-  }
-
   try {
-    const payload = jwt.verify(token, JWT_SECRET)
-
-    // Connect to database
-    if (!DATABASE_URL) {
+    // Verify authentication via Supabase
+    const { user, contact, error: authError } = await getAuthenticatedUser(event)
+    
+    if (authError || !user) {
       return {
-        statusCode: 500,
+        statusCode: 401,
         headers,
-        body: JSON.stringify({ error: 'Database not configured' })
+        body: JSON.stringify({ error: 'Not authenticated' })
       }
     }
 
-    const db = neon(DATABASE_URL)
+    const isAdmin = contact?.role === 'admin'
+    const contactId = contact?.id
+    const supabase = createSupabaseAdmin()
 
-    // Base filter for client vs admin
-    const contactFilter = payload.role === 'admin' 
-      ? '' 
-      : `AND p.contact_id = '${payload.userId}'`
-
-    // Projects summary
-    const summaryQuery = `
-      SELECT 
-        COUNT(*) as total_projects,
-        COUNT(CASE WHEN status = 'active' THEN 1 END) as active_projects,
-        COUNT(CASE WHEN status = 'completed' THEN 1 END) as completed_projects,
-        COUNT(CASE WHEN status = 'on-hold' THEN 1 END) as on_hold_projects,
-        COUNT(CASE WHEN status = 'planning' THEN 1 END) as planning_projects,
-        COALESCE(SUM(CAST(budget AS DECIMAL)), 0) as total_budget,
-        COALESCE(AVG(CAST(budget AS DECIMAL)), 0) as avg_budget
-      FROM projects p
-      WHERE 1=1 ${contactFilter}
-    `
+    // Fetch all projects (filtered by role)
+    let projectsQuery = supabase
+      .from('projects')
+      .select('id, name, status, budget, start_date, end_date, contact_id, created_at')
     
-    const summaryResult = await db(summaryQuery)
-    const summary = {
-      totalProjects: parseInt(summaryResult[0]?.total_projects || 0),
-      activeProjects: parseInt(summaryResult[0]?.active_projects || 0),
-      completedProjects: parseInt(summaryResult[0]?.completed_projects || 0),
-      onHoldProjects: parseInt(summaryResult[0]?.on_hold_projects || 0),
-      planningProjects: parseInt(summaryResult[0]?.planning_projects || 0),
-      totalBudget: parseFloat(summaryResult[0]?.total_budget || 0),
-      avgBudget: parseFloat(summaryResult[0]?.avg_budget || 0)
+    if (!isAdmin) {
+      projectsQuery = projectsQuery.eq('contact_id', contactId)
+    }
+    
+    const { data: projects, error: projectsError } = await projectsQuery
+    
+    if (projectsError) {
+      console.error('Projects query error:', projectsError)
+      throw new Error('Failed to fetch projects')
     }
 
-    // Project status breakdown
-    const statusBreakdownQuery = `
-      SELECT 
-        status,
-        COUNT(*) as count,
-        COALESCE(SUM(CAST(budget AS DECIMAL)), 0) as total_budget
-      FROM projects p
-      WHERE 1=1 ${contactFilter}
-      GROUP BY status
-      ORDER BY count DESC
-    `
-    
-    const statusBreakdownResult = await db(statusBreakdownQuery)
-    const statusBreakdown = statusBreakdownResult.map(row => ({
-      status: row.status,
-      count: parseInt(row.count),
-      totalBudget: parseFloat(row.total_budget)
-    }))
+    // Calculate summary
+    const summary = {
+      totalProjects: projects?.length || 0,
+      activeProjects: projects?.filter(p => p.status === 'active').length || 0,
+      completedProjects: projects?.filter(p => p.status === 'completed').length || 0,
+      onHoldProjects: projects?.filter(p => p.status === 'on-hold').length || 0,
+      planningProjects: projects?.filter(p => p.status === 'planning').length || 0,
+      totalBudget: projects?.reduce((sum, p) => sum + parseFloat(p.budget || 0), 0) || 0,
+      avgBudget: projects?.length > 0 
+        ? projects.reduce((sum, p) => sum + parseFloat(p.budget || 0), 0) / projects.length 
+        : 0
+    }
+
+    // Status breakdown
+    const statusMap = new Map()
+    for (const p of projects || []) {
+      const key = p.status || 'unknown'
+      if (!statusMap.has(key)) {
+        statusMap.set(key, { status: key, count: 0, totalBudget: 0 })
+      }
+      const entry = statusMap.get(key)
+      entry.count++
+      entry.totalBudget += parseFloat(p.budget || 0)
+    }
+    const statusBreakdown = Array.from(statusMap.values())
+      .sort((a, b) => b.count - a.count)
 
     // Projects by client (admin only)
     let projectsByClient = []
-    if (payload.role === 'admin') {
-      const clientQuery = `
-        SELECT 
-          c.id,
-          c.name,
-          c.company,
-          COUNT(p.id) as project_count,
-          COUNT(CASE WHEN p.status = 'active' THEN 1 END) as active_count,
-          COALESCE(SUM(CAST(p.budget AS DECIMAL)), 0) as total_budget
-        FROM contacts c
-        LEFT JOIN projects p ON p.contact_id = c.id
-        GROUP BY c.id, c.name, c.company
-        HAVING COUNT(p.id) > 0
-        ORDER BY project_count DESC
-        LIMIT 10
-      `
+    if (isAdmin) {
+      // Fetch contacts with their projects
+      const { data: contacts, error: contactsError } = await supabase
+        .from('contacts')
+        .select('id, name, company')
       
-      const clientResult = await db(clientQuery)
-      projectsByClient = clientResult.map(row => ({
-        contactId: row.id,
-        contactName: row.name,
-        company: row.company,
-        projectCount: parseInt(row.project_count),
-        activeCount: parseInt(row.active_count),
-        totalBudget: parseFloat(row.total_budget)
-      }))
+      if (!contactsError && contacts) {
+        const clientMap = new Map()
+        for (const c of contacts) {
+          clientMap.set(c.id, { 
+            contactId: c.id, 
+            contactName: c.name, 
+            company: c.company, 
+            projectCount: 0, 
+            activeCount: 0, 
+            totalBudget: 0 
+          })
+        }
+        
+        for (const p of projects || []) {
+          if (p.contact_id && clientMap.has(p.contact_id)) {
+            const entry = clientMap.get(p.contact_id)
+            entry.projectCount++
+            if (p.status === 'active') entry.activeCount++
+            entry.totalBudget += parseFloat(p.budget || 0)
+          }
+        }
+        
+        projectsByClient = Array.from(clientMap.values())
+          .filter(c => c.projectCount > 0)
+          .sort((a, b) => b.projectCount - a.projectCount)
+          .slice(0, 10)
+      }
     }
 
-    // Recent projects timeline
-    const timelineQuery = `
-      SELECT 
-        DATE_TRUNC('month', start_date) as month,
-        COUNT(*) as started_count,
-        COUNT(CASE WHEN end_date IS NOT NULL THEN 1 END) as completed_count
-      FROM projects p
-      WHERE start_date IS NOT NULL ${contactFilter}
-      GROUP BY DATE_TRUNC('month', start_date)
-      ORDER BY month DESC
-      LIMIT 12
-    `
-    
-    const timelineResult = await db(timelineQuery)
-    const timeline = timelineResult.map(row => ({
-      month: row.month,
-      startedCount: parseInt(row.started_count),
-      completedCount: parseInt(row.completed_count)
-    }))
+    // Timeline - projects by month
+    const timelineMap = new Map()
+    for (const p of projects || []) {
+      if (!p.start_date) continue
+      const date = new Date(p.start_date)
+      const monthKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-01`
+      
+      if (!timelineMap.has(monthKey)) {
+        timelineMap.set(monthKey, { month: monthKey, startedCount: 0, completedCount: 0 })
+      }
+      const entry = timelineMap.get(monthKey)
+      entry.startedCount++
+      if (p.end_date) entry.completedCount++
+    }
+    const timeline = Array.from(timelineMap.values())
+      .sort((a, b) => b.month.localeCompare(a.month))
+      .slice(0, 12)
 
-    // Project duration analysis (completed projects only)
-    const durationQuery = `
-      SELECT 
-        AVG(EXTRACT(EPOCH FROM (end_date - start_date)) / 86400) as avg_duration_days,
-        MIN(EXTRACT(EPOCH FROM (end_date - start_date)) / 86400) as min_duration_days,
-        MAX(EXTRACT(EPOCH FROM (end_date - start_date)) / 86400) as max_duration_days
-      FROM projects p
-      WHERE status = 'completed' 
-        AND start_date IS NOT NULL 
-        AND end_date IS NOT NULL
-        ${contactFilter}
-    `
+    // Duration analysis (completed projects only)
+    const completedProjects = (projects || []).filter(p => 
+      p.status === 'completed' && p.start_date && p.end_date
+    )
     
-    const durationResult = await db(durationQuery)
-    const duration = {
-      avgDurationDays: parseFloat(durationResult[0]?.avg_duration_days || 0),
-      minDurationDays: parseFloat(durationResult[0]?.min_duration_days || 0),
-      maxDurationDays: parseFloat(durationResult[0]?.max_duration_days || 0)
+    let duration = { avgDurationDays: 0, minDurationDays: 0, maxDurationDays: 0 }
+    if (completedProjects.length > 0) {
+      const durations = completedProjects.map(p => {
+        const start = new Date(p.start_date)
+        const end = new Date(p.end_date)
+        return (end - start) / (1000 * 60 * 60 * 24) // days
+      })
+      duration = {
+        avgDurationDays: durations.reduce((sum, d) => sum + d, 0) / durations.length,
+        minDurationDays: Math.min(...durations),
+        maxDurationDays: Math.max(...durations)
+      }
     }
 
     // Projects with pending invoices
-    const pendingInvoicesQuery = `
-      SELECT 
-        p.id,
-        p.name,
-        COUNT(i.id) as pending_invoice_count,
-        COALESCE(SUM(CAST(i.total_amount AS DECIMAL)), 0) as pending_amount
-      FROM projects p
-      JOIN invoices i ON i.project_id = p.id
-      WHERE i.status = 'pending' ${contactFilter}
-      GROUP BY p.id, p.name
-      ORDER BY pending_amount DESC
-      LIMIT 10
-    `
+    let invoicesQuery = supabase
+      .from('invoices')
+      .select('project_id, total_amount, projects!inner(id, name)')
+      .eq('status', 'pending')
     
-    const pendingInvoicesResult = await db(pendingInvoicesQuery)
-    const projectsWithPendingInvoices = pendingInvoicesResult.map(row => ({
-      projectId: row.id,
-      projectName: row.name,
-      pendingInvoiceCount: parseInt(row.pending_invoice_count),
-      pendingAmount: parseFloat(row.pending_amount)
-    }))
+    if (!isAdmin) {
+      invoicesQuery = invoicesQuery.eq('contact_id', contactId)
+    }
+    
+    const { data: pendingInvoices, error: invoicesError } = await invoicesQuery
+    
+    const pendingMap = new Map()
+    for (const inv of pendingInvoices || []) {
+      if (!inv.projects) continue
+      const key = inv.projects.id
+      if (!pendingMap.has(key)) {
+        pendingMap.set(key, { 
+          projectId: inv.projects.id, 
+          projectName: inv.projects.name, 
+          pendingInvoiceCount: 0, 
+          pendingAmount: 0 
+        })
+      }
+      const entry = pendingMap.get(key)
+      entry.pendingInvoiceCount++
+      entry.pendingAmount += parseFloat(inv.total_amount || 0)
+    }
+    const projectsWithPendingInvoices = Array.from(pendingMap.values())
+      .sort((a, b) => b.pendingAmount - a.pendingAmount)
+      .slice(0, 10)
 
-    // Projects with recent activity (messages/files in last 7 days)
-    const activityQuery = `
-      SELECT 
-        p.id,
-        p.name,
-        COUNT(DISTINCT m.id) as message_count,
-        COUNT(DISTINCT f.id) as file_count,
-        MAX(GREATEST(COALESCE(m.created_at, '1970-01-01'), COALESCE(f.uploaded_at, '1970-01-01'))) as last_activity
-      FROM projects p
-      LEFT JOIN messages m ON m.project_id = p.id AND m.created_at >= NOW() - INTERVAL '7 days'
-      LEFT JOIN files f ON f.project_id = p.id AND f.uploaded_at >= NOW() - INTERVAL '7 days'
-      WHERE 1=1 ${contactFilter}
-      GROUP BY p.id, p.name
-      HAVING COUNT(DISTINCT m.id) > 0 OR COUNT(DISTINCT f.id) > 0
-      ORDER BY last_activity DESC
-      LIMIT 10
-    `
+    // Recent activity - messages and files in last 7 days
+    const sevenDaysAgo = new Date()
+    sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7)
     
-    const activityResult = await db(activityQuery)
-    const recentActivity = activityResult.map(row => ({
-      projectId: row.id,
-      projectName: row.name,
-      messageCount: parseInt(row.message_count),
-      fileCount: parseInt(row.file_count),
-      lastActivity: row.last_activity
-    }))
+    let messagesQuery = supabase
+      .from('messages')
+      .select('project_id, created_at')
+      .gte('created_at', sevenDaysAgo.toISOString())
+    
+    if (!isAdmin) {
+      messagesQuery = messagesQuery.eq('contact_id', contactId)
+    }
+    
+    const { data: recentMessages } = await messagesQuery
+    
+    let filesQuery = supabase
+      .from('files')
+      .select('project_id, uploaded_at')
+      .gte('uploaded_at', sevenDaysAgo.toISOString())
+    
+    if (!isAdmin) {
+      filesQuery = filesQuery.eq('contact_id', contactId)
+    }
+    
+    const { data: recentFiles } = await filesQuery
+    
+    const activityMap = new Map()
+    const projectNames = new Map()
+    for (const p of projects || []) {
+      projectNames.set(p.id, p.name)
+    }
+    
+    for (const m of recentMessages || []) {
+      if (!m.project_id) continue
+      if (!activityMap.has(m.project_id)) {
+        activityMap.set(m.project_id, { 
+          projectId: m.project_id, 
+          projectName: projectNames.get(m.project_id) || 'Unknown', 
+          messageCount: 0, 
+          fileCount: 0, 
+          lastActivity: null 
+        })
+      }
+      const entry = activityMap.get(m.project_id)
+      entry.messageCount++
+      if (!entry.lastActivity || new Date(m.created_at) > new Date(entry.lastActivity)) {
+        entry.lastActivity = m.created_at
+      }
+    }
+    
+    for (const f of recentFiles || []) {
+      if (!f.project_id) continue
+      if (!activityMap.has(f.project_id)) {
+        activityMap.set(f.project_id, { 
+          projectId: f.project_id, 
+          projectName: projectNames.get(f.project_id) || 'Unknown', 
+          messageCount: 0, 
+          fileCount: 0, 
+          lastActivity: null 
+        })
+      }
+      const entry = activityMap.get(f.project_id)
+      entry.fileCount++
+      if (!entry.lastActivity || new Date(f.uploaded_at) > new Date(entry.lastActivity)) {
+        entry.lastActivity = f.uploaded_at
+      }
+    }
+    
+    const recentActivity = Array.from(activityMap.values())
+      .sort((a, b) => new Date(b.lastActivity) - new Date(a.lastActivity))
+      .slice(0, 10)
 
     // Completion rate by month (admin only)
     let completionRate = []
-    if (payload.role === 'admin') {
-      const completionRateQuery = `
-        SELECT 
-          DATE_TRUNC('month', created_at) as month,
-          COUNT(*) as total_started,
-          COUNT(CASE WHEN status = 'completed' THEN 1 END) as completed,
-          ROUND(COUNT(CASE WHEN status = 'completed' THEN 1 END)::DECIMAL / COUNT(*)::DECIMAL * 100, 2) as completion_percentage
-        FROM projects
-        WHERE created_at >= NOW() - INTERVAL '12 months'
-        GROUP BY DATE_TRUNC('month', created_at)
-        ORDER BY month DESC
-      `
+    if (isAdmin) {
+      const twelveMonthsAgo = new Date()
+      twelveMonthsAgo.setMonth(twelveMonthsAgo.getMonth() - 12)
       
-      const completionRateResult = await db(completionRateQuery)
-      completionRate = completionRateResult.map(row => ({
-        month: row.month,
-        totalStarted: parseInt(row.total_started),
-        completed: parseInt(row.completed),
-        completionPercentage: parseFloat(row.completion_percentage || 0)
-      }))
+      const recentProjects = (projects || []).filter(p => 
+        p.created_at && new Date(p.created_at) >= twelveMonthsAgo
+      )
+      
+      const rateMap = new Map()
+      for (const p of recentProjects) {
+        const date = new Date(p.created_at)
+        const monthKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-01`
+        
+        if (!rateMap.has(monthKey)) {
+          rateMap.set(monthKey, { month: monthKey, totalStarted: 0, completed: 0 })
+        }
+        const entry = rateMap.get(monthKey)
+        entry.totalStarted++
+        if (p.status === 'completed') entry.completed++
+      }
+      
+      completionRate = Array.from(rateMap.values())
+        .map(entry => ({
+          ...entry,
+          completionPercentage: entry.totalStarted > 0 
+            ? Math.round((entry.completed / entry.totalStarted) * 100 * 100) / 100 
+            : 0
+        }))
+        .sort((a, b) => b.month.localeCompare(a.month))
     }
 
     return {
@@ -275,14 +310,6 @@ export async function handler(event) {
 
   } catch (error) {
     console.error('Error fetching project analytics:', error)
-    
-    if (error.name === 'JsonWebTokenError' || error.name === 'TokenExpiredError') {
-      return {
-        statusCode: 401,
-        headers,
-        body: JSON.stringify({ error: 'Invalid or expired session' })
-      }
-    }
 
     return {
       statusCode: 500,

@@ -201,13 +201,13 @@ const Billing = () => {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold">Billing</h1>
-          <p className="text-gray-600">Manage invoices and billing information</p>
+          <h1 className="text-2xl font-bold text-[var(--text-primary)]">Billing</h1>
+          <p className="text-[var(--text-secondary)]">Manage invoices and billing information</p>
         </div>
         {isAdmin && (
           <Dialog open={isCreateDialogOpen} onOpenChange={setIsCreateDialogOpen}>
             <DialogTrigger asChild>
-              <Button className="bg-gradient-to-r from-[#4bbf39] to-[#39bfb0] hover:from-[#3da832] hover:to-[#2da89a]">
+              <Button variant="glass-primary">
                 <Plus className="w-4 h-4 mr-2" />
                 Create Invoice
               </Button>
@@ -325,7 +325,7 @@ const Billing = () => {
                   <Button 
                     type="submit" 
                     disabled={isLoading || !formData.contactId || !formData.amount || !formData.due_date}
-                    className="bg-gradient-to-r from-[#4bbf39] to-[#39bfb0] hover:from-[#3da832] hover:to-[#2da89a]"
+                    variant="glass-primary"
                   >
                     {isLoading ? (
                       <>
@@ -358,13 +358,13 @@ const Billing = () => {
                 <CardContent className="p-6">
                   <div className="flex items-center justify-between">
                     <div>
-                      <p className="text-sm font-medium text-gray-600">Total Revenue</p>
-                      <p className="text-2xl font-bold text-gray-900">
+                      <p className="text-sm font-medium text-[var(--text-secondary)]">Total Revenue</p>
+                      <p className="text-2xl font-bold text-[var(--text-primary)]">
                         {formatCurrency(summary.amounts.total_amount)}
                       </p>
                     </div>
-                    <div className="w-12 h-12 bg-green-100 rounded-lg flex items-center justify-center">
-                      <TrendingUp className="w-6 h-6 text-green-600" />
+                    <div className="w-12 h-12 bg-[var(--accent-success)]/20 rounded-xl flex items-center justify-center">
+                      <TrendingUp className="w-6 h-6 text-[var(--accent-success)]" />
                     </div>
                   </div>
                 </CardContent>
@@ -374,13 +374,13 @@ const Billing = () => {
                 <CardContent className="p-6">
                   <div className="flex items-center justify-between">
                     <div>
-                      <p className="text-sm font-medium text-gray-600">Pending</p>
-                      <p className="text-2xl font-bold text-yellow-600">
+                      <p className="text-sm font-medium text-[var(--text-secondary)]">Pending</p>
+                      <p className="text-2xl font-bold text-[var(--accent-warning)]">
                         {formatCurrency(summary.amounts.pending_amount)}
                       </p>
                     </div>
-                    <div className="w-12 h-12 bg-yellow-100 rounded-lg flex items-center justify-center">
-                      <Clock className="w-6 h-6 text-yellow-600" />
+                    <div className="w-12 h-12 bg-[var(--accent-warning)]/20 rounded-xl flex items-center justify-center">
+                      <Clock className="w-6 h-6 text-[var(--accent-warning)]" />
                     </div>
                   </div>
                 </CardContent>
@@ -390,13 +390,13 @@ const Billing = () => {
                 <CardContent className="p-6">
                   <div className="flex items-center justify-between">
                     <div>
-                      <p className="text-sm font-medium text-gray-600">Paid</p>
-                      <p className="text-2xl font-bold text-green-600">
+                      <p className="text-sm font-medium text-[var(--text-secondary)]">Paid</p>
+                      <p className="text-2xl font-bold text-[var(--accent-success)]">
                         {formatCurrency(summary.amounts.paid_amount)}
                       </p>
                     </div>
-                    <div className="w-12 h-12 bg-green-100 rounded-lg flex items-center justify-center">
-                      <CheckCircle className="w-6 h-6 text-green-600" />
+                    <div className="w-12 h-12 bg-[var(--accent-success)]/20 rounded-xl flex items-center justify-center">
+                      <CheckCircle className="w-6 h-6 text-[var(--accent-success)]" />
                     </div>
                   </div>
                 </CardContent>
@@ -406,13 +406,13 @@ const Billing = () => {
                 <CardContent className="p-6">
                   <div className="flex items-center justify-between">
                     <div>
-                      <p className="text-sm font-medium text-gray-600">Overdue</p>
-                      <p className="text-2xl font-bold text-red-600">
+                      <p className="text-sm font-medium text-[var(--text-secondary)]">Overdue</p>
+                      <p className="text-2xl font-bold text-[var(--accent-error)]">
                         {formatCurrency(summary.amounts.overdue_amount)}
                       </p>
                     </div>
-                    <div className="w-12 h-12 bg-red-100 rounded-lg flex items-center justify-center">
-                      <AlertTriangle className="w-6 h-6 text-red-600" />
+                    <div className="w-12 h-12 bg-[var(--accent-error)]/20 rounded-xl flex items-center justify-center">
+                      <AlertTriangle className="w-6 h-6 text-[var(--accent-error)]" />
                     </div>
                   </div>
                 </CardContent>
@@ -429,20 +429,20 @@ const Billing = () => {
             <CardContent>
               {summary?.recent_invoices?.length === 0 ? (
                 <div className="text-center py-8">
-                  <Receipt className="h-12 w-12 text-gray-400 mx-auto mb-4" />
-                  <p className="text-gray-500">No invoices yet</p>
+                  <Receipt className="h-12 w-12 text-[var(--text-tertiary)] mx-auto mb-4" />
+                  <p className="text-[var(--text-secondary)]">No invoices yet</p>
                 </div>
               ) : (
                 <div className="space-y-4">
                   {summary?.recent_invoices?.map((invoice) => (
-                    <div key={invoice.id} className="flex items-center justify-between p-4 border rounded-lg">
+                    <div key={invoice.id} className="flex items-center justify-between p-4 border border-[var(--glass-border)] rounded-xl bg-[var(--glass-bg)] backdrop-blur-sm">
                       <div className="flex items-center space-x-4">
-                        <div className="w-10 h-10 bg-[#4bbf39]/10 rounded-lg flex items-center justify-center">
-                          <Receipt className="w-5 h-5 text-[#4bbf39]" />
+                        <div className="w-10 h-10 bg-[var(--brand-primary)]/10 rounded-xl flex items-center justify-center">
+                          <Receipt className="w-5 h-5 text-[var(--brand-primary)]" />
                         </div>
                         <div>
-                          <p className="font-medium">{invoice.invoice_number}</p>
-                          <p className="text-sm text-gray-500">{invoice.project_title}</p>
+                          <p className="font-medium text-[var(--text-primary)]">{invoice.invoice_number}</p>
+                          <p className="text-sm text-[var(--text-secondary)]">{invoice.project_title}</p>
                         </div>
                       </div>
                       <div className="text-right">
@@ -482,14 +482,14 @@ const Billing = () => {
           {/* Invoices List */}
           {isLoading && filteredInvoices.length === 0 ? (
             <div className="flex items-center justify-center py-12">
-              <Loader2 className="h-8 w-8 animate-spin text-[#4bbf39]" />
+              <Loader2 className="h-8 w-8 animate-spin text-[var(--brand-primary)]" />
             </div>
           ) : filteredInvoices.length === 0 ? (
             <Card>
               <CardContent className="flex flex-col items-center justify-center py-12">
-                <Receipt className="h-12 w-12 text-gray-400 mb-4" />
-                <h3 className="text-lg font-medium text-gray-900 mb-2">No invoices found</h3>
-                <p className="text-gray-500 text-center mb-4">
+                <Receipt className="h-12 w-12 text-[var(--text-tertiary)] mb-4" />
+                <h3 className="text-lg font-medium text-[var(--text-primary)] mb-2">No invoices found</h3>
+                <p className="text-[var(--text-secondary)] text-center mb-4">
                   {statusFilter 
                     ? `No invoices with status "${statusFilter}".`
                     : "No invoices have been created yet."
@@ -498,7 +498,7 @@ const Billing = () => {
                 {isAdmin && !statusFilter && (
                   <Button 
                     onClick={() => setIsCreateDialogOpen(true)}
-                    className="bg-gradient-to-r from-[#4bbf39] to-[#39bfb0] hover:from-[#3da832] hover:to-[#2da89a]"
+                    variant="glass-primary"
                   >
                     <Plus className="w-4 h-4 mr-2" />
                     Create First Invoice
@@ -518,8 +518,8 @@ const Billing = () => {
                         </div>
                         <div>
                           <h4 className="font-semibold text-lg">{invoice.invoice_number}</h4>
-                          <p className="text-gray-600">{invoice.project_title}</p>
-                          <p className="text-sm text-gray-500">{invoice.company_name}</p>
+                          <p className="text-[var(--text-secondary)]">{invoice.project_title}</p>
+                          <p className="text-sm text-[var(--text-tertiary)]">{invoice.company_name}</p>
                         </div>
                       </div>
                       
@@ -540,7 +540,7 @@ const Billing = () => {
                             </span>
                           )}
                         </div>
-                        <p className="text-sm text-gray-500 mt-1">
+                        <p className="text-sm text-[var(--text-tertiary)] mt-1">
                           Due: {formatDate(invoice.due_date)}
                         </p>
                       </div>
@@ -563,8 +563,8 @@ const Billing = () => {
                         {invoice.status === 'pending' && (
                           <Button 
                             size="sm"
+                            variant="glass-primary"
                             onClick={() => handleMarkPaid(invoice)}
-                            className="bg-gradient-to-r from-[#4bbf39] to-[#39bfb0] hover:from-[#3da832] hover:to-[#2da89a]"
                           >
                             <CreditCard className="w-4 h-4 mr-2" />
                             Mark Paid
@@ -584,8 +584,8 @@ const Billing = () => {
             <Card>
               <CardContent className="flex flex-col items-center justify-center py-12">
                 <CheckCircle className="h-12 w-12 text-green-400 mb-4" />
-                <h3 className="text-lg font-medium text-gray-900 mb-2">No overdue invoices</h3>
-                <p className="text-gray-500 text-center">
+                <h3 className="text-lg font-medium text-[var(--text-primary)] mb-2">No overdue invoices</h3>
+                <p className="text-[var(--text-secondary)] text-center">
                   All invoices are up to date. Great job!
                 </p>
               </CardContent>
@@ -609,7 +609,7 @@ const Billing = () => {
                         </div>
                         <div>
                           <h4 className="font-semibold text-lg">{invoice.invoice_number}</h4>
-                          <p className="text-gray-600">{invoice.project_title}</p>
+                          <p className="text-[var(--text-secondary)]">{invoice.project_title}</p>
                           <p className="text-sm text-red-600 font-medium">
                             {invoice.days_overdue} days overdue
                           </p>
@@ -620,14 +620,15 @@ const Billing = () => {
                         <p className="text-2xl font-bold text-red-600">
                           {formatCurrency(invoice.total_amount)}
                         </p>
-                        <p className="text-sm text-gray-500">
+                        <p className="text-sm text-[var(--text-tertiary)]">
                           Due: {formatDate(invoice.due_date)}
                         </p>
                         {isAdmin && (
                           <Button 
                             size="sm"
+                            variant="glass-primary"
                             onClick={() => handleMarkPaid(invoice)}
-                            className="mt-2 bg-gradient-to-r from-[#4bbf39] to-[#39bfb0] hover:from-[#3da832] hover:to-[#2da89a]"
+                            className="mt-2"
                           >
                             <CreditCard className="w-4 h-4 mr-2" />
                             Mark Paid
@@ -754,8 +755,8 @@ const Billing = () => {
               </Button>
               <Button 
                 type="submit" 
+                variant="glass-primary"
                 disabled={isLoading}
-                className="bg-gradient-to-r from-[#4bbf39] to-[#39bfb0] hover:from-[#3da832] hover:to-[#2da89a]"
               >
                 {isLoading ? (
                   <>

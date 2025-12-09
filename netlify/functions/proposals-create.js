@@ -1,17 +1,19 @@
 // netlify/functions/proposals-create.js
+// Migrated to Supabase from Neon/Drizzle
 import jwt from 'jsonwebtoken'
-import { neon } from '@neondatabase/serverless'
-import { drizzle } from 'drizzle-orm/neon-http'
-import { eq } from 'drizzle-orm'
-import * as schema from '../../src/db/schema.js'
+import { createClient } from '@supabase/supabase-js'
 import { Resend } from 'resend'
 
 const COOKIE_NAME = process.env.SESSION_COOKIE_NAME || 'um_session'
 const JWT_SECRET = process.env.AUTH_JWT_SECRET
-const DATABASE_URL = process.env.DATABASE_URL
 const RESEND_API_KEY = process.env.RESEND_API_KEY
-const RESEND_FROM_EMAIL = process.env.RESEND_FROM_EMAIL || 'portal@uptrademedia.com'
-const PORTAL_URL = process.env.URL || 'http://localhost:8888'
+const RESEND_FROM_EMAIL = process.env.RESEND_FROM_EMAIL || 'portal@send.uptrademedia.com'
+const PORTAL_URL = process.env.URL || 'https://portal.uptrademedia.com'
+
+const supabase = createClient(
+  process.env.SUPABASE_URL,
+  process.env.SUPABASE_SERVICE_ROLE_KEY
+)
 
 // Generate URL-safe slug from title
 function generateSlug(title) {
@@ -23,7 +25,6 @@ function generateSlug(title) {
 }
 
 export async function handler(event) {
-  // CORS headers
   const headers = {
     'Access-Control-Allow-Origin': '*',
     'Access-Control-Allow-Headers': 'Content-Type',
@@ -43,7 +44,6 @@ export async function handler(event) {
     }
   }
 
-  // Verify authentication
   if (!JWT_SECRET) {
     return {
       statusCode: 500,
@@ -86,7 +86,8 @@ export async function handler(event) {
       status = 'draft',
       totalAmount,
       validUntil,
-      slug
+      slug,
+      lineItems
     } = body
 
     // Validate required fields
@@ -98,24 +99,14 @@ export async function handler(event) {
       }
     }
 
-    // Connect to database
-    if (!DATABASE_URL) {
-      return {
-        statusCode: 500,
-        headers,
-        body: JSON.stringify({ error: 'Database not configured' })
-      }
-    }
-
-    const sql = neon(DATABASE_URL)
-    const db = drizzle(sql, { schema })
-
     // Verify contact exists
-    const contact = await db.query.contacts.findFirst({
-      where: eq(schema.contacts.id, contactId)
-    })
+    const { data: contact, error: contactError } = await supabase
+      .from('contacts')
+      .select('id, email, name, account_setup, role')
+      .eq('id', contactId)
+      .single()
 
-    if (!contact) {
+    if (contactError || !contact) {
       return {
         statusCode: 404,
         headers,
@@ -125,11 +116,13 @@ export async function handler(event) {
 
     // If projectId provided, verify it exists
     if (projectId) {
-      const project = await db.query.projects.findFirst({
-        where: eq(schema.projects.id, projectId)
-      })
+      const { data: project, error: projectError } = await supabase
+        .from('projects')
+        .select('id')
+        .eq('id', projectId)
+        .single()
 
-      if (!project) {
+      if (projectError || !project) {
         return {
           statusCode: 404,
           headers,
@@ -142,66 +135,85 @@ export async function handler(event) {
     let proposalSlug = slug || generateSlug(title)
     
     // Ensure slug is unique
-    const existingProposal = await db.query.proposals.findFirst({
-      where: eq(schema.proposals.slug, proposalSlug)
-    })
+    const { data: existingProposal } = await supabase
+      .from('proposals')
+      .select('id')
+      .eq('slug', proposalSlug)
+      .single()
 
     if (existingProposal) {
-      // Add timestamp to make it unique
       proposalSlug = `${proposalSlug}-${Date.now()}`
     }
 
     // Create proposal
-    const [proposal] = await db.insert(schema.proposals).values({
-      contactId,
-      projectId: projectId || null,
-      slug: proposalSlug,
-      title,
-      description: description || null,
-      mdxContent,
-      status,
-      totalAmount: totalAmount ? String(totalAmount) : null,
-      validUntil: validUntil ? new Date(validUntil) : null
-    }).returning()
-
-    // Log activity: proposal created
-    await db.insert(schema.proposalActivity).values({
-      proposalId: proposal.id,
-      action: 'created',
-      performedBy: payload.userId,
-      metadata: JSON.stringify({
+    const { data: proposal, error: createError } = await supabase
+      .from('proposals')
+      .insert({
+        contact_id: contactId,
+        project_id: projectId || null,
+        slug: proposalSlug,
+        title,
+        description: description || null,
+        mdx_content: mdxContent,
         status,
-        timestamp: new Date().toISOString()
+        total_amount: totalAmount ? String(totalAmount) : null,
+        valid_until: validUntil || null
       })
-    }).catch(err => console.error('Error logging proposal creation:', err))
+      .select()
+      .single()
+
+    if (createError) {
+      console.error('Create proposal error:', createError)
+      throw createError
+    }
+
+    // Insert line items if provided
+    if (lineItems && Array.isArray(lineItems) && lineItems.length > 0) {
+      const lineItemsToInsert = lineItems.map((item, index) => ({
+        proposal_id: proposal.id,
+        service_type: item.serviceType || 'custom',
+        description: item.description,
+        quantity: item.quantity || 1,
+        unit_price: item.unitPrice,
+        total: (item.quantity || 1) * item.unitPrice,
+        sort_order: index
+      }))
+
+      const { error: lineItemsError } = await supabase
+        .from('proposal_line_items')
+        .insert(lineItemsToInsert)
+
+      if (lineItemsError) {
+        console.error('Line items error:', lineItemsError)
+        // Non-fatal, continue
+      }
+    }
 
     // Format response
     const formattedProposal = {
       id: proposal.id,
-      contactId: proposal.contactId,
-      projectId: proposal.projectId,
+      contactId: proposal.contact_id,
+      projectId: proposal.project_id,
       slug: proposal.slug,
       title: proposal.title,
-      mdxContent: proposal.mdxContent,
+      description: proposal.description,
+      mdxContent: proposal.mdx_content,
       status: proposal.status,
-      totalAmount: proposal.totalAmount ? parseFloat(proposal.totalAmount) : null,
-      validUntil: proposal.validUntil,
-      signedAt: proposal.signedAt,
-      adminSignedAt: proposal.adminSignedAt,
-      fullyExecutedAt: proposal.fullyExecutedAt,
-      createdAt: proposal.createdAt,
-      updatedAt: proposal.updatedAt
+      totalAmount: proposal.total_amount ? parseFloat(proposal.total_amount) : null,
+      validUntil: proposal.valid_until,
+      signedAt: proposal.signed_at,
+      adminSignedAt: proposal.admin_signed_at,
+      fullyExecutedAt: proposal.fully_executed_at,
+      createdAt: proposal.created_at,
+      updatedAt: proposal.updated_at
     }
 
-    // Send email notification to client
+    // Send email notification if not draft
     if (RESEND_API_KEY && status !== 'draft') {
       try {
         const resend = new Resend(RESEND_API_KEY)
+        const needsSetup = contact.account_setup === false || contact.account_setup === 'false'
         
-        // Check if client has completed account setup
-        const needsSetup = contact.accountSetup === 'false'
-        
-        // Generate appropriate token (24 hour expiration)
         let authToken, emailSubject, emailBody
         
         if (needsSetup) {
@@ -225,149 +237,42 @@ export async function handler(event) {
             <head>
               <meta charset="utf-8">
               <meta name="viewport" content="width=device-width, initial-scale=1.0">
-              <style>
-                body {
-                  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
-                  line-height: 1.6;
-                  color: #333;
-                  margin: 0;
-                  padding: 0;
-                  background-color: #f4f4f4;
-                }
-                .container {
-                  max-width: 600px;
-                  margin: 40px auto;
-                  background: white;
-                  border-radius: 8px;
-                  overflow: hidden;
-                  box-shadow: 0 2px 8px rgba(0,0,0,0.1);
-                }
-                .header {
-                  background: linear-gradient(135deg, #4bbf39 0%, #2d7a24 100%);
-                  color: white;
-                  padding: 40px 30px;
-                  text-align: center;
-                }
-                .header h1 {
-                  margin: 0;
-                  font-size: 28px;
-                  font-weight: 600;
-                }
-                .content {
-                  padding: 40px 30px;
-                }
-                .content p {
-                  margin: 0 0 20px;
-                  font-size: 16px;
-                }
-                .proposal-card {
-                  background: #f8f9fa;
-                  border-left: 4px solid #4bbf39;
-                  padding: 20px;
-                  border-radius: 6px;
-                  margin: 24px 0;
-                }
-                .proposal-card h2 {
-                  margin: 0 0 12px;
-                  font-size: 20px;
-                  color: #2d7a24;
-                }
-                .proposal-card .detail {
-                  margin: 8px 0;
-                  font-size: 14px;
-                  color: #555;
-                }
-                .cta-button {
-                  display: inline-block;
-                  background: #4bbf39;
-                  color: white !important;
-                  text-decoration: none;
-                  padding: 14px 32px;
-                  border-radius: 6px;
-                  font-weight: 600;
-                  font-size: 16px;
-                  margin: 20px 0;
-                  transition: background 0.3s;
-                }
-                .cta-button:hover {
-                  background: #3da930;
-                }
-                .setup-notice {
-                  background: #fff8e6;
-                  border-left: 4px solid #ffc107;
-                  padding: 16px 20px;
-                  margin: 20px 0;
-                  border-radius: 4px;
-                }
-                .setup-notice p {
-                  margin: 0;
-                  font-size: 14px;
-                  color: #856404;
-                }
-                .expiry-notice {
-                  background: #fff3cd;
-                  border: 1px solid #ffc107;
-                  padding: 12px 16px;
-                  border-radius: 4px;
-                  margin: 20px 0;
-                  font-size: 14px;
-                  color: #856404;
-                }
-                .footer {
-                  background: #f8f9fa;
-                  padding: 24px 30px;
-                  text-align: center;
-                  font-size: 14px;
-                  color: #666;
-                  border-top: 1px solid #e0e0e0;
-                }
-              </style>
             </head>
-            <body>
-              <div class="container">
-                <div class="header">
-                  <h1>📋 New Proposal Ready!</h1>
+            <body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Arial, sans-serif; margin: 0; padding: 0; background: #f4f4f4;">
+              <div style="max-width: 600px; margin: 40px auto; background: white; border-radius: 8px; overflow: hidden; box-shadow: 0 2px 8px rgba(0,0,0,0.1);">
+                <div style="background: linear-gradient(135deg, #4bbf39 0%, #2d7a24 100%); color: white; padding: 40px 30px; text-align: center;">
+                  <h1 style="margin: 0; font-size: 28px;">📋 New Proposal Ready!</h1>
                 </div>
                 
-                <div class="content">
-                  <p>Hi ${contact.name},</p>
+                <div style="padding: 40px 30px;">
+                  <p style="margin: 0 0 20px; font-size: 16px;">Hi ${contact.name},</p>
+                  <p style="margin: 0 0 20px; font-size: 16px;">Great news! We've prepared a new proposal for you:</p>
                   
-                  <p>Great news! We've prepared a new proposal for you:</p>
-                  
-                  <div class="proposal-card">
-                    <h2>${proposal.title}</h2>
-                    ${proposal.totalAmount ? `<div class="detail"><strong>Total Investment:</strong> $${parseFloat(proposal.totalAmount).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>` : ''}
-                    ${proposal.validUntil ? `<div class="detail"><strong>Valid Until:</strong> ${new Date(proposal.validUntil).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}</div>` : ''}
+                  <div style="background: #f8f9fa; border-left: 4px solid #4bbf39; padding: 20px; border-radius: 6px; margin: 24px 0;">
+                    <h2 style="margin: 0 0 12px; font-size: 20px; color: #2d7a24;">${proposal.title}</h2>
+                    ${proposal.total_amount ? `<div style="margin: 8px 0; font-size: 14px; color: #555;"><strong>Total Investment:</strong> $${parseFloat(proposal.total_amount).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>` : ''}
+                    ${proposal.valid_until ? `<div style="margin: 8px 0; font-size: 14px; color: #555;"><strong>Valid Until:</strong> ${new Date(proposal.valid_until).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}</div>` : ''}
                   </div>
                   
-                  <div class="setup-notice">
-                    <p><strong>🎯 First Time Here?</strong> You'll need to set up your portal account to view this proposal. It only takes a minute!</p>
+                  <div style="background: #fff8e6; border-left: 4px solid #ffc107; padding: 16px 20px; margin: 20px 0; border-radius: 4px;">
+                    <p style="margin: 0; font-size: 14px; color: #856404;"><strong>🎯 First Time Here?</strong> You'll need to set up your portal account to view this proposal.</p>
                   </div>
                   
                   <div style="text-align: center;">
-                    <a href="${setupUrl}" class="cta-button">Set Up Account & View Proposal</a>
+                    <a href="${setupUrl}" style="display: inline-block; background: #4bbf39; color: white; text-decoration: none; padding: 14px 32px; border-radius: 6px; font-weight: 600; font-size: 16px; margin: 20px 0;">Set Up Account & View Proposal</a>
                   </div>
                   
-                  <div class="expiry-notice">
-                    ⏰ <strong>Important:</strong> This link expires in 24 hours. If it expires, contact us for a new link.
+                  <div style="background: #fff3cd; border: 1px solid #ffc107; padding: 12px 16px; border-radius: 4px; margin: 20px 0; font-size: 14px; color: #856404;">
+                    ⏰ <strong>Important:</strong> This link expires in 24 hours.
                   </div>
                   
-                  <p>Once you're set up, you can sign in anytime with your password or use "Sign in with Google" for quick access.</p>
-                  
-                  <p>Questions? Just reply to this email or give us a call.</p>
-                  
-                  <p style="margin-top: 30px;">
-                    <strong>The Uptrade Media Team</strong><br>
-                    <span style="color: #666; font-size: 14px;">Elevating Your Digital Presence</span>
+                  <p style="margin-top: 30px; font-size: 16px;">
+                    <strong>The Uptrade Media Team</strong>
                   </p>
                 </div>
                 
-                <div class="footer">
-                  <p>© ${new Date().getFullYear()} Uptrade Media. All rights reserved.</p>
-                  <p style="margin-top: 8px;">
-                    <a href="${PORTAL_URL}" style="color: #4bbf39; text-decoration: none;">Visit Portal</a> • 
-                    <a href="https://uptrademedia.com" style="color: #4bbf39; text-decoration: none;">Website</a>
-                  </p>
+                <div style="background: #f8f9fa; padding: 24px 30px; text-align: center; font-size: 14px; color: #666; border-top: 1px solid #e0e0e0;">
+                  <p style="margin: 0;">© ${new Date().getFullYear()} Uptrade Media. All rights reserved.</p>
                 </div>
               </div>
             </body>
@@ -394,133 +299,38 @@ export async function handler(event) {
             <head>
               <meta charset="utf-8">
               <meta name="viewport" content="width=device-width, initial-scale=1.0">
-              <style>
-                body {
-                  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
-                  line-height: 1.6;
-                  color: #333;
-                  margin: 0;
-                  padding: 0;
-                  background-color: #f4f4f4;
-                }
-                .container {
-                  max-width: 600px;
-                  margin: 40px auto;
-                  background: white;
-                  border-radius: 8px;
-                  overflow: hidden;
-                  box-shadow: 0 2px 8px rgba(0,0,0,0.1);
-                }
-                .header {
-                  background: linear-gradient(135deg, #4bbf39 0%, #2d7a24 100%);
-                  color: white;
-                  padding: 40px 30px;
-                  text-align: center;
-                }
-                .header h1 {
-                  margin: 0;
-                  font-size: 28px;
-                  font-weight: 600;
-                }
-                .content {
-                  padding: 40px 30px;
-                }
-                .content p {
-                  margin: 0 0 20px;
-                  font-size: 16px;
-                }
-                .proposal-card {
-                  background: #f8f9fa;
-                  border-left: 4px solid #4bbf39;
-                  padding: 20px;
-                  border-radius: 6px;
-                  margin: 24px 0;
-                }
-                .proposal-card h2 {
-                  margin: 0 0 12px;
-                  font-size: 20px;
-                  color: #2d7a24;
-                }
-                .proposal-card .detail {
-                  margin: 8px 0;
-                  font-size: 14px;
-                  color: #555;
-                }
-                .cta-button {
-                  display: inline-block;
-                  background: #4bbf39;
-                  color: white !important;
-                  text-decoration: none;
-                  padding: 14px 32px;
-                  border-radius: 6px;
-                  font-weight: 600;
-                  font-size: 16px;
-                  margin: 20px 0;
-                  transition: background 0.3s;
-                }
-                .cta-button:hover {
-                  background: #3da930;
-                }
-                .expiry-notice {
-                  background: #fff3cd;
-                  border: 1px solid #ffc107;
-                  padding: 12px 16px;
-                  border-radius: 4px;
-                  margin: 20px 0;
-                  font-size: 14px;
-                  color: #856404;
-                }
-                .footer {
-                  background: #f8f9fa;
-                  padding: 24px 30px;
-                  text-align: center;
-                  font-size: 14px;
-                  color: #666;
-                  border-top: 1px solid #e0e0e0;
-                }
-              </style>
             </head>
-            <body>
-              <div class="container">
-                <div class="header">
-                  <h1>📋 New Proposal Ready!</h1>
+            <body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Arial, sans-serif; margin: 0; padding: 0; background: #f4f4f4;">
+              <div style="max-width: 600px; margin: 40px auto; background: white; border-radius: 8px; overflow: hidden; box-shadow: 0 2px 8px rgba(0,0,0,0.1);">
+                <div style="background: linear-gradient(135deg, #4bbf39 0%, #2d7a24 100%); color: white; padding: 40px 30px; text-align: center;">
+                  <h1 style="margin: 0; font-size: 28px;">📋 New Proposal Ready!</h1>
                 </div>
                 
-                <div class="content">
-                  <p>Hi ${contact.name},</p>
+                <div style="padding: 40px 30px;">
+                  <p style="margin: 0 0 20px; font-size: 16px;">Hi ${contact.name},</p>
+                  <p style="margin: 0 0 20px; font-size: 16px;">We've prepared a new proposal for your review:</p>
                   
-                  <p>We've prepared a new proposal for your review:</p>
-                  
-                  <div class="proposal-card">
-                    <h2>${proposal.title}</h2>
-                    ${proposal.totalAmount ? `<div class="detail"><strong>Total Investment:</strong> $${parseFloat(proposal.totalAmount).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>` : ''}
-                    ${proposal.validUntil ? `<div class="detail"><strong>Valid Until:</strong> ${new Date(proposal.validUntil).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}</div>` : ''}
+                  <div style="background: #f8f9fa; border-left: 4px solid #4bbf39; padding: 20px; border-radius: 6px; margin: 24px 0;">
+                    <h2 style="margin: 0 0 12px; font-size: 20px; color: #2d7a24;">${proposal.title}</h2>
+                    ${proposal.total_amount ? `<div style="margin: 8px 0; font-size: 14px; color: #555;"><strong>Total Investment:</strong> $${parseFloat(proposal.total_amount).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>` : ''}
+                    ${proposal.valid_until ? `<div style="margin: 8px 0; font-size: 14px; color: #555;"><strong>Valid Until:</strong> ${new Date(proposal.valid_until).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}</div>` : ''}
                   </div>
                   
                   <div style="text-align: center;">
-                    <a href="${magicUrl}" class="cta-button">View Proposal (Quick Login)</a>
+                    <a href="${magicUrl}" style="display: inline-block; background: #4bbf39; color: white; text-decoration: none; padding: 14px 32px; border-radius: 6px; font-weight: 600; font-size: 16px; margin: 20px 0;">View Proposal (Quick Login)</a>
                   </div>
                   
-                  <div class="expiry-notice">
-                    ⏰ <strong>Quick Login Link:</strong> This one-click login link expires in 24 hours for security. You can always sign in normally at <a href="${PORTAL_URL}/login">${PORTAL_URL}/login</a>
+                  <div style="background: #fff3cd; border: 1px solid #ffc107; padding: 12px 16px; border-radius: 4px; margin: 20px 0; font-size: 14px; color: #856404;">
+                    ⏰ This one-click login link expires in 24 hours. You can always sign in at <a href="${PORTAL_URL}/login">${PORTAL_URL}/login</a>
                   </div>
                   
-                  <p>The proposal includes detailed information about the project scope, timeline, and investment. Take your time reviewing it, and let us know if you have any questions.</p>
-                  
-                  <p>We're excited to work with you on this project!</p>
-                  
-                  <p style="margin-top: 30px;">
-                    <strong>The Uptrade Media Team</strong><br>
-                    <span style="color: #666; font-size: 14px;">Elevating Your Digital Presence</span>
+                  <p style="margin-top: 30px; font-size: 16px;">
+                    <strong>The Uptrade Media Team</strong>
                   </p>
                 </div>
                 
-                <div class="footer">
-                  <p>© ${new Date().getFullYear()} Uptrade Media. All rights reserved.</p>
-                  <p style="margin-top: 8px;">
-                    <a href="${PORTAL_URL}" style="color: #4bbf39; text-decoration: none;">Visit Portal</a> • 
-                    <a href="https://uptrademedia.com" style="color: #4bbf39; text-decoration: none;">Website</a>
-                  </p>
+                <div style="background: #f8f9fa; padding: 24px 30px; text-align: center; font-size: 14px; color: #666; border-top: 1px solid #e0e0e0;">
+                  <p style="margin: 0;">© ${new Date().getFullYear()} Uptrade Media. All rights reserved.</p>
                 </div>
               </div>
             </body>
@@ -535,10 +345,9 @@ export async function handler(event) {
           html: emailBody
         })
 
-        console.log(`Proposal notification sent to ${contact.email} (accountSetup: ${contact.accountSetup})`)
+        console.log(`Proposal notification sent to ${contact.email}`)
       } catch (emailError) {
-        console.error('Failed to send proposal notification email:', emailError)
-        // Don't fail the request if email fails
+        console.error('Failed to send proposal notification:', emailError)
       }
     }
 

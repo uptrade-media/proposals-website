@@ -5,12 +5,13 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { CheckCircle, X, Pen, Loader2, Mail } from 'lucide-react'
 
-export default function ProposalSignature({ proposalId, proposalTitle, clientName, clientEmail }) {
+export default function ProposalSignature({ proposalId, proposalTitle, clientName, clientEmail, onSignatureStarted }) {
   const sigPad = useRef(null)
   const [signed, setSigned] = useState(false)
   const [signing, setSigning] = useState(false)
   const [error, setError] = useState('')
   const [isEmpty, setIsEmpty] = useState(true)
+  const [hasTriggeredStart, setHasTriggeredStart] = useState(false)
 
   // Check if proposal is already signed on mount
   useEffect(() => {
@@ -44,6 +45,12 @@ export default function ProposalSignature({ proposalId, proposalTitle, clientNam
   const handleBegin = () => {
     setIsEmpty(false)
     setError('')
+    
+    // Track signature started (only once)
+    if (!hasTriggeredStart && onSignatureStarted) {
+      setHasTriggeredStart(true)
+      onSignatureStarted()
+    }
   }
 
   const handleSign = async () => {

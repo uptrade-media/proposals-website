@@ -5,7 +5,7 @@ import LogoPng from '../assets/logo.png'
 
 const Navigation = () => {
   return (
-    <header className="bg-white shadow-sm border-b sticky top-0 z-50">
+    <header className="bg-[var(--glass-bg)] backdrop-blur-xl border-b border-[var(--glass-border)] sticky top-0 z-50 shadow-[var(--shadow-sm)]">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex justify-between items-center py-4">
           <div className="flex items-center space-x-8">
@@ -25,7 +25,7 @@ const Navigation = () => {
               <Button
                 asChild
                 aria-label="Contact"
-                className="relative isolate overflow-hidden rounded-md bg-gradient-to-r from-[#4bbf39] to-[#39bfb0] text-white shadow-lg transition-shadow duration-300 group-hover:shadow-2xl transform-gpu [backface-visibility:hidden] focus-visible:ring-2 focus-visible:ring-[#4bbf39]"
+                variant="glass-primary"
               >
                 <a href="https://www.uptrademedia.com/contact">Contact</a>
               </Button>

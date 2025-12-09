@@ -41,19 +41,20 @@ export function DashboardEmptyState({
   const IconComponent = Icon || defaultIcons[type] || defaultIcons.default
 
   return (
-    <Card className="border-2 border-dashed bg-gradient-to-br from-gray-50 to-gray-100">
+    <Card className="border-2 border-dashed border-[var(--glass-border)] bg-[var(--glass-bg)] backdrop-blur-xl">
       <CardContent className="flex flex-col items-center justify-center py-12 text-center">
-        <div className="mb-4 p-3 rounded-full bg-gray-200">
-          <IconComponent className="w-6 h-6 text-gray-600" />
+        <div className="mb-4 p-3 rounded-full bg-[var(--surface-tertiary)]">
+          <IconComponent className="w-6 h-6 text-[var(--text-secondary)]" />
         </div>
         
-        <h3 className="text-lg font-semibold text-gray-900 mb-2">{title}</h3>
-        <p className="text-sm text-gray-600 mb-6 max-w-sm">{description}</p>
+        <h3 className="text-lg font-semibold text-[var(--text-primary)] mb-2">{title}</h3>
+        <p className="text-sm text-[var(--text-secondary)] mb-6 max-w-sm">{description}</p>
 
         {actionLabel && (
           <Button 
             onClick={onAction}
-            className="mb-6 bg-[#4bbf39] hover:bg-[#39bfb0]"
+            variant="glass-primary"
+            className="mb-6"
           >
             {actionLabel}
             <ArrowRight className="w-4 h-4 ml-2" />
@@ -61,12 +62,12 @@ export function DashboardEmptyState({
         )}
 
         {suggestions.length > 0 && (
-          <div className="border-t pt-6 w-full">
-            <div className="flex items-center justify-center text-sm text-gray-600 mb-3">
+          <div className="border-t border-[var(--glass-border)] pt-6 w-full">
+            <div className="flex items-center justify-center text-sm text-[var(--text-secondary)] mb-3">
               <Lightbulb className="w-4 h-4 mr-2" />
               <span className="font-medium">Suggestions:</span>
             </div>
-            <ul className="text-sm text-gray-600 space-y-1">
+            <ul className="text-sm text-[var(--text-secondary)] space-y-1">
               {suggestions.map((suggestion, i) => (
                 <li key={i}>• {suggestion}</li>
               ))}

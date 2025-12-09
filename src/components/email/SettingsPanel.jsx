@@ -23,7 +23,7 @@ export default function SettingsPanel() {
               </div>
               <div>
                 <Label htmlFor="from-email">From Email</Label>
-                <Input id="from-email" placeholder="portal@uptrademedia.com" type="email" />
+                <Input id="from-email" placeholder="portal@send.uptrademedia.com" type="email" />
               </div>
               <div className="col-span-2">
                 <Label htmlFor="reply-to">Reply-To Email</Label>

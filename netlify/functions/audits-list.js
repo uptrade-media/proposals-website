@@ -1,19 +1,11 @@
 // netlify/functions/audits-list.js
-import jwt from 'jsonwebtoken'
-import { neon } from '@neondatabase/serverless'
-import { drizzle } from 'drizzle-orm/neon-http'
-import { desc, eq } from 'drizzle-orm'
-import * as schema from '../../src/db/schema.js'
-
-const COOKIE_NAME = process.env.SESSION_COOKIE_NAME || 'um_session'
-const JWT_SECRET = process.env.AUTH_JWT_SECRET
-const DATABASE_URL = process.env.DATABASE_URL
+import { createSupabaseAdmin, getAuthenticatedUser } from './utils/supabase.js'
 
 export async function handler(event) {
   // CORS headers
   const headers = {
     'Access-Control-Allow-Origin': '*',
-    'Access-Control-Allow-Headers': 'Content-Type',
+    'Access-Control-Allow-Headers': 'Content-Type, Authorization',
     'Access-Control-Allow-Methods': 'GET, OPTIONS',
     'Content-Type': 'application/json'
   }
@@ -30,86 +22,127 @@ export async function handler(event) {
     }
   }
 
-  // Verify authentication
-  if (!JWT_SECRET) {
-    return {
-      statusCode: 500,
-      headers,
-      body: JSON.stringify({ error: 'Server not configured' })
-    }
-  }
-
-  const rawCookie = event.headers.cookie || ''
-  const token = rawCookie.split('; ').find(c => c.startsWith(`${COOKIE_NAME}=`))?.split('=')[1]
-  
-  if (!token) {
-    return {
-      statusCode: 401,
-      headers,
-      body: JSON.stringify({ error: 'Not authenticated' })
-    }
-  }
-
   try {
-    const payload = jwt.verify(token, JWT_SECRET)
-    const userId = payload.userId || payload.sub
-
-    if (!userId) {
+    // Get authenticated user via Supabase
+    const { contact, error: authError } = await getAuthenticatedUser(event)
+    
+    if (authError || !contact) {
       return {
         statusCode: 401,
         headers,
-        body: JSON.stringify({ error: 'Invalid token' })
+        body: JSON.stringify({ error: 'Not authenticated' })
       }
     }
 
-    // Connect to database
-    if (!DATABASE_URL) {
-      return {
-        statusCode: 500,
-        headers,
-        body: JSON.stringify({ error: 'Database not configured' })
-      }
+    const supabase = createSupabaseAdmin()
+    const isAdmin = contact.role === 'admin'
+
+    let audits
+
+    if (isAdmin) {
+      // Admins see all audits with contact info
+      const { data, error } = await supabase
+        .from('audits')
+        .select(`
+          id,
+          target_url,
+          status,
+          performance_score,
+          seo_score,
+          accessibility_score,
+          best_practices_score,
+          created_at,
+          completed_at,
+          report_storage_path,
+          contact_id,
+          project_id,
+          device_type,
+          magic_token,
+          magic_token_expires,
+          contacts (
+            id,
+            name,
+            email,
+            company
+          )
+        `)
+        .order('created_at', { ascending: false })
+
+      if (error) throw error
+
+      // Transform to camelCase and flatten contact
+      audits = data.map(a => ({
+        id: a.id,
+        targetUrl: a.target_url,
+        status: a.status,
+        scores: {
+          performance: a.performance_score,
+          seo: a.seo_score,
+          accessibility: a.accessibility_score,
+          bestPractices: a.best_practices_score
+        },
+        createdAt: a.created_at,
+        completedAt: a.completed_at,
+        reportStoragePath: a.report_storage_path,
+        contactId: a.contact_id,
+        projectId: a.project_id,
+        deviceType: a.device_type,
+        magicToken: a.magic_token,
+        magicTokenExpiresAt: a.magic_token_expires,
+        contact: a.contacts ? {
+          id: a.contacts.id,
+          name: a.contacts.name,
+          email: a.contacts.email,
+          company: a.contacts.company
+        } : null
+      }))
+    } else {
+      // Regular users see only their audits
+      const { data, error } = await supabase
+        .from('audits')
+        .select(`
+          id,
+          target_url,
+          status,
+          performance_score,
+          seo_score,
+          accessibility_score,
+          best_practices_score,
+          created_at,
+          completed_at,
+          report_storage_path
+        `)
+        .eq('contact_id', contact.id)
+        .order('created_at', { ascending: false })
+
+      if (error) throw error
+
+      // Transform to camelCase
+      audits = data.map(a => ({
+        id: a.id,
+        targetUrl: a.target_url,
+        status: a.status,
+        scorePerformance: a.performance_score,
+        scoreSeo: a.seo_score,
+        scoreAccessibility: a.accessibility_score,
+        createdAt: a.created_at,
+        completedAt: a.completed_at,
+        reportStoragePath: a.report_storage_path
+      }))
     }
-
-    const sql = neon(DATABASE_URL)
-    const db = drizzle(sql, { schema })
-
-    // Fetch all audits for this user
-    const audits = await db
-      .select({
-        id: schema.audits.id,
-        targetUrl: schema.audits.targetUrl,
-        status: schema.audits.status,
-        scorePerformance: schema.audits.performanceScore,
-        scoreSeo: schema.audits.seoScore,
-        scoreAccessibility: schema.audits.accessibilityScore,
-        createdAt: schema.audits.createdAt,
-        completedAt: schema.audits.completedAt,
-        reportUrl: schema.audits.reportUrl
-      })
-      .from(schema.audits)
-      .where(eq(schema.audits.contactId, userId))
-      .orderBy(desc(schema.audits.createdAt))
 
     return {
       statusCode: 200,
       headers,
       body: JSON.stringify({
         audits,
-        count: audits.length
+        count: audits.length,
+        isAdmin
       })
     }
 
   } catch (error) {
     console.error('Error fetching audits:', error)
-    
-    if (error.name === 'JsonWebTokenError') {
-      return {
-        statusCode: 401,
-        headers,
-        body: JSON.stringify({ error: 'Invalid token' })
-      }
-    }
 
     return {
       statusCode: 500,

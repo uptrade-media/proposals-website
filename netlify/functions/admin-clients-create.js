@@ -10,7 +10,7 @@ const COOKIE_NAME = process.env.SESSION_COOKIE_NAME || 'um_session'
 const JWT_SECRET = process.env.AUTH_JWT_SECRET
 const DATABASE_URL = process.env.DATABASE_URL
 const RESEND_API_KEY = process.env.RESEND_API_KEY
-const RESEND_FROM_EMAIL = process.env.RESEND_FROM_EMAIL || 'portal@uptrademedia.com'
+const RESEND_FROM_EMAIL = process.env.RESEND_FROM_EMAIL || 'portal@send.uptrademedia.com'
 const PORTAL_URL = process.env.URL || 'http://localhost:8888'
 
 export async function handler(event) {

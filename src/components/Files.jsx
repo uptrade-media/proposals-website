@@ -182,13 +182,13 @@ const Files = () => {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold">Files</h1>
-          <p className="text-gray-600">Manage project files and documents</p>
+          <h1 className="text-2xl font-bold text-[var(--text-primary)]">Files</h1>
+          <p className="text-[var(--text-secondary)]">Manage project files and documents</p>
         </div>
         {canUpload && (
           <Dialog open={isUploadDialogOpen} onOpenChange={setIsUploadDialogOpen}>
             <DialogTrigger asChild>
-              <Button className="bg-gradient-to-r from-[#4bbf39] to-[#39bfb0] hover:from-[#3da832] hover:to-[#2da89a]">
+              <Button variant="glass-primary">
                 <Upload className="w-4 h-4 mr-2" />
                 Upload Files
               </Button>
@@ -233,14 +233,14 @@ const Files = () => {
                   className={`border-2 border-dashed rounded-lg p-6 text-center transition-colors ${
                     dragOver 
                       ? 'border-[#4bbf39] bg-[#4bbf39]/5' 
-                      : 'border-gray-300 hover:border-gray-400'
+                      : 'border-[var(--glass-border)] hover:border-[var(--text-tertiary)]'
                   }`}
                   onDragOver={handleDragOver}
                   onDragLeave={handleDragLeave}
                   onDrop={handleDrop}
                 >
-                  <Upload className="w-8 h-8 mx-auto mb-2 text-gray-400" />
-                  <p className="text-sm text-gray-600 mb-2">
+                  <Upload className="w-8 h-8 mx-auto mb-2 text-[var(--text-tertiary)]" />
+                  <p className="text-sm text-[var(--text-secondary)] mb-2">
                     Drag and drop files here, or click to select
                   </p>
                   <Input
@@ -262,9 +262,9 @@ const Files = () => {
                     <Label>Selected Files ({selectedFiles.length})</Label>
                     <div className="max-h-32 overflow-y-auto space-y-1">
                       {selectedFiles.map((file, index) => (
-                        <div key={index} className="flex items-center justify-between text-sm p-2 bg-gray-50 rounded">
+                        <div key={index} className="flex items-center justify-between text-sm p-2 bg-[var(--surface-secondary)] rounded">
                           <span className="truncate">{file.name}</span>
-                          <span className="text-gray-500">{formatFileSize(file.size)}</span>
+                          <span className="text-[var(--text-tertiary)]">{formatFileSize(file.size)}</span>
                         </div>
                       ))}
                     </div>
@@ -275,7 +275,7 @@ const Files = () => {
                   <div className="space-y-2">
                     <Label>Upload Progress</Label>
                     <Progress value={uploadProgress} className="w-full" />
-                    <p className="text-sm text-gray-600">{uploadProgress}% complete</p>
+                    <p className="text-sm text-[var(--text-secondary)]">{uploadProgress}% complete</p>
                   </div>
                 )}
                 
@@ -305,9 +305,9 @@ const Files = () => {
                     Cancel
                   </Button>
                   <Button 
+                    variant="glass-primary"
                     onClick={handleUpload}
                     disabled={isLoading || !selectedProject || selectedFiles.length === 0}
-                    className="bg-gradient-to-r from-[#4bbf39] to-[#39bfb0] hover:from-[#3da832] hover:to-[#2da89a]"
                   >
                     {isLoading ? (
                       <>
@@ -331,7 +331,7 @@ const Files = () => {
           <div className="flex flex-col md:flex-row gap-4">
             <div className="flex-1">
               <div className="relative">
-                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
+                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-[var(--text-tertiary)] w-4 h-4" />
                 <Input
                   placeholder="Search files..."
                   value={searchTerm}
@@ -443,7 +443,7 @@ const Files = () => {
                     {file.original_filename}
                   </h4>
                   
-                  <div className="text-xs text-gray-500 space-y-1">
+                  <div className="text-xs text-[var(--text-tertiary)] space-y-1">
                     <div>Size: {formatFileSize(file.file_size)}</div>
                     <div>Uploaded by: {file.uploader_name}</div>
                     <div>

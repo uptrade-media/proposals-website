@@ -1,16 +1,17 @@
 // netlify/functions/proposals-list.js
+// Migrated to Supabase from Neon/Drizzle
 import jwt from 'jsonwebtoken'
-import { neon } from '@neondatabase/serverless'
-import { drizzle } from 'drizzle-orm/neon-http'
-import { eq, desc, and } from 'drizzle-orm'
-import * as schema from '../../src/db/schema.js'
+import { createClient } from '@supabase/supabase-js'
 
 const COOKIE_NAME = process.env.SESSION_COOKIE_NAME || 'um_session'
 const JWT_SECRET = process.env.AUTH_JWT_SECRET
-const DATABASE_URL = process.env.DATABASE_URL
+
+const supabase = createClient(
+  process.env.SUPABASE_URL,
+  process.env.SUPABASE_SERVICE_ROLE_KEY
+)
 
 export async function handler(event) {
-  // CORS headers
   const headers = {
     'Access-Control-Allow-Origin': '*',
     'Access-Control-Allow-Headers': 'Content-Type',
@@ -30,7 +31,6 @@ export async function handler(event) {
     }
   }
 
-  // Verify authentication
   if (!JWT_SECRET) {
     return {
       statusCode: 500,
@@ -53,8 +53,8 @@ export async function handler(event) {
   try {
     const payload = jwt.verify(token, JWT_SECRET)
     
-    // Allow Google OAuth users and admins with role-based access
-    if (payload.type !== 'google' && payload.role !== 'admin') {
+    // Allow authenticated users with role-based access
+    if (!payload.userId && !payload.email) {
       return {
         statusCode: 403,
         headers,
@@ -64,104 +64,105 @@ export async function handler(event) {
 
     // Parse query parameters for filtering
     const queryParams = event.queryStringParameters || {}
-    const { projectId, status } = queryParams
+    const { projectId, status, contactId } = queryParams
 
-    // Connect to database
-    if (!DATABASE_URL) {
-      return {
-        statusCode: 500,
-        headers,
-        body: JSON.stringify({ error: 'Database not configured' })
-      }
-    }
+    // Build query
+    let query = supabase
+      .from('proposals')
+      .select(`
+        *,
+        contact:contacts!proposals_contact_id_fkey (
+          id,
+          name,
+          email,
+          company,
+          avatar
+        ),
+        project:projects!proposals_project_id_fkey (
+          id,
+          title,
+          status
+        ),
+        line_items:proposal_line_items (
+          id,
+          service_type,
+          description,
+          quantity,
+          unit_price,
+          total,
+          sort_order
+        )
+      `)
+      .order('created_at', { ascending: false })
 
-    const sql = neon(DATABASE_URL)
-    const db = drizzle(sql, { schema })
-
-    // Build where conditions
-    let whereConditions = []
-    
+    // Filter by user role
     if (payload.role !== 'admin') {
-      // Clients see only their proposals
-      whereConditions.push(eq(schema.proposals.contactId, payload.userId))
+      query = query.eq('contact_id', payload.userId)
+    } else if (contactId) {
+      // Admins can filter by specific contact
+      query = query.eq('contact_id', contactId)
     }
-    
+
     if (projectId) {
-      whereConditions.push(eq(schema.proposals.projectId, projectId))
+      query = query.eq('project_id', projectId)
     }
-    
+
     if (status) {
-      whereConditions.push(eq(schema.proposals.status, status))
+      query = query.eq('status', status)
     }
 
-    // Fetch proposals with activity
-    const proposals = await db.query.proposals.findMany({
-      where: whereConditions.length > 0 ? and(...whereConditions) : undefined,
-      orderBy: [desc(schema.proposals.createdAt)],
-      with: {
-        contact: {
-          columns: {
-            id: true,
-            name: true,
-            email: true,
-            company: true,
-            avatar: true
-          }
-        },
-        project: {
-          columns: {
-            id: true,
-            title: true,
-            status: true
-          }
-        },
-        activity: true
-      }
-    })
+    const { data: proposals, error } = await query
 
-    // Format response with activity counts
-    const formattedProposals = proposals.map(p => {
-      const viewCount = p.activity?.filter(a => a.action === 'viewed').length || 0
-      const signCount = p.activity?.filter(a => a.action === 'signed').length || 0
-      
-      return {
-        id: p.id,
-        slug: p.slug,
-        title: p.title,
-        description: p.description,
-        status: p.status,
-        version: p.version,
-        totalAmount: p.totalAmount ? parseFloat(p.totalAmount) : null,
-        validUntil: p.validUntil,
-        sentAt: p.sentAt,
-        viewedAt: p.viewedAt,
-        viewCount,
-        signCount,
-        signedAt: p.signedAt,
-        adminSignedAt: p.adminSignedAt,
-        fullyExecutedAt: p.fullyExecutedAt,
-        createdAt: p.createdAt,
-        updatedAt: p.updatedAt,
-        // Include contact info for admin view
-        ...(payload.role === 'admin' && p.contact ? {
-          contact: {
-            id: p.contact.id,
-            name: p.contact.name,
-            email: p.contact.email,
-            company: p.contact.company,
-            avatar: p.contact.avatar
-          }
-        } : {}),
-        // Include project info if linked
-        ...(p.project ? {
-          project: {
-            id: p.project.id,
-            title: p.project.title,
-            status: p.project.status
-          }
-        } : {})
-      }
-    })
+    if (error) {
+      console.error('Supabase error:', error)
+      throw error
+    }
+
+    // Format response
+    const formattedProposals = (proposals || []).map(p => ({
+      id: p.id,
+      slug: p.slug,
+      title: p.title,
+      description: p.description,
+      status: p.status,
+      version: p.version,
+      totalAmount: p.total_amount ? parseFloat(p.total_amount) : null,
+      validUntil: p.valid_until,
+      sentAt: p.sent_at,
+      viewedAt: p.viewed_at,
+      signedAt: p.signed_at,
+      adminSignedAt: p.admin_signed_at,
+      fullyExecutedAt: p.fully_executed_at,
+      createdAt: p.created_at,
+      updatedAt: p.updated_at,
+      // Include contact info for admin view
+      ...(payload.role === 'admin' && p.contact ? {
+        contact: {
+          id: p.contact.id,
+          name: p.contact.name,
+          email: p.contact.email,
+          company: p.contact.company,
+          avatar: p.contact.avatar
+        }
+      } : {}),
+      // Include project info if linked
+      ...(p.project ? {
+        project: {
+          id: p.project.id,
+          title: p.project.title,
+          status: p.project.status
+        }
+      } : {}),
+      // Include line items
+      lineItems: (p.line_items || []).sort((a, b) => a.sort_order - b.sort_order).map(li => ({
+        id: li.id,
+        serviceType: li.service_type,
+        description: li.description,
+        quantity: li.quantity,
+        unitPrice: parseFloat(li.unit_price),
+        total: parseFloat(li.total)
+      }))
+    }))
 
     return {
       statusCode: 200,

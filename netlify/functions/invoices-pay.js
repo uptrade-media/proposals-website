@@ -1,35 +1,43 @@
 // netlify/functions/invoices-pay.js
-import jwt from 'jsonwebtoken'
-import { neon } from '@neondatabase/serverless'
-import { drizzle } from 'drizzle-orm/neon-http'
-import { eq } from 'drizzle-orm'
+import { createSupabaseAdmin, getAuthenticatedUser } from './utils/supabase.js'
 import { Client, Environment } from 'square'
 import { Resend } from 'resend'
-import { RateLimiterMemory } from 'rate-limiter-flexible'
-import * as schema from '../../src/db/schema.js'
 
-// Rate limiter: 5 payment attempts per minute per user
-const rateLimiter = new RateLimiterMemory({
-  points: 5,
-  duration: 60, // 60 seconds
-  blockDurationMs: 60000 // block for 60 seconds after limit exceeded
-})
-
-const COOKIE_NAME = process.env.SESSION_COOKIE_NAME || 'um_session'
-const JWT_SECRET = process.env.AUTH_JWT_SECRET
-const DATABASE_URL = process.env.DATABASE_URL
 const SQUARE_ACCESS_TOKEN = process.env.SQUARE_ACCESS_TOKEN
 const SQUARE_LOCATION_ID = process.env.SQUARE_LOCATION_ID
 const SQUARE_ENVIRONMENT = process.env.SQUARE_ENVIRONMENT || 'sandbox'
 const RESEND_API_KEY = process.env.RESEND_API_KEY
-const RESEND_FROM_EMAIL = process.env.RESEND_FROM_EMAIL || 'portal@uptrademedia.com'
+const RESEND_FROM_EMAIL = process.env.RESEND_FROM_EMAIL || 'portal@send.uptrademedia.com'
 const ADMIN_EMAIL = process.env.ADMIN_EMAIL
+
+// Simple in-memory rate limiting (resets on function cold start)
+const rateLimitMap = new Map()
+
+function checkRateLimit(userId) {
+  const now = Date.now()
+  const windowMs = 60000 // 1 minute
+  const maxAttempts = 5
+  
+  const userKey = userId
+  const userAttempts = rateLimitMap.get(userKey) || []
+  
+  // Filter to only recent attempts
+  const recentAttempts = userAttempts.filter(t => now - t < windowMs)
+  
+  if (recentAttempts.length >= maxAttempts) {
+    return false
+  }
+  
+  recentAttempts.push(now)
+  rateLimitMap.set(userKey, recentAttempts)
+  return true
+}
 
 export async function handler(event) {
   // CORS headers
   const headers = {
     'Access-Control-Allow-Origin': '*',
-    'Access-Control-Allow-Headers': 'Content-Type',
+    'Access-Control-Allow-Headers': 'Content-Type, Authorization',
     'Access-Control-Allow-Methods': 'POST, OPTIONS',
     'Content-Type': 'application/json'
   }
@@ -46,44 +54,27 @@ export async function handler(event) {
     }
   }
 
-  // Verify authentication
-  if (!JWT_SECRET) {
-    return {
-      statusCode: 500,
-      headers,
-      body: JSON.stringify({ error: 'Server not configured' })
-    }
-  }
-
-  const rawCookie = event.headers.cookie || ''
-  const token = rawCookie.split('; ').find(c => c.startsWith(`${COOKIE_NAME}=`))?.split('=')[1]
-  
-  if (!token) {
-    return {
-      statusCode: 401,
-      headers,
-      body: JSON.stringify({ error: 'Not authenticated' })
-    }
-  }
-
   try {
-    const payload = jwt.verify(token, JWT_SECRET)
+    // Verify authentication with Supabase
+    const { user, contact, error: authError } = await getAuthenticatedUser(event)
+    
+    if (authError || !contact) {
+      return {
+        statusCode: 401,
+        headers,
+        body: JSON.stringify({ error: 'Not authenticated' })
+      }
+    }
 
-    // Check rate limit per user
-    try {
-      await rateLimiter.consume(payload.userId || payload.email)
-    } catch (rateLimitError) {
-      if (rateLimitError.isFirstInDuration) {
-        // Just started consuming
-      } else {
-        return {
-          statusCode: 429,
-          headers,
-          body: JSON.stringify({ 
-            error: 'Too many payment attempts. Please wait before trying again.',
-            retryAfter: Math.ceil(rateLimitError.msBeforeNext / 1000)
-          })
-        }
+    // Check rate limit
+    if (!checkRateLimit(contact.id)) {
+      return {
+        statusCode: 429,
+        headers,
+        body: JSON.stringify({ 
+          error: 'Too many payment attempts. Please wait before trying again.',
+          retryAfter: 60
+        })
       }
     }
 
@@ -109,28 +100,20 @@ export async function handler(event) {
       }
     }
 
-    // Connect to database
-    if (!DATABASE_URL) {
-      return {
-        statusCode: 500,
-        headers,
-        body: JSON.stringify({ error: 'Database not configured' })
-      }
-    }
+    const supabase = createSupabaseAdmin()
 
-    const sql = neon(DATABASE_URL)
-    const db = drizzle(sql, { schema })
+    // Fetch invoice
+    const { data: invoice, error: fetchError } = await supabase
+      .from('invoices')
+      .select(`
+        *,
+        contact:contacts(id, name, email, company),
+        project:projects(id, title)
+      `)
+      .eq('id', invoiceId)
+      .single()
 
-    // Fetch invoice with contact info
-    const invoice = await db.query.invoices.findFirst({
-      where: eq(schema.invoices.id, invoiceId),
-      with: {
-        contact: true,
-        project: true
-      }
-    })
-
-    if (!invoice) {
+    if (fetchError || !invoice) {
       return {
         statusCode: 404,
         headers,
@@ -138,8 +121,8 @@ export async function handler(event) {
       }
     }
 
-    // Verify user has permission to pay this invoice
-    if (payload.role !== 'admin' && payload.userId !== invoice.contactId) {
+    // Verify the user can pay this invoice (must be the contact or admin)
+    if (contact.role !== 'admin' && invoice.contact_id !== contact.id) {
       return {
         statusCode: 403,
         headers,
@@ -156,7 +139,7 @@ export async function handler(event) {
       }
     }
 
-    // Create Square client
+    // Process payment with Square
     const squareClient = new Client({
       accessToken: SQUARE_ACCESS_TOKEN,
       environment: SQUARE_ENVIRONMENT === 'production' 
@@ -164,167 +147,154 @@ export async function handler(event) {
         : Environment.Sandbox
     })
 
-    // Convert amount to cents (Square requires integer cents)
-    const totalAmount = parseFloat(invoice.totalAmount)
-    const amountInCents = Math.round(totalAmount * 100)
+    // Create payment
+    const amountInCents = Math.round(invoice.total_amount * 100)
+    const idempotencyKey = `${invoiceId}-${Date.now()}`
 
-    // Create payment in Square
-    const paymentResponse = await squareClient.paymentsApi.createPayment({
-      sourceId,
-      idempotencyKey: `${invoiceId}-${Date.now()}`,
+    const { result: paymentResult, errors: paymentErrors } = await squareClient.paymentsApi.createPayment({
+      sourceId: sourceId,
+      idempotencyKey: idempotencyKey,
       amountMoney: {
         amount: BigInt(amountInCents),
         currency: 'USD'
       },
       locationId: SQUARE_LOCATION_ID,
-      note: `Payment for invoice ${invoice.invoiceNumber}`,
-      referenceId: invoiceId
+      referenceId: invoice.invoice_number,
+      note: `Payment for invoice ${invoice.invoice_number}`
     })
 
-    const payment = paymentResponse.result.payment
-
-    if (payment.status !== 'COMPLETED') {
+    if (paymentErrors && paymentErrors.length > 0) {
+      console.error('[invoices-pay] Square payment errors:', paymentErrors)
       return {
         statusCode: 400,
         headers,
         body: JSON.stringify({ 
-          error: 'Payment failed',
-          status: payment.status 
+          error: 'Payment failed: ' + (paymentErrors[0]?.detail || 'Unknown error')
         })
       }
     }
 
-    // Update invoice in database
-    const [updatedInvoice] = await db.update(schema.invoices)
-      .set({
+    const payment = paymentResult.payment
+
+    // Update invoice to paid status
+    const now = new Date().toISOString()
+    const { data: updatedInvoice, error: updateError } = await supabase
+      .from('invoices')
+      .update({
         status: 'paid',
-        paidAt: new Date(),
-        squarePaymentId: payment.id,
-        updatedAt: new Date()
+        paid_at: now,
+        payment_method: 'square',
+        square_payment_id: payment.id,
+        updated_at: now
       })
-      .where(eq(schema.invoices.id, invoiceId))
-      .returning()
+      .eq('id', invoiceId)
+      .select(`
+        *,
+        contact:contacts(id, name, email, company),
+        project:projects(id, title)
+      `)
+      .single()
 
-    // Send receipt email to client
-    if (RESEND_API_KEY && invoice.contact.email) {
-      try {
-        const resend = new Resend(RESEND_API_KEY)
-        await resend.emails.send({
-          from: RESEND_FROM_EMAIL,
-          to: invoice.contact.email,
-          subject: `Receipt for Invoice ${invoice.invoiceNumber}`,
-          html: `
-            <h2>Payment Receipt</h2>
-            <p>Hello ${invoice.contact.name},</p>
-            <p>Thank you for your payment!</p>
-            <table style="border-collapse: collapse; margin: 20px 0;">
-              <tr><td style="padding: 8px;"><strong>Invoice Number:</strong></td><td style="padding: 8px;">${invoice.invoiceNumber}</td></tr>
-              <tr><td style="padding: 8px;"><strong>Payment ID:</strong></td><td style="padding: 8px;">${payment.id}</td></tr>
-              <tr><td style="padding: 8px;"><strong>Amount Paid:</strong></td><td style="padding: 8px;"><strong>$${totalAmount.toFixed(2)}</strong></td></tr>
-              <tr><td style="padding: 8px;"><strong>Payment Date:</strong></td><td style="padding: 8px;">${new Date().toLocaleDateString()}</td></tr>
-              <tr><td style="padding: 8px;"><strong>Payment Method:</strong></td><td style="padding: 8px;">${payment.cardDetails?.card?.cardBrand || 'Card'} ending in ${payment.cardDetails?.card?.last4 || '****'}</td></tr>
-            </table>
-            ${invoice.description ? `<p><strong>Description:</strong> ${invoice.description}</p>` : ''}
-            <p>You can view your receipt anytime at <a href="${process.env.URL}/billing/invoices/${invoice.id}">your billing portal</a>.</p>
-            <p>Thank you for your business!</p>
-          `
-        })
-      } catch (emailError) {
-        console.error('Failed to send receipt email to client:', emailError)
-      }
+    if (updateError) {
+      console.error('[invoices-pay] Database error:', updateError)
+      // Payment succeeded but database update failed - log for manual reconciliation
+      console.error('[invoices-pay] CRITICAL: Payment succeeded but DB update failed!', {
+        invoiceId,
+        squarePaymentId: payment.id,
+        amount: invoice.total_amount
+      })
     }
 
-    // Send payment notification to admin
-    if (RESEND_API_KEY && ADMIN_EMAIL) {
-      try {
-        const resend = new Resend(RESEND_API_KEY)
-        await resend.emails.send({
-          from: RESEND_FROM_EMAIL,
-          to: ADMIN_EMAIL,
-          subject: `Payment Received - Invoice ${invoice.invoiceNumber}`,
-          html: `
-            <h2>Payment Received</h2>
-            <p>A payment has been processed:</p>
-            <table style="border-collapse: collapse; margin: 20px 0;">
-              <tr><td style="padding: 8px;"><strong>Invoice Number:</strong></td><td style="padding: 8px;">${invoice.invoiceNumber}</td></tr>
-              <tr><td style="padding: 8px;"><strong>Client:</strong></td><td style="padding: 8px;">${invoice.contact.name} (${invoice.contact.email})</td></tr>
-              <tr><td style="padding: 8px;"><strong>Amount:</strong></td><td style="padding: 8px;"><strong>$${totalAmount.toFixed(2)}</strong></td></tr>
-              <tr><td style="padding: 8px;"><strong>Payment ID:</strong></td><td style="padding: 8px;">${payment.id}</td></tr>
-              ${invoice.project ? `<tr><td style="padding: 8px;"><strong>Project:</strong></td><td style="padding: 8px;">${invoice.project.name}</td></tr>` : ''}
-            </table>
-            <p><a href="https://squareup.com/dashboard/sales/transactions/${payment.id}">View in Square Dashboard</a></p>
-          `
-        })
-      } catch (emailError) {
-        console.error('Failed to send payment notification to admin:', emailError)
+    // Send confirmation emails
+    if (RESEND_API_KEY) {
+      const resend = new Resend(RESEND_API_KEY)
+      
+      // Email to client
+      if (invoice.contact?.email) {
+        try {
+          await resend.emails.send({
+            from: RESEND_FROM_EMAIL,
+            to: invoice.contact.email,
+            subject: `Payment Successful - Invoice ${invoice.invoice_number}`,
+            html: `
+              <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto;">
+                <h2 style="color: #4bbf39;">Payment Confirmed</h2>
+                <p>Hi ${invoice.contact.name || 'there'},</p>
+                <p>Your payment has been processed successfully. Thank you!</p>
+                <div style="background: #f5f5f5; padding: 20px; border-radius: 8px; margin: 20px 0;">
+                  <p><strong>Invoice Number:</strong> ${invoice.invoice_number}</p>
+                  <p><strong>Amount Paid:</strong> $${invoice.total_amount.toFixed(2)}</p>
+                  <p><strong>Payment Date:</strong> ${new Date().toLocaleDateString()}</p>
+                  <p><strong>Transaction ID:</strong> ${payment.id}</p>
+                </div>
+                <p>
+                  <a href="https://portal.uptrademedia.com/billing" 
+                     style="display: inline-block; background: #4bbf39; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px;">
+                    View Receipt
+                  </a>
+                </p>
+                <p style="color: #666; font-size: 14px; margin-top: 30px;">
+                  Best regards,<br>Uptrade Media
+                </p>
+              </div>
+            `
+          })
+        } catch (emailError) {
+          console.error('[invoices-pay] Client email error:', emailError)
+        }
       }
-    }
 
-    // Format response
-    const formattedInvoice = {
-      id: updatedInvoice.id,
-      contactId: updatedInvoice.contactId,
-      projectId: updatedInvoice.projectId,
-      invoiceNumber: updatedInvoice.invoiceNumber,
-      squareInvoiceId: updatedInvoice.squareInvoiceId,
-      squarePaymentId: updatedInvoice.squarePaymentId,
-      amount: parseFloat(updatedInvoice.amount),
-      taxRate: parseFloat(updatedInvoice.taxRate),
-      taxAmount: parseFloat(updatedInvoice.taxAmount),
-      totalAmount: parseFloat(updatedInvoice.totalAmount),
-      status: updatedInvoice.status,
-      description: updatedInvoice.description,
-      dueDate: updatedInvoice.dueDate,
-      paidAt: updatedInvoice.paidAt,
-      createdAt: updatedInvoice.createdAt,
-      updatedAt: updatedInvoice.updatedAt
+      // Email to admin
+      if (ADMIN_EMAIL) {
+        try {
+          await resend.emails.send({
+            from: RESEND_FROM_EMAIL,
+            to: ADMIN_EMAIL,
+            subject: `Payment Received - ${invoice.invoice_number} ($${invoice.total_amount.toFixed(2)})`,
+            html: `
+              <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto;">
+                <h2>Payment Received</h2>
+                <p>A payment has been processed:</p>
+                <div style="background: #f5f5f5; padding: 20px; border-radius: 8px; margin: 20px 0;">
+                  <p><strong>Client:</strong> ${invoice.contact?.name || 'Unknown'} (${invoice.contact?.email || 'N/A'})</p>
+                  <p><strong>Invoice:</strong> ${invoice.invoice_number}</p>
+                  <p><strong>Amount:</strong> $${invoice.total_amount.toFixed(2)}</p>
+                  <p><strong>Transaction ID:</strong> ${payment.id}</p>
+                </div>
+              </div>
+            `
+          })
+        } catch (emailError) {
+          console.error('[invoices-pay] Admin email error:', emailError)
+        }
+      }
     }
 
     return {
       statusCode: 200,
       headers,
-      body: JSON.stringify({ 
-        invoice: formattedInvoice,
+      body: JSON.stringify({
+        success: true,
         payment: {
           id: payment.id,
           status: payment.status,
-          cardBrand: payment.cardDetails?.card?.cardBrand,
-          last4: payment.cardDetails?.card?.last4
+          amount: invoice.total_amount
         },
-        message: 'Payment processed successfully'
+        invoice: updatedInvoice ? {
+          id: updatedInvoice.id,
+          invoiceNumber: updatedInvoice.invoice_number,
+          status: updatedInvoice.status,
+          paidAt: updatedInvoice.paid_at
+        } : null
       })
     }
 
   } catch (error) {
-    console.error('Error processing payment:', error)
-    
-    if (error.name === 'JsonWebTokenError' || error.name === 'TokenExpiredError') {
-      return {
-        statusCode: 401,
-        headers,
-        body: JSON.stringify({ error: 'Invalid or expired session' })
-      }
-    }
-
-    // Handle Square API errors
-    if (error.errors) {
-      return {
-        statusCode: 400,
-        headers,
-        body: JSON.stringify({ 
-          error: 'Payment processing failed',
-          details: error.errors
-        })
-      }
-    }
-
+    console.error('[invoices-pay] Error:', error)
     return {
       statusCode: 500,
       headers,
-      body: JSON.stringify({ 
-        error: 'Failed to process payment',
-        message: error.message 
-      })
+      body: JSON.stringify({ error: 'Payment processing failed' })
     }
   }
 }

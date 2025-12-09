@@ -1,4 +1,5 @@
 import axios from 'axios'
+import { supabase } from './supabase-auth'
 
 // Create axios instance with default config
 const api = axios.create({
@@ -8,10 +9,17 @@ const api = axios.create({
   }
 })
 
-// Add request interceptor for debugging
+// Add request interceptor to attach Supabase session token
 api.interceptors.request.use(
-  (config) => {
+  async (config) => {
     console.log('[API Request]', config.method?.toUpperCase(), config.url)
+    
+    // Get Supabase session and add to Authorization header
+    const { data: { session } } = await supabase.auth.getSession()
+    if (session?.access_token) {
+      config.headers.Authorization = `Bearer ${session.access_token}`
+    }
+    
     return config
   },
   (error) => {

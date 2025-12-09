@@ -95,7 +95,8 @@ export class ErrorBoundary extends React.Component {
               <div className="flex flex-col sm:flex-row gap-3">
                 <Button 
                   onClick={this.handleReset}
-                  className="flex-1 bg-gradient-to-r from-[#4bbf39] to-[#39bfb0]"
+                  variant="glass-primary"
+                  className="flex-1"
                 >
                   <RefreshCw className="mr-2 h-4 w-4" />
                   Reload Page

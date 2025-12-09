@@ -1,20 +1,14 @@
 // netlify/functions/audits-request.js
-import jwt from 'jsonwebtoken'
-import { neon } from '@neondatabase/serverless'
-import { drizzle } from 'drizzle-orm/neon-http'
-import { eq } from 'drizzle-orm'
-import * as schema from '../../src/db/schema.js'
+import crypto from 'crypto'
+import { createSupabaseAdmin, getAuthenticatedUser } from './utils/supabase.js'
 
-const COOKIE_NAME = process.env.SESSION_COOKIE_NAME || 'um_session'
-const JWT_SECRET = process.env.AUTH_JWT_SECRET
-const DATABASE_URL = process.env.DATABASE_URL
-const MAIN_SITE_AUDIT_ENDPOINT = process.env.MAIN_SITE_AUDIT_ENDPOINT || 'https://uptrademedia.com/.netlify/functions/audit-request'
+const MAIN_SITE_AUDIT_ENDPOINT = process.env.MAIN_SITE_AUDIT_ENDPOINT || 'https://uptrademedia.com/api/audit-request'
 
 export async function handler(event) {
   // CORS headers
   const headers = {
     'Access-Control-Allow-Origin': '*',
-    'Access-Control-Allow-Headers': 'Content-Type',
+    'Access-Control-Allow-Headers': 'Content-Type, Authorization',
     'Access-Control-Allow-Methods': 'POST, OPTIONS',
     'Content-Type': 'application/json'
   }
@@ -31,40 +25,20 @@ export async function handler(event) {
     }
   }
 
-  // Verify authentication
-  if (!JWT_SECRET) {
-    return {
-      statusCode: 500,
-      headers,
-      body: JSON.stringify({ error: 'Server not configured' })
-    }
-  }
-
-  const rawCookie = event.headers.cookie || ''
-  const token = rawCookie.split('; ').find(c => c.startsWith(`${COOKIE_NAME}=`))?.split('=')[1]
-  
-  if (!token) {
-    return {
-      statusCode: 401,
-      headers,
-      body: JSON.stringify({ error: 'Not authenticated' })
-    }
-  }
-
   try {
-    const payload = jwt.verify(token, JWT_SECRET)
-    const userId = payload.userId || payload.sub
-
-    if (!userId) {
+    // Verify authentication via Supabase
+    const { contact, error: authError } = await getAuthenticatedUser(event)
+    
+    if (authError || !contact) {
       return {
         statusCode: 401,
         headers,
-        body: JSON.stringify({ error: 'Invalid token' })
+        body: JSON.stringify({ error: 'Not authenticated' })
       }
     }
 
     // Parse request body
-    const { url, projectId } = JSON.parse(event.body || '{}')
+    const { url, projectId, recipientEmail, recipientName } = JSON.parse(event.body || '{}')
 
     if (!url) {
       return {
@@ -74,13 +48,22 @@ export async function handler(event) {
       }
     }
 
-    // projectId is optional - if not provided, we'll create a default project or skip it
-    // For now, projectId is required by schema
-    if (!projectId) {
+    // Admins can send to any email, clients need a project
+    const isAdmin = contact.role === 'admin'
+    
+    if (!isAdmin && !projectId) {
       return {
         statusCode: 400,
         headers,
         body: JSON.stringify({ error: 'Project ID is required' })
+      }
+    }
+
+    if (isAdmin && !recipientEmail && !projectId) {
+      return {
+        statusCode: 400,
+        headers,
+        body: JSON.stringify({ error: 'Recipient email or project is required' })
       }
     }
 
@@ -97,54 +80,92 @@ export async function handler(event) {
       }
     }
 
-    // Connect to database
-    if (!DATABASE_URL) {
+    const supabase = createSupabaseAdmin()
+
+    // Determine the contact_id for the audit
+    let auditContactId = contact.id
+    
+    // If admin is sending to a specific email, find or create that contact
+    if (isAdmin && recipientEmail) {
+      // Check if contact exists
+      const { data: existingContact } = await supabase
+        .from('contacts')
+        .select('id')
+        .eq('email', recipientEmail.toLowerCase())
+        .single()
+
+      if (existingContact) {
+        auditContactId = existingContact.id
+      } else {
+        // Create new prospect contact
+        const { data: newContact, error: contactError } = await supabase
+          .from('contacts')
+          .insert({
+            email: recipientEmail.toLowerCase(),
+            name: recipientName || null,
+            role: 'client',
+            source: 'audit',
+            created_at: new Date().toISOString()
+          })
+          .select('id')
+          .single()
+
+        if (contactError) {
+          console.error('Failed to create contact:', contactError)
+          return {
+            statusCode: 500,
+            headers,
+            body: JSON.stringify({ error: 'Failed to create contact' })
+          }
+        }
+        auditContactId = newContact.id
+      }
+    }
+
+    // Generate magic token for the audit
+    const magicToken = crypto.randomBytes(32).toString('hex')
+    const magicTokenExpires = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000) // 30 days
+
+    // Create audit record with magic token
+    const auditData = {
+      contact_id: auditContactId,
+      target_url: targetUrl,
+      status: 'pending',
+      device_type: 'mobile',
+      throttling_profile: '4g',
+      magic_token: magicToken,
+      magic_token_expires: magicTokenExpires.toISOString(),
+      created_at: new Date().toISOString()
+    }
+    
+    // Only include project_id if provided (column may have NOT NULL constraint)
+    if (projectId) {
+      auditData.project_id = projectId
+    }
+
+    const { data: newAudit, error: insertError } = await supabase
+      .from('audits')
+      .insert(auditData)
+      .select('id')
+      .single()
+
+    if (insertError) {
+      console.error('Failed to create audit:', insertError)
       return {
         statusCode: 500,
         headers,
-        body: JSON.stringify({ error: 'Database not configured' })
+        body: JSON.stringify({ error: 'Failed to create audit record' })
       }
     }
 
-    const sql = neon(DATABASE_URL)
-    const db = drizzle(sql, { schema })
-
-    // Get user info
-    const user = await db.query.contacts.findFirst({
-      where: eq(schema.contacts.id, userId)
-    })
-
-    if (!user) {
-      return {
-        statusCode: 404,
-        headers,
-        body: JSON.stringify({ error: 'User not found' })
-      }
-    }
-
-    // Create audit record
-    const [newAudit] = await db
-      .insert(schema.audits)
-      .values({
-        projectId,
-        contactId: userId,
-        targetUrl,
-        status: 'pending',
-        deviceType: 'mobile',
-        throttlingProfile: '4g',
-        createdAt: new Date()
-      })
-      .returning()
-
-    // Trigger audit on main website (async, don't wait)
+    // Trigger audit on main website using Portal Mode
+    // Main site will run the analysis and update the record
     fetch(MAIN_SITE_AUDIT_ENDPOINT, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json'
       },
       body: JSON.stringify({
-        email: user.email,
-        url: targetUrl,
         auditId: newAudit.id,
         source: 'portal'
       })
@@ -165,14 +186,6 @@ export async function handler(event) {
 
   } catch (error) {
     console.error('Error requesting audit:', error)
-    
-    if (error.name === 'JsonWebTokenError') {
-      return {
-        statusCode: 401,
-        headers,
-        body: JSON.stringify({ error: 'Invalid token' })
-      }
-    }
 
     return {
       statusCode: 500,

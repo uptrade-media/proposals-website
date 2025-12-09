@@ -146,7 +146,7 @@ const Messages = () => {
       return message.status === 'unread' ? (
         <Mail className="w-4 h-4 text-[#4bbf39]" />
       ) : (
-        <MailOpen className="w-4 h-4 text-gray-400" />
+        <MailOpen className="w-4 h-4 text-[var(--text-tertiary)]" />
       )
     } else {
       // Sent message
@@ -159,12 +159,12 @@ const Messages = () => {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold">Messages</h1>
-          <p className="text-gray-600">Communicate with team members and clients</p>
+          <h1 className="text-2xl font-bold text-[var(--text-primary)]">Messages</h1>
+          <p className="text-[var(--text-secondary)]">Communicate with team members and clients</p>
         </div>
         <Dialog open={isComposeDialogOpen} onOpenChange={setIsComposeDialogOpen}>
           <DialogTrigger asChild>
-            <Button className="bg-gradient-to-r from-[#4bbf39] to-[#39bfb0] hover:from-[#3da832] hover:to-[#2da89a]">
+            <Button variant="glass-primary">
               <Plus className="w-4 h-4 mr-2" />
               Compose
             </Button>
@@ -197,7 +197,7 @@ const Messages = () => {
                       <SelectItem key={contact.id} value={contact.id.toString()}>
                         <div className="flex flex-col">
                           <span>{contact.name}</span>
-                          <span className="text-xs text-gray-500">{contact.email}</span>
+                          <span className="text-xs text-[var(--text-tertiary)]">{contact.email}</span>
                         </div>
                       </SelectItem>
                     ))}
@@ -259,7 +259,7 @@ const Messages = () => {
                 <Button 
                   type="submit" 
                   disabled={isLoading || !composeForm.recipient_id || !composeForm.content}
-                  className="bg-gradient-to-r from-[#4bbf39] to-[#39bfb0] hover:from-[#3da832] hover:to-[#2da89a]"
+                  variant="glass-primary"
                 >
                   {isLoading ? (
                     <>
@@ -303,7 +303,7 @@ const Messages = () => {
         <TabsContent value="inbox" className="space-y-4">
           {/* Search */}
           <div className="relative">
-            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
+            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-[var(--text-tertiary)] w-4 h-4" />
             <Input
               placeholder="Search messages..."
               value={searchTerm}
@@ -315,16 +315,16 @@ const Messages = () => {
           {/* Messages List */}
           {isLoading && filteredMessages.length === 0 ? (
             <div className="flex items-center justify-center py-12">
-              <Loader2 className="h-8 w-8 animate-spin text-[#4bbf39]" />
+              <Loader2 className="h-8 w-8 animate-spin text-[var(--brand-primary)]" />
             </div>
           ) : filteredMessages.length === 0 ? (
             <Card>
               <CardContent className="flex flex-col items-center justify-center py-12">
-                <Mail className="h-12 w-12 text-gray-400 mb-4" />
-                <h3 className="text-lg font-medium text-gray-900 mb-2">
+                <Mail className="h-12 w-12 text-[var(--text-tertiary)] mb-4" />
+                <h3 className="text-lg font-medium text-[var(--text-primary)] mb-2">
                   {searchTerm ? 'No messages found' : 'No messages yet'}
                 </h3>
-                <p className="text-gray-500 text-center mb-4">
+                <p className="text-[var(--text-secondary)] text-center mb-4">
                   {searchTerm 
                     ? "No messages match your search criteria."
                     : "Start a conversation by composing a new message."
@@ -333,7 +333,7 @@ const Messages = () => {
                 {!searchTerm && (
                   <Button 
                     onClick={() => setIsComposeDialogOpen(true)}
-                    className="bg-gradient-to-r from-[#4bbf39] to-[#39bfb0] hover:from-[#3da832] hover:to-[#2da89a]"
+                    variant="glass-primary"
                   >
                     <Plus className="w-4 h-4 mr-2" />
                     Compose Message
@@ -348,7 +348,7 @@ const Messages = () => {
                   key={message.id} 
                   className={`cursor-pointer hover:shadow-md transition-shadow ${
                     message.status === 'unread' && message.recipient_id === user?.id 
-                      ? 'border-[#4bbf39] bg-[#4bbf39]/5' 
+                      ? 'border-[var(--brand-primary)] bg-[var(--brand-primary)]/5' 
                       : ''
                   }`}
                   onClick={() => handleMessageClick(message)}
@@ -364,8 +364,8 @@ const Messages = () => {
                             <div className="flex items-center space-x-2">
                               <span className={`font-medium ${
                                 message.status === 'unread' && message.recipient_id === user?.id
-                                  ? 'text-gray-900' 
-                                  : 'text-gray-700'
+                                  ? 'text-[var(--text-primary)]' 
+                                  : 'text-[var(--text-secondary)]'
                               }`}>
                                 {message.recipient_id === user?.id 
                                   ? message.sender_name 
@@ -378,20 +378,20 @@ const Messages = () => {
                                 </Badge>
                               )}
                             </div>
-                            <span className="text-xs text-gray-500">
+                            <span className="text-xs text-[var(--text-tertiary)]">
                               {formatMessageDate(message.created_at)}
                             </span>
                           </div>
                           
                           <h4 className={`text-sm mb-1 ${
                             message.status === 'unread' && message.recipient_id === user?.id
-                              ? 'font-semibold text-gray-900' 
-                              : 'text-gray-800'
+                              ? 'font-semibold text-[var(--text-primary)]' 
+                              : 'text-[var(--text-secondary)]'
                           }`}>
                             {message.subject || '(no subject)'}
                           </h4>
                           
-                          <p className="text-sm text-gray-600 truncate">
+                          <p className="text-sm text-[var(--text-secondary)] truncate">
                             {message.content}
                           </p>
                         </div>
@@ -420,7 +420,7 @@ const Messages = () => {
                               size="sm"
                               onClick={() => handleReply(message.id)}
                               disabled={!replyContent.trim() || isLoading}
-                              className="bg-gradient-to-r from-[#4bbf39] to-[#39bfb0] hover:from-[#3da832] hover:to-[#2da89a]"
+                              variant="glass-primary"
                             >
                               <Reply className="w-3 h-3 mr-1" />
                               Reply
@@ -440,14 +440,14 @@ const Messages = () => {
           {conversations.length === 0 ? (
             <Card>
               <CardContent className="flex flex-col items-center justify-center py-12">
-                <MessageCircle className="h-12 w-12 text-gray-400 mb-4" />
-                <h3 className="text-lg font-medium text-gray-900 mb-2">No conversations yet</h3>
-                <p className="text-gray-500 text-center mb-4">
+                <MessageCircle className="h-12 w-12 text-[var(--text-tertiary)] mb-4" />
+                <h3 className="text-lg font-medium text-[var(--text-primary)] mb-2">No conversations yet</h3>
+                <p className="text-[var(--text-secondary)] text-center mb-4">
                   Start messaging with team members to see conversations here.
                 </p>
                 <Button 
                   onClick={() => setIsComposeDialogOpen(true)}
-                  className="bg-gradient-to-r from-[#4bbf39] to-[#39bfb0] hover:from-[#3da832] hover:to-[#2da89a]"
+                  variant="glass-primary"
                 >
                   <Plus className="w-4 h-4 mr-2" />
                   Start Conversation
@@ -465,12 +465,12 @@ const Messages = () => {
                   <CardContent className="p-4">
                     <div className="flex items-start justify-between">
                       <div className="flex items-start space-x-3 flex-1">
-                        <div className="w-10 h-10 bg-gradient-to-r from-[#4bbf39] to-[#39bfb0] rounded-full flex items-center justify-center text-white font-medium">
+                        <div className="w-10 h-10 bg-gradient-to-r from-[var(--brand-primary)] to-[var(--brand-secondary)] rounded-full flex items-center justify-center text-white font-medium">
                           {conversation.partner_name.charAt(0)}
                         </div>
                         <div className="flex-1 min-w-0">
                           <div className="flex items-center justify-between mb-1">
-                            <span className="font-medium text-gray-900">
+                            <span className="font-medium text-[var(--text-primary)]">
                               {conversation.partner_name}
                             </span>
                             <div className="flex items-center space-x-2">
@@ -479,13 +479,13 @@ const Messages = () => {
                                   {conversation.unread_count}
                                 </Badge>
                               )}
-                              <span className="text-xs text-gray-500">
+                              <span className="text-xs text-[var(--text-tertiary)]">
                                 {formatMessageDate(conversation.latest_message.created_at)}
                               </span>
                             </div>
                           </div>
                           
-                          <p className="text-sm text-gray-600 truncate">
+                          <p className="text-sm text-[var(--text-secondary)] truncate">
                             {conversation.latest_message.is_from_partner ? '' : 'You: '}
                             {conversation.latest_message.content}
                           </p>
@@ -503,9 +503,9 @@ const Messages = () => {
           {contacts.length === 0 ? (
             <Card>
               <CardContent className="flex flex-col items-center justify-center py-12">
-                <Users className="h-12 w-12 text-gray-400 mb-4" />
-                <h3 className="text-lg font-medium text-gray-900 mb-2">No contacts available</h3>
-                <p className="text-gray-500 text-center">
+                <Users className="h-12 w-12 text-[var(--text-tertiary)] mb-4" />
+                <h3 className="text-lg font-medium text-[var(--text-primary)] mb-2">No contacts available</h3>
+                <p className="text-[var(--text-secondary)] text-center">
                   No team members or contacts are available for messaging.
                 </p>
               </CardContent>
@@ -516,14 +516,14 @@ const Messages = () => {
                 <Card key={contact.id} className="hover:shadow-md transition-shadow">
                   <CardContent className="p-4">
                     <div className="flex items-center space-x-3">
-                      <div className="w-10 h-10 bg-gradient-to-r from-[#4bbf39] to-[#39bfb0] rounded-full flex items-center justify-center text-white font-medium">
+                      <div className="w-10 h-10 bg-gradient-to-r from-[var(--brand-primary)] to-[var(--brand-secondary)] rounded-full flex items-center justify-center text-white font-medium">
                         {contact.name.charAt(0)}
                       </div>
                       <div className="flex-1 min-w-0">
-                        <h4 className="font-medium text-gray-900 truncate">
+                        <h4 className="font-medium text-[var(--text-primary)] truncate">
                           {contact.name}
                         </h4>
-                        <p className="text-sm text-gray-500 truncate">
+                        <p className="text-sm text-[var(--text-secondary)] truncate">
                           {contact.email}
                         </p>
                         <div className="flex items-center space-x-2 mt-1">
@@ -531,7 +531,7 @@ const Messages = () => {
                             {contact.role}
                           </Badge>
                           {contact.company_name && (
-                            <span className="text-xs text-gray-400">
+                            <span className="text-xs text-[var(--text-tertiary)]">
                               {contact.company_name}
                             </span>
                           )}
@@ -541,7 +541,8 @@ const Messages = () => {
                     
                     <Button 
                       size="sm" 
-                      className="w-full mt-3 bg-gradient-to-r from-[#4bbf39] to-[#39bfb0] hover:from-[#3da832] hover:to-[#2da89a]"
+                      variant="glass-primary"
+                      className="w-full mt-3"
                       onClick={() => {
                         setComposeForm(prev => ({
                           ...prev,

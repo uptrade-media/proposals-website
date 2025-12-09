@@ -1,19 +1,11 @@
 // netlify/functions/invoices-list.js
-import jwt from 'jsonwebtoken'
-import { neon } from '@neondatabase/serverless'
-import { drizzle } from 'drizzle-orm/neon-http'
-import { eq, desc, and } from 'drizzle-orm'
-import * as schema from '../../src/db/schema.js'
-
-const COOKIE_NAME = process.env.SESSION_COOKIE_NAME || 'um_session'
-const JWT_SECRET = process.env.AUTH_JWT_SECRET
-const DATABASE_URL = process.env.DATABASE_URL
+import { createSupabaseAdmin, getAuthenticatedUser } from './utils/supabase.js'
 
 export async function handler(event) {
   // CORS headers
   const headers = {
     'Access-Control-Allow-Origin': '*',
-    'Access-Control-Allow-Headers': 'Content-Type',
+    'Access-Control-Allow-Headers': 'Content-Type, Authorization',
     'Access-Control-Allow-Methods': 'GET, OPTIONS',
     'Content-Type': 'application/json'
   }
@@ -30,152 +22,115 @@ export async function handler(event) {
     }
   }
 
-  // Verify authentication
-  if (!JWT_SECRET) {
-    return {
-      statusCode: 500,
-      headers,
-      body: JSON.stringify({ error: 'Server not configured' })
-    }
-  }
-
-  const rawCookie = event.headers.cookie || ''
-  const token = rawCookie.split('; ').find(c => c.startsWith(`${COOKIE_NAME}=`))?.split('=')[1]
-  
-  if (!token) {
-    return {
-      statusCode: 401,
-      headers,
-      body: JSON.stringify({ error: 'Not authenticated' })
-    }
-  }
-
   try {
-    const payload = jwt.verify(token, JWT_SECRET)
+    // Verify authentication with Supabase
+    const { user, contact, error: authError } = await getAuthenticatedUser(event)
     
-    // Only Google OAuth users can access invoices
-    if (payload.type !== 'google' && payload.role !== 'admin') {
+    if (authError || !contact) {
       return {
-        statusCode: 403,
+        statusCode: 401,
         headers,
-        body: JSON.stringify({ error: 'Only authenticated users can access invoices' })
+        body: JSON.stringify({ error: 'Not authenticated' })
       }
     }
 
     // Parse query parameters
     const queryParams = event.queryStringParameters || {}
-    const { projectId, status } = queryParams
+    const { projectId, status, contactId } = queryParams
 
-    // Connect to database
-    if (!DATABASE_URL) {
+    const supabase = createSupabaseAdmin()
+
+    // Build query
+    let query = supabase
+      .from('invoices')
+      .select(`
+        *,
+        contact:contacts(id, name, email, company),
+        project:projects(id, title)
+      `)
+      .order('created_at', { ascending: false })
+
+    // Apply filters based on role
+    if (contact.role !== 'admin') {
+      // Clients can only see their own invoices
+      query = query.eq('contact_id', contact.id)
+    } else if (contactId) {
+      // Admin filtering by specific contact
+      query = query.eq('contact_id', contactId)
+    }
+
+    if (projectId) {
+      query = query.eq('project_id', projectId)
+    }
+
+    if (status) {
+      query = query.eq('status', status)
+    }
+
+    const { data: invoices, error: queryError } = await query
+
+    if (queryError) {
+      console.error('[invoices-list] Database error:', queryError)
       return {
         statusCode: 500,
         headers,
-        body: JSON.stringify({ error: 'Database not configured' })
+        body: JSON.stringify({ error: 'Failed to fetch invoices' })
       }
     }
-
-    const sql = neon(DATABASE_URL)
-    const db = drizzle(sql, { schema })
-
-    // Build where conditions
-    let whereConditions = []
-    
-    if (payload.role !== 'admin') {
-      // Clients see only their invoices
-      whereConditions.push(eq(schema.invoices.contactId, payload.userId))
-    }
-    
-    if (projectId) {
-      whereConditions.push(eq(schema.invoices.projectId, projectId))
-    }
-    
-    if (status) {
-      whereConditions.push(eq(schema.invoices.status, status))
-    }
-
-    // Fetch invoices
-    const invoices = await db.query.invoices.findMany({
-      where: whereConditions.length > 0 ? and(...whereConditions) : undefined,
-      orderBy: [desc(schema.invoices.createdAt)],
-      with: {
-        contact: {
-          columns: {
-            id: true,
-            name: true,
-            email: true,
-            company: true
-          }
-        },
-        project: {
-          columns: {
-            id: true,
-            title: true
-          }
-        }
-      }
-    })
 
     // Format response
-    const formattedInvoices = invoices.map(inv => ({
+    const formattedInvoices = (invoices || []).map(inv => ({
       id: inv.id,
-      invoiceNumber: inv.invoiceNumber,
-      squareInvoiceId: inv.squareInvoiceId,
-      amount: inv.amount ? parseFloat(inv.amount) : 0,
-      taxRate: inv.taxRate ? parseFloat(inv.taxRate) : 0,
-      taxAmount: inv.taxAmount ? parseFloat(inv.taxAmount) : 0,
-      totalAmount: inv.totalAmount ? parseFloat(inv.totalAmount) : 0,
-      status: inv.status,
+      invoiceNumber: inv.invoice_number,
+      amount: inv.amount,
+      taxRate: inv.tax_rate,
+      taxAmount: inv.tax_amount,
+      totalAmount: inv.total_amount,
       description: inv.description,
-      dueDate: inv.dueDate,
-      paidAt: inv.paidAt,
-      createdAt: inv.createdAt,
-      updatedAt: inv.updatedAt,
-      // Include contact info for admin view
-      ...(payload.role === 'admin' && inv.contact ? {
-        contact: {
-          id: inv.contact.id,
-          name: inv.contact.name,
-          email: inv.contact.email,
-          company: inv.contact.company
-        }
-      } : {}),
-      // Include project info if linked
-      ...(inv.project ? {
-        project: {
-          id: inv.project.id,
-          title: inv.project.title
-        }
-      } : {})
+      dueDate: inv.due_date,
+      status: inv.status,
+      paidAt: inv.paid_at,
+      paymentMethod: inv.payment_method,
+      squareInvoiceId: inv.square_invoice_id,
+      squarePaymentId: inv.square_payment_id,
+      contact: inv.contact,
+      project: inv.project,
+      createdAt: inv.created_at,
+      updatedAt: inv.updated_at
     }))
+
+    // Calculate summary stats
+    const summary = {
+      total: formattedInvoices.length,
+      pending: formattedInvoices.filter(i => i.status === 'pending').length,
+      paid: formattedInvoices.filter(i => i.status === 'paid').length,
+      overdue: formattedInvoices.filter(i => 
+        i.status === 'pending' && new Date(i.dueDate) < new Date()
+      ).length,
+      totalAmount: formattedInvoices.reduce((sum, i) => sum + (i.totalAmount || 0), 0),
+      paidAmount: formattedInvoices
+        .filter(i => i.status === 'paid')
+        .reduce((sum, i) => sum + (i.totalAmount || 0), 0),
+      pendingAmount: formattedInvoices
+        .filter(i => i.status === 'pending')
+        .reduce((sum, i) => sum + (i.totalAmount || 0), 0)
+    }
 
     return {
       statusCode: 200,
       headers,
       body: JSON.stringify({
         invoices: formattedInvoices,
-        total: formattedInvoices.length
+        summary
       })
     }
 
   } catch (error) {
-    console.error('Error fetching invoices:', error)
-    
-    if (error.name === 'JsonWebTokenError' || error.name === 'TokenExpiredError') {
-      return {
-        statusCode: 401,
-        headers,
-        body: JSON.stringify({ error: 'Invalid or expired session' })
-      }
-    }
-
+    console.error('[invoices-list] Error:', error)
     return {
       statusCode: 500,
       headers,
-      body: JSON.stringify({ 
-        error: 'Failed to fetch invoices',
-        message: error.message 
-      })
+      body: JSON.stringify({ error: 'Internal server error' })
     }
   }
 }

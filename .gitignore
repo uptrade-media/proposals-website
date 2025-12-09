@@ -138,8 +138,51 @@ dist
 # Local Netlify folder
 .netlify
 
-# Documentation and process scripts (internal use only)
-/*.md
-/scripts/*.cjs
-/scripts/*.mjs
+# macOS
+.DS_Store
+**/.DS_Store
+
+# Local environment files
+.env.local
+.env.migration
+.env.*.local
+
+# SQL migration/debug scripts (keep in database repo instead)
+/*.sql
+
+# Debug/development scripts
+check-*.js
+check-*.ts
+
+# npm lockfile (using pnpm)
+package-lock.json
+
+# Deno lockfile
+deno.lock
+
+# Development schema files
+NEW-SCHEMA-TABLES.ts
+
+# Zencoder AI folder
+.zencoder/
+
+# Internal documentation (keep README.md)
+GOOGLE-*.md
+OAUTH-*.md
+SUPABASE-*.md
+PORTFOLIO-*.md
+OPENPHONE-*.md
+LIQUID-GLASS-*.md
+
+# README folder (internal docs)
+README/
+
+# Keep essential docs
+!README.md
+
+# Editor folders
+.idea/
+*.swp
+*.swo
+*~
 

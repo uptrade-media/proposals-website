@@ -58,7 +58,7 @@ export function ActivityTimeline({ limit = 10 }) {
         </CardHeader>
         <CardContent>
           <div className="text-center py-8">
-            <p className="text-gray-500">{error}</p>
+            <p className="text-[var(--text-secondary)]">{error}</p>
             <button
               onClick={fetchActivities}
               className="mt-3 text-sm text-blue-600 hover:underline"
@@ -79,11 +79,11 @@ export function ActivityTimeline({ limit = 10 }) {
       <CardContent>
         {loading ? (
           <div className="flex items-center justify-center py-8">
-            <Loader2 className="w-5 h-5 animate-spin text-gray-400" />
+            <Loader2 className="w-5 h-5 animate-spin text-[var(--text-tertiary)]" />
           </div>
         ) : activities.length === 0 ? (
           <div className="text-center py-8">
-            <p className="text-gray-500">No recent activity</p>
+            <p className="text-[var(--text-secondary)]">No recent activity</p>
           </div>
         ) : (
           <div className="space-y-4">
@@ -94,7 +94,7 @@ export function ActivityTimeline({ limit = 10 }) {
               return (
                 <div
                   key={`${activity.related_id}-${activity.type}-${index}`}
-                  className="flex gap-3 pb-4 border-b last:border-0 last:pb-0 hover:bg-gray-50 -mx-2 px-2 py-2 rounded transition-colors"
+                  className="flex gap-3 pb-4 border-b last:border-0 last:pb-0 hover:bg-[var(--surface-secondary)] -mx-2 px-2 py-2 rounded transition-colors"
                 >
                   <div className={`${config.color} w-10 h-10 rounded-lg flex items-center justify-center flex-shrink-0`}>
                     <span className="text-lg">{config.icon}</span>
@@ -103,10 +103,10 @@ export function ActivityTimeline({ limit = 10 }) {
                   <div className="flex-1 min-w-0">
                     <div className="flex items-start justify-between gap-2">
                       <div>
-                        <p className="font-medium text-gray-900 truncate">
+                        <p className="font-medium text-[var(--text-primary)] truncate">
                           {activity.title}
                         </p>
-                        <p className="text-sm text-gray-600 line-clamp-2">
+                        <p className="text-sm text-[var(--text-secondary)] line-clamp-2">
                           {activity.description}
                         </p>
                       </div>
@@ -115,7 +115,7 @@ export function ActivityTimeline({ limit = 10 }) {
                       </Badge>
                     </div>
                     
-                    <div className="flex items-center gap-2 mt-2 text-xs text-gray-500">
+                    <div className="flex items-center gap-2 mt-2 text-xs text-[var(--text-tertiary)]">
                       <span>{formatDistanceToNow(timestamp, { addSuffix: true })}</span>
                       {activity.user_email && activity.user_email !== 'You' && (
                         <>

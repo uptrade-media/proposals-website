@@ -32,14 +32,14 @@ export default function ActivityLog() {
 
   const getEventBadgeColor = (type) => {
     switch (type) {
-      case 'sent': return 'bg-blue-100 text-blue-800'
-      case 'delivered': return 'bg-green-100 text-green-800'
-      case 'open': return 'bg-purple-100 text-purple-800'
-      case 'click': return 'bg-cyan-100 text-cyan-800'
-      case 'bounce': return 'bg-red-100 text-red-800'
-      case 'complaint': return 'bg-orange-100 text-orange-800'
-      case 'unsubscribe': return 'bg-gray-100 text-gray-800'
-      default: return 'bg-gray-100 text-gray-800'
+      case 'sent': return 'bg-[var(--brand-primary)]/20 text-[var(--brand-primary)]'
+      case 'delivered': return 'bg-[var(--accent-success)]/20 text-[var(--accent-success)]'
+      case 'open': return 'bg-purple-500/20 text-purple-400'
+      case 'click': return 'bg-cyan-500/20 text-cyan-400'
+      case 'bounce': return 'bg-[var(--accent-error)]/20 text-[var(--accent-error)]'
+      case 'complaint': return 'bg-[var(--accent-warning)]/20 text-[var(--accent-warning)]'
+      case 'unsubscribe': return 'bg-[var(--surface-tertiary)] text-[var(--text-secondary)]'
+      default: return 'bg-[var(--surface-tertiary)] text-[var(--text-secondary)]'
     }
   }
 
@@ -96,26 +96,26 @@ export default function ActivityLog() {
             <CardContent>
               {isLoading ? (
                 <div className="flex justify-center py-12">
-                  <Loader2 className="h-6 w-6 animate-spin text-gray-400" />
+                  <Loader2 className="h-6 w-6 animate-spin text-[var(--brand-primary)]" />
                 </div>
               ) : activities.length === 0 ? (
                 <div className="text-center py-12">
-                  <p className="text-gray-500">No activity yet</p>
+                  <p className="text-[var(--text-secondary)]">No activity yet</p>
                 </div>
               ) : (
                 <div className="space-y-3">
                   {activities.map((activity) => (
-                    <div key={activity.id} className="flex items-start justify-between p-4 border rounded">
+                    <div key={activity.id} className="flex items-start justify-between p-4 border border-[var(--glass-border)] rounded-xl bg-[var(--glass-bg)] backdrop-blur-sm">
                       <div className="flex-1">
                         <div className="flex items-center gap-2">
                           <Badge className={getEventBadgeColor(activity.type)}>
                             {activity.type}
                           </Badge>
-                          <span className="font-medium">{activity.email}</span>
+                          <span className="font-medium text-[var(--text-primary)]">{activity.email}</span>
                         </div>
-                        <p className="text-sm text-gray-600 mt-1">{activity.campaign}</p>
+                        <p className="text-sm text-[var(--text-secondary)] mt-1">{activity.campaign}</p>
                       </div>
-                      <div className="text-right text-sm text-gray-500">
+                      <div className="text-right text-sm text-[var(--text-tertiary)]">
                         <p>{new Date(activity.timestamp).toLocaleString()}</p>
                       </div>
                     </div>
@@ -135,21 +135,21 @@ export default function ActivityLog() {
             </CardHeader>
             <CardContent>
               <div className="grid grid-cols-4 gap-4">
-                <div className="text-center p-4 bg-gray-50 rounded">
-                  <p className="text-xs text-gray-600">Sent</p>
-                  <p className="text-2xl font-bold">0</p>
+                <div className="text-center p-4 bg-[var(--surface-secondary)] rounded-xl border border-[var(--glass-border)]">
+                  <p className="text-xs text-[var(--text-secondary)]">Sent</p>
+                  <p className="text-2xl font-bold text-[var(--text-primary)]">0</p>
                 </div>
-                <div className="text-center p-4 bg-gray-50 rounded">
-                  <p className="text-xs text-gray-600">Delivered</p>
-                  <p className="text-2xl font-bold">0</p>
+                <div className="text-center p-4 bg-[var(--surface-secondary)] rounded-xl border border-[var(--glass-border)]">
+                  <p className="text-xs text-[var(--text-secondary)]">Delivered</p>
+                  <p className="text-2xl font-bold text-[var(--text-primary)]">0</p>
                 </div>
-                <div className="text-center p-4 bg-gray-50 rounded">
-                  <p className="text-xs text-gray-600">Open Rate</p>
-                  <p className="text-2xl font-bold">0%</p>
+                <div className="text-center p-4 bg-[var(--surface-secondary)] rounded-xl border border-[var(--glass-border)]">
+                  <p className="text-xs text-[var(--text-secondary)]">Open Rate</p>
+                  <p className="text-2xl font-bold text-[var(--text-primary)]">0%</p>
                 </div>
-                <div className="text-center p-4 bg-gray-50 rounded">
-                  <p className="text-xs text-gray-600">Click Rate</p>
-                  <p className="text-2xl font-bold">0%</p>
+                <div className="text-center p-4 bg-[var(--surface-secondary)] rounded-xl border border-[var(--glass-border)]">
+                  <p className="text-xs text-[var(--text-secondary)]">Click Rate</p>
+                  <p className="text-2xl font-bold text-[var(--text-primary)]">0%</p>
                 </div>
               </div>
             </CardContent>
@@ -163,16 +163,16 @@ export default function ActivityLog() {
             <CardContent>
               <div className="space-y-2">
                 <div className="flex justify-between text-sm">
-                  <span>Desktop</span>
-                  <span className="text-gray-600">0</span>
+                  <span className="text-[var(--text-primary)]">Desktop</span>
+                  <span className="text-[var(--text-secondary)]">0</span>
                 </div>
                 <div className="flex justify-between text-sm">
-                  <span>Mobile</span>
-                  <span className="text-gray-600">0</span>
+                  <span className="text-[var(--text-primary)]">Mobile</span>
+                  <span className="text-[var(--text-secondary)]">0</span>
                 </div>
                 <div className="flex justify-between text-sm">
-                  <span>Tablet</span>
-                  <span className="text-gray-600">0</span>
+                  <span className="text-[var(--text-primary)]">Tablet</span>
+                  <span className="text-[var(--text-secondary)]">0</span>
                 </div>
               </div>
             </CardContent>

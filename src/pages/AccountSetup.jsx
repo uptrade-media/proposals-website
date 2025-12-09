@@ -6,13 +6,10 @@ import { Button } from '../components/ui/button'
 import { Input } from '../components/ui/input'
 import { Label } from '../components/ui/label'
 import { Alert, AlertDescription } from '../components/ui/alert'
-import { Loader2, KeyRound, Mail, Eye, EyeOff, Lock } from 'lucide-react'
+import { Loader2, KeyRound, Mail, Eye, EyeOff, Lock, Sparkles, ArrowRight, Lightbulb } from 'lucide-react'
 import api from '@/lib/api'
 import useAuthStore from '../lib/auth-store'
-import HyperspaceBackground from '../components/HyperspaceBackground'
-import whitelogo from '../assets/whitelogo.svg'
-
-const BRAND_GRAD = 'from-[#4bbf39] to-[#39bfb0]'
+const logo = '/logo.svg'
 
 export default function AccountSetup() {
   const [searchParams] = useSearchParams()
@@ -105,38 +102,50 @@ export default function AccountSetup() {
     }
   }
 
+  // Loading state
   if (isValidating) {
     return (
-      <div className="relative min-h-screen flex items-center justify-center overflow-hidden bg-black">
-        <HyperspaceBackground />
-        <Card className="relative z-20 w-full max-w-md border border-white/10 bg-neutral-900/70 backdrop-blur-xl shadow-[0_0_0_1px_rgba(255,255,255,0.06)]">
-          <CardContent className="pt-6 flex flex-col items-center">
-            <Loader2 className="h-8 w-8 animate-spin text-[#39bfb0] mb-4" />
-            <p className="text-neutral-300">Validating setup link...</p>
+      <div className="min-h-screen flex items-center justify-center bg-[var(--surface-primary)] relative overflow-hidden p-4">
+        <div className="absolute inset-0 overflow-hidden pointer-events-none">
+          <div className="absolute -top-1/4 -right-1/4 w-1/2 h-1/2 bg-[var(--brand-primary)] opacity-[0.08] blur-[120px] rounded-full" />
+          <div className="absolute -bottom-1/4 -left-1/4 w-1/2 h-1/2 bg-[var(--brand-secondary)] opacity-[0.08] blur-[120px] rounded-full" />
+        </div>
+        <Card className="relative w-full max-w-md bg-[var(--glass-bg)] backdrop-blur-xl border-[var(--glass-border)] shadow-[var(--shadow-lg)]">
+          <CardContent className="pt-8 pb-8 flex flex-col items-center">
+            <div className="h-16 w-16 rounded-full bg-[var(--brand-primary)]/10 flex items-center justify-center mb-4">
+              <Loader2 className="h-8 w-8 animate-spin text-[var(--brand-primary)]" />
+            </div>
+            <p className="text-[var(--text-secondary)]">Validating setup link...</p>
           </CardContent>
         </Card>
       </div>
     )
   }
 
+  // Error state (invalid token)
   if (error && !tokenData) {
     return (
-      <div className="relative min-h-screen flex items-center justify-center overflow-hidden bg-black">
-        <HyperspaceBackground />
-        <Card className="relative z-20 w-full max-w-md border border-white/10 bg-neutral-900/70 backdrop-blur-xl shadow-[0_0_0_1px_rgba(255,255,255,0.06)]">
-          <CardHeader>
-            <CardTitle className="text-red-400">Setup Link Invalid</CardTitle>
-            <CardDescription className="text-neutral-300">{error}</CardDescription>
+      <div className="min-h-screen flex items-center justify-center bg-[var(--surface-primary)] relative overflow-hidden p-4">
+        <div className="absolute inset-0 overflow-hidden pointer-events-none">
+          <div className="absolute -top-1/4 -right-1/4 w-1/2 h-1/2 bg-[var(--brand-primary)] opacity-[0.08] blur-[120px] rounded-full" />
+          <div className="absolute -bottom-1/4 -left-1/4 w-1/2 h-1/2 bg-[var(--brand-secondary)] opacity-[0.08] blur-[120px] rounded-full" />
+        </div>
+        <Card className="relative w-full max-w-md bg-[var(--glass-bg)] backdrop-blur-xl border-[var(--glass-border)] shadow-[var(--shadow-lg)]">
+          <CardHeader className="text-center">
+            <CardTitle className="text-[var(--accent-error)]">Setup Link Invalid</CardTitle>
+            <CardDescription className="text-[var(--text-secondary)]">{error}</CardDescription>
           </CardHeader>
           <CardContent>
-            <p className="text-sm text-neutral-400 mb-4">
+            <p className="text-sm text-[var(--text-tertiary)] mb-6 text-center">
               This setup link may have expired or is invalid. Please contact your account manager for a new link.
             </p>
             <Button 
               onClick={() => navigate('/login')} 
-              className={`w-full bg-gradient-to-r ${BRAND_GRAD} hover:shadow-[0_10px_35px_rgba(57,191,176,0.35)]`}
+              variant="glass-primary"
+              className="w-full"
             >
               Go to Login
+              <ArrowRight className="ml-2 h-4 w-4" />
             </Button>
           </CardContent>
         </Card>
@@ -144,54 +153,52 @@ export default function AccountSetup() {
     )
   }
 
+  // Main form
   return (
-    <div className="relative min-h-screen flex items-center justify-center overflow-hidden bg-black p-4">
-      {/* Hyperspace Background */}
-      <HyperspaceBackground />
+    <div className="min-h-screen flex items-center justify-center bg-[var(--surface-primary)] relative overflow-hidden p-4">
+      {/* Subtle gradient orbs */}
+      <div className="absolute inset-0 overflow-hidden pointer-events-none">
+        <div className="absolute -top-1/4 -right-1/4 w-1/2 h-1/2 bg-[var(--brand-primary)] opacity-[0.08] blur-[120px] rounded-full" />
+        <div className="absolute -bottom-1/4 -left-1/4 w-1/2 h-1/2 bg-[var(--brand-secondary)] opacity-[0.08] blur-[120px] rounded-full" />
+      </div>
 
-      <Card className="relative z-20 w-full max-w-md overflow-hidden border border-white/10 bg-neutral-900/70 backdrop-blur-xl shadow-[0_0_0_1px_rgba(255,255,255,0.06)]">
-        {/* Ring overlay */}
-        <div aria-hidden="true" className="pointer-events-none absolute -inset-[1px] z-0 rounded-xl opacity-70 [mask:linear-gradient(#000,transparent)]">
-          <div className={`h-full w-full rounded-xl bg-gradient-to-r ${BRAND_GRAD} blur-[10px] opacity-30`} />
-        </div>
-
-        <CardHeader className="relative z-10 space-y-4 text-center pb-6">
-          <div className="flex justify-center">
+      <Card className="relative w-full max-w-md bg-[var(--glass-bg)] backdrop-blur-xl border-[var(--glass-border)] shadow-[var(--shadow-lg)]">
+        <CardHeader className="text-center pb-6">
+          <div className="flex justify-center mb-4">
             <img
-              src={whitelogo}
+              src={logo}
               alt="Uptrade Media"
-              className="h-14 w-auto drop-shadow-[0_6px_20px_rgba(57,191,176,0.35)] transition-transform duration-300 hover:scale-105"
+              className="h-12 w-12"
             />
           </div>
-          <CardTitle className="text-3xl font-semibold tracking-tight">
-            <span className={`bg-gradient-to-r ${BRAND_GRAD} bg-clip-text text-transparent`}>
-              Welcome! 🎉
-            </span>
-          </CardTitle>
-          <CardDescription className="text-neutral-300/80">
+          <div className="flex items-center justify-center gap-2 mb-2">
+            <Sparkles className="h-5 w-5 text-[var(--brand-primary)]" />
+            <CardTitle className="text-2xl font-semibold text-[var(--text-primary)]">Welcome!</CardTitle>
+          </div>
+          <CardDescription className="text-[var(--text-secondary)]">
             Hi {tokenData?.name}! Choose how you'd like to access your account
           </CardDescription>
         </CardHeader>
 
-        <CardContent className="relative z-10 space-y-6">
+        <CardContent className="space-y-6">
           {error && (
-            <Alert variant="destructive" className="bg-red-500/10 border-red-500/30 text-red-200">
+            <Alert variant="destructive">
               <AlertDescription>{error}</AlertDescription>
             </Alert>
           )}
 
           {/* Password Setup Option */}
           <div className="space-y-4">
-            <div className="flex items-center gap-2 text-sm font-medium text-neutral-200">
-              <KeyRound className="h-4 w-4 text-[#39bfb0]" />
+            <div className="flex items-center gap-2 text-sm font-medium text-[var(--text-primary)]">
+              <KeyRound className="h-4 w-4 text-[var(--brand-primary)]" />
               <span>Set Up Password</span>
             </div>
             
             <form onSubmit={handlePasswordSetup} className="space-y-4">
               <div className="space-y-2">
-                <Label htmlFor="password" className="text-neutral-200">Password</Label>
-                <div className="relative group">
-                  <Lock className="absolute left-3 top-1/2 -translate-y-1/2 text-neutral-500 w-5 h-5 group-focus-within:text-[#39bfb0]" />
+                <Label htmlFor="password" className="text-[var(--text-primary)]">Password</Label>
+                <div className="relative">
+                  <Lock className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--text-tertiary)] w-5 h-5" />
                   <Input
                     id="password"
                     type={showPassword ? 'text' : 'password'}
@@ -200,13 +207,13 @@ export default function AccountSetup() {
                     onChange={(e) => setPassword(e.target.value)}
                     disabled={isSubmitting}
                     required
-                    className="pl-11 pr-11 bg-neutral-900/60 border-white/10 text-white placeholder:text-neutral-500 focus-visible:ring-2 focus-visible:ring-[#39bfb0]/30 focus-visible:border-[#39bfb0] transition-all"
+                    className="pl-11 pr-11"
                   />
                   <button
                     type="button"
                     aria-label={showPassword ? 'Hide password' : 'Show password'}
                     onClick={() => setShowPassword(!showPassword)}
-                    className="absolute right-3 top-1/2 -translate-y-1/2 text-neutral-500 hover:text-neutral-300 transition-colors"
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-[var(--text-tertiary)] hover:text-[var(--text-primary)] transition-colors"
                     disabled={isSubmitting}
                   >
                     {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
@@ -215,9 +222,9 @@ export default function AccountSetup() {
               </div>
 
               <div className="space-y-2">
-                <Label htmlFor="confirmPassword" className="text-neutral-200">Confirm Password</Label>
-                <div className="relative group">
-                  <Lock className="absolute left-3 top-1/2 -translate-y-1/2 text-neutral-500 w-5 h-5 group-focus-within:text-[#39bfb0]" />
+                <Label htmlFor="confirmPassword" className="text-[var(--text-primary)]">Confirm Password</Label>
+                <div className="relative">
+                  <Lock className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--text-tertiary)] w-5 h-5" />
                   <Input
                     id="confirmPassword"
                     type={showPassword ? 'text' : 'password'}
@@ -226,14 +233,15 @@ export default function AccountSetup() {
                     onChange={(e) => setConfirmPassword(e.target.value)}
                     disabled={isSubmitting}
                     required
-                    className="pl-11 bg-neutral-900/60 border-white/10 text-white placeholder:text-neutral-500 focus-visible:ring-2 focus-visible:ring-[#39bfb0]/30 focus-visible:border-[#39bfb0] transition-all"
+                    className="pl-11"
                   />
                 </div>
               </div>
 
               <Button 
                 type="submit" 
-                className={`w-full py-6 font-semibold rounded-lg shadow-lg transition-all duration-300 hover:shadow-[0_10px_35px_rgba(57,191,176,0.35)] active:scale-[0.99] bg-gradient-to-r ${BRAND_GRAD}`}
+                variant="glass-primary"
+                className="w-full"
                 disabled={isSubmitting}
               >
                 {isSubmitting ? (
@@ -251,31 +259,34 @@ export default function AccountSetup() {
           {/* Divider */}
           <div className="relative">
             <div className="absolute inset-0 flex items-center">
-              <div className="w-full border-t border-white/10" />
+              <div className="w-full border-t border-[var(--glass-border)]" />
             </div>
             <div className="relative flex justify-center text-sm">
-              <span className="bg-neutral-900/70 px-4 text-neutral-400">OR</span>
+              <span className="bg-[var(--glass-bg)] px-4 text-[var(--text-tertiary)]">OR</span>
             </div>
           </div>
 
           {/* Google OAuth Option */}
           <div className="space-y-4">
-            <div className="flex items-center gap-2 text-sm font-medium text-neutral-200">
-              <Mail className="h-4 w-4 text-[#39bfb0]" />
+            <div className="flex items-center gap-2 text-sm font-medium text-[var(--text-primary)]">
+              <Mail className="h-4 w-4 text-[var(--brand-primary)]" />
               <span>Sign in with Google</span>
             </div>
             
             <div id="google-signin-button" />
             
-            <p className="text-xs text-neutral-400 text-center">
+            <p className="text-xs text-[var(--text-tertiary)] text-center">
               Quick and secure access using your Google account
             </p>
           </div>
 
           {/* Helper Text */}
-          <div className="bg-[#39bfb0]/10 border border-[#39bfb0]/30 rounded-lg p-4 text-sm">
-            <p className="text-[#39bfb0] font-medium mb-1">💡 Pro Tip</p>
-            <p className="text-neutral-300">
+          <div className="bg-[var(--brand-primary)]/5 border border-[var(--brand-primary)]/20 rounded-xl p-4 text-sm">
+            <div className="flex items-center gap-2 text-[var(--brand-primary)] font-medium mb-1">
+              <Lightbulb className="h-4 w-4" />
+              Pro Tip
+            </div>
+            <p className="text-[var(--text-secondary)]">
               Choose whichever method works best for you. You can always add the other option later in your account settings.
             </p>
           </div>

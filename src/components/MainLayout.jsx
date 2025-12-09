@@ -1,19 +1,22 @@
-import { useState, useEffect, useRef } from 'react'
+import { useState, lazy, Suspense } from 'react'
 import Sidebar from './Sidebar'
-import Dashboard from './Dashboard'
-import Reports from './Reports'
-import Projects from './Projects'
-import Files from './Files'
-import Messages from './Messages'
-import Billing from './Billing'
-import ClientManagement from './ClientManagement'
-import EmailManager from '@/pages/EmailManager'
-import BlogManagement from './BlogManagement'
-import Audits from '@/pages/Audits'
 import UptradeLoading from './UptradeLoading'
 import useAuthStore from '@/lib/auth-store'
 import { Menu, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
+
+// Lazy load all section components for better code splitting
+const Dashboard = lazy(() => import('./Dashboard'))
+const Reports = lazy(() => import('./Reports'))
+const Projects = lazy(() => import('./Projects'))
+const FilesDrive = lazy(() => import('./FilesDrive'))
+const Messages = lazy(() => import('./Messages'))
+const Billing = lazy(() => import('./Billing'))
+const ClientManagement = lazy(() => import('./ClientManagement'))
+const EmailManager = lazy(() => import('@/pages/EmailManager'))
+const BlogManagement = lazy(() => import('./BlogManagement'))
+const PortfolioManagement = lazy(() => import('./PortfolioManagement'))
+const Audits = lazy(() => import('@/pages/Audits'))
 
 const MainLayout = () => {
   const [activeSection, setActiveSection] = useState('dashboard')
@@ -36,7 +39,7 @@ const MainLayout = () => {
       case 'projects':
         return <Projects />
       case 'files':
-        return <Files />
+        return <FilesDrive />
       case 'messages':
         return <Messages />
       case 'billing':
@@ -45,6 +48,8 @@ const MainLayout = () => {
         return <ClientManagement />
       case 'blog':
         return <BlogManagement />
+      case 'portfolio':
+        return <PortfolioManagement />
       case 'email':
         return <EmailManager />
       default:
@@ -54,21 +59,21 @@ const MainLayout = () => {
 
   if (isLoading) {
     return (
-      <div className="fixed inset-0 z-50 flex items-center justify-center bg-white/80 backdrop-blur-sm">
+      <div className="fixed inset-0 z-50 flex items-center justify-center bg-[var(--surface-primary)]/80 backdrop-blur-[var(--blur-sm)]">
         <UptradeLoading />
       </div>
     )
   }
 
   return (
-    <div className="flex h-screen bg-gray-50">
+    <div className="flex h-screen bg-[var(--surface-primary)]">
       {/* Mobile Sidebar Toggle */}
       <div className="lg:hidden fixed top-4 left-4 z-50">
         <Button
-          variant="outline"
+          variant="glass"
           size="sm"
           onClick={() => setIsMobileSidebarOpen(!isMobileSidebarOpen)}
-          className="bg-white shadow-md"
+          className="shadow-[var(--shadow-md)]"
         >
           {isMobileSidebarOpen ? (
             <X className="h-5 w-5" />
@@ -79,7 +84,7 @@ const MainLayout = () => {
       </div>
 
       {/* Desktop Sidebar */}
-      <aside className="hidden lg:block w-64 bg-white border-r">
+      <aside className="hidden lg:block w-64 bg-[var(--glass-bg)] backdrop-blur-[var(--blur-xl)] border-r border-[var(--glass-border)]">
         <Sidebar
           activeSection={activeSection}
           onSectionChange={setActiveSection}
@@ -90,10 +95,10 @@ const MainLayout = () => {
       {isMobileSidebarOpen && (
         <>
           <div
-            className="lg:hidden fixed inset-0 bg-black/50 z-[100]"
+            className="lg:hidden fixed inset-0 bg-black/40 backdrop-blur-[var(--blur-sm)] z-[100]"
             onClick={() => setIsMobileSidebarOpen(false)}
           />
-          <aside className="lg:hidden fixed inset-y-0 left-0 w-64 bg-white border-r shadow-xl z-[101] overflow-y-auto">
+          <aside className="lg:hidden fixed inset-y-0 left-0 w-64 bg-[var(--glass-bg)] backdrop-blur-[var(--blur-xl)] border-r border-[var(--glass-border)] shadow-[var(--shadow-xl)] z-[101] overflow-y-auto">
             <Sidebar
               activeSection={activeSection}
               onSectionChange={(section) => {
@@ -108,8 +113,10 @@ const MainLayout = () => {
 
       {/* Main Content */}
       <main className="flex-1 overflow-y-auto">
-        <div className="container mx-auto p-6 lg:p-8 max-w-7xl">
-          {renderContent()}
+        <div className="p-6 lg:p-8">
+          <Suspense fallback={<UptradeLoading />}>
+            {renderContent()}
+          </Suspense>
         </div>
       </main>
     </div>

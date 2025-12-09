@@ -130,7 +130,7 @@ export default function TemplatesManager() {
       {templates.length === 0 ? (
         <Card>
           <CardContent className="pt-6">
-            <p className="text-center text-gray-500">No templates yet. Create your first one!</p>
+            <p className="text-center text-[var(--text-secondary)]">No templates yet. Create your first one!</p>
           </CardContent>
         </Card>
       ) : (

@@ -1,23 +1,16 @@
 // netlify/functions/invoices-mark-paid.js
-import jwt from 'jsonwebtoken'
-import { neon } from '@neondatabase/serverless'
-import { drizzle } from 'drizzle-orm/neon-http'
-import { eq } from 'drizzle-orm'
+import { createSupabaseAdmin, getAuthenticatedUser } from './utils/supabase.js'
 import { Resend } from 'resend'
-import * as schema from '../../src/db/schema.js'
 
-const COOKIE_NAME = process.env.SESSION_COOKIE_NAME || 'um_session'
-const JWT_SECRET = process.env.AUTH_JWT_SECRET
-const DATABASE_URL = process.env.DATABASE_URL
 const RESEND_API_KEY = process.env.RESEND_API_KEY
-const RESEND_FROM_EMAIL = process.env.RESEND_FROM_EMAIL || 'portal@uptrademedia.com'
+const RESEND_FROM_EMAIL = process.env.RESEND_FROM_EMAIL || 'portal@send.uptrademedia.com'
 const ADMIN_EMAIL = process.env.ADMIN_EMAIL
 
 export async function handler(event) {
   // CORS headers
   const headers = {
     'Access-Control-Allow-Origin': '*',
-    'Access-Control-Allow-Headers': 'Content-Type',
+    'Access-Control-Allow-Headers': 'Content-Type, Authorization',
     'Access-Control-Allow-Methods': 'POST, OPTIONS',
     'Content-Type': 'application/json'
   }
@@ -34,31 +27,20 @@ export async function handler(event) {
     }
   }
 
-  // Verify authentication
-  if (!JWT_SECRET) {
-    return {
-      statusCode: 500,
-      headers,
-      body: JSON.stringify({ error: 'Server not configured' })
-    }
-  }
-
-  const rawCookie = event.headers.cookie || ''
-  const token = rawCookie.split('; ').find(c => c.startsWith(`${COOKIE_NAME}=`))?.split('=')[1]
-
-  if (!token) {
-    return {
-      statusCode: 401,
-      headers,
-      body: JSON.stringify({ error: 'Not authenticated' })
-    }
-  }
-
   try {
-    const payload = jwt.verify(token, JWT_SECRET)
+    // Verify authentication with Supabase
+    const { user, contact, error: authError } = await getAuthenticatedUser(event)
+    
+    if (authError || !contact) {
+      return {
+        statusCode: 401,
+        headers,
+        body: JSON.stringify({ error: 'Not authenticated' })
+      }
+    }
 
     // Only admins can mark invoices as paid
-    if (payload.role !== 'admin') {
+    if (contact.role !== 'admin') {
       return {
         statusCode: 403,
         headers,
@@ -78,28 +60,20 @@ export async function handler(event) {
       }
     }
 
-    // Connect to database
-    if (!DATABASE_URL) {
-      return {
-        statusCode: 500,
-        headers,
-        body: JSON.stringify({ error: 'Database not configured' })
-      }
-    }
-
-    const sql = neon(DATABASE_URL)
-    const db = drizzle(sql, { schema })
+    const supabase = createSupabaseAdmin()
 
     // Fetch invoice
-    const invoice = await db.query.invoices.findFirst({
-      where: eq(schema.invoices.id, invoiceId),
-      with: {
-        contact: true,
-        project: true
-      }
-    })
+    const { data: invoice, error: fetchError } = await supabase
+      .from('invoices')
+      .select(`
+        *,
+        contact:contacts(id, name, email, company),
+        project:projects(id, title)
+      `)
+      .eq('id', invoiceId)
+      .single()
 
-    if (!invoice) {
+    if (fetchError || !invoice) {
       return {
         statusCode: 404,
         headers,
@@ -117,127 +91,100 @@ export async function handler(event) {
     }
 
     // Update invoice to paid status
-    const now = new Date()
-    const [updatedInvoice] = await db.update(schema.invoices)
-      .set({
+    const now = new Date().toISOString()
+    const { data: updatedInvoice, error: updateError } = await supabase
+      .from('invoices')
+      .update({
         status: 'paid',
-        paidAt: now,
-        updatedAt: now
+        paid_at: now,
+        payment_method: paymentMethod || 'manual',
+        updated_at: now
       })
-      .where(eq(schema.invoices.id, invoiceId))
-      .returning()
+      .eq('id', invoiceId)
+      .select(`
+        *,
+        contact:contacts(id, name, email, company),
+        project:projects(id, title)
+      `)
+      .single()
 
-    // Send receipt email to client
-    if (RESEND_API_KEY && invoice.contact.email) {
+    if (updateError) {
+      console.error('[invoices-mark-paid] Database error:', updateError)
+      return {
+        statusCode: 500,
+        headers,
+        body: JSON.stringify({ error: 'Failed to update invoice' })
+      }
+    }
+
+    // Send payment confirmation email to client
+    if (RESEND_API_KEY && invoice.contact?.email) {
       try {
         const resend = new Resend(RESEND_API_KEY)
         await resend.emails.send({
           from: RESEND_FROM_EMAIL,
           to: invoice.contact.email,
-          subject: `Receipt for Invoice ${invoice.invoiceNumber}`,
+          subject: `Payment Received - Invoice ${invoice.invoice_number}`,
           html: `
-            <h2>Payment Receipt</h2>
-            <p>Hello ${invoice.contact.name},</p>
-            <p>Thank you for your payment! We've received payment for your invoice.</p>
-            <table style="border-collapse: collapse; margin: 20px 0;">
-              <tr><td style="padding: 8px;"><strong>Invoice Number:</strong></td><td style="padding: 8px;">${invoice.invoiceNumber}</td></tr>
-              <tr><td style="padding: 8px;"><strong>Amount:</strong></td><td style="padding: 8px;">$${parseFloat(invoice.totalAmount).toFixed(2)}</td></tr>
-              <tr><td style="padding: 8px;"><strong>Payment Date:</strong></td><td style="padding: 8px;">${now.toLocaleDateString()}</td></tr>
-              ${paymentMethod ? `<tr><td style="padding: 8px;"><strong>Payment Method:</strong></td><td style="padding: 8px;">${paymentMethod}</td></tr>` : ''}
-              ${invoice.project ? `<tr><td style="padding: 8px;"><strong>Project:</strong></td><td style="padding: 8px;">${invoice.project.name}</td></tr>` : ''}
-            </table>
-            <p>You can view this invoice anytime in your billing portal.</p>
-            <p>Thank you for your business!</p>
+            <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto;">
+              <h2 style="color: #4bbf39;">Payment Confirmed</h2>
+              <p>Hi ${invoice.contact.name || 'there'},</p>
+              <p>We've received your payment. Thank you!</p>
+              <div style="background: #f5f5f5; padding: 20px; border-radius: 8px; margin: 20px 0;">
+                <p><strong>Invoice Number:</strong> ${invoice.invoice_number}</p>
+                <p><strong>Amount Paid:</strong> $${invoice.total_amount.toFixed(2)}</p>
+                <p><strong>Payment Date:</strong> ${new Date().toLocaleDateString()}</p>
+                <p><strong>Payment Method:</strong> ${paymentMethod || 'Manual'}</p>
+              </div>
+              <p>
+                <a href="https://portal.uptrademedia.com/billing" 
+                   style="display: inline-block; background: #4bbf39; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px;">
+                  View Receipt
+                </a>
+              </p>
+              <p style="color: #666; font-size: 14px; margin-top: 30px;">
+                Best regards,<br>Uptrade Media
+              </p>
+            </div>
           `
         })
       } catch (emailError) {
-        console.error('Failed to send receipt email:', emailError)
-        // Don't fail the whole request if email fails
+        console.error('[invoices-mark-paid] Email error:', emailError)
+        // Don't fail the request if email fails
       }
-    }
-
-    // Send notification to admin
-    if (RESEND_API_KEY && ADMIN_EMAIL) {
-      try {
-        const resend = new Resend(RESEND_API_KEY)
-        await resend.emails.send({
-          from: RESEND_FROM_EMAIL,
-          to: ADMIN_EMAIL,
-          subject: `Payment Marked - Invoice ${invoice.invoiceNumber}`,
-          html: `
-            <h2>Invoice Payment Marked</h2>
-            <p>Admin has marked the following invoice as paid:</p>
-            <table style="border-collapse: collapse; margin: 20px 0;">
-              <tr><td style="padding: 8px;"><strong>Client:</strong></td><td style="padding: 8px;">${invoice.contact.name}</td></tr>
-              <tr><td style="padding: 8px;"><strong>Invoice Number:</strong></td><td style="padding: 8px;">${invoice.invoiceNumber}</td></tr>
-              <tr><td style="padding: 8px;"><strong>Amount:</strong></td><td style="padding: 8px;">$${parseFloat(invoice.totalAmount).toFixed(2)}</td></tr>
-              <tr><td style="padding: 8px;"><strong>Marked Paid At:</strong></td><td style="padding: 8px;">${now.toLocaleString()}</td></tr>
-              ${paymentMethod ? `<tr><td style="padding: 8px;"><strong>Payment Method:</strong></td><td style="padding: 8px;">${paymentMethod}</td></tr>` : ''}
-            </table>
-          `
-        })
-      } catch (emailError) {
-        console.error('Failed to send admin notification:', emailError)
-        // Don't fail the whole request if email fails
-      }
-    }
-
-    // Format response
-    const formattedInvoice = {
-      id: updatedInvoice.id,
-      contactId: updatedInvoice.contactId,
-      projectId: updatedInvoice.projectId,
-      invoiceNumber: updatedInvoice.invoiceNumber,
-      squareInvoiceId: updatedInvoice.squareInvoiceId,
-      amount: updatedInvoice.amount ? parseFloat(updatedInvoice.amount) : 0,
-      taxRate: updatedInvoice.taxRate ? parseFloat(updatedInvoice.taxRate) : 0,
-      taxAmount: updatedInvoice.taxAmount ? parseFloat(updatedInvoice.taxAmount) : 0,
-      totalAmount: updatedInvoice.totalAmount ? parseFloat(updatedInvoice.totalAmount) : 0,
-      status: updatedInvoice.status,
-      description: updatedInvoice.description,
-      dueDate: updatedInvoice.dueDate?.toISOString(),
-      paidAt: updatedInvoice.paidAt?.toISOString(),
-      createdAt: updatedInvoice.createdAt?.toISOString(),
-      updatedAt: updatedInvoice.updatedAt?.toISOString(),
-      contact: {
-        id: invoice.contact?.id,
-        name: invoice.contact?.name,
-        email: invoice.contact?.email,
-        company: invoice.contact?.company
-      },
-      project: invoice.project ? {
-        id: invoice.project.id,
-        name: invoice.project.name
-      } : null
     }
 
     return {
       statusCode: 200,
       headers,
-      body: JSON.stringify({ 
+      body: JSON.stringify({
         success: true,
-        message: 'Invoice marked as paid successfully',
-        invoice: formattedInvoice 
+        invoice: {
+          id: updatedInvoice.id,
+          invoiceNumber: updatedInvoice.invoice_number,
+          amount: updatedInvoice.amount,
+          taxRate: updatedInvoice.tax_rate,
+          taxAmount: updatedInvoice.tax_amount,
+          totalAmount: updatedInvoice.total_amount,
+          description: updatedInvoice.description,
+          dueDate: updatedInvoice.due_date,
+          status: updatedInvoice.status,
+          paidAt: updatedInvoice.paid_at,
+          paymentMethod: updatedInvoice.payment_method,
+          contact: updatedInvoice.contact,
+          project: updatedInvoice.project,
+          createdAt: updatedInvoice.created_at,
+          updatedAt: updatedInvoice.updated_at
+        }
       })
     }
 
   } catch (error) {
-    if (error.name === 'JsonWebTokenError') {
-      return {
-        statusCode: 401,
-        headers,
-        body: JSON.stringify({ error: 'Invalid or expired session' })
-      }
-    }
-
-    console.error('Error marking invoice as paid:', error)
+    console.error('[invoices-mark-paid] Error:', error)
     return {
       statusCode: 500,
       headers,
-      body: JSON.stringify({ 
-        error: 'Failed to mark invoice as paid',
-        message: error.message 
-      })
+      body: JSON.stringify({ error: 'Internal server error' })
     }
   }
 }

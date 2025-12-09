@@ -1,8 +1,5 @@
 // netlify/functions/blog-create.js
-import { neon } from '@neondatabase/serverless'
-import jwt from 'jsonwebtoken'
-
-const sql = neon(process.env.DATABASE_URL)
+import { createSupabaseAdmin, getUserFromCookie } from './utils/supabase.js'
 
 export async function handler(event) {
   // CORS headers
@@ -30,19 +27,18 @@ export async function handler(event) {
 
   try {
     // Verify authentication
-    const token = event.headers.cookie?.match(/um_session=([^;]+)/)?.[1]
-    if (!token) {
+    const { user, contact, error: authError } = await getUserFromCookie(event)
+    
+    if (authError || !user || !contact) {
       return {
         statusCode: 401,
         headers,
         body: JSON.stringify({ error: 'Unauthorized' })
       }
     }
-
-    const payload = jwt.verify(token, process.env.AUTH_JWT_SECRET || process.env.JWT_SECRET)
     
     // Verify admin role
-    if (payload.role !== 'admin') {
+    if (contact.role !== 'admin') {
       return {
         statusCode: 403,
         headers,
@@ -73,55 +69,41 @@ export async function handler(event) {
       .replace(/\n/g, '<br>')
 
     // Insert into database
-    const result = await sql`
-      INSERT INTO blog_posts (
-        slug,
-        title,
-        subtitle,
-        category,
-        excerpt,
-        content,
-        content_html,
-        featured_image,
-        featured_image_alt,
-        author,
-        keywords,
-        reading_time,
-        meta_title,
-        meta_description,
-        status,
-        published_at,
-        created_at,
-        updated_at
-      ) VALUES (
-        ${blogPost.slug},
-        ${blogPost.title},
-        ${blogPost.subtitle || null},
-        ${blogPost.category || 'news'},
-        ${blogPost.excerpt},
-        ${blogPost.content},
-        ${contentHtml},
-        ${blogPost.featuredImage},
-        ${blogPost.featuredImageAlt || blogPost.title},
-        ${blogPost.author || 'Uptrade Media'},
-        ${blogPost.keywords ? JSON.stringify(blogPost.keywords) : null},
-        ${blogPost.readingTime || 5},
-        ${blogPost.metaTitle || blogPost.title},
-        ${blogPost.metaDescription || blogPost.excerpt},
-        ${blogPost.status || 'draft'},
-        ${blogPost.publishedAt ? new Date(blogPost.publishedAt) : new Date()},
-        NOW(),
-        NOW()
-      )
-      RETURNING id, slug, title, status
-    `
+    const supabase = createSupabaseAdmin()
+    
+    const { data, error: insertError } = await supabase
+      .from('blog_posts')
+      .insert({
+        slug: blogPost.slug,
+        title: blogPost.title,
+        subtitle: blogPost.subtitle || null,
+        category: blogPost.category || 'news',
+        excerpt: blogPost.excerpt,
+        content: blogPost.content,
+        content_html: contentHtml,
+        featured_image: blogPost.featuredImage,
+        featured_image_alt: blogPost.featuredImageAlt || blogPost.title,
+        author: blogPost.author || 'Uptrade Media',
+        keywords: blogPost.keywords || [],
+        reading_time: blogPost.readingTime || 5,
+        meta_title: blogPost.metaTitle || blogPost.title,
+        meta_description: blogPost.metaDescription || blogPost.excerpt,
+        status: blogPost.status || 'draft',
+        published_at: blogPost.publishedAt ? new Date(blogPost.publishedAt) : new Date()
+      })
+      .select('id, slug, title, status')
+      .single()
+
+    if (insertError) {
+      throw insertError
+    }
 
     return {
       statusCode: 201,
       headers,
       body: JSON.stringify({
         success: true,
-        data: result[0],
+        data,
         message: 'Blog post created successfully'
       })
     }
@@ -129,7 +111,7 @@ export async function handler(event) {
     console.error('Blog create error:', error)
 
     // Check for duplicate slug
-    if (error.message.includes('unique constraint')) {
+    if (error.message.includes('duplicate') || error.code === '23505') {
       return {
         statusCode: 409,
         headers,

@@ -1,16 +1,17 @@
 // netlify/functions/proposals-update.js
+// Migrated to Supabase from Neon/Drizzle
 import jwt from 'jsonwebtoken'
-import { neon } from '@neondatabase/serverless'
-import { drizzle } from 'drizzle-orm/neon-http'
-import { eq } from 'drizzle-orm'
-import * as schema from '../../src/db/schema.js'
+import { createClient } from '@supabase/supabase-js'
 
 const COOKIE_NAME = process.env.SESSION_COOKIE_NAME || 'um_session'
 const JWT_SECRET = process.env.AUTH_JWT_SECRET
-const DATABASE_URL = process.env.DATABASE_URL
+
+const supabase = createClient(
+  process.env.SUPABASE_URL,
+  process.env.SUPABASE_SERVICE_ROLE_KEY
+)
 
 export async function handler(event) {
-  // CORS headers
   const headers = {
     'Access-Control-Allow-Origin': '*',
     'Access-Control-Allow-Headers': 'Content-Type',
@@ -40,7 +41,6 @@ export async function handler(event) {
     }
   }
 
-  // Verify authentication
   if (!JWT_SECRET) {
     return {
       statusCode: 500,
@@ -76,31 +76,23 @@ export async function handler(event) {
     const body = JSON.parse(event.body || '{}')
     const { 
       title,
+      description,
       mdxContent,
       status,
       totalAmount,
       validUntil,
-      projectId
+      projectId,
+      lineItems
     } = body
 
-    // Connect to database
-    if (!DATABASE_URL) {
-      return {
-        statusCode: 500,
-        headers,
-        body: JSON.stringify({ error: 'Database not configured' })
-      }
-    }
-
-    const sql = neon(DATABASE_URL)
-    const db = drizzle(sql, { schema })
-
     // Check if proposal exists
-    const existingProposal = await db.query.proposals.findFirst({
-      where: eq(schema.proposals.id, proposalId)
-    })
+    const { data: existingProposal, error: fetchError } = await supabase
+      .from('proposals')
+      .select('id, status')
+      .eq('id', proposalId)
+      .single()
 
-    if (!existingProposal) {
+    if (fetchError || !existingProposal) {
       return {
         statusCode: 404,
         headers,
@@ -110,39 +102,78 @@ export async function handler(event) {
 
     // Build update object (only include fields that were provided)
     const updates = {
-      updatedAt: new Date()
+      updated_at: new Date().toISOString()
     }
 
     if (title !== undefined) updates.title = title
-    if (mdxContent !== undefined) updates.mdxContent = mdxContent
+    if (description !== undefined) updates.description = description
+    if (mdxContent !== undefined) updates.mdx_content = mdxContent
     if (status !== undefined) updates.status = status
-    if (totalAmount !== undefined) updates.totalAmount = totalAmount ? String(totalAmount) : null
-    if (validUntil !== undefined) updates.validUntil = validUntil ? new Date(validUntil) : null
-    if (projectId !== undefined) updates.projectId = projectId || null
+    if (totalAmount !== undefined) updates.total_amount = totalAmount ? String(totalAmount) : null
+    if (validUntil !== undefined) updates.valid_until = validUntil || null
+    if (projectId !== undefined) updates.project_id = projectId || null
 
     // Update proposal
-    const [updatedProposal] = await db
-      .update(schema.proposals)
-      .set(updates)
-      .where(eq(schema.proposals.id, proposalId))
-      .returning()
+    const { data: updatedProposal, error: updateError } = await supabase
+      .from('proposals')
+      .update(updates)
+      .eq('id', proposalId)
+      .select()
+      .single()
+
+    if (updateError) {
+      console.error('Update error:', updateError)
+      throw updateError
+    }
+
+    // Update line items if provided
+    if (lineItems && Array.isArray(lineItems)) {
+      // Delete existing line items
+      await supabase
+        .from('proposal_line_items')
+        .delete()
+        .eq('proposal_id', proposalId)
+
+      // Insert new line items
+      if (lineItems.length > 0) {
+        const lineItemsToInsert = lineItems.map((item, index) => ({
+          proposal_id: proposalId,
+          service_type: item.serviceType || 'custom',
+          description: item.description,
+          quantity: item.quantity || 1,
+          unit_price: item.unitPrice,
+          total: (item.quantity || 1) * item.unitPrice,
+          sort_order: index
+        }))
+
+        const { error: lineItemsError } = await supabase
+          .from('proposal_line_items')
+          .insert(lineItemsToInsert)
+
+        if (lineItemsError) {
+          console.error('Line items error:', lineItemsError)
+          // Non-fatal, continue
+        }
+      }
+    }
 
     // Format response
     const formattedProposal = {
       id: updatedProposal.id,
-      contactId: updatedProposal.contactId,
-      projectId: updatedProposal.projectId,
+      contactId: updatedProposal.contact_id,
+      projectId: updatedProposal.project_id,
       slug: updatedProposal.slug,
       title: updatedProposal.title,
-      mdxContent: updatedProposal.mdxContent,
+      description: updatedProposal.description,
+      mdxContent: updatedProposal.mdx_content,
       status: updatedProposal.status,
-      totalAmount: updatedProposal.totalAmount ? parseFloat(updatedProposal.totalAmount) : null,
-      validUntil: updatedProposal.validUntil,
-      signedAt: updatedProposal.signedAt,
-      adminSignedAt: updatedProposal.adminSignedAt,
-      fullyExecutedAt: updatedProposal.fullyExecutedAt,
-      createdAt: updatedProposal.createdAt,
-      updatedAt: updatedProposal.updatedAt
+      totalAmount: updatedProposal.total_amount ? parseFloat(updatedProposal.total_amount) : null,
+      validUntil: updatedProposal.valid_until,
+      signedAt: updatedProposal.signed_at,
+      adminSignedAt: updatedProposal.admin_signed_at,
+      fullyExecutedAt: updatedProposal.fully_executed_at,
+      createdAt: updatedProposal.created_at,
+      updatedAt: updatedProposal.updated_at
     }
 
     return {

@@ -61,7 +61,7 @@ export function HelpIcon({ text, size = 'sm' }) {
 
   return (
     <Tooltip text={text}>
-      <HelpCircle className={`${sizeClasses[size]} text-gray-400 cursor-help hover:text-gray-600 transition-colors`} />
+      <HelpCircle className={`${sizeClasses[size]} text-[var(--text-tertiary)] cursor-help hover:text-[var(--text-secondary)] transition-colors`} />
     </Tooltip>
   )
 }

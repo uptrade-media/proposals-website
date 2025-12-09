@@ -25,12 +25,360 @@ import {
   Edit,
   Loader2,
   Send,
-  Trash2
+  Trash2,
+  Sparkles
 } from 'lucide-react'
 import useProjectsStore from '@/lib/projects-store'
 import useAuthStore from '@/lib/auth-store'
 import api from '@/lib/api'
 import { ProjectSkeleton } from './skeletons/ProjectSkeleton'
+import ProposalAIDialog from './ProposalAIDialog'
+import EditProposalDialog from './EditProposalDialog'
+import { ChevronDown, ChevronUp, BarChart2, MousePointer, Timer, TrendingUp, Activity } from 'lucide-react'
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible'
+import { Progress } from '@/components/ui/progress'
+
+// Proposal Row component for consistent display (Admin view) with expandable analytics
+function ProposalRow({ proposal, onView, onEdit, onDelete, showSignedDate = false }) {
+  const [isExpanded, setIsExpanded] = useState(false)
+  const [analytics, setAnalytics] = useState(null)
+  const [loadingAnalytics, setLoadingAnalytics] = useState(false)
+
+  const getStatusBadge = (status) => {
+    switch (status) {
+      case 'signed':
+      case 'accepted':
+        return <Badge className="bg-emerald-100 text-emerald-700 border-emerald-200">Signed</Badge>
+      case 'sent':
+        return <Badge variant="outline" className="border-blue-200 text-blue-600">Sent</Badge>
+      case 'viewed':
+        return <Badge variant="outline" className="border-purple-200 text-purple-600">Viewed</Badge>
+      case 'draft':
+        return <Badge variant="outline">Draft</Badge>
+      case 'declined':
+        return <Badge variant="outline" className="border-red-200 text-red-600">Declined</Badge>
+      default:
+        return <Badge variant="outline">{status}</Badge>
+    }
+  }
+
+  const formatDate = (dateStr) => {
+    if (!dateStr) return null
+    return new Date(dateStr).toLocaleDateString('en-US', { 
+      month: 'short', 
+      day: 'numeric', 
+      year: 'numeric' 
+    })
+  }
+
+  const formatTime = (seconds) => {
+    if (!seconds || seconds === 0) return '0s'
+    if (seconds < 60) return `${Math.round(seconds)}s`
+    const mins = Math.floor(seconds / 60)
+    const secs = Math.round(seconds % 60)
+    return secs > 0 ? `${mins}m ${secs}s` : `${mins}m`
+  }
+
+  const formatDateTime = (dateStr) => {
+    if (!dateStr) return null
+    return new Date(dateStr).toLocaleString('en-US', { 
+      month: 'short', 
+      day: 'numeric',
+      hour: 'numeric',
+      minute: '2-digit'
+    })
+  }
+
+  const fetchAnalytics = async () => {
+    if (analytics || loadingAnalytics) return
+    setLoadingAnalytics(true)
+    try {
+      const response = await api.get(`/.netlify/functions/proposals-analytics?id=${proposal.id}`)
+      setAnalytics(response.data.analytics)
+    } catch (err) {
+      console.error('Failed to fetch analytics:', err)
+    } finally {
+      setLoadingAnalytics(false)
+    }
+  }
+
+  const handleToggle = () => {
+    if (!isExpanded && !analytics) {
+      fetchAnalytics()
+    }
+    setIsExpanded(!isExpanded)
+  }
+
+  // Don't show analytics toggle for drafts
+  const showAnalytics = proposal.status !== 'draft'
+
+  return (
+    <Collapsible open={isExpanded} onOpenChange={handleToggle}>
+      <div className="border border-[var(--glass-border)] rounded-xl bg-[var(--glass-bg)] backdrop-blur-sm hover:bg-[var(--surface-secondary)] transition-colors overflow-hidden">
+        {/* Main Row */}
+        <div className="flex items-center justify-between p-4">
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center gap-2">
+              <h4 className="font-medium text-[var(--text-primary)] truncate">{proposal.title}</h4>
+              {getStatusBadge(proposal.status)}
+              {showAnalytics && analytics?.summary?.engagementScore > 0 && (
+                <Badge variant="outline" className="border-amber-200 text-amber-600 gap-1">
+                  <TrendingUp className="w-3 h-3" />
+                  {analytics.summary.engagementScore}%
+                </Badge>
+              )}
+            </div>
+            <div className="flex items-center gap-3 mt-1">
+              <p className="text-sm text-[var(--text-secondary)] truncate">
+                {proposal.contact?.name || proposal.client_name || 'Unknown client'}
+                {(proposal.contact?.email || proposal.client_email) && (
+                  <span className="text-[var(--text-tertiary)]"> ({proposal.contact?.email || proposal.client_email})</span>
+                )}
+              </p>
+              {proposal.totalAmount && (
+                <span className="text-sm font-medium text-[var(--text-primary)]">
+                  ${proposal.totalAmount.toLocaleString()}
+                </span>
+              )}
+            </div>
+            {showSignedDate && proposal.signedAt && (
+              <p className="text-xs text-emerald-600 mt-1 flex items-center gap-1">
+                <CheckCircle className="w-3 h-3" />
+                Signed on {formatDate(proposal.signedAt)}
+                {proposal.fullyExecutedAt && (
+                  <span className="text-[var(--text-tertiary)]"> • Fully executed {formatDate(proposal.fullyExecutedAt)}</span>
+                )}
+              </p>
+            )}
+          </div>
+          <div className="flex items-center gap-2 ml-4">
+            {showAnalytics && (
+              <CollapsibleTrigger asChild>
+                <Button variant="ghost" size="sm" className="text-[var(--text-secondary)]">
+                  <BarChart2 className="w-3.5 h-3.5 mr-1" />
+                  Analytics
+                  {isExpanded ? <ChevronUp className="w-3.5 h-3.5 ml-1" /> : <ChevronDown className="w-3.5 h-3.5 ml-1" />}
+                </Button>
+              </CollapsibleTrigger>
+            )}
+            <Button variant="outline" size="sm" onClick={onView}>
+              <Eye className="w-3 h-3 mr-1" />
+              View
+            </Button>
+            {!['signed', 'accepted'].includes(proposal.status) && (
+              <Button variant="outline" size="sm" onClick={onEdit}>
+                <Edit className="w-3 h-3 mr-1" />
+                Edit
+              </Button>
+            )}
+            {!['signed', 'accepted'].includes(proposal.status) && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={onDelete}
+                className="text-red-600 hover:text-red-700 hover:bg-red-50"
+              >
+                <Trash2 className="w-3 h-3" />
+              </Button>
+            )}
+          </div>
+        </div>
+
+        {/* Expandable Analytics Panel */}
+        <CollapsibleContent>
+          <div className="border-t border-[var(--glass-border)] bg-[var(--surface-secondary)]/50 px-4 py-3">
+            {loadingAnalytics ? (
+              <div className="flex items-center justify-center py-4">
+                <Loader2 className="w-5 h-5 animate-spin text-[var(--text-tertiary)]" />
+                <span className="ml-2 text-sm text-[var(--text-secondary)]">Loading analytics...</span>
+              </div>
+            ) : analytics ? (
+              <div className="space-y-4">
+                {/* Summary Stats Row */}
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                  <div className="bg-[var(--glass-bg)] rounded-lg p-3 border border-[var(--glass-border)]">
+                    <div className="flex items-center gap-2 text-[var(--text-secondary)] text-xs mb-1">
+                      <Eye className="w-3.5 h-3.5" />
+                      Total Views
+                    </div>
+                    <p className="text-xl font-semibold text-[var(--text-primary)]">
+                      {analytics.summary.totalViews}
+                    </p>
+                    <p className="text-xs text-[var(--text-tertiary)]">
+                      {analytics.summary.uniqueViewDays} unique day{analytics.summary.uniqueViewDays !== 1 ? 's' : ''}
+                    </p>
+                  </div>
+
+                  <div className="bg-[var(--glass-bg)] rounded-lg p-3 border border-[var(--glass-border)]">
+                    <div className="flex items-center gap-2 text-[var(--text-secondary)] text-xs mb-1">
+                      <Timer className="w-3.5 h-3.5" />
+                      Time Spent
+                    </div>
+                    <p className="text-xl font-semibold text-[var(--text-primary)]">
+                      {formatTime(analytics.summary.totalTimeSpent)}
+                    </p>
+                    <p className="text-xs text-[var(--text-tertiary)]">
+                      Total viewing time
+                    </p>
+                  </div>
+
+                  <div className="bg-[var(--glass-bg)] rounded-lg p-3 border border-[var(--glass-border)]">
+                    <div className="flex items-center gap-2 text-[var(--text-secondary)] text-xs mb-1">
+                      <MousePointer className="w-3.5 h-3.5" />
+                      Scroll Depth
+                    </div>
+                    <p className="text-xl font-semibold text-[var(--text-primary)]">
+                      {analytics.summary.maxScrollDepth}%
+                    </p>
+                    <Progress value={analytics.summary.maxScrollDepth} className="h-1.5 mt-1" />
+                  </div>
+
+                  <div className="bg-[var(--glass-bg)] rounded-lg p-3 border border-[var(--glass-border)]">
+                    <div className="flex items-center gap-2 text-[var(--text-secondary)] text-xs mb-1">
+                      <TrendingUp className="w-3.5 h-3.5" />
+                      Engagement
+                    </div>
+                    <p className="text-xl font-semibold text-[var(--text-primary)]">
+                      {analytics.summary.engagementScore}%
+                    </p>
+                    <Progress 
+                      value={analytics.summary.engagementScore} 
+                      className={`h-1.5 mt-1 ${
+                        analytics.summary.engagementScore >= 70 ? '[&>div]:bg-emerald-500' :
+                        analytics.summary.engagementScore >= 40 ? '[&>div]:bg-amber-500' :
+                        '[&>div]:bg-red-500'
+                      }`} 
+                    />
+                  </div>
+                </div>
+
+                {/* Timeline / Activity */}
+                {analytics.timeline.length > 0 && (
+                  <div>
+                    <h5 className="text-xs font-medium text-[var(--text-secondary)] mb-2 flex items-center gap-1.5">
+                      <Activity className="w-3.5 h-3.5" />
+                      Recent Activity
+                    </h5>
+                    <div className="space-y-1.5 max-h-32 overflow-y-auto">
+                      {analytics.timeline.slice(0, 8).map((event, i) => (
+                        <div key={i} className="flex items-center justify-between text-xs bg-[var(--glass-bg)] rounded px-2 py-1.5">
+                          <span className="text-[var(--text-secondary)] capitalize">
+                            {event.action.replace(/_/g, ' ')}
+                            {event.metadata?.section && (
+                              <span className="text-[var(--text-tertiary)]"> - {event.metadata.section}</span>
+                            )}
+                            {event.metadata?.scrollDepth && (
+                              <span className="text-[var(--text-tertiary)]"> ({event.metadata.scrollDepth}%)</span>
+                            )}
+                          </span>
+                          <span className="text-[var(--text-tertiary)]">
+                            {formatDateTime(event.timestamp)}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* First View / Last Activity */}
+                <div className="flex items-center gap-4 text-xs text-[var(--text-tertiary)] pt-1 border-t border-[var(--glass-border)]">
+                  {analytics.summary.firstView && (
+                    <span>First viewed: {formatDateTime(analytics.summary.firstView)}</span>
+                  )}
+                  {analytics.summary.lastActivity && (
+                    <span>Last activity: {formatDateTime(analytics.summary.lastActivity)}</span>
+                  )}
+                  {analytics.summary.signatureStarted && (
+                    <Badge variant="outline" className="border-amber-200 text-amber-600 text-xs">
+                      Signature started
+                    </Badge>
+                  )}
+                </div>
+              </div>
+            ) : (
+              <div className="text-center py-4 text-[var(--text-secondary)]">
+                <BarChart2 className="w-8 h-8 mx-auto mb-2 text-[var(--text-tertiary)]" />
+                <p className="text-sm">No analytics data yet</p>
+                <p className="text-xs text-[var(--text-tertiary)]">Client hasn't viewed this proposal</p>
+              </div>
+            )}
+          </div>
+        </CollapsibleContent>
+      </div>
+    </Collapsible>
+  )
+}
+
+// Client Proposal Row - Simpler version for clients
+function ClientProposalRow({ proposal, onView, showSignedDate = false }) {
+  const getStatusBadge = (status) => {
+    switch (status) {
+      case 'signed':
+      case 'accepted':
+        return <Badge className="bg-emerald-100 text-emerald-700 border-emerald-200">Signed</Badge>
+      case 'sent':
+        return <Badge className="bg-blue-100 text-blue-700 border-blue-200">Ready for Review</Badge>
+      case 'viewed':
+        return <Badge className="bg-purple-100 text-purple-700 border-purple-200">In Review</Badge>
+      case 'draft':
+        return <Badge variant="outline">Draft</Badge>
+      default:
+        return <Badge variant="outline">{status}</Badge>
+    }
+  }
+
+  const formatDate = (dateStr) => {
+    if (!dateStr) return null
+    return new Date(dateStr).toLocaleDateString('en-US', { 
+      month: 'short', 
+      day: 'numeric', 
+      year: 'numeric' 
+    })
+  }
+
+  return (
+    <div className="flex items-center justify-between p-4 border border-[var(--glass-border)] rounded-xl bg-[var(--glass-bg)] backdrop-blur-sm hover:bg-[var(--surface-secondary)] transition-colors">
+      <div className="flex-1 min-w-0">
+        <div className="flex items-center gap-2">
+          <h4 className="font-medium text-[var(--text-primary)] truncate">{proposal.title}</h4>
+          {getStatusBadge(proposal.status)}
+        </div>
+        <div className="flex items-center gap-3 mt-1">
+          {proposal.totalAmount && (
+            <span className="text-sm font-medium text-[var(--text-primary)]">
+              ${proposal.totalAmount.toLocaleString()}
+            </span>
+          )}
+          {proposal.createdAt && (
+            <span className="text-sm text-[var(--text-secondary)]">
+              Sent {formatDate(proposal.createdAt)}
+            </span>
+          )}
+        </div>
+        {showSignedDate && proposal.signedAt && (
+          <p className="text-xs text-emerald-600 mt-1 flex items-center gap-1">
+            <CheckCircle className="w-3 h-3" />
+            You signed on {formatDate(proposal.signedAt)}
+            {proposal.fullyExecutedAt && (
+              <span className="text-[var(--text-tertiary)]"> • Contract executed {formatDate(proposal.fullyExecutedAt)}</span>
+            )}
+          </p>
+        )}
+      </div>
+      <div className="flex items-center gap-2 ml-4">
+        <Button 
+          variant={['sent', 'viewed'].includes(proposal.status) ? 'default' : 'outline'} 
+          size="sm" 
+          onClick={onView}
+          className={['sent', 'viewed'].includes(proposal.status) ? 'bg-[var(--brand-primary)] hover:bg-[var(--brand-primary-hover)]' : ''}
+        >
+          <Eye className="w-3 h-3 mr-1" />
+          {['sent', 'viewed'].includes(proposal.status) ? 'Review & Sign' : 'View'}
+        </Button>
+      </div>
+    </div>
+  )
+}
 
 const Projects = () => {
   const { user } = useAuthStore()
@@ -62,14 +410,7 @@ const Projects = () => {
   // Admin-specific state
   const [proposals, setProposals] = useState([])
   const [clients, setClients] = useState([])
-  const [isProposalDialogOpen, setIsProposalDialogOpen] = useState(false)
-  const [proposalForm, setProposalForm] = useState({
-    title: '',
-    description: '',
-    contactId: '',
-    mdxContent: '',
-    slug: ''
-  })
+  const [editingProposal, setEditingProposal] = useState(null)
   const [deleteDialog, setDeleteDialog] = useState({ open: false, id: null, title: '' })
   const [deleteProposalDialog, setDeleteProposalDialog] = useState({ open: false, id: null, title: '' })
 
@@ -81,8 +422,9 @@ const Projects = () => {
     hasFetchedRef.current = true
     
     fetchProjects()
+    // Both admin and client need proposals now
+    fetchProposals()
     if (isAdmin) {
-      fetchProposals()
       fetchClients()
     }
   }, []) // Empty dependency array - only run once
@@ -102,29 +444,6 @@ const Projects = () => {
       setClients(response.data.clients || [])
     } catch (err) {
       console.error('Failed to fetch clients:', err)
-    }
-  }
-
-  const handleCreateProposal = async (e) => {
-    e.preventDefault()
-
-    try {
-      const response = await api.post('/.netlify/functions/proposals-create', {
-        title: proposalForm.title,
-        description: proposalForm.description,
-        contactId: proposalForm.contactId,
-        mdxContent: proposalForm.mdxContent,
-        slug: proposalForm.slug
-      })
-
-      toast.success('Proposal created and notification sent!')
-      setIsProposalDialogOpen(false)
-      setProposalForm({ title: '', description: '', contactId: '', mdxContent: '', slug: '' })
-      
-      // Refresh proposals list
-      fetchProposals()
-    } catch (err) {
-      toast.error(err.response?.data?.error || 'Failed to create proposal')
     }
   }
 
@@ -150,17 +469,17 @@ const Projects = () => {
   const getStatusColor = (status) => {
     switch (status) {
       case 'completed':
-        return 'bg-green-100 text-green-800 border-green-200'
+        return 'bg-[var(--accent-success)]/20 text-[var(--accent-success)] border-[var(--accent-success)]/30'
       case 'in_progress':
-        return 'bg-blue-100 text-blue-800 border-blue-200'
+        return 'bg-[var(--brand-primary)]/20 text-[var(--brand-primary)] border-[var(--brand-primary)]/30'
       case 'review':
-        return 'bg-yellow-100 text-yellow-800 border-yellow-200'
+        return 'bg-[var(--accent-warning)]/20 text-[var(--accent-warning)] border-[var(--accent-warning)]/30'
       case 'planning':
-        return 'bg-gray-100 text-gray-800 border-gray-200'
+        return 'bg-[var(--surface-tertiary)] text-[var(--text-secondary)] border-[var(--glass-border)]'
       case 'on_hold':
-        return 'bg-red-100 text-red-800 border-red-200'
+        return 'bg-[var(--accent-error)]/20 text-[var(--accent-error)] border-[var(--accent-error)]/30'
       default:
-        return 'bg-gray-100 text-gray-800 border-gray-200'
+        return 'bg-[var(--surface-tertiary)] text-[var(--text-secondary)] border-[var(--glass-border)]'
     }
   }
 
@@ -282,13 +601,13 @@ const Projects = () => {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold">Projects</h1>
-          <p className="text-gray-600">Manage your projects and track progress</p>
+          <h1 className="text-2xl font-bold text-[var(--text-primary)]">Projects</h1>
+          <p className="text-[var(--text-secondary)]">Manage your projects and track progress</p>
         </div>
         {canCreateProject && (
           <Dialog open={isCreateDialogOpen} onOpenChange={setIsCreateDialogOpen}>
             <DialogTrigger asChild>
-              <Button className="bg-gradient-to-r from-[#4bbf39] to-[#39bfb0] hover:from-[#3da832] hover:to-[#2da89a]">
+              <Button variant="glass-primary">
                 <Plus className="w-4 h-4 mr-2" />
                 New Project
               </Button>
@@ -394,7 +713,7 @@ const Projects = () => {
                   <Button 
                     type="submit" 
                     disabled={isLoading || !formData.contactId || !formData.title}
-                    className="bg-gradient-to-r from-[#4bbf39] to-[#39bfb0] hover:from-[#3da832] hover:to-[#2da89a]"
+                    variant="glass-primary"
                   >
                     {isLoading ? (
                       <>
@@ -460,22 +779,22 @@ const Projects = () => {
                     </CardHeader>
                     <CardContent className="space-y-4">
                       <div className="grid grid-cols-2 gap-4 text-sm">
-                        <div className="flex items-center text-gray-600">
+                        <div className="flex items-center text-[var(--text-secondary)]">
                           <FileText className="w-4 h-4 mr-2" />
                           {project.proposals_count || 0} Proposals
                         </div>
-                        <div className="flex items-center text-gray-600">
+                        <div className="flex items-center text-[var(--text-secondary)]">
                           <FileText className="w-4 h-4 mr-2" />
                           {project.files_count || 0} Files
                         </div>
                         {project.start_date && (
-                          <div className="flex items-center text-gray-600">
+                          <div className="flex items-center text-[var(--text-secondary)]">
                             <Calendar className="w-4 h-4 mr-2" />
                             {new Date(project.start_date).toLocaleDateString()}
                           </div>
                         )}
                         {project.budget && (
-                          <div className="flex items-center text-gray-600">
+                          <div className="flex items-center text-[var(--text-secondary)]">
                             <DollarSign className="w-4 h-4 mr-2" />
                             ${project.budget.toLocaleString()}
                           </div>
@@ -508,255 +827,312 @@ const Projects = () => {
                     <CardTitle>Manage Proposals</CardTitle>
                     <CardDescription>Create and send proposals to clients</CardDescription>
                   </div>
-                  <Dialog open={isProposalDialogOpen} onOpenChange={setIsProposalDialogOpen}>
-                    <DialogTrigger asChild>
-                      <Button className="bg-gradient-to-r from-[#4bbf39] to-[#39bfb0]">
-                        <Plus className="w-4 h-4 mr-2" />
-                        New Proposal
-                      </Button>
-                    </DialogTrigger>
-                    <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
-                      <DialogHeader>
-                        <DialogTitle>Create New Proposal</DialogTitle>
-                        <DialogDescription>
-                          Create a proposal and send it to a client
-                        </DialogDescription>
-                      </DialogHeader>
-                      <form onSubmit={handleCreateProposal} className="space-y-4">
-                        <div className="space-y-2">
-                          <Label htmlFor="proposalTitle">Proposal Title</Label>
-                          <Input
-                            id="proposalTitle"
-                            placeholder="Website Redesign Proposal"
-                            value={proposalForm.title}
-                            onChange={(e) => setProposalForm({ ...proposalForm, title: e.target.value })}
-                            required
-                          />
-                        </div>
-
-                        <div className="space-y-2">
-                          <Label htmlFor="proposalDescription">Description</Label>
-                          <Textarea
-                            id="proposalDescription"
-                            placeholder="Brief description of the proposal (shown in the list)"
-                            value={proposalForm.description}
-                            onChange={(e) => setProposalForm({ ...proposalForm, description: e.target.value })}
-                            rows={2}
-                          />
-                        </div>
-
-                        <div className="space-y-2">
-                          <Label htmlFor="contactId">Client</Label>
-                          <Select
-                            value={proposalForm.contactId}
-                            onValueChange={(value) => setProposalForm({ ...proposalForm, contactId: value })}
-                          >
-                            <SelectTrigger>
-                              <SelectValue placeholder="Select a client" />
-                            </SelectTrigger>
-                            <SelectContent>
-                              {clients.map((client) => (
-                                <SelectItem key={client.id} value={client.id}>
-                                  {client.name} ({client.email})
-                                </SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
-                        </div>
-
-                        <div className="space-y-2">
-                          <Label htmlFor="slug">Proposal Slug</Label>
-                          <Input
-                            id="slug"
-                            placeholder="website-redesign-2024"
-                            value={proposalForm.slug}
-                            onChange={(e) => setProposalForm({ ...proposalForm, slug: e.target.value })}
-                            required
-                          />
-                        </div>
-
-                        <div className="space-y-2">
-                          <Label htmlFor="mdxContent">Proposal Content (MDX)</Label>
-                          <Textarea
-                            id="mdxContent"
-                            placeholder="# Proposal Content&#10;&#10;## Introduction&#10;..."
-                            value={proposalForm.mdxContent}
-                            onChange={(e) => setProposalForm({ ...proposalForm, mdxContent: e.target.value })}
-                            rows={10}
-                            required
-                            className="font-mono text-sm"
-                          />
-                        </div>
-
-                        <div className="flex justify-end gap-2">
-                          <Button
-                            type="button"
-                            variant="outline"
-                            onClick={() => setIsProposalDialogOpen(false)}
-                          >
-                            Cancel
-                          </Button>
-                          <Button
-                            type="submit"
-                            className="bg-gradient-to-r from-[#4bbf39] to-[#39bfb0]"
-                          >
-                            <Send className="w-4 h-4 mr-2" />
-                            Create & Send
-                          </Button>
-                        </div>
-                      </form>
-                    </DialogContent>
-                  </Dialog>
+                  <ProposalAIDialog 
+                    clients={clients} 
+                    onSuccess={(proposal) => {
+                      setProposals([proposal, ...proposals])
+                      toast.success(`Proposal "${proposal.title}" generated!`)
+                    }}
+                  />
                 </div>
               </CardHeader>
               <CardContent>
-                <div className="space-y-2">
-                  {proposals.length === 0 ? (
-                    <EmptyState
-                      icon={Send}
-                      title="No proposals yet"
-                      description="Create your first proposal to send to clients."
-                      actionLabel="Create Proposal"
-                      onAction={() => setIsProposalDialogOpen(true)}
-                    />
-                  ) : (
-                    proposals.map((proposal) => (
-                      <div
-                        key={proposal.id}
-                        className="flex items-center justify-between p-4 border rounded-lg hover:bg-gray-50"
-                      >
-                        <div className="flex-1">
-                          <h4 className="font-medium">{proposal.title}</h4>
-                          <p className="text-sm text-gray-500">
-                            {proposal.description || `${proposal.client_name} (${proposal.client_email})`}
-                          </p>
-                        </div>
-                        <div className="flex items-center gap-2">
-                          <Badge variant={proposal.status === 'approved' ? 'default' : 'outline'}>
-                            {proposal.status}
-                          </Badge>
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => setViewingProposal(proposal.id)}
-                          >
-                            <Eye className="w-3 h-3 mr-1" />
-                            View
-                          </Button>
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => setDeleteProposalDialog({ 
-                              open: true, 
-                              id: proposal.id, 
-                              title: proposal.title 
-                            })}
-                            className="text-red-600 hover:text-red-700 hover:bg-red-50"
-                          >
-                            <Trash2 className="w-3 h-3" />
-                          </Button>
-                        </div>
+                {/* Sub-tabs for Active vs Signed */}
+                <Tabs defaultValue="active" className="w-full">
+                  <TabsList className="mb-4">
+                    <TabsTrigger value="active" className="flex items-center gap-1.5">
+                      <Clock className="w-3.5 h-3.5" />
+                      Active
+                      <Badge variant="secondary" className="ml-1 h-5 px-1.5 text-xs">
+                        {proposals.filter(p => !['signed', 'accepted', 'declined'].includes(p.status)).length}
+                      </Badge>
+                    </TabsTrigger>
+                    <TabsTrigger value="signed" className="flex items-center gap-1.5">
+                      <CheckCircle className="w-3.5 h-3.5" />
+                      Signed
+                      <Badge variant="secondary" className="ml-1 h-5 px-1.5 text-xs bg-emerald-100 text-emerald-700">
+                        {proposals.filter(p => ['signed', 'accepted'].includes(p.status)).length}
+                      </Badge>
+                    </TabsTrigger>
+                    <TabsTrigger value="declined" className="flex items-center gap-1.5">
+                      <AlertCircle className="w-3.5 h-3.5" />
+                      Declined
+                      <Badge variant="secondary" className="ml-1 h-5 px-1.5 text-xs">
+                        {proposals.filter(p => p.status === 'declined').length}
+                      </Badge>
+                    </TabsTrigger>
+                  </TabsList>
+
+                  {/* Active Proposals */}
+                  <TabsContent value="active" className="space-y-2 mt-0">
+                    {proposals.filter(p => !['signed', 'accepted', 'declined'].includes(p.status)).length === 0 ? (
+                      <EmptyState
+                        icon={Send}
+                        title="No active proposals"
+                        description="Create your first proposal to send to clients."
+                        actionLabel="Create Proposal"
+                        onAction={() => {}}
+                      />
+                    ) : (
+                      proposals.filter(p => !['signed', 'accepted', 'declined'].includes(p.status)).map((proposal) => (
+                        <ProposalRow 
+                          key={proposal.id} 
+                          proposal={proposal}
+                          onView={() => setViewingProposal(proposal.id)}
+                          onEdit={() => setEditingProposal(proposal)}
+                          onDelete={() => setDeleteProposalDialog({ open: true, id: proposal.id, title: proposal.title })}
+                        />
+                      ))
+                    )}
+                  </TabsContent>
+
+                  {/* Signed/Accepted Proposals */}
+                  <TabsContent value="signed" className="space-y-2 mt-0">
+                    {proposals.filter(p => ['signed', 'accepted'].includes(p.status)).length === 0 ? (
+                      <div className="text-center py-8 text-[var(--text-secondary)]">
+                        <CheckCircle className="w-12 h-12 mx-auto mb-3 text-[var(--text-tertiary)]" />
+                        <p className="font-medium">No signed proposals yet</p>
+                        <p className="text-sm">Proposals will appear here once clients sign them.</p>
                       </div>
-                    ))
-                  )}
-                </div>
+                    ) : (
+                      proposals.filter(p => ['signed', 'accepted'].includes(p.status)).map((proposal) => (
+                        <ProposalRow 
+                          key={proposal.id} 
+                          proposal={proposal}
+                          onView={() => setViewingProposal(proposal.id)}
+                          onEdit={() => setEditingProposal(proposal)}
+                          onDelete={() => setDeleteProposalDialog({ open: true, id: proposal.id, title: proposal.title })}
+                          showSignedDate
+                        />
+                      ))
+                    )}
+                  </TabsContent>
+
+                  {/* Declined Proposals */}
+                  <TabsContent value="declined" className="space-y-2 mt-0">
+                    {proposals.filter(p => p.status === 'declined').length === 0 ? (
+                      <div className="text-center py-8 text-[var(--text-secondary)]">
+                        <AlertCircle className="w-12 h-12 mx-auto mb-3 text-[var(--text-tertiary)]" />
+                        <p className="font-medium">No declined proposals</p>
+                        <p className="text-sm">Proposals that clients decline will appear here.</p>
+                      </div>
+                    ) : (
+                      proposals.filter(p => p.status === 'declined').map((proposal) => (
+                        <ProposalRow 
+                          key={proposal.id} 
+                          proposal={proposal}
+                          onView={() => setViewingProposal(proposal.id)}
+                          onEdit={() => setEditingProposal(proposal)}
+                          onDelete={() => setDeleteProposalDialog({ open: true, id: proposal.id, title: proposal.title })}
+                        />
+                      ))
+                    )}
+                  </TabsContent>
+                </Tabs>
+              </CardContent>
+            </Card>
+
+            {/* Edit Proposal Dialog */}
+            {editingProposal && (
+              <EditProposalDialog
+                proposal={editingProposal}
+                isOpen={!!editingProposal}
+                onClose={() => setEditingProposal(null)}
+                onSuccess={(updated) => {
+                  setProposals(proposals.map(p => p.id === updated.id ? updated : p))
+                  setEditingProposal(null)
+                  toast.success('Proposal updated!')
+                }}
+              />
+            )}
+          </TabsContent>
+        </Tabs>
+      ) : (
+        /* Client View - Projects & Proposals Tabs */
+        <Tabs defaultValue="projects" className="space-y-6">
+          <TabsList>
+            <TabsTrigger value="projects" className="flex items-center gap-1.5">
+              <FileText className="w-3.5 h-3.5" />
+              Projects
+              {projects.length > 0 && (
+                <Badge variant="secondary" className="ml-1 h-5 px-1.5 text-xs">
+                  {projects.length}
+                </Badge>
+              )}
+            </TabsTrigger>
+            <TabsTrigger value="proposals" className="flex items-center gap-1.5">
+              <Send className="w-3.5 h-3.5" />
+              Proposals
+              {proposals.length > 0 && (
+                <Badge variant="secondary" className="ml-1 h-5 px-1.5 text-xs">
+                  {proposals.length}
+                </Badge>
+              )}
+            </TabsTrigger>
+          </TabsList>
+
+          {/* Projects Tab Content */}
+          <TabsContent value="projects" className="space-y-6">
+            {isLoading && projects.length === 0 ? (
+              <div className="flex items-center justify-center py-12">
+                <Loader2 className="h-8 w-8 animate-spin text-[var(--brand-primary)]" />
+              </div>
+            ) : projects.length === 0 ? (
+              <Card>
+                <CardContent className="flex flex-col items-center justify-center py-12">
+                  <FileText className="h-12 w-12 text-[var(--text-tertiary)] mb-4" />
+                  <h3 className="text-lg font-medium text-[var(--text-primary)] mb-2">No projects yet</h3>
+                  <p className="text-[var(--text-secondary)] text-center mb-4">
+                    No projects have been created for your account yet.
+                  </p>
+                </CardContent>
+              </Card>
+            ) : (
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                {projects.map((project) => (
+                  <Card key={project.id} className="hover:shadow-lg transition-shadow">
+                    <CardHeader>
+                      <div className="flex items-start justify-between">
+                        <div className="flex-1">
+                          <CardTitle className="text-lg">{project.title}</CardTitle>
+                          <CardDescription className="mt-1">
+                            {project.description || 'No description provided'}
+                          </CardDescription>
+                        </div>
+                        <Badge className={getStatusColor(project.status)}>
+                          <div className="flex items-center space-x-1">
+                            {getStatusIcon(project.status)}
+                            <span className="capitalize">{project.status.replace('_', ' ')}</span>
+                          </div>
+                        </Badge>
+                      </div>
+                    </CardHeader>
+                    <CardContent className="space-y-4">
+                      <div className="grid grid-cols-2 gap-4 text-sm">
+                        <div className="flex items-center text-[var(--text-secondary)]">
+                          <FileText className="w-4 h-4 mr-2" />
+                          {project.proposals_count || 0} Proposals
+                        </div>
+                        <div className="flex items-center text-[var(--text-secondary)]">
+                          <FileText className="w-4 h-4 mr-2" />
+                          {project.files_count || 0} Files
+                        </div>
+                        {project.start_date && (
+                          <div className="flex items-center text-[var(--text-secondary)]">
+                            <Calendar className="w-4 h-4 mr-2" />
+                            {new Date(project.start_date).toLocaleDateString()}
+                          </div>
+                        )}
+                        {project.budget && (
+                          <div className="flex items-center text-[var(--text-secondary)]">
+                            <DollarSign className="w-4 h-4 mr-2" />
+                            ${parseFloat(project.budget).toLocaleString()}
+                          </div>
+                        )}
+                      </div>
+                      <div className="flex space-x-2">
+                        <Button variant="outline" size="sm" className="flex-1">
+                          <Eye className="w-4 h-4 mr-2" />
+                          View Details
+                        </Button>
+                        {project.proposals_count > 0 && (
+                          <Button 
+                            variant="outline" 
+                            size="sm"
+                            onClick={() => setViewingProposal(project.id)}
+                            className="border-[var(--brand-primary)] text-[var(--brand-primary)] hover:bg-[var(--brand-primary)] hover:text-white"
+                          >
+                            <FileText className="w-4 h-4 mr-2" />
+                            View Proposal
+                          </Button>
+                        )}
+                        {canCreateProject && (
+                          <Button 
+                            variant="outline" 
+                            size="sm"
+                            onClick={() => openEditDialog(project)}
+                          >
+                            <Edit className="w-4 h-4" />
+                          </Button>
+                        )}
+                      </div>
+                    </CardContent>
+                  </Card>
+                ))}
+              </div>
+            )}
+          </TabsContent>
+
+          {/* Proposals Tab Content */}
+          <TabsContent value="proposals" className="space-y-6">
+            <Card>
+              <CardHeader>
+                <CardTitle>Your Proposals</CardTitle>
+                <CardDescription>View proposals sent to you and their status</CardDescription>
+              </CardHeader>
+              <CardContent>
+                {/* Sub-tabs for Pending vs Signed */}
+                <Tabs defaultValue="pending" className="w-full">
+                  <TabsList className="mb-4">
+                    <TabsTrigger value="pending" className="flex items-center gap-1.5">
+                      <Clock className="w-3.5 h-3.5" />
+                      Pending Review
+                      <Badge variant="secondary" className="ml-1 h-5 px-1.5 text-xs">
+                        {proposals.filter(p => ['sent', 'viewed', 'draft'].includes(p.status)).length}
+                      </Badge>
+                    </TabsTrigger>
+                    <TabsTrigger value="signed" className="flex items-center gap-1.5">
+                      <CheckCircle className="w-3.5 h-3.5" />
+                      Signed
+                      <Badge variant="secondary" className="ml-1 h-5 px-1.5 text-xs bg-emerald-100 text-emerald-700">
+                        {proposals.filter(p => ['signed', 'accepted'].includes(p.status)).length}
+                      </Badge>
+                    </TabsTrigger>
+                  </TabsList>
+
+                  {/* Pending Proposals */}
+                  <TabsContent value="pending" className="space-y-2 mt-0">
+                    {proposals.filter(p => ['sent', 'viewed', 'draft'].includes(p.status)).length === 0 ? (
+                      <div className="text-center py-8 text-[var(--text-secondary)]">
+                        <Send className="w-12 h-12 mx-auto mb-3 text-[var(--text-tertiary)]" />
+                        <p className="font-medium">No pending proposals</p>
+                        <p className="text-sm">When we send you a new proposal, it will appear here.</p>
+                      </div>
+                    ) : (
+                      proposals.filter(p => ['sent', 'viewed', 'draft'].includes(p.status)).map((proposal) => (
+                        <ClientProposalRow 
+                          key={proposal.id} 
+                          proposal={proposal}
+                          onView={() => setViewingProposal(proposal.id)}
+                        />
+                      ))
+                    )}
+                  </TabsContent>
+
+                  {/* Signed Proposals */}
+                  <TabsContent value="signed" className="space-y-2 mt-0">
+                    {proposals.filter(p => ['signed', 'accepted'].includes(p.status)).length === 0 ? (
+                      <div className="text-center py-8 text-[var(--text-secondary)]">
+                        <CheckCircle className="w-12 h-12 mx-auto mb-3 text-[var(--text-tertiary)]" />
+                        <p className="font-medium">No signed proposals yet</p>
+                        <p className="text-sm">Proposals you've signed will appear here.</p>
+                      </div>
+                    ) : (
+                      proposals.filter(p => ['signed', 'accepted'].includes(p.status)).map((proposal) => (
+                        <ClientProposalRow 
+                          key={proposal.id} 
+                          proposal={proposal}
+                          onView={() => setViewingProposal(proposal.id)}
+                          showSignedDate
+                        />
+                      ))
+                    )}
+                  </TabsContent>
+                </Tabs>
               </CardContent>
             </Card>
           </TabsContent>
         </Tabs>
-      ) : (
-        /* Client View - Regular Projects Grid */
-        <>
-          {isLoading && projects.length === 0 ? (
-            <div className="flex items-center justify-center py-12">
-              <Loader2 className="h-8 w-8 animate-spin text-[#4bbf39]" />
-            </div>
-          ) : projects.length === 0 ? (
-            <Card>
-              <CardContent className="flex flex-col items-center justify-center py-12">
-                <FileText className="h-12 w-12 text-gray-400 mb-4" />
-                <h3 className="text-lg font-medium text-gray-900 mb-2">No projects yet</h3>
-                <p className="text-gray-500 text-center mb-4">
-                  No projects have been created for your account yet.
-                </p>
-              </CardContent>
-            </Card>
-          ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {projects.map((project) => (
-                <Card key={project.id} className="hover:shadow-lg transition-shadow">
-              <CardHeader>
-                <div className="flex items-start justify-between">
-                  <div className="flex-1">
-                    <CardTitle className="text-lg">{project.title}</CardTitle>
-                    <CardDescription className="mt-1">
-                      {project.description || 'No description provided'}
-                    </CardDescription>
-                  </div>
-                  <Badge className={getStatusColor(project.status)}>
-                    <div className="flex items-center space-x-1">
-                      {getStatusIcon(project.status)}
-                      <span className="capitalize">{project.status.replace('_', ' ')}</span>
-                    </div>
-                  </Badge>
-                </div>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div className="grid grid-cols-2 gap-4 text-sm">
-                  <div className="flex items-center text-gray-600">
-                    <FileText className="w-4 h-4 mr-2" />
-                    {project.proposals_count || 0} Proposals
-                  </div>
-                  <div className="flex items-center text-gray-600">
-                    <FileText className="w-4 h-4 mr-2" />
-                    {project.files_count || 0} Files
-                  </div>
-                  {project.start_date && (
-                    <div className="flex items-center text-gray-600">
-                      <Calendar className="w-4 h-4 mr-2" />
-                      {new Date(project.start_date).toLocaleDateString()}
-                    </div>
-                  )}
-                  {project.budget && (
-                    <div className="flex items-center text-gray-600">
-                      <DollarSign className="w-4 h-4 mr-2" />
-                      ${parseFloat(project.budget).toLocaleString()}
-                    </div>
-                  )}
-                </div>
-                
-                <div className="flex space-x-2">
-                  <Button variant="outline" size="sm" className="flex-1">
-                    <Eye className="w-4 h-4 mr-2" />
-                    View Details
-                  </Button>
-                  {project.proposals_count > 0 && (
-                    <Button 
-                      variant="outline" 
-                      size="sm"
-                      onClick={() => setViewingProposal(project.id)}
-                      className="border-[#4bbf39] text-[#4bbf39] hover:bg-[#4bbf39] hover:text-white"
-                    >
-                      <FileText className="w-4 h-4 mr-2" />
-                      View Proposal
-                    </Button>
-                  )}
-                  {canCreateProject && (
-                    <Button 
-                      variant="outline" 
-                      size="sm"
-                      onClick={() => openEditDialog(project)}
-                    >
-                      <Edit className="w-4 h-4" />
-                    </Button>
-                  )}
-                </div>
-              </CardContent>
-            </Card>
-          ))}
-        </div>
-          )}
-        </>
       )}
 
       {/* Edit Project Dialog */}
@@ -863,7 +1239,7 @@ const Projects = () => {
               <Button 
                 type="submit" 
                 disabled={isLoading || !formData.title}
-                className="bg-gradient-to-r from-[#4bbf39] to-[#39bfb0] hover:from-[#3da832] hover:to-[#2da89a]"
+                variant="glass-primary"
               >
                 {isLoading ? (
                   <>

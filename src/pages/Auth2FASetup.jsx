@@ -1,7 +1,13 @@
 import React, { useState, useEffect } from 'react'
-import { Copy, Check, AlertCircle, RefreshCw } from 'lucide-react'
+import { Copy, Check, AlertCircle, RefreshCw, Shield, ArrowLeft, Download } from 'lucide-react'
 import axios from 'axios'
 import { useNavigate } from 'react-router-dom'
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '../components/ui/card'
+import { Button } from '../components/ui/button'
+import { Alert, AlertDescription } from '../components/ui/alert'
+import { Input } from '../components/ui/input'
+import { Label } from '../components/ui/label'
+import { Checkbox } from '../components/ui/checkbox'
 
 export default function Auth2FASetup() {
   const navigate = useNavigate()
@@ -99,222 +105,245 @@ export default function Auth2FASetup() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 p-4">
-      <div className="max-w-md mx-auto">
+    <div className="min-h-screen flex items-center justify-center bg-[var(--surface-primary)] relative overflow-hidden p-4">
+      {/* Subtle gradient orbs */}
+      <div className="absolute inset-0 overflow-hidden pointer-events-none">
+        <div className="absolute -top-1/4 -right-1/4 w-1/2 h-1/2 bg-[var(--brand-primary)] opacity-[0.08] blur-[120px] rounded-full" />
+        <div className="absolute -bottom-1/4 -left-1/4 w-1/2 h-1/2 bg-[var(--brand-secondary)] opacity-[0.08] blur-[120px] rounded-full" />
+      </div>
+
+      <div className="w-full max-w-md relative">
         {/* Header */}
         <div className="text-center mb-8">
-          <h1 className="text-3xl font-bold text-white mb-2">Enable Two-Factor Authentication</h1>
-          <p className="text-slate-300">Step {step} of 3</p>
+          <div className="flex justify-center mb-4">
+            <img src="/logo.svg" alt="Uptrade Media" className="h-12 w-12" />
+          </div>
+          <h1 className="text-2xl font-semibold text-[var(--text-primary)] mb-2">Enable Two-Factor Authentication</h1>
+          <p className="text-[var(--text-secondary)]">Step {step} of 3</p>
         </div>
 
         {/* Error Alert */}
         {error && (
-          <div className="bg-red-900/20 border border-red-700 rounded-lg p-4 mb-6 flex gap-3">
-            <AlertCircle className="w-5 h-5 text-red-400 flex-shrink-0 mt-0.5" />
-            <div>
-              <h3 className="font-semibold text-red-300">Setup Error</h3>
-              <p className="text-red-200 text-sm">{error}</p>
-            </div>
-          </div>
+          <Alert variant="destructive" className="mb-6">
+            <AlertCircle className="h-4 w-4" />
+            <AlertDescription>{error}</AlertDescription>
+          </Alert>
         )}
 
         {/* Step 1: QR Code */}
         {step === 1 && (
-          <div className="bg-slate-800 rounded-lg p-8 border border-slate-700">
-            <h2 className="text-xl font-semibold text-white mb-6">Step 1: Scan QR Code</h2>
-
-            {loading ? (
-              <div className="flex justify-center items-center py-12">
-                <RefreshCw className="w-8 h-8 text-blue-400 animate-spin" />
-              </div>
-            ) : qrCode ? (
-              <>
-                <div className="space-y-6">
+          <Card className="bg-[var(--glass-bg)] backdrop-blur-xl border-[var(--glass-border)] shadow-[var(--shadow-lg)]">
+            <CardHeader>
+              <CardTitle className="text-[var(--text-primary)]">Step 1: Scan QR Code</CardTitle>
+              <CardDescription className="text-[var(--text-secondary)]">
+                Scan this code with your authenticator app
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-6">
+              {loading ? (
+                <div className="flex justify-center items-center py-12">
+                  <RefreshCw className="w-8 h-8 text-[var(--brand-primary)] animate-spin" />
+                </div>
+              ) : qrCode ? (
+                <>
                   {/* QR Code */}
-                  <div className="flex justify-center p-4 bg-white rounded-lg">
-                    <img src={qrCode} alt="2FA QR Code" className="w-64 h-64" />
+                  <div className="flex justify-center p-4 bg-white rounded-xl">
+                    <img src={qrCode} alt="2FA QR Code" className="w-48 h-48" />
                   </div>
 
                   <div className="text-center">
-                    <p className="text-slate-300 mb-3">
-                      Scan this code with your authenticator app:
+                    <p className="text-[var(--text-secondary)] text-sm mb-3">
+                      Compatible with:
                     </p>
-                    <ul className="text-left text-sm text-slate-400 space-y-1 mb-6">
-                      <li>• Google Authenticator</li>
-                      <li>• Microsoft Authenticator</li>
-                      <li>• Authy</li>
-                      <li>• 1Password</li>
-                    </ul>
-                  </div>
-
-                  {/* Manual Entry */}
-                  <div className="border-t border-slate-700 pt-6">
-                    <p className="text-slate-300 text-sm mb-3">Or enter this code manually:</p>
-                    <div className="flex gap-2">
-                      <code className="flex-1 bg-slate-900 border border-slate-600 rounded px-3 py-2 text-slate-100 font-mono text-sm break-all">
-                        {manualKey}
-                      </code>
-                      <button
-                        onClick={handleCopyKey}
-                        className="px-4 py-2 bg-slate-700 hover:bg-slate-600 text-white rounded font-medium transition-colors flex items-center gap-2"
-                      >
-                        {copied ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
-                      </button>
+                    <div className="flex flex-wrap justify-center gap-2 text-xs text-[var(--text-tertiary)]">
+                      <span className="px-2 py-1 bg-[var(--surface-secondary)] rounded">Google Authenticator</span>
+                      <span className="px-2 py-1 bg-[var(--surface-secondary)] rounded">Microsoft Authenticator</span>
+                      <span className="px-2 py-1 bg-[var(--surface-secondary)] rounded">Authy</span>
+                      <span className="px-2 py-1 bg-[var(--surface-secondary)] rounded">1Password</span>
                     </div>
                   </div>
 
-                  {/* Next Button */}
-                  <button
+                  {/* Manual Entry */}
+                  <div className="border-t border-[var(--glass-border)] pt-6">
+                    <Label className="text-[var(--text-secondary)] text-sm mb-2 block">Or enter this code manually:</Label>
+                    <div className="flex gap-2">
+                      <code className="flex-1 bg-[var(--surface-secondary)] border border-[var(--glass-border)] rounded-lg px-3 py-2 text-[var(--text-primary)] font-mono text-sm break-all">
+                        {manualKey}
+                      </code>
+                      <Button
+                        variant="glass"
+                        size="icon"
+                        onClick={handleCopyKey}
+                      >
+                        {copied ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
+                      </Button>
+                    </div>
+                  </div>
+
+                  <Button
                     onClick={() => setStep(2)}
-                    className="w-full mt-6 px-4 py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-semibold transition-colors"
+                    variant="glass-primary"
+                    className="w-full"
                   >
                     I've Scanned the Code
-                  </button>
-                </div>
-              </>
-            ) : null}
-          </div>
+                  </Button>
+                </>
+              ) : null}
+            </CardContent>
+          </Card>
         )}
 
         {/* Step 2: Verify Token */}
         {step === 2 && (
-          <div className="bg-slate-800 rounded-lg p-8 border border-slate-700">
-            <h2 className="text-xl font-semibold text-white mb-6">Step 2: Enter Code from App</h2>
-
-            <div className="space-y-6">
-              <p className="text-slate-300">
-                Open your authenticator app and enter the 6-digit code shown there:
-              </p>
-
+          <Card className="bg-[var(--glass-bg)] backdrop-blur-xl border-[var(--glass-border)] shadow-[var(--shadow-lg)]">
+            <CardHeader>
+              <CardTitle className="text-[var(--text-primary)]">Step 2: Enter Code from App</CardTitle>
+              <CardDescription className="text-[var(--text-secondary)]">
+                Open your authenticator app and enter the 6-digit code
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-6">
               {tokenError && (
-                <div className="bg-red-900/20 border border-red-700 rounded-lg p-3 flex gap-2">
-                  <AlertCircle className="w-5 h-5 text-red-400 flex-shrink-0 mt-0.5" />
-                  <p className="text-red-200 text-sm">{tokenError}</p>
-                </div>
+                <Alert variant="destructive">
+                  <AlertCircle className="h-4 w-4" />
+                  <AlertDescription>{tokenError}</AlertDescription>
+                </Alert>
               )}
 
-              {/* 6-Digit Code Input */}
-              <input
-                type="text"
-                inputMode="numeric"
-                maxLength="6"
-                placeholder="000000"
-                value={totpToken}
-                onChange={(e) => {
-                  const val = e.target.value.replace(/\D/g, '')
-                  setTotpToken(val.slice(0, 6))
-                  setTokenError(null)
-                }}
-                onKeyPress={(e) => {
-                  if (e.key === 'Enter' && totpToken.length === 6) {
-                    handleVerifyToken()
-                  }
-                }}
-                className="w-full px-4 py-3 bg-slate-900 border border-slate-600 rounded-lg text-white text-center text-3xl font-mono tracking-widest focus:outline-none focus:border-blue-500"
-              />
+              <div className="space-y-2">
+                <Label className="text-[var(--text-primary)]">6-Digit Code</Label>
+                <Input
+                  type="text"
+                  inputMode="numeric"
+                  maxLength="6"
+                  placeholder="000000"
+                  value={totpToken}
+                  onChange={(e) => {
+                    const val = e.target.value.replace(/\D/g, '')
+                    setTotpToken(val.slice(0, 6))
+                    setTokenError(null)
+                  }}
+                  onKeyPress={(e) => {
+                    if (e.key === 'Enter' && totpToken.length === 6) {
+                      handleVerifyToken()
+                    }
+                  }}
+                  className="text-center text-2xl font-mono tracking-widest"
+                />
+              </div>
 
-              <button
-                onClick={handleVerifyToken}
-                disabled={loading || totpToken.length !== 6}
-                className="w-full px-4 py-3 bg-blue-600 hover:bg-blue-700 disabled:bg-slate-600 text-white rounded-lg font-semibold transition-colors"
-              >
-                {loading ? 'Verifying...' : 'Verify Code'}
-              </button>
-
-              <button
-                onClick={() => setStep(1)}
-                className="w-full px-4 py-2 bg-slate-700 hover:bg-slate-600 text-white rounded-lg font-medium transition-colors"
-              >
-                Back
-              </button>
-            </div>
-          </div>
+              <div className="flex gap-3">
+                <Button
+                  onClick={() => setStep(1)}
+                  variant="glass"
+                  className="flex-1"
+                >
+                  <ArrowLeft className="w-4 h-4 mr-2" />
+                  Back
+                </Button>
+                <Button
+                  onClick={handleVerifyToken}
+                  disabled={loading || totpToken.length !== 6}
+                  variant="glass-primary"
+                  className="flex-1"
+                >
+                  {loading ? 'Verifying...' : 'Verify Code'}
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
         )}
 
         {/* Step 3: Save Backup Codes */}
         {step === 3 && (
-          <div className="bg-slate-800 rounded-lg p-8 border border-slate-700">
-            <h2 className="text-xl font-semibold text-white mb-4">Step 3: Save Backup Codes</h2>
+          <Card className="bg-[var(--glass-bg)] backdrop-blur-xl border-[var(--glass-border)] shadow-[var(--shadow-lg)]">
+            <CardHeader>
+              <CardTitle className="text-[var(--text-primary)]">Step 3: Save Backup Codes</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-6">
+              <div className="bg-[var(--accent-warning)]/10 border border-[var(--accent-warning)]/30 rounded-xl p-4">
+                <p className="text-[var(--text-primary)] text-sm">
+                  <strong>Important:</strong> Save these codes in a secure location. You can use them to login if you lose access to your authenticator app. Each code can only be used once.
+                </p>
+              </div>
 
-            <div className="bg-amber-900/20 border border-amber-700 rounded-lg p-4 mb-6">
-              <p className="text-amber-200 text-sm">
-                <strong>Important:</strong> Save these codes in a secure location. You can use them to login if you lose access to your authenticator app. Each code can only be used once.
-              </p>
-            </div>
+              {/* Backup Codes */}
+              <div className="bg-[var(--surface-secondary)] rounded-xl p-4 space-y-2 max-h-48 overflow-y-auto">
+                {backupCodes.map((code, index) => (
+                  <div key={index} className="flex items-center gap-3 font-mono text-sm">
+                    <span className="text-[var(--text-tertiary)]">{index + 1}.</span>
+                    <code className="flex-1 text-[var(--text-primary)]">{code}</code>
+                  </div>
+                ))}
+              </div>
 
-            {/* Backup Codes */}
-            <div className="bg-slate-900 rounded-lg p-6 mb-6 space-y-2 max-h-64 overflow-y-auto">
-              {backupCodes.map((code, index) => (
-                <div key={index} className="flex items-center gap-3 font-mono text-sm">
-                  <span className="text-slate-500">{index + 1}.</span>
-                  <code className="flex-1 text-slate-200">{code}</code>
-                </div>
-              ))}
-            </div>
+              {/* Download / Copy */}
+              <div className="flex gap-3">
+                <Button
+                  variant="glass"
+                  className="flex-1"
+                  onClick={() => {
+                    const text = backupCodes.join('\n')
+                    navigator.clipboard.writeText(text)
+                    alert('Codes copied to clipboard!')
+                  }}
+                >
+                  <Copy className="w-4 h-4 mr-2" />
+                  Copy
+                </Button>
+                <Button
+                  variant="glass"
+                  className="flex-1"
+                  onClick={() => {
+                    const element = document.createElement('a')
+                    const file = new Blob([backupCodes.join('\n')], { type: 'text/plain' })
+                    element.href = URL.createObjectURL(file)
+                    element.download = 'backup-codes.txt'
+                    document.body.appendChild(element)
+                    element.click()
+                    document.body.removeChild(element)
+                  }}
+                >
+                  <Download className="w-4 h-4 mr-2" />
+                  Download
+                </Button>
+              </div>
 
-            {/* Download / Copy */}
-            <div className="flex gap-3 mb-6">
-              <button
-                onClick={() => {
-                  const text = backupCodes.join('\n')
-                  navigator.clipboard.writeText(text)
-                  alert('Codes copied to clipboard!')
-                }}
-                className="flex-1 px-4 py-2 bg-slate-700 hover:bg-slate-600 text-white rounded-lg font-medium transition-colors flex items-center justify-center gap-2"
+              {/* Confirmation Checkbox */}
+              <div className="flex items-start gap-3">
+                <Checkbox
+                  id="savedCodes"
+                  checked={savedCodes}
+                  onCheckedChange={setSavedCodes}
+                />
+                <label htmlFor="savedCodes" className="text-[var(--text-secondary)] text-sm cursor-pointer">
+                  I have saved my backup codes in a secure location
+                </label>
+              </div>
+
+              {/* Complete Button */}
+              <Button
+                onClick={handleCodesConfirmed}
+                disabled={!savedCodes}
+                variant="glass-primary"
+                className="w-full"
               >
-                <Copy className="w-4 h-4" />
-                Copy
-              </button>
-              <button
-                onClick={() => {
-                  const element = document.createElement('a')
-                  const file = new Blob([backupCodes.join('\n')], { type: 'text/plain' })
-                  element.href = URL.createObjectURL(file)
-                  element.download = 'backup-codes.txt'
-                  document.body.appendChild(element)
-                  element.click()
-                  document.body.removeChild(element)
-                }}
-                className="flex-1 px-4 py-2 bg-slate-700 hover:bg-slate-600 text-white rounded-lg font-medium transition-colors"
-              >
-                Download
-              </button>
-            </div>
+                {success ? '✓ Setup Complete!' : 'Complete Setup'}
+              </Button>
 
-            {/* Confirmation Checkbox */}
-            <label className="flex items-start gap-3 mb-6">
-              <input
-                type="checkbox"
-                checked={savedCodes}
-                onChange={(e) => setSavedCodes(e.target.checked)}
-                className="mt-1 w-4 h-4 rounded border-slate-500"
-              />
-              <span className="text-slate-300 text-sm">
-                I have saved my backup codes in a secure location
-              </span>
-            </label>
-
-            {/* Complete Button */}
-            <button
-              onClick={handleCodesConfirmed}
-              disabled={!savedCodes}
-              className="w-full px-4 py-3 bg-green-600 hover:bg-green-700 disabled:bg-slate-600 text-white rounded-lg font-semibold transition-colors"
-            >
-              {success ? '✓ Setup Complete!' : 'Complete Setup'}
-            </button>
-
-            {success && (
-              <p className="text-center text-green-400 text-sm mt-4">
-                2FA is now enabled. Redirecting to settings...
-              </p>
-            )}
-          </div>
+              {success && (
+                <p className="text-center text-[var(--accent-success)] text-sm">
+                  2FA is now enabled. Redirecting to settings...
+                </p>
+              )}
+            </CardContent>
+          </Card>
         )}
 
         {/* Footer */}
-        <p className="text-center text-slate-400 text-sm mt-8">
+        <p className="text-center text-[var(--text-tertiary)] text-sm mt-8">
           Need help? Check the{' '}
-          <a href="/help/2fa" className="text-blue-400 hover:text-blue-300">
+          <a href="/help/2fa" className="text-[var(--brand-primary)] hover:underline">
             2FA setup guide
           </a>
         </p>

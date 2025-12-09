@@ -180,7 +180,7 @@ export default function NewsletterComposer() {
                       <SelectValue placeholder="Select mailbox" />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="default">Default (portal@uptrademedia.com)</SelectItem>
+                      <SelectItem value="default">Default (portal@send.uptrademedia.com)</SelectItem>
                       <SelectItem value="newsletter">Newsletter (newsletter@uptrademedia.com)</SelectItem>
                     </SelectContent>
                   </Select>
@@ -225,7 +225,7 @@ export default function NewsletterComposer() {
                     placeholder="This shows in email preview"
                     maxLength="150"
                   />
-                  <p className="text-xs text-gray-500 mt-1">{preheader.length}/150</p>
+                  <p className="text-xs text-[var(--text-tertiary)] mt-1">{preheader.length}/150</p>
                 </div>
               </CardContent>
             </Card>
@@ -245,7 +245,7 @@ export default function NewsletterComposer() {
                     placeholder="Paste your HTML email content here..."
                     className="font-mono min-h-64"
                   />
-                  <p className="text-xs text-gray-500 mt-1">{htmlContent.length} characters</p>
+                  <p className="text-xs text-[var(--text-tertiary)] mt-1">{htmlContent.length} characters</p>
                 </div>
 
                 <div>
@@ -525,9 +525,9 @@ export default function NewsletterComposer() {
               </CardHeader>
               <CardContent>
                 <div className="space-y-4">
-                  <div className="p-4 bg-gray-50 rounded-lg border">
-                    <p className="text-xs text-gray-600 mb-1">Subject: {subject || '(no subject)'}</p>
-                    <p className="text-xs text-gray-600 mb-4">Preheader: {preheader || '(no preheader)'}</p>
+                  <div className="p-4 bg-[var(--surface-secondary)] rounded-lg border">
+                    <p className="text-xs text-[var(--text-secondary)] mb-1">Subject: {subject || '(no subject)'}</p>
+                    <p className="text-xs text-[var(--text-secondary)] mb-4">Preheader: {preheader || '(no preheader)'}</p>
                     <div
                       className="prose prose-sm max-w-none bg-white p-4 rounded"
                       dangerouslySetInnerHTML={{ __html: htmlContent || '<p>No content yet</p>' }}
@@ -548,25 +548,25 @@ export default function NewsletterComposer() {
           </CardHeader>
           <CardContent className="space-y-4">
             <div>
-              <p className="text-xs text-gray-600">Campaign</p>
+              <p className="text-xs text-[var(--text-secondary)]">Campaign</p>
               <p className="font-semibold">{name || 'Unnamed'}</p>
             </div>
 
             <div>
-              <p className="text-xs text-gray-600">Recipients</p>
+              <p className="text-xs text-[var(--text-secondary)]">Recipients</p>
               <p className="font-semibold">{estimatedCount.toLocaleString() || 'Not validated'}</p>
             </div>
 
             <div>
-              <p className="text-xs text-gray-600">Schedule</p>
+              <p className="text-xs text-[var(--text-secondary)]">Schedule</p>
               <p className="font-semibold capitalize">{scheduleType}</p>
             </div>
 
             {abTestEnabled && (
               <div>
-                <p className="text-xs text-gray-600">A/B Test</p>
+                <p className="text-xs text-[var(--text-secondary)]">A/B Test</p>
                 <Badge>Enabled</Badge>
-                <p className="text-xs text-gray-500 mt-1">
+                <p className="text-xs text-[var(--text-tertiary)] mt-1">
                   {abSplitPercent}% get subject A, winner selected by {abMetric} after {abEvaluationHours}h
                 </p>
               </div>
@@ -574,7 +574,7 @@ export default function NewsletterComposer() {
 
             {resendEnabled && (
               <div>
-                <p className="text-xs text-gray-600">Re-send</p>
+                <p className="text-xs text-[var(--text-secondary)]">Re-send</p>
                 <Badge variant="outline">Non-openers +{resendDelayDays}d</Badge>
               </div>
             )}

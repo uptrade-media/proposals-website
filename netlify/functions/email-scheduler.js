@@ -10,7 +10,7 @@ import { Resend } from 'resend'
 
 const DATABASE_URL = process.env.DATABASE_URL
 const RESEND_API_KEY = process.env.RESEND_API_KEY
-const SENDING_DOMAIN = process.env.SENDING_DOMAIN || 'portal@uptrademedia.com'
+const SENDING_DOMAIN = process.env.SENDING_DOMAIN || 'portal@send.uptrademedia.com'
 
 // Helper: Check if current time is within business hours (9 AM - 5 PM)
 function isBusinessHours() {

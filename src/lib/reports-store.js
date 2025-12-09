@@ -22,8 +22,53 @@ const useReportsStore = create((set, get) => ({
     
     try {
       const response = await api.get(`/.netlify/functions/reports-dashboard?period=${period}`)
+      const metrics = response.data.metrics || {}
+      
+      // Transform projectStatusBreakdown to chart format
+      const projectStatusDistribution = (metrics.projectStatusBreakdown || []).map(s => ({
+        name: s.status?.charAt(0).toUpperCase() + s.status?.slice(1) || 'Unknown',
+        status: s.status,
+        count: s.count,
+        percentage: 0 // Will calculate below
+      }))
+      const totalProjects = projectStatusDistribution.reduce((sum, s) => sum + s.count, 0)
+      projectStatusDistribution.forEach(s => {
+        s.percentage = totalProjects > 0 ? Math.round((s.count / totalProjects) * 100) : 0
+      })
+      
+      // Transform monthlyRevenue to chart format
+      const revenueTrend = (metrics.monthlyRevenue || []).map(m => ({
+        month: m.month,
+        month_name: new Date(m.month + '-01').toLocaleDateString('en-US', { month: 'short' }),
+        revenue: m.total || 0
+      }))
+      
+      // Transform to expected structure for the Reports component
+      const overviewReport = {
+        summary: {
+          total_projects: totalProjects || metrics.activeProjects || 0,
+          active_projects: metrics.activeProjects || 0,
+          total_revenue: metrics.revenue || 0,
+          pending_revenue: metrics.pendingInvoices || 0,
+          total_messages: metrics.recentMessages || 0,
+          recent_messages: metrics.recentMessages || 0,
+          unread_messages: metrics.unreadMessages || 0,
+          pending_proposals: metrics.pendingProposals || 0
+        },
+        charts: {
+          project_status_distribution: projectStatusDistribution,
+          revenue_trend: revenueTrend,
+          project_creation_trend: [], // Not provided by API currently
+          project_trend: [] // Not provided by API currently
+        },
+        projectStatusBreakdown: metrics.projectStatusBreakdown || [],
+        invoiceStatusBreakdown: metrics.invoiceStatusBreakdown || [],
+        monthlyRevenue: metrics.monthlyRevenue || [],
+        period: response.data.period
+      }
+      
       set({ 
-        overviewReport: response.data.metrics,
+        overviewReport,
         isLoading: false 
       })
       
@@ -44,9 +89,35 @@ const useReportsStore = create((set, get) => ({
     
     try {
       const response = await api.get('/.netlify/functions/reports-projects')
+      const data = response.data || {}
+      
+      // Transform to expected structure (snake_case) for the Reports component
+      const projectReport = {
+        summary: {
+          total_projects: data.summary?.totalProjects || 0,
+          active_projects: data.summary?.activeProjects || 0,
+          completed_projects: data.summary?.completedProjects || 0,
+          on_hold_projects: data.summary?.onHoldProjects || 0,
+          planning_projects: data.summary?.planningProjects || 0,
+          total_budget: data.summary?.totalBudget || 0,
+          avg_budget: data.summary?.avgBudget || 0,
+          avg_duration_by_status: data.duration ? {
+            avg: data.duration.avgDurationDays || 0,
+            min: data.duration.minDurationDays || 0,
+            max: data.duration.maxDurationDays || 0
+          } : {}
+        },
+        statusBreakdown: data.statusBreakdown || [],
+        projectsByClient: data.projectsByClient || [],
+        timeline: data.timeline || [],
+        duration: data.duration || {},
+        projectsWithPendingInvoices: data.projectsWithPendingInvoices || [],
+        recentActivity: data.recentActivity || [],
+        completionRate: data.completionRate || []
+      }
       
       set({ 
-        projectReport: response.data,
+        projectReport,
         isLoading: false 
       })
       
@@ -90,11 +161,21 @@ const useReportsStore = create((set, get) => ({
     
     try {
       const response = await api.get(`/.netlify/functions/reports-dashboard?period=${period}`)
+      const metrics = response.data.metrics || {}
+      
       set({ 
         activityReport: {
-          recentProjectActivity: response.data.metrics.recentProjectActivity,
-          recentMessages: response.data.metrics.recentMessages,
-          unreadMessages: response.data.metrics.unreadMessages
+          summary: {
+            new_projects: metrics.recentProjectActivity || 0,
+            new_messages: metrics.recentMessages || 0,
+            new_files: 0, // Not tracked in current API
+            total_activity: (metrics.recentProjectActivity || 0) + (metrics.recentMessages || 0)
+          },
+          user_activity: [], // Not tracked in current API
+          recent_activity: [], // Not tracked in current API
+          recentProjectActivity: metrics.recentProjectActivity || 0,
+          recentMessages: metrics.recentMessages || 0,
+          unreadMessages: metrics.unreadMessages || 0
         },
         isLoading: false 
       })
@@ -229,13 +310,15 @@ const useReportsStore = create((set, get) => ({
   },
 
   // Request a new audit
-  requestAudit: async (targetUrl, projectId) => {
+  requestAudit: async (targetUrl, projectId, { email, name } = {}) => {
     set({ isLoading: true, error: null })
     
     try {
       const response = await api.post('/.netlify/functions/audits-request', {
         url: targetUrl,
-        projectId
+        projectId: projectId || null,
+        recipientEmail: email || null,
+        recipientName: name || null
       })
       
       set({ isLoading: false })
@@ -243,6 +326,30 @@ const useReportsStore = create((set, get) => ({
       return { success: true, data: response.data }
     } catch (error) {
       const errorMessage = error.response?.data?.error || 'Failed to request audit'
+      set({ 
+        isLoading: false, 
+        error: errorMessage 
+      })
+      return { success: false, error: errorMessage }
+    }
+  },
+
+  // Delete an audit
+  deleteAudit: async (auditId) => {
+    set({ isLoading: true, error: null })
+    
+    try {
+      await api.delete(`/.netlify/functions/audits-delete?auditId=${auditId}`)
+      
+      // Remove from local state
+      set(state => ({
+        audits: state.audits.filter(a => a.id !== auditId),
+        isLoading: false
+      }))
+      
+      return { success: true }
+    } catch (error) {
+      const errorMessage = error.response?.data?.error || 'Failed to delete audit'
       set({ 
         isLoading: false, 
         error: errorMessage 

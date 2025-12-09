@@ -61,7 +61,7 @@ export function TrendIndicators({ period = 'month', showComparison = true }) {
         </CardHeader>
         <CardContent>
           <div className="text-center py-8">
-            <p className="text-gray-500">{error}</p>
+            <p className="text-[var(--text-secondary)]">{error}</p>
             <button
               onClick={fetchTrends}
               className="mt-3 text-sm text-blue-600 hover:underline"
@@ -79,7 +79,7 @@ export function TrendIndicators({ period = 'month', showComparison = true }) {
       <CardHeader>
         <CardTitle>
           Trends
-          <span className="text-sm font-normal text-gray-500 ml-2">
+          <span className="text-sm font-normal text-[var(--text-tertiary)] ml-2">
             vs. {period === 'week' ? 'last week' : period === 'year' ? 'last year' : 'last month'}
           </span>
         </CardTitle>
@@ -87,11 +87,11 @@ export function TrendIndicators({ period = 'month', showComparison = true }) {
       <CardContent>
         {loading ? (
           <div className="flex items-center justify-center py-8">
-            <Loader2 className="w-5 h-5 animate-spin text-gray-400" />
+            <Loader2 className="w-5 h-5 animate-spin text-[var(--text-tertiary)]" />
           </div>
         ) : !trends ? (
           <div className="text-center py-8">
-            <p className="text-gray-500">No trend data available</p>
+            <p className="text-[var(--text-secondary)]">No trend data available</p>
           </div>
         ) : (
           <div className="grid grid-cols-2 gap-4">
@@ -107,8 +107,8 @@ export function TrendIndicators({ period = 'month', showComparison = true }) {
                 >
                   <div className="flex items-start justify-between mb-3">
                     <div>
-                      <p className="text-sm text-gray-600 mb-1">{config.label}</p>
-                      <p className="text-2xl font-bold text-gray-900">
+                      <p className="text-sm text-[var(--text-secondary)] mb-1">{config.label}</p>
+                      <p className="text-2xl font-bold text-[var(--text-primary)]">
                         {config.format(data.current)}
                       </p>
                     </div>
@@ -124,14 +124,14 @@ export function TrendIndicators({ period = 'month', showComparison = true }) {
                       <span>{Math.abs(data.percentageChange)}%</span>
                     </Badge>
                     {showComparison && (
-                      <span className="text-xs text-gray-500">
+                      <span className="text-xs text-[var(--text-tertiary)]">
                         from {config.format(data.previous)}
                       </span>
                     )}
                   </div>
 
                   {data.percentageChange === 0 && (
-                    <div className="mt-2 text-xs text-gray-500">
+                    <div className="mt-2 text-xs text-[var(--text-tertiary)]">
                       ➜ No change from previous period
                     </div>
                   )}
@@ -150,7 +150,7 @@ export function TrendIndicators({ period = 'month', showComparison = true }) {
                 className={`text-xs px-3 py-1 rounded capitalize transition-colors ${
                   period === p
                     ? 'bg-blue-100 text-blue-700'
-                    : 'text-gray-600 hover:bg-gray-100'
+                    : 'text-[var(--text-secondary)] hover:bg-[var(--surface-secondary)]'
                 }`}
               >
                 {p === 'week' ? '7d' : p === 'month' ? '30d' : '1y'}

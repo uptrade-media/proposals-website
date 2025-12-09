@@ -41,7 +41,7 @@ import {
 } from 'lucide-react'
 import useReportsStore from '@/lib/reports-store'
 import useAuthStore from '@/lib/auth-store'
-import LighthouseReport from '@/components/LighthouseReport'
+import SiteAnalytics from '@/components/SiteAnalytics'
 
 const Reports = () => {
   const { user } = useAuthStore()
@@ -142,8 +142,8 @@ const Reports = () => {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold">Reports & Analytics</h1>
-          <p className="text-gray-600">Insights and analytics for your business</p>
+          <h1 className="text-2xl font-bold text-[var(--text-primary)]">Reports & Analytics</h1>
+          <p className="text-[var(--text-secondary)]">Insights and analytics for your business</p>
         </div>
         <div className="flex space-x-2">
           <Button 
@@ -175,16 +175,16 @@ const Reports = () => {
       <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
         <TabsList className="grid w-full grid-cols-5">
           <TabsTrigger value="overview">Overview</TabsTrigger>
+          <TabsTrigger value="site-analytics">Site Analytics</TabsTrigger>
           <TabsTrigger value="projects">Projects</TabsTrigger>
           <TabsTrigger value="financial">Financial</TabsTrigger>
           <TabsTrigger value="activity">Activity</TabsTrigger>
-          <TabsTrigger value="lighthouse">Lighthouse</TabsTrigger>
         </TabsList>
 
         <TabsContent value="overview" className="space-y-6">
           {isLoading && !overviewReport ? (
             <div className="flex items-center justify-center py-12">
-              <Loader2 className="h-8 w-8 animate-spin text-[#4bbf39]" />
+              <Loader2 className="h-8 w-8 animate-spin text-[var(--brand-primary)]" />
             </div>
           ) : overviewReport ? (
             <>
@@ -194,16 +194,16 @@ const Reports = () => {
                   <CardContent className="p-6">
                     <div className="flex items-center justify-between">
                       <div>
-                        <p className="text-sm font-medium text-gray-600">Total Projects</p>
-                        <p className="text-2xl font-bold text-gray-900">
+                        <p className="text-sm font-medium text-[var(--text-secondary)]">Total Projects</p>
+                        <p className="text-2xl font-bold text-[var(--text-primary)]">
                           {overviewReport.summary.total_projects}
                         </p>
-                        <p className="text-xs text-gray-500">
+                        <p className="text-xs text-[var(--text-tertiary)]">
                           {overviewReport.summary.active_projects} active
                         </p>
                       </div>
-                      <div className="w-12 h-12 bg-blue-100 rounded-lg flex items-center justify-center">
-                        <FileText className="w-6 h-6 text-blue-600" />
+                      <div className="w-12 h-12 bg-[var(--brand-primary)]/20 rounded-xl flex items-center justify-center">
+                        <FileText className="w-6 h-6 text-[var(--brand-primary)]" />
                       </div>
                     </div>
                   </CardContent>
@@ -213,16 +213,16 @@ const Reports = () => {
                   <CardContent className="p-6">
                     <div className="flex items-center justify-between">
                       <div>
-                        <p className="text-sm font-medium text-gray-600">Total Revenue</p>
-                        <p className="text-2xl font-bold text-green-600">
+                        <p className="text-sm font-medium text-[var(--text-secondary)]">Total Revenue</p>
+                        <p className="text-2xl font-bold text-[var(--accent-success)]">
                           {formatCurrency(overviewReport.summary.total_revenue)}
                         </p>
-                        <p className="text-xs text-gray-500">
+                        <p className="text-xs text-[var(--text-tertiary)]">
                           {formatCurrency(overviewReport.summary.pending_revenue)} pending
                         </p>
                       </div>
-                      <div className="w-12 h-12 bg-green-100 rounded-lg flex items-center justify-center">
-                        <DollarSign className="w-6 h-6 text-green-600" />
+                      <div className="w-12 h-12 bg-[var(--accent-success)]/20 rounded-xl flex items-center justify-center">
+                        <DollarSign className="w-6 h-6 text-[var(--accent-success)]" />
                       </div>
                     </div>
                   </CardContent>
@@ -232,16 +232,16 @@ const Reports = () => {
                   <CardContent className="p-6">
                     <div className="flex items-center justify-between">
                       <div>
-                        <p className="text-sm font-medium text-gray-600">Messages</p>
-                        <p className="text-2xl font-bold text-purple-600">
+                        <p className="text-sm font-medium text-[var(--text-secondary)]">Messages</p>
+                        <p className="text-2xl font-bold text-purple-500">
                           {overviewReport.summary.total_messages}
                         </p>
-                        <p className="text-xs text-gray-500">
+                        <p className="text-xs text-[var(--text-tertiary)]">
                           {overviewReport.summary.recent_messages} recent
                         </p>
                       </div>
-                      <div className="w-12 h-12 bg-purple-100 rounded-lg flex items-center justify-center">
-                        <MessageSquare className="w-6 h-6 text-purple-600" />
+                      <div className="w-12 h-12 bg-purple-500/20 rounded-xl flex items-center justify-center">
+                        <MessageSquare className="w-6 h-6 text-purple-500" />
                       </div>
                     </div>
                   </CardContent>
@@ -251,16 +251,16 @@ const Reports = () => {
                   <CardContent className="p-6">
                     <div className="flex items-center justify-between">
                       <div>
-                        <p className="text-sm font-medium text-gray-600">Files</p>
-                        <p className="text-2xl font-bold text-orange-600">
+                        <p className="text-sm font-medium text-[var(--text-secondary)]">Files</p>
+                        <p className="text-2xl font-bold text-[var(--accent-warning)]">
                           {overviewReport.summary.total_files}
                         </p>
-                        <p className="text-xs text-gray-500">
+                        <p className="text-xs text-[var(--text-tertiary)]">
                           {formatFileSize(overviewReport.summary.total_file_size)}
                         </p>
                       </div>
-                      <div className="w-12 h-12 bg-orange-100 rounded-lg flex items-center justify-center">
-                        <FileText className="w-6 h-6 text-orange-600" />
+                      <div className="w-12 h-12 bg-[var(--accent-warning)]/20 rounded-xl flex items-center justify-center">
+                        <FileText className="w-6 h-6 text-[var(--accent-warning)]" />
                       </div>
                     </div>
                   </CardContent>
@@ -347,9 +347,9 @@ const Reports = () => {
           ) : (
             <Card>
               <CardContent className="flex flex-col items-center justify-center py-12">
-                <BarChart3 className="h-12 w-12 text-gray-400 mb-4" />
-                <h3 className="text-lg font-medium text-gray-900 mb-2">No data available</h3>
-                <p className="text-gray-500 text-center">
+                <BarChart3 className="h-12 w-12 text-[var(--text-tertiary)] mb-4" />
+                <h3 className="text-lg font-medium text-[var(--text-primary)] mb-2">No data available</h3>
+                <p className="text-[var(--text-secondary)] text-center">
                   Unable to load overview report. Please try refreshing.
                 </p>
               </CardContent>
@@ -398,7 +398,7 @@ const Reports = () => {
               <Button 
                 onClick={() => fetchProjectReport(dateFilters)}
                 disabled={isLoading}
-                className="bg-gradient-to-r from-[#4bbf39] to-[#39bfb0] hover:from-[#3da832] hover:to-[#2da89a]"
+                variant="glass-primary"
               >
                 {isLoading ? (
                   <>
@@ -419,10 +419,10 @@ const Reports = () => {
                 <Card>
                   <CardContent className="p-6">
                     <div className="text-center">
-                      <p className="text-2xl font-bold text-gray-900">
+                      <p className="text-2xl font-bold text-[var(--text-primary)]">
                         {projectReport.summary.total_projects}
                       </p>
-                      <p className="text-sm text-gray-600">Total Projects</p>
+                      <p className="text-sm text-[var(--text-secondary)]">Total Projects</p>
                     </div>
                   </CardContent>
                 </Card>
@@ -433,7 +433,7 @@ const Reports = () => {
                       <p className="text-2xl font-bold text-green-600">
                         {formatCurrency(projectReport.summary.total_budget)}
                       </p>
-                      <p className="text-sm text-gray-600">Total Budget</p>
+                      <p className="text-sm text-[var(--text-secondary)]">Total Budget</p>
                     </div>
                   </CardContent>
                 </Card>
@@ -447,7 +447,7 @@ const Reports = () => {
                           : 0
                         }
                       </p>
-                      <p className="text-sm text-gray-600">Avg Duration (days)</p>
+                      <p className="text-sm text-[var(--text-secondary)]">Avg Duration (days)</p>
                     </div>
                   </CardContent>
                 </Card>
@@ -514,9 +514,9 @@ const Reports = () => {
           {activeTab === 'financial' && !financialReport && (
             <div className="text-center py-8">
               <Button 
+                variant="glass-primary"
                 onClick={() => fetchFinancialReport(dateFilters)}
                 disabled={isLoading}
-                className="bg-gradient-to-r from-[#4bbf39] to-[#39bfb0] hover:from-[#3da832] hover:to-[#2da89a]"
               >
                 {isLoading ? (
                   <>
@@ -540,7 +540,7 @@ const Reports = () => {
                       <p className="text-2xl font-bold text-green-600">
                         {formatCurrency(financialReport.summary.total_revenue)}
                       </p>
-                      <p className="text-sm text-gray-600">Total Revenue</p>
+                      <p className="text-sm text-[var(--text-secondary)]">Total Revenue</p>
                     </div>
                   </CardContent>
                 </Card>
@@ -551,7 +551,7 @@ const Reports = () => {
                       <p className="text-2xl font-bold text-blue-600">
                         {formatCurrency(financialReport.summary.avg_invoice_value)}
                       </p>
-                      <p className="text-sm text-gray-600">Avg Invoice</p>
+                      <p className="text-sm text-[var(--text-secondary)]">Avg Invoice</p>
                     </div>
                   </CardContent>
                 </Card>
@@ -562,7 +562,7 @@ const Reports = () => {
                       <p className="text-2xl font-bold text-yellow-600">
                         {formatCurrency(financialReport.summary.overdue_amount)}
                       </p>
-                      <p className="text-sm text-gray-600">Overdue Amount</p>
+                      <p className="text-sm text-[var(--text-secondary)]">Overdue Amount</p>
                     </div>
                   </CardContent>
                 </Card>
@@ -573,7 +573,7 @@ const Reports = () => {
                       <p className="text-2xl font-bold text-purple-600">
                         {financialReport.summary.avg_payment_days}
                       </p>
-                      <p className="text-sm text-gray-600">Avg Payment Days</p>
+                      <p className="text-sm text-[var(--text-secondary)]">Avg Payment Days</p>
                     </div>
                   </CardContent>
                 </Card>
@@ -638,7 +638,7 @@ const Reports = () => {
                   <CardContent className="p-6">
                     <div className="flex items-center justify-between">
                       <div>
-                        <p className="text-sm font-medium text-gray-600">New Projects</p>
+                        <p className="text-sm font-medium text-[var(--text-secondary)]">New Projects</p>
                         <p className="text-2xl font-bold text-blue-600">
                           {activityReport.summary.new_projects}
                         </p>
@@ -652,7 +652,7 @@ const Reports = () => {
                   <CardContent className="p-6">
                     <div className="flex items-center justify-between">
                       <div>
-                        <p className="text-sm font-medium text-gray-600">New Messages</p>
+                        <p className="text-sm font-medium text-[var(--text-secondary)]">New Messages</p>
                         <p className="text-2xl font-bold text-purple-600">
                           {activityReport.summary.new_messages}
                         </p>
@@ -666,7 +666,7 @@ const Reports = () => {
                   <CardContent className="p-6">
                     <div className="flex items-center justify-between">
                       <div>
-                        <p className="text-sm font-medium text-gray-600">New Files</p>
+                        <p className="text-sm font-medium text-[var(--text-secondary)]">New Files</p>
                         <p className="text-2xl font-bold text-orange-600">
                           {activityReport.summary.new_files}
                         </p>
@@ -680,7 +680,7 @@ const Reports = () => {
                   <CardContent className="p-6">
                     <div className="flex items-center justify-between">
                       <div>
-                        <p className="text-sm font-medium text-gray-600">Total Activity</p>
+                        <p className="text-sm font-medium text-[var(--text-secondary)]">Total Activity</p>
                         <p className="text-2xl font-bold text-green-600">
                           {activityReport.summary.total_activity}
                         </p>
@@ -722,19 +722,19 @@ const Reports = () => {
                   <CardContent>
                     <div className="space-y-4">
                       {activityReport.user_activity.map((user, index) => (
-                        <div key={user.user_id} className="flex items-center justify-between p-4 border rounded-lg">
+                        <div key={user.user_id} className="flex items-center justify-between p-4 border border-[var(--glass-border)] rounded-lg">
                           <div className="flex items-center space-x-4">
-                            <div className="w-10 h-10 bg-gradient-to-r from-[#4bbf39] to-[#39bfb0] rounded-full flex items-center justify-center text-white font-medium">
+                            <div className="w-10 h-10 bg-gradient-to-r from-[var(--brand-primary)] to-[var(--brand-secondary)] rounded-full flex items-center justify-center text-white font-medium">
                               {user.user_name.charAt(0)}
                             </div>
                             <div>
-                              <p className="font-medium">{user.user_name}</p>
-                              <p className="text-sm text-gray-500">{user.user_email}</p>
+                              <p className="font-medium text-[var(--text-primary)]">{user.user_name}</p>
+                              <p className="text-sm text-[var(--text-tertiary)]">{user.user_email}</p>
                             </div>
                           </div>
                           <div className="text-right">
-                            <p className="font-medium">{user.total_activity} activities</p>
-                            <p className="text-sm text-gray-500">
+                            <p className="font-medium text-[var(--text-primary)]">{user.total_activity} activities</p>
+                            <p className="text-sm text-[var(--text-tertiary)]">
                               {user.messages} messages, {user.files} files
                             </p>
                           </div>
@@ -748,9 +748,10 @@ const Reports = () => {
           )}
         </TabsContent>
 
-        <TabsContent value="lighthouse" className="space-y-6">
-          <LighthouseReport projectId={null} />
+        <TabsContent value="site-analytics" className="space-y-6">
+          <SiteAnalytics />
         </TabsContent>
+
       </Tabs>
     </div>
   )

@@ -44,10 +44,10 @@ export default function AuditDetail() {
 
   if (isLoading) {
     return (
-      <div className="flex items-center justify-center min-h-screen">
+      <div className="flex items-center justify-center min-h-screen bg-[var(--surface-primary)]">
         <div className="text-center">
-          <Loader2 className="w-12 h-12 animate-spin text-[#4bbf39] mx-auto mb-4" />
-          <p className="text-gray-600">Loading audit report...</p>
+          <Loader2 className="w-12 h-12 animate-spin text-[var(--brand-primary)] mx-auto mb-4" />
+          <p className="text-[var(--text-secondary)]">Loading audit report...</p>
         </div>
       </div>
     )
@@ -62,7 +62,7 @@ export default function AuditDetail() {
           </AlertDescription>
         </Alert>
         <Button
-          variant="outline"
+          variant="glass"
           onClick={() => navigate('/audits')}
         >
           <ArrowLeft className="w-4 h-4 mr-2" />
@@ -77,7 +77,7 @@ export default function AuditDetail() {
     return (
       <div className="p-6 max-w-4xl mx-auto">
         <Button
-          variant="outline"
+          variant="glass"
           onClick={() => navigate('/audits')}
           className="mb-6"
         >
@@ -85,21 +85,21 @@ export default function AuditDetail() {
           Back to Audits
         </Button>
 
-        <Card>
+        <Card className="bg-[var(--glass-bg)] backdrop-blur-xl border-[var(--glass-border)]">
           <CardContent className="py-12 text-center">
-            <Clock className="w-16 h-16 mx-auto text-blue-600 mb-4" />
-            <h2 className="text-2xl font-bold text-gray-900 mb-2">
+            <Clock className="w-16 h-16 mx-auto text-[var(--brand-primary)] mb-4" />
+            <h2 className="text-2xl font-bold text-[var(--text-primary)] mb-2">
               Audit Processing
             </h2>
-            <p className="text-gray-600 mb-4">
+            <p className="text-[var(--text-secondary)] mb-4">
               Your audit for <span className="font-medium">{currentAudit.targetUrl}</span> is currently being analyzed.
             </p>
-            <p className="text-sm text-gray-500 mb-6">
+            <p className="text-sm text-[var(--text-tertiary)] mb-6">
               This usually takes 2-3 minutes. The page will update automatically.
             </p>
             <Button
               onClick={() => fetchAudit(id)}
-              variant="outline"
+              variant="glass"
             >
               <RefreshCw className="w-4 h-4 mr-2" />
               Check Status
@@ -115,7 +115,7 @@ export default function AuditDetail() {
     return (
       <div className="p-6 max-w-4xl mx-auto">
         <Button
-          variant="outline"
+          variant="glass"
           onClick={() => navigate('/audits')}
           className="mb-6"
         >
@@ -123,27 +123,27 @@ export default function AuditDetail() {
           Back to Audits
         </Button>
 
-        <Card>
+        <Card className="bg-[var(--glass-bg)] backdrop-blur-xl border-[var(--glass-border)]">
           <CardContent className="py-12 text-center">
-            <XCircle className="w-16 h-16 mx-auto text-red-600 mb-4" />
-            <h2 className="text-2xl font-bold text-gray-900 mb-2">
+            <XCircle className="w-16 h-16 mx-auto text-[var(--accent-error)] mb-4" />
+            <h2 className="text-2xl font-bold text-[var(--text-primary)] mb-2">
               Audit Failed
             </h2>
-            <p className="text-gray-600 mb-4">
+            <p className="text-[var(--text-secondary)] mb-4">
               We encountered an issue analyzing <span className="font-medium">{currentAudit.targetUrl}</span>
             </p>
-            <p className="text-sm text-gray-500 mb-6">
+            <p className="text-sm text-[var(--text-tertiary)] mb-6">
               Please contact support or request a new audit.
             </p>
             <div className="flex gap-2 justify-center">
               <Button
                 onClick={() => navigate('/audits')}
-                className="bg-gradient-to-r from-[#4bbf39] to-[#39bfb0]"
+                variant="glass-primary"
               >
                 Request New Audit
               </Button>
               <Button
-                variant="outline"
+                variant="glass"
                 onClick={() => navigate('/contact')}
               >
                 Contact Support
@@ -157,9 +157,9 @@ export default function AuditDetail() {
 
   // Audit completed - render the report
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen bg-[var(--surface-primary)]">
       {/* Header - Don't print this */}
-      <div className="no-print bg-white border-b sticky top-0 z-10">
+      <div className="no-print bg-[var(--glass-bg)] backdrop-blur-xl border-b border-[var(--glass-border)] sticky top-0 z-10">
         <div className="max-w-7xl mx-auto px-6 py-4">
           <div className="flex items-center justify-between">
             <Button
@@ -173,7 +173,7 @@ export default function AuditDetail() {
             <div className="flex gap-2">
               {currentAudit.reportUrl && (
                 <Button
-                  variant="outline"
+                  variant="glass"
                   onClick={handleDownload}
                 >
                   <Download className="w-4 h-4 mr-2" />
@@ -181,14 +181,14 @@ export default function AuditDetail() {
                 </Button>
               )}
               <Button
-                variant="outline"
+                variant="glass"
                 onClick={handlePrint}
               >
                 <Printer className="w-4 h-4 mr-2" />
                 Print
               </Button>
               <Button
-                variant="outline"
+                variant="glass"
                 onClick={() => window.open(currentAudit.targetUrl, '_blank')}
               >
                 <ExternalLink className="w-4 h-4 mr-2" />
@@ -201,14 +201,14 @@ export default function AuditDetail() {
 
       {/* Report Content */}
       <div className="max-w-7xl mx-auto px-6 py-8">
-        <div className="bg-white rounded-lg shadow-sm p-6 mb-6 no-print">
-          <h1 className="text-3xl font-bold text-gray-900 mb-2">
+        <div className="bg-[var(--glass-bg)] backdrop-blur-xl border border-[var(--glass-border)] rounded-xl shadow-[var(--shadow-md)] p-6 mb-6 no-print">
+          <h1 className="text-3xl font-bold text-[var(--text-primary)] mb-2">
             Audit Report
           </h1>
-          <p className="text-gray-600">
+          <p className="text-[var(--text-secondary)]">
             {currentAudit.targetUrl}
           </p>
-          <p className="text-sm text-gray-500 mt-1">
+          <p className="text-sm text-[var(--text-tertiary)] mt-1">
             Generated on {new Date(currentAudit.createdAt).toLocaleDateString()} at{' '}
             {new Date(currentAudit.createdAt).toLocaleTimeString()}
           </p>
@@ -217,7 +217,7 @@ export default function AuditDetail() {
         {/* Render report based on what's available */}
         {currentAudit.reportUrl ? (
           // If we have a report URL, render it in an iframe
-          <div className="bg-white rounded-lg shadow-sm overflow-hidden">
+          <div className="bg-[var(--glass-bg)] backdrop-blur-xl border border-[var(--glass-border)] rounded-xl shadow-[var(--shadow-md)] overflow-hidden">
             <iframe
               src={currentAudit.reportUrl}
               title="Audit Report"
@@ -227,48 +227,48 @@ export default function AuditDetail() {
           </div>
         ) : currentAudit.fullAuditJson ? (
           // If we have JSON data, render a simple scores view
-          <Card>
+          <Card className="bg-[var(--glass-bg)] backdrop-blur-xl border-[var(--glass-border)]">
             <CardContent className="p-6">
-              <h2 className="text-xl font-bold mb-4">Audit Scores</h2>
+              <h2 className="text-xl font-bold text-[var(--text-primary)] mb-4">Audit Scores</h2>
               <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
                 {currentAudit.performanceScore !== null && (
-                  <div className="text-center p-4 bg-gray-50 rounded-lg">
-                    <div className="text-3xl font-bold text-blue-600">
+                  <div className="text-center p-4 bg-[var(--brand-primary)]/10 rounded-xl">
+                    <div className="text-3xl font-bold text-[var(--brand-primary)]">
                       {currentAudit.performanceScore}
                     </div>
-                    <div className="text-sm text-gray-600 mt-1">Performance</div>
+                    <div className="text-sm text-[var(--text-secondary)] mt-1">Performance</div>
                   </div>
                 )}
                 {currentAudit.seoScore !== null && (
-                  <div className="text-center p-4 bg-gray-50 rounded-lg">
-                    <div className="text-3xl font-bold text-green-600">
+                  <div className="text-center p-4 bg-[var(--accent-success)]/10 rounded-xl">
+                    <div className="text-3xl font-bold text-[var(--accent-success)]">
                       {currentAudit.seoScore}
                     </div>
-                    <div className="text-sm text-gray-600 mt-1">SEO</div>
+                    <div className="text-sm text-[var(--text-secondary)] mt-1">SEO</div>
                   </div>
                 )}
                 {currentAudit.accessibilityScore !== null && (
-                  <div className="text-center p-4 bg-gray-50 rounded-lg">
-                    <div className="text-3xl font-bold text-purple-600">
+                  <div className="text-center p-4 bg-purple-500/10 rounded-xl">
+                    <div className="text-3xl font-bold text-purple-500">
                       {currentAudit.accessibilityScore}
                     </div>
-                    <div className="text-sm text-gray-600 mt-1">Accessibility</div>
+                    <div className="text-sm text-[var(--text-secondary)] mt-1">Accessibility</div>
                   </div>
                 )}
                 {currentAudit.bestPracticesScore !== null && (
-                  <div className="text-center p-4 bg-gray-50 rounded-lg">
-                    <div className="text-3xl font-bold text-yellow-600">
+                  <div className="text-center p-4 bg-[var(--accent-warning)]/10 rounded-xl">
+                    <div className="text-3xl font-bold text-[var(--accent-warning)]">
                       {currentAudit.bestPracticesScore}
                     </div>
-                    <div className="text-sm text-gray-600 mt-1">Best Practices</div>
+                    <div className="text-sm text-[var(--text-secondary)] mt-1">Best Practices</div>
                   </div>
                 )}
                 {currentAudit.pwaScore !== null && (
-                  <div className="text-center p-4 bg-gray-50 rounded-lg">
-                    <div className="text-3xl font-bold text-pink-600">
+                  <div className="text-center p-4 bg-pink-500/10 rounded-xl">
+                    <div className="text-3xl font-bold text-pink-500">
                       {currentAudit.pwaScore}
                     </div>
-                    <div className="text-sm text-gray-600 mt-1">PWA</div>
+                    <div className="text-sm text-[var(--text-secondary)] mt-1">PWA</div>
                   </div>
                 )}
               </div>

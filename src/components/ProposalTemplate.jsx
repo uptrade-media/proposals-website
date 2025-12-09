@@ -29,16 +29,133 @@ import html2canvas from 'html2canvas'
 import useProjectsStore from '@/lib/projects-store'
 import useAuthStore from '@/lib/auth-store'
 import ProposalSignature from './ProposalSignature'
+import api from '@/lib/api'
 
-const ProposalTemplate = ({ proposal: proposalProp, proposalId, onBack }) => {
+const ProposalTemplate = ({ proposal: proposalProp, proposalId, proposalSlug, isPublicView = false, onBack }) => {
   const { user } = useAuthStore()
   const [proposal, setProposal] = useState(proposalProp || null)
   const [showBackToTop, setShowBackToTop] = useState(false)
   const [exportingPDF, setExportingPDF] = useState(false)
   const proposalRef = useRef(null)
+  
+  // Analytics tracking refs
+  const startTimeRef = useRef(Date.now())
+  const maxScrollDepthRef = useRef(0)
+  const sectionsViewedRef = useRef(new Set())
+  const lastScrollTrackRef = useRef(0)
+  const timeTrackIntervalRef = useRef(null)
+
+  // Track analytics event
+  const trackEvent = async (eventType, metadata = {}) => {
+    if (!isPublicView || !proposal?.id) return
+    
+    try {
+      await api.post('/.netlify/functions/proposals-track-view', {
+        proposalId: proposal.id,
+        event: eventType,
+        metadata: {
+          ...metadata,
+          userAgent: navigator.userAgent,
+          referrer: document.referrer,
+          screenWidth: window.innerWidth,
+          timestamp: new Date().toISOString()
+        }
+      })
+    } catch (err) {
+      // Silently fail - analytics shouldn't break the user experience
+      console.warn('Failed to track event:', err)
+    }
+  }
+
+  // Track time spent periodically
+  useEffect(() => {
+    if (!isPublicView || !proposal?.id) return
+
+    // Track time spent every 30 seconds
+    timeTrackIntervalRef.current = setInterval(() => {
+      const timeSpent = Math.round((Date.now() - startTimeRef.current) / 1000)
+      trackEvent('time_spent', { duration: timeSpent, cumulative: true })
+    }, 30000) // Every 30 seconds
+
+    // Cleanup and send final time on unmount
+    return () => {
+      if (timeTrackIntervalRef.current) {
+        clearInterval(timeTrackIntervalRef.current)
+      }
+      const finalTimeSpent = Math.round((Date.now() - startTimeRef.current) / 1000)
+      if (finalTimeSpent > 5) { // Only track if spent more than 5 seconds
+        trackEvent('time_spent', { duration: finalTimeSpent, final: true })
+      }
+    }
+  }, [isPublicView, proposal?.id])
+
+  // Track scroll depth
+  useEffect(() => {
+    if (!isPublicView || !proposal?.id) return
+
+    const handleScroll = () => {
+      const scrollTop = window.scrollY
+      const docHeight = document.documentElement.scrollHeight - window.innerHeight
+      const scrollPercent = Math.round((scrollTop / docHeight) * 100)
+      
+      // Update max scroll depth
+      if (scrollPercent > maxScrollDepthRef.current) {
+        maxScrollDepthRef.current = scrollPercent
+        
+        // Only track at certain milestones (25%, 50%, 75%, 90%, 100%)
+        const milestones = [25, 50, 75, 90, 100]
+        const now = Date.now()
+        
+        for (const milestone of milestones) {
+          if (scrollPercent >= milestone && lastScrollTrackRef.current < milestone) {
+            // Debounce - don't track same milestone within 2 seconds
+            if (now - lastScrollTrackRef.current > 2000) {
+              trackEvent('scroll', { scrollDepth: milestone, maxDepth: maxScrollDepthRef.current })
+              lastScrollTrackRef.current = milestone
+            }
+            break
+          }
+        }
+      }
+    }
+
+    window.addEventListener('scroll', handleScroll, { passive: true })
+    return () => window.removeEventListener('scroll', handleScroll)
+  }, [isPublicView, proposal?.id])
+
+  // Track section visibility with Intersection Observer
+  useEffect(() => {
+    if (!isPublicView || !proposal?.id) return
+
+    const sectionObserver = new IntersectionObserver(
+      (entries) => {
+        entries.forEach((entry) => {
+          if (entry.isIntersecting) {
+            const sectionId = entry.target.getAttribute('data-section')
+            if (sectionId && !sectionsViewedRef.current.has(sectionId)) {
+              sectionsViewedRef.current.add(sectionId)
+              trackEvent('section_view', { section: sectionId })
+            }
+          }
+        })
+      },
+      { threshold: 0.3 } // 30% visible
+    )
+
+    // Observe all sections with data-section attribute
+    const sections = document.querySelectorAll('[data-section]')
+    sections.forEach((section) => sectionObserver.observe(section))
+
+    return () => sectionObserver.disconnect()
+  }, [isPublicView, proposal?.id])
 
   const handleExportPDF = async () => {
     if (!proposal) return
+    
+    // Track PDF download
+    if (isPublicView) {
+      trackEvent('click', { action: 'pdf_download' })
+    }
     
     setExportingPDF(true)
     try {
@@ -367,7 +484,7 @@ const ProposalTemplate = ({ proposal: proposalProp, proposalId, onBack }) => {
       </Card>
 
       {/* Critical Issues Alert */}
-      <Card className="mb-8 border-red-200 bg-red-50">
+      <Card className="mb-8 border-red-200 bg-red-50" data-section="critical-issues">
         <CardHeader>
           <CardTitle className="text-red-900 flex items-center">
             <AlertTriangle className="h-6 w-6 mr-2" />
@@ -391,7 +508,7 @@ const ProposalTemplate = ({ proposal: proposalProp, proposalId, onBack }) => {
       </Card>
 
       {/* Current Performance */}
-      <Card className="mb-8">
+      <Card className="mb-8" data-section="current-performance">
         <CardHeader>
           <CardTitle>Current Website Performance</CardTitle>
           <CardDescription>SEMrush audit results showing critical performance gaps</CardDescription>
@@ -423,7 +540,7 @@ const ProposalTemplate = ({ proposal: proposalProp, proposalId, onBack }) => {
       </Card>
 
       {/* Project Objectives */}
-      <Card className="mb-8">
+      <Card className="mb-8" data-section="objectives">
         <CardHeader>
           <CardTitle>Project Objectives</CardTitle>
           <CardDescription>Key goals and deliverables for this engagement</CardDescription>
@@ -441,7 +558,7 @@ const ProposalTemplate = ({ proposal: proposalProp, proposalId, onBack }) => {
       </Card>
 
       {/* Project Timeline */}
-      <Card className="mb-8">
+      <Card className="mb-8" data-section="timeline">
         <CardHeader>
           <CardTitle>Project Timeline</CardTitle>
           <CardDescription>12-week implementation roadmap</CardDescription>
@@ -467,7 +584,7 @@ const ProposalTemplate = ({ proposal: proposalProp, proposalId, onBack }) => {
       </Card>
 
       {/* Investment Breakdown */}
-      <Card className="mb-8">
+      <Card className="mb-8" data-section="investment">
         <CardHeader>
           <CardTitle>Investment Breakdown</CardTitle>
           <CardDescription>Detailed pricing for all project components</CardDescription>
@@ -515,7 +632,7 @@ const ProposalTemplate = ({ proposal: proposalProp, proposalId, onBack }) => {
       </Card>
 
       {/* Why Choose Uptrade Media */}
-      <Card className="mb-8">
+      <Card className="mb-8" data-section="why-choose-us">
         <CardHeader>
           <CardTitle>Why Choose Uptrade Media</CardTitle>
           <CardDescription>Our competitive advantages and proven track record</CardDescription>
@@ -542,14 +659,17 @@ const ProposalTemplate = ({ proposal: proposalProp, proposalId, onBack }) => {
       </Card>
 
       {/* Signature Section */}
-      {proposal && (
-        <ProposalSignature 
-          proposalId={proposal.id}
-          proposalTitle={proposal.title}
-          clientName={user?.name}
-          clientEmail={user?.email}
-        />
-      )}
+      <div data-section="signature">
+        {proposal && (
+          <ProposalSignature 
+            proposalId={proposal.id}
+            proposalTitle={proposal.title}
+            clientName={user?.name}
+            clientEmail={user?.email}
+            onSignatureStarted={() => isPublicView && trackEvent('signature_started')}
+          />
+        )}
+      </div>
       </div>
       {/* End of PDF export content */}
 

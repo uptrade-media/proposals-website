@@ -1,16 +1,17 @@
 // netlify/functions/projects-create.js
+// Migrated to Supabase from Neon/Drizzle
 import jwt from 'jsonwebtoken'
-import { neon } from '@neondatabase/serverless'
-import { drizzle } from 'drizzle-orm/neon-http'
-import { eq } from 'drizzle-orm'
-import * as schema from '../../src/db/schema.js'
+import { createClient } from '@supabase/supabase-js'
 
 const COOKIE_NAME = process.env.SESSION_COOKIE_NAME || 'um_session'
 const JWT_SECRET = process.env.AUTH_JWT_SECRET
-const DATABASE_URL = process.env.DATABASE_URL
+
+const supabase = createClient(
+  process.env.SUPABASE_URL,
+  process.env.SUPABASE_SERVICE_ROLE_KEY
+)
 
 export async function handler(event) {
-  // CORS headers
   const headers = {
     'Access-Control-Allow-Origin': '*',
     'Access-Control-Allow-Headers': 'Content-Type',
@@ -30,7 +31,6 @@ export async function handler(event) {
     }
   }
 
-  // Verify authentication
   if (!JWT_SECRET) {
     return {
       statusCode: 500,
@@ -71,7 +71,8 @@ export async function handler(event) {
       status = 'planning',
       budget,
       startDate,
-      endDate
+      endDate,
+      proposalId
     } = body
 
     // Validate required fields
@@ -83,24 +84,14 @@ export async function handler(event) {
       }
     }
 
-    // Connect to database
-    if (!DATABASE_URL) {
-      return {
-        statusCode: 500,
-        headers,
-        body: JSON.stringify({ error: 'Database not configured' })
-      }
-    }
-
-    const sql = neon(DATABASE_URL)
-    const db = drizzle(sql, { schema })
-
     // Verify contact exists
-    const contact = await db.query.contacts.findFirst({
-      where: eq(schema.contacts.id, contactId)
-    })
+    const { data: contact, error: contactError } = await supabase
+      .from('contacts')
+      .select('id')
+      .eq('id', contactId)
+      .single()
 
-    if (!contact) {
+    if (contactError || !contact) {
       return {
         statusCode: 404,
         headers,
@@ -109,28 +100,45 @@ export async function handler(event) {
     }
 
     // Create project
-    const [project] = await db.insert(schema.projects).values({
-      contactId,
-      title,
-      description,
-      status,
-      budget: budget ? String(budget) : null,
-      startDate: startDate ? new Date(startDate) : null,
-      endDate: endDate ? new Date(endDate) : null
-    }).returning()
+    const { data: project, error: createError } = await supabase
+      .from('projects')
+      .insert({
+        contact_id: contactId,
+        title,
+        description: description || null,
+        status,
+        budget: budget ? String(budget) : null,
+        start_date: startDate || null,
+        end_date: endDate || null
+      })
+      .select()
+      .single()
+
+    if (createError) {
+      console.error('Create project error:', createError)
+      throw createError
+    }
+
+    // If created from a proposal, link the proposal to this project
+    if (proposalId) {
+      await supabase
+        .from('proposals')
+        .update({ project_id: project.id })
+        .eq('id', proposalId)
+    }
 
     // Format response
     const formattedProject = {
       id: project.id,
-      contactId: project.contactId,
+      contactId: project.contact_id,
       title: project.title,
       description: project.description,
       status: project.status,
       budget: project.budget ? parseFloat(project.budget) : null,
-      startDate: project.startDate,
-      endDate: project.endDate,
-      createdAt: project.createdAt,
-      updatedAt: project.updatedAt
+      startDate: project.start_date,
+      endDate: project.end_date,
+      createdAt: project.created_at,
+      updatedAt: project.updated_at
     }
 
     return {

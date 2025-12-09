@@ -23,7 +23,7 @@ export async function handler(event) {
   if (!message) return json(400, { error: 'Message required' })
 
   try {
-    const from = process.env.RESEND_FROM || 'no-reply@uptrademedia.com'
+    const from = process.env.RESEND_FROM || 'noreply@send.uptrademedia.com'
     const to = process.env.SUPPORT_TO || process.env.ADMIN_EMAIL || 'ramsey@uptrademedia.com'
 
     await resend.emails.send({

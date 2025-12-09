@@ -186,7 +186,7 @@ export default function PaymentForm({ invoice, customer, onSuccess, onError, onC
 
       <CardContent className="space-y-6">
         {/* Secure badge */}
-        <div className="flex items-center justify-center gap-2 text-sm text-muted-foreground bg-gray-50 p-3 rounded-lg">
+        <div className="flex items-center justify-center gap-2 text-sm text-muted-foreground bg-[var(--surface-secondary)] p-3 rounded-lg">
           <Lock className="h-4 w-4" />
           <span>Secure payment powered by Square</span>
         </div>
@@ -220,7 +220,7 @@ export default function PaymentForm({ invoice, customer, onSuccess, onError, onC
             </div>
 
             {/* Customer info display */}
-            <div className="bg-gray-50 p-4 rounded-lg space-y-2">
+            <div className="bg-[var(--surface-secondary)] p-4 rounded-lg space-y-2">
               <div className="text-sm font-medium">Billing Information</div>
               <div className="text-sm text-muted-foreground">
                 {customer?.givenName} {customer?.familyName}

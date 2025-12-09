@@ -250,15 +250,15 @@ const Dashboard = ({ onNavigate }) => {
   const getStatusColor = (status) => {
     switch (status) {
       case 'completed':
-        return 'bg-green-100 text-green-800'
+        return 'bg-[var(--accent-success)]/20 text-[var(--accent-success)]'
       case 'in_progress':
-        return 'bg-blue-100 text-blue-800'
+        return 'bg-[var(--brand-primary)]/20 text-[var(--brand-primary)]'
       case 'review':
-        return 'bg-yellow-100 text-yellow-800'
+        return 'bg-[var(--accent-warning)]/20 text-[var(--accent-warning)]'
       case 'planning':
-        return 'bg-gray-100 text-gray-800'
+        return 'bg-[var(--surface-tertiary)] text-[var(--text-secondary)]'
       default:
-        return 'bg-gray-100 text-gray-800'
+        return 'bg-[var(--surface-tertiary)] text-[var(--text-secondary)]'
     }
   }
 
@@ -282,7 +282,7 @@ const Dashboard = ({ onNavigate }) => {
   if (isLoading) {
     console.log('[Dashboard] Showing loading spinner')
     return (
-      <div className="fixed inset-0 z-50 flex items-center justify-center bg-white/80 backdrop-blur-sm">
+      <div className="fixed inset-0 z-50 flex items-center justify-center bg-[var(--surface-primary)]/80 backdrop-blur-sm">
         <UptradeLoading />
       </div>
     )
@@ -310,18 +310,18 @@ const Dashboard = ({ onNavigate }) => {
   return (
     <div className="space-y-6">
       {/* Welcome Section */}
-      <div className="bg-gradient-to-r from-[#4bbf39] to-[#39bfb0] rounded-lg p-6 text-white">
+      <div className="bg-[var(--glass-bg)] backdrop-blur-xl rounded-2xl p-6 border border-[var(--glass-border)] shadow-[var(--shadow-md)]">
         <div className="flex items-center justify-between">
           <div>
-            <h1 className="text-2xl font-bold mb-2">
+            <h1 className="text-2xl font-bold mb-2 text-[var(--text-primary)]">
               Welcome back{user?.name ? `, ${user.name.split(' ')[0]}` : ''}!
             </h1>
-            <p className="text-white/90">
+            <p className="text-[var(--text-secondary)]">
               {isAdmin ? "Manage clients, proposals, and invoices from your admin dashboard." : "Here's what's happening with your projects today."}
             </p>
           </div>
           {isAdmin && (
-            <Badge variant="secondary" className="bg-white/20 text-white border-white/30">
+            <Badge variant="secondary" className="bg-[var(--brand-primary)]/20 text-[var(--brand-primary)] border-[var(--brand-primary)]/30">
               <Shield className="w-3 h-3 mr-1" />
               Admin
             </Badge>
@@ -520,12 +520,12 @@ const Dashboard = ({ onNavigate }) => {
             ) : (
               <>
                 {dashboardData.projects.map((project) => (
-                  <div key={project.id} className="flex items-center justify-between p-4 border rounded-lg hover:bg-gray-50 transition-colors">
+                  <div key={project.id} className="flex items-center justify-between p-4 border border-[var(--glass-border)] rounded-xl bg-[var(--glass-bg)] backdrop-blur-sm hover:bg-[var(--surface-secondary)] transition-colors">
                     <div className="flex items-center space-x-3">
                       {getStatusIcon(project.status)}
                       <div>
-                        <h4 className="font-medium">{project.title}</h4>
-                        <p className="text-sm text-gray-500">Due: {project.dueDate}</p>
+                        <h4 className="font-medium text-[var(--text-primary)]">{project.title}</h4>
+                        <p className="text-sm text-[var(--text-secondary)]">Due: {project.dueDate}</p>
                       </div>
                     </div>
                     <div className="flex items-center space-x-2">
@@ -533,10 +533,10 @@ const Dashboard = ({ onNavigate }) => {
                         {project.status.replace('_', ' ')}
                       </Badge>
                       <div className="text-right">
-                        <div className="text-sm font-medium">{project.progress}%</div>
-                        <div className="w-16 bg-gray-200 rounded-full h-2">
+                        <div className="text-sm font-medium text-[var(--text-primary)]">{project.progress}%</div>
+                        <div className="w-16 bg-[var(--surface-tertiary)] rounded-full h-2">
                           <div 
-                            className="bg-[#4bbf39] h-2 rounded-full" 
+                            className="bg-[var(--brand-primary)] h-2 rounded-full" 
                             style={{ width: `${project.progress}%` }}
                           ></div>
                         </div>
@@ -569,16 +569,16 @@ const Dashboard = ({ onNavigate }) => {
             ) : (
               <>
                 {dashboardData.recentMessages.map((message) => (
-                  <div key={message.id} className="flex items-start space-x-3 p-3 border rounded-lg hover:bg-gray-50 transition-colors">
-                    <div className={`w-2 h-2 rounded-full mt-2 ${message.unread ? 'bg-[#4bbf39]' : 'bg-gray-300'}`}></div>
+                  <div key={message.id} className="flex items-start space-x-3 p-3 border border-[var(--glass-border)] rounded-xl bg-[var(--glass-bg)] backdrop-blur-sm hover:bg-[var(--surface-secondary)] transition-colors">
+                    <div className={`w-2 h-2 rounded-full mt-2 ${message.unread ? 'bg-[var(--brand-primary)]' : 'bg-[var(--surface-tertiary)]'}`}></div>
                     <div className="flex-1">
                       <div className="flex items-center justify-between">
-                        <h4 className={`font-medium ${message.unread ? 'text-gray-900' : 'text-gray-600'}`}>
+                        <h4 className={`font-medium ${message.unread ? 'text-[var(--text-primary)]' : 'text-[var(--text-secondary)]'}`}>
                           {message.subject}
                         </h4>
-                        <span className="text-xs text-gray-500">{message.timestamp}</span>
+                        <span className="text-xs text-[var(--text-tertiary)]">{message.timestamp}</span>
                       </div>
-                      <p className="text-sm text-gray-500">{message.sender}</p>
+                      <p className="text-sm text-[var(--text-secondary)]">{message.sender}</p>
                     </div>
                   </div>
                 ))}
@@ -603,13 +603,13 @@ const Dashboard = ({ onNavigate }) => {
           </CardHeader>
           <CardContent className="space-y-3">
             {dashboardData.notifications.map((notification) => (
-              <div key={notification.id} className="flex items-start space-x-3 p-3 bg-gray-50 rounded-lg">
+              <div key={notification.id} className="flex items-start space-x-3 p-3 bg-[var(--surface-secondary)] rounded-xl border border-[var(--glass-border)]">
                 <div className={`w-2 h-2 rounded-full mt-2 ${
-                  notification.type === 'warning' ? 'bg-yellow-500' : 'bg-blue-500'
+                  notification.type === 'warning' ? 'bg-[var(--accent-warning)]' : 'bg-[var(--brand-primary)]'
                 }`}></div>
                 <div className="flex-1">
-                  <p className="text-sm">{notification.message}</p>
-                  <span className="text-xs text-gray-500">{notification.timestamp}</span>
+                  <p className="text-sm text-[var(--text-primary)]">{notification.message}</p>
+                  <span className="text-xs text-[var(--text-tertiary)]">{notification.timestamp}</span>
                 </div>
               </div>
             ))}
@@ -631,14 +631,14 @@ const Dashboard = ({ onNavigate }) => {
             ) : (
               <>
                 {dashboardData.pendingInvoices.map((invoice) => (
-                  <div key={invoice.id} className="flex items-center justify-between p-4 border rounded-lg hover:bg-gray-50 transition-colors">
+                  <div key={invoice.id} className="flex items-center justify-between p-4 border border-[var(--glass-border)] rounded-xl bg-[var(--glass-bg)] backdrop-blur-sm hover:bg-[var(--surface-secondary)] transition-colors">
                     <div>
-                      <h4 className="font-medium">{invoice.invoiceNumber}</h4>
-                      <p className="text-sm text-gray-500">Due: {invoice.dueDate}</p>
+                      <h4 className="font-medium text-[var(--text-primary)]">{invoice.invoiceNumber}</h4>
+                      <p className="text-sm text-[var(--text-secondary)]">Due: {invoice.dueDate}</p>
                     </div>
                     <div className="text-right">
-                      <div className="text-lg font-bold">${invoice.amount.toFixed(2)}</div>
-                      <Badge variant="outline" className="text-yellow-600 border-yellow-600">
+                      <div className="text-lg font-bold text-[var(--text-primary)]">${invoice.amount.toFixed(2)}</div>
+                      <Badge variant="outline" className="text-[var(--accent-warning)] border-[var(--accent-warning)]">
                         {invoice.status}
                       </Badge>
                     </div>
