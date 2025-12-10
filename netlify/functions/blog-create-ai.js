@@ -5,7 +5,7 @@
  * Enhanced with Uptrade service callouts and comprehensive SEO
  */
 
-import { createSupabaseAdmin } from './utils/supabase.js'
+import { createSupabaseAdmin, getAuthenticatedUser } from './utils/supabase.js'
 import OpenAI from 'openai'
 
 const openai = new OpenAI({
@@ -232,6 +232,26 @@ export async function handler(event) {
   }
 
   try {
+    // Verify authentication
+    const { user, contact, error: authError } = await getAuthenticatedUser(event)
+    
+    if (authError || !user || !contact) {
+      return {
+        statusCode: 401,
+        headers,
+        body: JSON.stringify({ error: 'Unauthorized' })
+      }
+    }
+
+    // Verify admin role
+    if (contact.role !== 'admin') {
+      return {
+        statusCode: 403,
+        headers,
+        body: JSON.stringify({ error: 'Admin access required' })
+      }
+    }
+
     const formData = JSON.parse(event.body || '{}')
     
     console.log('[Blog AI] Generating content for:', formData.topic)

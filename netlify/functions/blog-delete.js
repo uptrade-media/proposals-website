@@ -1,12 +1,12 @@
 // netlify/functions/blog-delete.js
-import { createSupabaseAdmin, getUserFromCookie } from './utils/supabase.js'
+import { createSupabaseAdmin, getAuthenticatedUser } from './utils/supabase.js'
 
 export async function handler(event) {
   // CORS headers
   const origin = event.headers.origin || 'http://localhost:8888'
   const headers = {
     'Access-Control-Allow-Origin': origin,
-    'Access-Control-Allow-Headers': 'Content-Type',
+    'Access-Control-Allow-Headers': 'Content-Type, Authorization',
     'Access-Control-Allow-Methods': 'DELETE, OPTIONS',
     'Access-Control-Allow-Credentials': 'true',
     'Content-Type': 'application/json',
@@ -27,7 +27,7 @@ export async function handler(event) {
 
   try {
     // Verify authentication
-    const { user, contact, error: authError } = await getUserFromCookie(event)
+    const { user, contact, error: authError } = await getAuthenticatedUser(event)
     
     if (authError || !user || !contact) {
       return {

@@ -160,18 +160,64 @@ export async function handler(event) {
 
     // Trigger audit on main website using Portal Mode
     // Main site will run the analysis and update the record
-    fetch(MAIN_SITE_AUDIT_ENDPOINT, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify({
-        auditId: newAudit.id,
-        source: 'portal'
+    console.log('[audits-request] Triggering main site audit:', MAIN_SITE_AUDIT_ENDPOINT)
+    console.log('[audits-request] Audit ID:', newAudit.id)
+    
+    try {
+      const triggerResponse = await fetch(MAIN_SITE_AUDIT_ENDPOINT, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          auditId: newAudit.id,
+          source: 'portal'
+        })
       })
-    }).catch(err => {
-      console.error('Failed to trigger audit on main site:', err)
-    })
+      
+      console.log('[audits-request] Main site response status:', triggerResponse.status)
+      
+      if (!triggerResponse.ok) {
+        const errorText = await triggerResponse.text()
+        console.error('[audits-request] Main site error:', errorText)
+        
+        // Update audit status to failed if main site rejects
+        await supabase
+          .from('audits')
+          .update({ status: 'failed' })
+          .eq('id', newAudit.id)
+        
+        return {
+          statusCode: 500,
+          headers,
+          body: JSON.stringify({ 
+            error: 'Failed to start audit analysis',
+            details: errorText
+          })
+        }
+      }
+      
+      const result = await triggerResponse.json()
+      console.log('[audits-request] Main site success:', result)
+      
+    } catch (err) {
+      console.error('[audits-request] Failed to trigger audit on main site:', err)
+      
+      // Update audit status to failed
+      await supabase
+        .from('audits')
+        .update({ status: 'failed' })
+        .eq('id', newAudit.id)
+      
+      return {
+        statusCode: 500,
+        headers,
+        body: JSON.stringify({ 
+          error: 'Failed to connect to audit service',
+          details: err.message
+        })
+      }
+    }
 
     return {
       statusCode: 201,
