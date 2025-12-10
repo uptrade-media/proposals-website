@@ -8,6 +8,7 @@ import { Badge } from '../components/ui/badge'
 import { Alert, AlertDescription } from '../components/ui/alert'
 import { Progress } from '../components/ui/progress'
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '../components/ui/collapsible'
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '../components/ui/dialog'
 import { 
   BarChart3, 
   ExternalLink, 
@@ -30,13 +31,18 @@ import {
   Smartphone,
   Monitor,
   TrendingUp,
-  Trash2
+  Trash2,
+  Zap,
+  Search,
+  Shield,
+  Maximize2
 } from 'lucide-react'
 import useReportsStore from '../lib/reports-store'
 import useProjectsStore from '../lib/projects-store'
 import useAuthStore from '../lib/auth-store'
 import api from '../lib/api'
 import { toast } from '../lib/toast'
+import AuditPublicView from '../components/AuditPublicView'
 
 // Admin-only audit row component with magic link and analytics
 function AdminAuditRow({ audit, navigate, getStatusIcon, getScoreColor, getAuditStatusBadge, onDelete }) {
@@ -45,6 +51,9 @@ function AdminAuditRow({ audit, navigate, getStatusIcon, getScoreColor, getAudit
   const [isGenerating, setIsGenerating] = useState(false)
   const [isDeleting, setIsDeleting] = useState(false)
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
+  const [showFullAudit, setShowFullAudit] = useState(false)
+  const [fullAuditData, setFullAuditData] = useState(null)
+  const [loadingFullAudit, setLoadingFullAudit] = useState(false)
   const [magicLink, setMagicLink] = useState(audit.magicToken ? 
     `${window.location.origin}/audit/${audit.id}?token=${audit.magicToken}` : null
   )
@@ -115,22 +124,59 @@ function AdminAuditRow({ audit, navigate, getStatusIcon, getScoreColor, getAudit
     }
   }
 
-  // Load analytics when expanded
+  // Load analytics and audit preview when expanded
   const handleToggle = async () => {
     const newState = !isOpen
     setIsOpen(newState)
     
-    if (newState && !analytics && audit.status === 'completed') {
-      setLoadingAnalytics(true)
-      try {
-        const res = await api.get(`/.netlify/functions/audits-analytics?auditId=${audit.id}`)
-        setAnalytics(res.data)
-      } catch (err) {
-        console.error('Failed to load analytics:', err)
-      } finally {
-        setLoadingAnalytics(false)
+    if (newState && audit.status === 'completed') {
+      // Load analytics
+      if (!analytics) {
+        setLoadingAnalytics(true)
+        try {
+          const res = await api.get(`/.netlify/functions/audits-analytics?auditId=${audit.id}`)
+          setAnalytics(res.data)
+        } catch (err) {
+          console.error('Failed to load analytics:', err)
+        } finally {
+          setLoadingAnalytics(false)
+        }
+      }
+      
+      // Load full audit data for preview
+      if (!fullAuditData) {
+        setLoadingFullAudit(true)
+        try {
+          const res = await api.get(`/.netlify/functions/audits-get?id=${audit.id}`)
+          setFullAuditData(res.data.audit)
+        } catch (err) {
+          console.error('Failed to load audit data:', err)
+        } finally {
+          setLoadingFullAudit(false)
+        }
       }
     }
+  }
+
+  // Open full audit view modal
+  const handleViewFullAudit = async (e) => {
+    e?.stopPropagation()
+    
+    if (!fullAuditData) {
+      setLoadingFullAudit(true)
+      try {
+        const res = await api.get(`/.netlify/functions/audits-get?id=${audit.id}`)
+        setFullAuditData(res.data.audit)
+      } catch (err) {
+        console.error('Failed to load audit data:', err)
+        toast.error('Failed to load audit data')
+        return
+      } finally {
+        setLoadingFullAudit(false)
+      }
+    }
+    
+    setShowFullAudit(true)
   }
 
   // Check if magic link is expired
@@ -321,63 +367,207 @@ function AdminAuditRow({ audit, navigate, getStatusIcon, getScoreColor, getAudit
           {/* Expanded Analytics Section */}
           <CollapsibleContent>
             <div className="mt-6 pt-6 border-t border-[var(--glass-border)]">
-              {loadingAnalytics ? (
+              {loadingAnalytics || loadingFullAudit ? (
                 <div className="flex items-center justify-center py-8">
                   <Loader2 className="w-6 h-6 animate-spin text-[var(--brand-primary)]" />
                 </div>
-              ) : analytics ? (
-                <div className="space-y-4">
-                  {/* Contact Details */}
-                  {audit.contact && (
-                    <div className="p-4 rounded-xl bg-[var(--brand-primary)]/5 border border-[var(--brand-primary)]/20">
-                      <h4 className="text-sm font-semibold text-[var(--text-primary)] mb-3 flex items-center gap-2">
-                        <User className="w-4 h-4" />
-                        Prospect Details
-                      </h4>
-                      <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
-                        <div>
-                          <span className="text-[var(--text-tertiary)]">Name</span>
-                          <p className="font-medium text-[var(--text-primary)]">{audit.contact.name || '—'}</p>
-                        </div>
-                        <div>
-                          <span className="text-[var(--text-tertiary)]">Email</span>
-                          <p className="font-medium text-[var(--text-primary)]">{audit.contact.email}</p>
-                        </div>
-                        <div>
-                          <span className="text-[var(--text-tertiary)]">Company</span>
-                          <p className="font-medium text-[var(--text-primary)]">{audit.contact.company || '—'}</p>
-                        </div>
-                        <div>
-                          <span className="text-[var(--text-tertiary)]">Magic Link</span>
-                          <p className="font-medium text-[var(--text-primary)]">
-                            {magicLink ? (
-                              <span className={isExpired ? 'text-[var(--accent-warning)]' : 'text-[var(--accent-success)]'}>
-                                {isExpired ? 'Expired' : 'Active'}
-                              </span>
-                            ) : (
-                              <span className="text-[var(--text-tertiary)]">Not generated</span>
-                            )}
-                          </p>
-                        </div>
+              ) : (
+                <div className="space-y-6">
+                  {/* Audit Results Preview */}
+                  {audit.status === 'completed' && fullAuditData && (
+                    <div className="space-y-4">
+                      <div className="flex items-center justify-between">
+                        <h4 className="text-sm font-semibold text-[var(--text-primary)] flex items-center gap-2">
+                          <BarChart3 className="w-4 h-4" />
+                          Audit Results
+                        </h4>
+                        <Button
+                          variant="glass"
+                          size="sm"
+                          onClick={handleViewFullAudit}
+                        >
+                          <Maximize2 className="w-4 h-4 mr-1.5" />
+                          View Full Report
+                        </Button>
                       </div>
+                      
+                      {/* Score Cards Grid */}
+                      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                        {(fullAuditData.performanceScore ?? fullAuditData.scores?.performance) != null && (
+                          <div className={`p-3 rounded-xl border ${
+                            (fullAuditData.performanceScore ?? fullAuditData.scores?.performance) >= 90 
+                              ? 'bg-[var(--accent-success)]/10 border-[var(--accent-success)]/20' 
+                              : (fullAuditData.performanceScore ?? fullAuditData.scores?.performance) >= 50 
+                                ? 'bg-[var(--accent-warning)]/10 border-[var(--accent-warning)]/20'
+                                : 'bg-[var(--accent-error)]/10 border-[var(--accent-error)]/20'
+                          }`}>
+                            <div className="flex items-center gap-2 mb-1">
+                              <Zap className="w-4 h-4 text-[var(--text-tertiary)]" />
+                              <span className="text-xs font-medium text-[var(--text-secondary)]">Performance</span>
+                            </div>
+                            <div className={`text-2xl font-bold ${
+                              (fullAuditData.performanceScore ?? fullAuditData.scores?.performance) >= 90 
+                                ? 'text-[var(--accent-success)]' 
+                                : (fullAuditData.performanceScore ?? fullAuditData.scores?.performance) >= 50 
+                                  ? 'text-[var(--accent-warning)]'
+                                  : 'text-[var(--accent-error)]'
+                            }`}>
+                              {fullAuditData.performanceScore ?? fullAuditData.scores?.performance}
+                            </div>
+                          </div>
+                        )}
+                        {(fullAuditData.seoScore ?? fullAuditData.scores?.seo) != null && (
+                          <div className={`p-3 rounded-xl border ${
+                            (fullAuditData.seoScore ?? fullAuditData.scores?.seo) >= 90 
+                              ? 'bg-[var(--accent-success)]/10 border-[var(--accent-success)]/20' 
+                              : (fullAuditData.seoScore ?? fullAuditData.scores?.seo) >= 50 
+                                ? 'bg-[var(--accent-warning)]/10 border-[var(--accent-warning)]/20'
+                                : 'bg-[var(--accent-error)]/10 border-[var(--accent-error)]/20'
+                          }`}>
+                            <div className="flex items-center gap-2 mb-1">
+                              <Search className="w-4 h-4 text-[var(--text-tertiary)]" />
+                              <span className="text-xs font-medium text-[var(--text-secondary)]">SEO</span>
+                            </div>
+                            <div className={`text-2xl font-bold ${
+                              (fullAuditData.seoScore ?? fullAuditData.scores?.seo) >= 90 
+                                ? 'text-[var(--accent-success)]' 
+                                : (fullAuditData.seoScore ?? fullAuditData.scores?.seo) >= 50 
+                                  ? 'text-[var(--accent-warning)]'
+                                  : 'text-[var(--accent-error)]'
+                            }`}>
+                              {fullAuditData.seoScore ?? fullAuditData.scores?.seo}
+                            </div>
+                          </div>
+                        )}
+                        {(fullAuditData.accessibilityScore ?? fullAuditData.scores?.accessibility) != null && (
+                          <div className={`p-3 rounded-xl border ${
+                            (fullAuditData.accessibilityScore ?? fullAuditData.scores?.accessibility) >= 90 
+                              ? 'bg-[var(--accent-success)]/10 border-[var(--accent-success)]/20' 
+                              : (fullAuditData.accessibilityScore ?? fullAuditData.scores?.accessibility) >= 50 
+                                ? 'bg-[var(--accent-warning)]/10 border-[var(--accent-warning)]/20'
+                                : 'bg-[var(--accent-error)]/10 border-[var(--accent-error)]/20'
+                          }`}>
+                            <div className="flex items-center gap-2 mb-1">
+                              <Eye className="w-4 h-4 text-[var(--text-tertiary)]" />
+                              <span className="text-xs font-medium text-[var(--text-secondary)]">Accessibility</span>
+                            </div>
+                            <div className={`text-2xl font-bold ${
+                              (fullAuditData.accessibilityScore ?? fullAuditData.scores?.accessibility) >= 90 
+                                ? 'text-[var(--accent-success)]' 
+                                : (fullAuditData.accessibilityScore ?? fullAuditData.scores?.accessibility) >= 50 
+                                  ? 'text-[var(--accent-warning)]'
+                                  : 'text-[var(--accent-error)]'
+                            }`}>
+                              {fullAuditData.accessibilityScore ?? fullAuditData.scores?.accessibility}
+                            </div>
+                          </div>
+                        )}
+                        {(fullAuditData.bestPracticesScore ?? fullAuditData.scores?.bestPractices) != null && (
+                          <div className={`p-3 rounded-xl border ${
+                            (fullAuditData.bestPracticesScore ?? fullAuditData.scores?.bestPractices) >= 90 
+                              ? 'bg-[var(--accent-success)]/10 border-[var(--accent-success)]/20' 
+                              : (fullAuditData.bestPracticesScore ?? fullAuditData.scores?.bestPractices) >= 50 
+                                ? 'bg-[var(--accent-warning)]/10 border-[var(--accent-warning)]/20'
+                                : 'bg-[var(--accent-error)]/10 border-[var(--accent-error)]/20'
+                          }`}>
+                            <div className="flex items-center gap-2 mb-1">
+                              <Shield className="w-4 h-4 text-[var(--text-tertiary)]" />
+                              <span className="text-xs font-medium text-[var(--text-secondary)]">Best Practices</span>
+                            </div>
+                            <div className={`text-2xl font-bold ${
+                              (fullAuditData.bestPracticesScore ?? fullAuditData.scores?.bestPractices) >= 90 
+                                ? 'text-[var(--accent-success)]' 
+                                : (fullAuditData.bestPracticesScore ?? fullAuditData.scores?.bestPractices) >= 50 
+                                  ? 'text-[var(--accent-warning)]'
+                                  : 'text-[var(--accent-error)]'
+                            }`}>
+                              {fullAuditData.bestPracticesScore ?? fullAuditData.scores?.bestPractices}
+                            </div>
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Priority Actions Preview */}
+                      {(() => {
+                        const auditJson = typeof fullAuditData.fullAuditJson === 'string' 
+                          ? JSON.parse(fullAuditData.fullAuditJson || '{}') 
+                          : (fullAuditData.fullAuditJson || {})
+                        const priorityActions = fullAuditData.priorityActions || auditJson.priorityActions || []
+                        
+                        if (priorityActions.length > 0) {
+                          return (
+                            <div className="p-4 rounded-xl bg-[var(--glass-bg)] border border-[var(--glass-border)]">
+                              <h5 className="text-sm font-semibold text-[var(--text-primary)] mb-2">Top Priority Actions</h5>
+                              <ul className="space-y-1.5">
+                                {priorityActions.slice(0, 3).map((action, i) => (
+                                  <li key={i} className="flex items-start gap-2 text-sm text-[var(--text-secondary)]">
+                                    <span className="text-[var(--brand-primary)] font-bold">{i + 1}.</span>
+                                    {action}
+                                  </li>
+                                ))}
+                              </ul>
+                            </div>
+                          )
+                        }
+                        return null
+                      })()}
                     </div>
                   )}
 
-                  {/* Engagement Stats */}
-                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                    <div className="p-4 rounded-xl bg-[var(--glass-bg)] border border-[var(--glass-border)]">
-                      <div className="flex items-center gap-2 text-[var(--text-tertiary)] mb-1">
-                        <Eye className="w-4 h-4" />
-                        <span className="text-xs font-medium">Total Views</span>
-                      </div>
-                      <p className="text-2xl font-bold text-[var(--text-primary)]">{analytics.totalViews || 0}</p>
-                    </div>
-                    <div className="p-4 rounded-xl bg-[var(--glass-bg)] border border-[var(--glass-border)]">
-                      <div className="flex items-center gap-2 text-[var(--text-tertiary)] mb-1">
-                        <Clock className="w-4 h-4" />
-                        <span className="text-xs font-medium">Time Spent</span>
-                      </div>
-                      <p className="text-2xl font-bold text-[var(--text-primary)]">
+                  {/* Analytics Section */}
+                  {analytics ? (
+                    <div className="space-y-4">
+                      {/* Contact Details */}
+                      {audit.contact && (
+                        <div className="p-4 rounded-xl bg-[var(--brand-primary)]/5 border border-[var(--brand-primary)]/20">
+                          <h4 className="text-sm font-semibold text-[var(--text-primary)] mb-3 flex items-center gap-2">
+                            <User className="w-4 h-4" />
+                            Prospect Details
+                          </h4>
+                          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+                            <div>
+                              <span className="text-[var(--text-tertiary)]">Name</span>
+                              <p className="font-medium text-[var(--text-primary)]">{audit.contact.name || '—'}</p>
+                            </div>
+                            <div>
+                              <span className="text-[var(--text-tertiary)]">Email</span>
+                              <p className="font-medium text-[var(--text-primary)]">{audit.contact.email}</p>
+                            </div>
+                            <div>
+                              <span className="text-[var(--text-tertiary)]">Company</span>
+                              <p className="font-medium text-[var(--text-primary)]">{audit.contact.company || '—'}</p>
+                            </div>
+                            <div>
+                              <span className="text-[var(--text-tertiary)]">Magic Link</span>
+                              <p className="font-medium text-[var(--text-primary)]">
+                                {magicLink ? (
+                                  <span className={isExpired ? 'text-[var(--accent-warning)]' : 'text-[var(--accent-success)]'}>
+                                    {isExpired ? 'Expired' : 'Active'}
+                                  </span>
+                                ) : (
+                                  <span className="text-[var(--text-tertiary)]">Not generated</span>
+                                )}
+                              </p>
+                            </div>
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Engagement Stats */}
+                      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                        <div className="p-4 rounded-xl bg-[var(--glass-bg)] border border-[var(--glass-border)]">
+                          <div className="flex items-center gap-2 text-[var(--text-tertiary)] mb-1">
+                            <Eye className="w-4 h-4" />
+                            <span className="text-xs font-medium">Total Views</span>
+                          </div>
+                          <p className="text-2xl font-bold text-[var(--text-primary)]">{analytics.totalViews || 0}</p>
+                        </div>
+                        <div className="p-4 rounded-xl bg-[var(--glass-bg)] border border-[var(--glass-border)]">
+                          <div className="flex items-center gap-2 text-[var(--text-tertiary)] mb-1">
+                            <Clock className="w-4 h-4" />
+                            <span className="text-xs font-medium">Time Spent</span>
+                          </div>
+                          <p className="text-2xl font-bold text-[var(--text-primary)]">
                         {analytics.totalTimeSpent ? `${Math.round(analytics.totalTimeSpent / 60)}m` : '0m'}
                       </p>
                     </div>
@@ -447,76 +637,123 @@ function AdminAuditRow({ audit, navigate, getStatusIcon, getScoreColor, getAudit
                       <p>No views yet. Share the magic link with your prospect!</p>
                     </div>
                   )}
-                </div>
-              ) : (
-                <div className="text-center py-8 text-[var(--text-tertiary)]">
-                  <BarChart3 className="w-8 h-8 mx-auto mb-2 opacity-50" />
-                  <p>Analytics available for completed audits</p>
+                    </div>
+                  ) : !fullAuditData && audit.status === 'completed' ? (
+                    <div className="text-center py-8 text-[var(--text-tertiary)]">
+                      <BarChart3 className="w-8 h-8 mx-auto mb-2 opacity-50" />
+                      <p>Loading audit data...</p>
+                    </div>
+                  ) : audit.status !== 'completed' ? (
+                    <div className="text-center py-8 text-[var(--text-tertiary)]">
+                      <BarChart3 className="w-8 h-8 mx-auto mb-2 opacity-50" />
+                      <p>Audit results will appear here when complete</p>
+                    </div>
+                  ) : null}
                 </div>
               )}
             </div>
           </CollapsibleContent>
         </CardContent>
       </Card>
+
+      {/* Full Audit Modal */}
+      <Dialog open={showFullAudit} onOpenChange={setShowFullAudit}>
+        <DialogContent className="max-w-[95vw] w-full max-h-[95vh] overflow-hidden p-0">
+          <div className="overflow-y-auto max-h-[95vh]">
+            {fullAuditData && (
+              <AuditPublicView 
+                audit={fullAuditData} 
+                contact={audit.contact}
+              />
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
     </Collapsible>
   )
 }
 
 // Client audit row (simpler, no magic link management)
 function ClientAuditRow({ audit, navigate, getStatusIcon, getScoreColor, getAuditStatusBadge }) {
+  const [showFullAudit, setShowFullAudit] = useState(false)
+  const [fullAuditData, setFullAuditData] = useState(null)
+  const [loadingFullAudit, setLoadingFullAudit] = useState(false)
+  
   const statusBadge = getAuditStatusBadge(audit.status)
 
+  // Open full audit view modal
+  const handleViewFullAudit = async (e) => {
+    e?.stopPropagation()
+    
+    if (!fullAuditData) {
+      setLoadingFullAudit(true)
+      try {
+        const res = await api.get(`/.netlify/functions/audits-get?id=${audit.id}`)
+        setFullAuditData(res.data.audit)
+      } catch (err) {
+        console.error('Failed to load audit data:', err)
+        toast.error('Failed to load audit data')
+        return
+      } finally {
+        setLoadingFullAudit(false)
+      }
+    }
+    
+    setShowFullAudit(true)
+  }
+
   return (
-    <Card 
-      className="bg-[var(--glass-bg)] backdrop-blur-xl border-[var(--glass-border)] hover:shadow-[var(--shadow-lg)] transition-all cursor-pointer"
-      onClick={() => navigate(`/audits/${audit.id}`)}
-    >
-      <CardContent className="p-6">
-        <div className="flex items-start justify-between">
-          <div className="flex-1">
-            {/* URL and Status */}
-            <div className="flex items-center gap-3 mb-3">
-              {getStatusIcon(audit.status)}
-              <div>
-                <h3 className="text-lg font-semibold text-[var(--text-primary)] flex items-center gap-2">
-                  {audit.targetUrl}
-                  <ExternalLink className="w-4 h-4 text-[var(--text-tertiary)]" />
-                </h3>
-                <div className="flex items-center gap-2 mt-1">
-                  <Badge variant={statusBadge.color}>
-                    {statusBadge.text}
-                  </Badge>
-                  <span className="text-sm text-[var(--text-tertiary)] flex items-center gap-1">
-                    <Calendar className="w-3 h-3" />
-                    {new Date(audit.createdAt).toLocaleDateString()}
-                  </span>
+    <>
+      <Card 
+        className="bg-[var(--glass-bg)] backdrop-blur-xl border-[var(--glass-border)] hover:shadow-[var(--shadow-lg)] transition-all cursor-pointer"
+        onClick={handleViewFullAudit}
+      >
+        <CardContent className="p-6">
+          <div className="flex items-start justify-between">
+            <div className="flex-1">
+              {/* URL and Status */}
+              <div className="flex items-center gap-3 mb-3">
+                {getStatusIcon(audit.status)}
+                <div>
+                  <h3 className="text-lg font-semibold text-[var(--text-primary)] flex items-center gap-2">
+                    {audit.targetUrl}
+                    <ExternalLink className="w-4 h-4 text-[var(--text-tertiary)]" />
+                  </h3>
+                  <div className="flex items-center gap-2 mt-1">
+                    <Badge variant={statusBadge.color}>
+                      {statusBadge.text}
+                    </Badge>
+                    <span className="text-sm text-[var(--text-tertiary)] flex items-center gap-1">
+                      <Calendar className="w-3 h-3" />
+                      {new Date(audit.createdAt).toLocaleDateString()}
+                    </span>
+                  </div>
                 </div>
               </div>
-            </div>
 
-            {/* Scores (only show if completed) */}
-            {audit.status === 'completed' && (
-              <div className="flex gap-3 mt-4">
-                {audit.scorePerformance !== null && (
-                  <div className={`px-3 py-2 rounded-xl ${getScoreColor(audit.scorePerformance)}`}>
-                    <div className="text-xs font-medium">Performance</div>
-                    <div className="text-2xl font-bold">{audit.scorePerformance}</div>
-                  </div>
-                )}
-                {audit.scoreSeo !== null && (
-                  <div className={`px-3 py-2 rounded-xl ${getScoreColor(audit.scoreSeo)}`}>
-                    <div className="text-xs font-medium">SEO</div>
-                    <div className="text-2xl font-bold">{audit.scoreSeo}</div>
-                  </div>
-                )}
-                {audit.scoreAccessibility !== null && (
-                  <div className={`px-3 py-2 rounded-xl ${getScoreColor(audit.scoreAccessibility)}`}>
-                    <div className="text-xs font-medium">Accessibility</div>
-                    <div className="text-2xl font-bold">{audit.scoreAccessibility}</div>
-                  </div>
-                )}
-              </div>
-            )}
+              {/* Scores (only show if completed) */}
+              {audit.status === 'completed' && (
+                <div className="flex gap-3 mt-4">
+                  {audit.scorePerformance !== null && (
+                    <div className={`px-3 py-2 rounded-xl ${getScoreColor(audit.scorePerformance)}`}>
+                      <div className="text-xs font-medium">Performance</div>
+                      <div className="text-2xl font-bold">{audit.scorePerformance}</div>
+                    </div>
+                  )}
+                  {audit.scoreSeo !== null && (
+                    <div className={`px-3 py-2 rounded-xl ${getScoreColor(audit.scoreSeo)}`}>
+                      <div className="text-xs font-medium">SEO</div>
+                      <div className="text-2xl font-bold">{audit.scoreSeo}</div>
+                    </div>
+                  )}
+                  {audit.scoreAccessibility !== null && (
+                    <div className={`px-3 py-2 rounded-xl ${getScoreColor(audit.scoreAccessibility)}`}>
+                      <div className="text-xs font-medium">Accessibility</div>
+                      <div className="text-2xl font-bold">{audit.scoreAccessibility}</div>
+                    </div>
+                  )}
+                </div>
+              )}
 
             {/* Processing message */}
             {(audit.status === 'pending' || audit.status === 'running') && (
@@ -537,17 +774,35 @@ function ClientAuditRow({ audit, navigate, getStatusIcon, getScoreColor, getAudi
           {audit.status === 'completed' && (
             <Button
               variant="glass"
-              onClick={(e) => {
-                e.stopPropagation()
-                navigate(`/audits/${audit.id}`)
-              }}
+              onClick={handleViewFullAudit}
+              disabled={loadingFullAudit}
             >
+              {loadingFullAudit ? (
+                <Loader2 className="w-4 h-4 animate-spin mr-2" />
+              ) : (
+                <Maximize2 className="w-4 h-4 mr-2" />
+              )}
               View Report
             </Button>
           )}
         </div>
       </CardContent>
     </Card>
+
+    {/* Full Audit Modal */}
+    <Dialog open={showFullAudit} onOpenChange={setShowFullAudit}>
+      <DialogContent className="max-w-[95vw] w-full max-h-[95vh] overflow-hidden p-0">
+        <div className="overflow-y-auto max-h-[95vh]">
+          {fullAuditData && (
+            <AuditPublicView 
+              audit={fullAuditData} 
+              contact={null}
+            />
+          )}
+        </div>
+      </DialogContent>
+    </Dialog>
+    </>
   )
 }
 

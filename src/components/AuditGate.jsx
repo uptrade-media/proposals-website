@@ -98,19 +98,48 @@ export default function AuditGate() {
         }
       }
 
-      // Check for existing Supabase session
+      // Check if URL hash contains magic link tokens
+      // Supabase will process these automatically via detectSessionInUrl
+      const hashHasTokens = window.location.hash.includes('access_token') || 
+                            window.location.hash.includes('error_description')
+      
+      if (hashHasTokens) {
+        console.log('[AuditGate] Magic link tokens in URL hash, letting Supabase process...')
+        // Give Supabase a moment to process the hash tokens
+        // The onAuthStateChange listener will handle SIGNED_IN event
+        await new Promise(resolve => setTimeout(resolve, 500))
+        
+        // Check if auth succeeded after processing
+        const { data: { session } } = await supabase.auth.getSession()
+        if (session) {
+          console.log('[AuditGate] Session established from magic link')
+          // Clean up the URL hash for better UX
+          window.history.replaceState(null, '', window.location.pathname)
+          await fetchAuditWithSession(session)
+          return
+        }
+        
+        // Check for auth errors in hash
+        if (window.location.hash.includes('error_description')) {
+          const errorMatch = window.location.hash.match(/error_description=([^&]+)/)
+          const errorMsg = errorMatch ? decodeURIComponent(errorMatch[1]) : 'Authentication failed'
+          console.error('[AuditGate] Magic link error:', errorMsg)
+          setError(errorMsg.includes('expired') ? 'Token expired' : 'Invalid token')
+          setIsLoading(false)
+          return
+        }
+        
+        // Wait a bit more for onAuthStateChange to fire
+        console.log('[AuditGate] Waiting for auth state change...')
+        return
+      }
+
+      // Check for existing Supabase session (user already authenticated)
       const { data: { session } } = await supabase.auth.getSession()
       
       if (session) {
         console.log('[AuditGate] Found existing session')
         await fetchAuditWithSession(session)
-        return
-      }
-
-      // Check if URL hash contains magic link tokens (Supabase will process these)
-      if (window.location.hash.includes('access_token')) {
-        console.log('[AuditGate] Magic link tokens in URL, waiting for auth state change...')
-        // Don't set loading false - onAuthStateChange will handle this
         return
       }
 

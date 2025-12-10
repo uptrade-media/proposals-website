@@ -11,7 +11,7 @@ const supabase = createClient(
 export async function handler(event) {
   const headers = {
     'Access-Control-Allow-Origin': '*',
-    'Access-Control-Allow-Headers': 'Content-Type',
+    'Access-Control-Allow-Headers': 'Content-Type, Authorization',
     'Access-Control-Allow-Methods': 'GET, OPTIONS',
     'Content-Type': 'application/json'
   }
@@ -40,13 +40,15 @@ export async function handler(event) {
   }
 
   // Authenticate with Supabase session (magic links create sessions automatically)
-  const { contact, error: authError } = await getAuthenticatedUser(event)
+  // Note: Magic link recipients might not have a contact record yet
+  const { user, contact, error: authError } = await getAuthenticatedUser(event)
   
-  if (authError || !contact) {
+  // We need at least a verified Supabase user
+  if (!user) {
     return {
       statusCode: 401,
       headers,
-      body: JSON.stringify({ error: authError || 'Not authenticated' })
+      body: JSON.stringify({ error: authError?.message || 'Not authenticated' })
     }
   }
 
@@ -106,8 +108,20 @@ export async function handler(event) {
 
     // Check authorization
     // - Admins can see all proposals
-    // - Clients can see their own proposals (Supabase magic links create sessions)
-    if (contact.role !== 'admin' && proposal.contact_id !== contact.id) {
+    // - Clients with a contact record can see their own proposals
+    // - Magic link recipients can see proposals sent to their email (client_email match)
+    const isAdmin = contact?.role === 'admin'
+    const isOwner = contact && proposal.contact_id === contact.id
+    const isRecipient = proposal.client_email && user.email && 
+                        proposal.client_email.toLowerCase() === user.email.toLowerCase()
+    
+    if (!isAdmin && !isOwner && !isRecipient) {
+      console.log('[proposals-get] Access denied:', {
+        userEmail: user.email,
+        contactId: contact?.id,
+        proposalContactId: proposal.contact_id,
+        clientEmail: proposal.client_email
+      })
       return {
         statusCode: 403,
         headers,
@@ -116,7 +130,7 @@ export async function handler(event) {
     }
 
     // Record view if not admin (first view)
-    if (contact.role !== 'admin') {
+    if (!isAdmin) {
       const updateData = {}
       
       // Set viewed_at if first view

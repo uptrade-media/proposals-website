@@ -1,5 +1,6 @@
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom'
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useRef } from 'react'
+import { supabase } from '../lib/supabase'
 import api from '@/lib/api'
 import { toast } from '@/lib/toast'
 import UptradeLoading from './UptradeLoading'
@@ -13,56 +14,189 @@ export default function ProposalGate() {
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState(null)
   const [isMagicLink, setIsMagicLink] = useState(false)
+  const authChecked = useRef(false)
 
   useEffect(() => {
-    const fetchProposal = async () => {
-      try {
-        setIsLoading(true)
+    // Set up Supabase auth state listener for magic link tokens in URL hash
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(
+      async (event, session) => {
+        console.log('[ProposalGate] Auth state change:', event, !!session)
         
-        // Check for magic link token
-        const token = searchParams.get('token')
-        
-        // Build request with token if present
-        const params = new URLSearchParams({ id: slug })
-        if (token) {
-          params.append('token', token)
+        if (event === 'SIGNED_IN' && session) {
+          // Magic link worked - fetch proposal with session
           setIsMagicLink(true)
+          await fetchProposalWithSession(session)
         }
-        
-        const response = await api.get(`/.netlify/functions/proposals-get?${params.toString()}`)
-        setProposal(response.data.proposal)
-        
-        // Track proposal view if magic link access
-        if (token && response.data.proposal?.id) {
-          api.post('/.netlify/functions/proposals-track-view', {
-            proposalId: response.data.proposal.id,
-            event: 'view',
-            metadata: {
-              accessType: 'magic_link',
-              userAgent: navigator.userAgent,
-              referrer: document.referrer
-            }
-          }).catch(err => console.warn('Failed to track view:', err))
-        }
-      } catch (err) {
-        console.error('Failed to fetch proposal:', err)
-        const errorMsg = err.response?.data?.error || 'Failed to load proposal'
-        setError(errorMsg)
-        
-        // Only redirect to login if not using magic link
-        if (err.response?.status === 401 && !searchParams.get('token')) {
-          toast.error('Please log in to view this proposal')
-          navigate('/login')
-        }
-      } finally {
-        setIsLoading(false)
       }
-    }
+    )
 
-    if (slug) {
-      fetchProposal()
+    // Initial auth check
+    checkAuthAndFetchProposal()
+
+    return () => {
+      subscription.unsubscribe()
     }
-  }, [slug, navigate, searchParams])
+  }, [slug])
+
+  // Check for existing session or token
+  const checkAuthAndFetchProposal = async () => {
+    if (authChecked.current) return
+    authChecked.current = true
+
+    try {
+      setIsLoading(true)
+      setError(null)
+
+      // Check if URL hash contains magic link tokens
+      const hashHasTokens = window.location.hash.includes('access_token') || 
+                            window.location.hash.includes('error_description')
+      
+      if (hashHasTokens) {
+        console.log('[ProposalGate] Magic link tokens in URL hash, letting Supabase process...')
+        // Give Supabase a moment to process the hash tokens
+        await new Promise(resolve => setTimeout(resolve, 500))
+        
+        // Check if auth succeeded after processing
+        const { data: { session } } = await supabase.auth.getSession()
+        if (session) {
+          console.log('[ProposalGate] Session established from magic link')
+          // Clean up the URL hash for better UX
+          window.history.replaceState(null, '', window.location.pathname)
+          setIsMagicLink(true)
+          await fetchProposalWithSession(session)
+          return
+        }
+        
+        // Check for auth errors in hash
+        if (window.location.hash.includes('error_description')) {
+          const errorMatch = window.location.hash.match(/error_description=([^&]+)/)
+          const errorMsg = errorMatch ? decodeURIComponent(errorMatch[1]) : 'Authentication failed'
+          console.error('[ProposalGate] Magic link error:', errorMsg)
+          setError(errorMsg.includes('expired') ? 'This link has expired' : 'Invalid link')
+          setIsLoading(false)
+          return
+        }
+        
+        // Wait for onAuthStateChange to fire
+        console.log('[ProposalGate] Waiting for auth state change...')
+        return
+      }
+
+      // Check for existing Supabase session
+      const { data: { session } } = await supabase.auth.getSession()
+      
+      if (session) {
+        console.log('[ProposalGate] Found existing session')
+        setIsMagicLink(true)
+        await fetchProposalWithSession(session)
+        return
+      }
+
+      // Fallback: Check for legacy token in query params
+      const token = searchParams.get('token')
+      if (token) {
+        console.log('[ProposalGate] Using legacy token validation')
+        setIsMagicLink(true)
+        await fetchProposalWithToken(token)
+        return
+      }
+
+      // No auth - try to fetch without auth (will require login if not public)
+      await fetchProposalNoAuth()
+
+    } catch (err) {
+      console.error('[ProposalGate] Auth check failed:', err)
+      setError('Failed to authenticate. Please try again.')
+      setIsLoading(false)
+    }
+  }
+
+  // Fetch proposal using Supabase session
+  const fetchProposalWithSession = async (session) => {
+    try {
+      console.log('[ProposalGate] Fetching proposal with session for user:', session.user?.email)
+      
+      const response = await api.get(`/.netlify/functions/proposals-get?id=${slug}`, {
+        headers: {
+          'Authorization': `Bearer ${session.access_token}`
+        }
+      })
+      
+      setProposal(response.data.proposal)
+      
+      // Track view
+      trackProposalView(response.data.proposal?.id, 'supabase_magic_link', session.access_token)
+      
+      setIsLoading(false)
+    } catch (err) {
+      console.error('[ProposalGate] Failed to fetch proposal with session:', err)
+      setError(err.response?.data?.error || 'Failed to load proposal')
+      setIsLoading(false)
+    }
+  }
+
+  // Fetch proposal using legacy token
+  const fetchProposalWithToken = async (token) => {
+    try {
+      const params = new URLSearchParams({ id: slug, token })
+      const response = await api.get(`/.netlify/functions/proposals-get?${params.toString()}`)
+      
+      setProposal(response.data.proposal)
+      
+      // Track view
+      trackProposalView(response.data.proposal?.id, 'legacy_token')
+      
+      setIsLoading(false)
+    } catch (err) {
+      console.error('[ProposalGate] Failed to fetch proposal with token:', err)
+      setError(err.response?.data?.error || 'Failed to load proposal')
+      setIsLoading(false)
+    }
+  }
+
+  // Fetch proposal without auth (requires login for non-public proposals)
+  const fetchProposalNoAuth = async () => {
+    try {
+      const response = await api.get(`/.netlify/functions/proposals-get?id=${slug}`)
+      setProposal(response.data.proposal)
+      setIsLoading(false)
+    } catch (err) {
+      console.error('[ProposalGate] Failed to fetch proposal:', err)
+      const errorMsg = err.response?.data?.error || 'Failed to load proposal'
+      setError(errorMsg)
+      
+      // Redirect to login if unauthorized
+      if (err.response?.status === 401) {
+        toast.error('Please log in to view this proposal')
+        navigate('/login')
+      }
+      setIsLoading(false)
+    }
+  }
+
+  // Track proposal view for analytics
+  const trackProposalView = async (proposalId, accessType, accessToken = null) => {
+    if (!proposalId) return
+    
+    try {
+      const headers = { 'Content-Type': 'application/json' }
+      if (accessToken) {
+        headers['Authorization'] = `Bearer ${accessToken}`
+      }
+      
+      await api.post('/.netlify/functions/proposals-track-view', {
+        proposalId,
+        event: 'view',
+        metadata: {
+          accessType,
+          userAgent: navigator.userAgent,
+          referrer: document.referrer
+        }
+      }, { headers })
+    } catch (err) {
+      console.warn('[ProposalGate] Failed to track view:', err)
+    }
+  }
 
   if (isLoading) {
     return <UptradeLoading />

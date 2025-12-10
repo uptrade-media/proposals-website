@@ -12,12 +12,15 @@ if (!supabaseUrl || !supabaseAnonKey) {
 }
 
 // Create Supabase client
+// Note: Using implicit flow (not PKCE) because magic links generated via
+// supabaseAdmin.auth.admin.generateLink() produce implicit flow tokens.
+// PKCE requires client-initiated auth to generate code verifier/challenge pairs.
 export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
   auth: {
     autoRefreshToken: true,
     persistSession: true,
     detectSessionInUrl: true,
-    flowType: 'pkce', // Use PKCE flow for better security
+    flowType: 'implicit', // Required for admin-generated magic links to work
   },
 })
 
