@@ -388,6 +388,7 @@ const Projects = () => {
     fetchProjects, 
     createProject, 
     updateProject,
+    deleteProject,
     isLoading, 
     error, 
     clearError 
@@ -559,13 +560,11 @@ const Projects = () => {
   }
 
   const handleDeleteProject = async (projectId) => {
-    try {
-      // This would call a delete function from the store
-      // await deleteProject(projectId)
+    const result = await deleteProject(projectId)
+    if (result.success) {
       toast.success('Project deleted successfully!')
-      fetchProjects()
-    } catch (err) {
-      toast.error('Failed to delete project')
+    } else {
+      toast.error(result.error || 'Failed to delete project')
     }
   }
 
@@ -810,6 +809,14 @@ const Projects = () => {
                           <Edit className="w-3 h-3 mr-1" />
                           Edit
                         </Button>
+                        <Button 
+                          variant="outline" 
+                          size="sm"
+                          className="text-red-600 hover:text-red-700 hover:bg-red-50"
+                          onClick={() => setDeleteDialog({ open: true, id: project.id, title: project.title })}
+                        >
+                          <Trash2 className="w-3 h-3" />
+                        </Button>
                       </div>
                     </CardContent>
                   </Card>
@@ -1053,6 +1060,16 @@ const Projects = () => {
                             onClick={() => openEditDialog(project)}
                           >
                             <Edit className="w-4 h-4" />
+                          </Button>
+                        )}
+                        {isAdmin && (
+                          <Button 
+                            variant="outline" 
+                            size="sm"
+                            className="text-red-600 hover:text-red-700 hover:bg-red-50"
+                            onClick={() => setDeleteDialog({ open: true, id: project.id, title: project.title })}
+                          >
+                            <Trash2 className="w-4 h-4" />
                           </Button>
                         )}
                       </div>

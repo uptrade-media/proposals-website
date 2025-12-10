@@ -107,6 +107,33 @@ const useProjectsStore = create((set, get) => ({
     }
   },
 
+  // Delete project
+  deleteProject: async (projectId) => {
+    set({ isLoading: true, error: null })
+    
+    try {
+      await api.delete(`/.netlify/functions/projects-delete?id=${projectId}`)
+      
+      // Remove project from the list
+      set(state => ({
+        projects: state.projects.filter(p => p.id !== projectId),
+        currentProject: state.currentProject?.id === projectId 
+          ? null 
+          : state.currentProject,
+        isLoading: false
+      }))
+      
+      return { success: true }
+    } catch (error) {
+      const errorMessage = error.response?.data?.error || 'Failed to delete project'
+      set({ 
+        isLoading: false, 
+        error: errorMessage 
+      })
+      return { success: false, error: errorMessage }
+    }
+  },
+
   // Fetch project proposals
   fetchProposals: async (projectId) => {
     set({ isLoading: true, error: null })
