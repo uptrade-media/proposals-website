@@ -73,11 +73,65 @@ export async function handler(event) {
       }
     }
 
+    // Transform to camelCase for frontend consistency
+    const transformedAudit = {
+      id: audit.id,
+      targetUrl: audit.target_url,
+      status: audit.status,
+      errorMessage: audit.error_message,
+      
+      // Grade - check summary first
+      grade: audit.summary?.grade || audit.summary?.metrics?.grade || null,
+      
+      // Scores
+      performanceScore: audit.performance_score || audit.score_performance || audit.summary?.metrics?.performance,
+      seoScore: audit.seo_score || audit.score_seo || audit.summary?.metrics?.seo,
+      accessibilityScore: audit.accessibility_score || audit.score_accessibility || audit.summary?.metrics?.accessibility,
+      bestPracticesScore: audit.best_practices_score || audit.score_best_practices,
+      securityScore: audit.score_security || audit.summary?.metrics?.security,
+      overallScore: audit.score_overall || audit.summary?.metrics?.overall,
+      
+      // Core Web Vitals
+      lcpMs: audit.lcp_ms,
+      fidMs: audit.fid_ms,
+      clsScore: audit.cls_score,
+      fcpMs: audit.fcp_ms,
+      ttiMs: audit.tti_ms,
+      tbtMs: audit.tbt_ms,
+      speedIndexMs: audit.speed_index_ms,
+      
+      // Summary data
+      summary: audit.summary || null,
+      seoIssues: audit.summary?.seoIssues || [],
+      performanceIssues: audit.summary?.performanceIssues || [],
+      securityIssues: audit.summary?.securityIssues || {},
+      priorityActions: audit.summary?.priorityActions || [],
+      insightsSummary: audit.summary?.insightsSummary || null,
+      
+      // Full data
+      fullAuditJson: audit.full_audit_json || audit.pagespeed_response,
+      reportUrl: audit.report_url,
+      htmlReport: audit.html_report,
+      
+      // Metadata
+      deviceType: audit.device_type,
+      throttlingProfile: audit.throttling_profile,
+      
+      // Magic link
+      magicToken: audit.magic_token,
+      magicTokenExpires: audit.magic_token_expires,
+      
+      // Timestamps
+      createdAt: audit.created_at,
+      completedAt: audit.completed_at,
+      updatedAt: audit.updated_at
+    }
+
     return {
       statusCode: 200,
       headers,
       body: JSON.stringify({
-        audit
+        audit: transformedAudit
       })
     }
 

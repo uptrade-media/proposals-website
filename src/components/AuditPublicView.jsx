@@ -176,21 +176,16 @@ export default function AuditPublicView({ audit, contact }) {
     }, { passive: true })
   }
   
-  const grade = calculateGrade(audit)
-  const gradeColor = gradeColors[grade]
+  // Use grade from API or calculate from scores
+  const grade = audit.grade || calculateGrade(audit)
+  const gradeColor = gradeColors[grade] || gradeColors['N/A']
   
-  // Parse full audit JSON for detailed data
-  let fullData = {}
-  try {
-    fullData = audit.fullAuditJson ? JSON.parse(audit.fullAuditJson) : {}
-  } catch (e) {
-    console.warn('Failed to parse full audit JSON')
-  }
-  
-  // Extract issues from full data if available
-  const seoIssues = fullData.seoIssues || []
-  const securityIssues = fullData.securityIssues || {}
-  const performanceIssues = fullData.performanceIssues || []
+  // Issues are now sent directly from API (extracted from summary)
+  const seoIssues = audit.seoIssues || []
+  const securityIssues = audit.securityIssues || {}
+  const performanceIssues = audit.performanceIssues || []
+  const priorityActions = audit.priorityActions || []
+  const insightsSummary = audit.insightsSummary || null
   
   return (
     <div className="min-h-screen bg-[var(--surface-page)]">
@@ -411,62 +406,85 @@ export default function AuditPublicView({ audit, contact }) {
             <CardDescription className="text-gray-400">Top recommendations to improve your website</CardDescription>
           </CardHeader>
           <CardContent>
+            {/* Show AI-generated insights summary if available */}
+            {insightsSummary && (
+              <div className="mb-6 p-4 bg-white/5 rounded-xl border border-white/10">
+                <p className="text-gray-300 text-sm leading-relaxed">{insightsSummary}</p>
+              </div>
+            )}
+            
             <div className="space-y-4">
-              {audit.performanceScore < 70 && (
-                <div className="flex items-start gap-4 bg-white/5 rounded-xl p-4">
-                  <div className="w-8 h-8 rounded-full bg-[var(--accent-red)]/20 flex items-center justify-center flex-shrink-0">
-                    <span className="text-[var(--accent-red)] font-bold">1</span>
+              {/* Use API priority actions if available, otherwise fall back to score-based logic */}
+              {priorityActions.length > 0 ? (
+                priorityActions.map((action, index) => (
+                  <div key={index} className="flex items-start gap-4 bg-white/5 rounded-xl p-4">
+                    <div className="w-8 h-8 rounded-full bg-[var(--brand-primary)]/20 flex items-center justify-center flex-shrink-0">
+                      <span className="text-[var(--brand-primary)] font-bold">{index + 1}</span>
+                    </div>
+                    <div>
+                      <p className="text-gray-300 text-sm">{action}</p>
+                    </div>
                   </div>
-                  <div>
-                    <h4 className="font-medium text-white">Improve Page Speed</h4>
-                    <p className="text-gray-400 text-sm mt-1">
-                      Your performance score of {audit.performanceScore} is below optimal. Consider optimizing images, 
-                      minifying CSS/JS, and implementing lazy loading.
-                    </p>
-                  </div>
-                </div>
-              )}
+                ))
+              ) : (
+                <>
+                  {audit.performanceScore < 70 && (
+                    <div className="flex items-start gap-4 bg-white/5 rounded-xl p-4">
+                      <div className="w-8 h-8 rounded-full bg-[var(--accent-red)]/20 flex items-center justify-center flex-shrink-0">
+                        <span className="text-[var(--accent-red)] font-bold">1</span>
+                      </div>
+                      <div>
+                        <h4 className="font-medium text-white">Improve Page Speed</h4>
+                        <p className="text-gray-400 text-sm mt-1">
+                          Your performance score of {audit.performanceScore} is below optimal. Consider optimizing images, 
+                          minifying CSS/JS, and implementing lazy loading.
+                        </p>
+                      </div>
+                    </div>
+                  )}
               
-              {audit.seoScore < 80 && (
-                <div className="flex items-start gap-4 bg-white/5 rounded-xl p-4">
-                  <div className="w-8 h-8 rounded-full bg-[var(--accent-orange)]/20 flex items-center justify-center flex-shrink-0">
-                    <span className="text-[var(--accent-orange)] font-bold">2</span>
-                  </div>
-                  <div>
-                    <h4 className="font-medium text-white">Optimize for Search Engines</h4>
-                    <p className="text-gray-400 text-sm mt-1">
-                      Your SEO score could be improved. Ensure meta descriptions, title tags, and structured data are properly configured.
-                    </p>
-                  </div>
-                </div>
-              )}
+                  {audit.seoScore < 80 && (
+                    <div className="flex items-start gap-4 bg-white/5 rounded-xl p-4">
+                      <div className="w-8 h-8 rounded-full bg-[var(--accent-orange)]/20 flex items-center justify-center flex-shrink-0">
+                        <span className="text-[var(--accent-orange)] font-bold">2</span>
+                      </div>
+                      <div>
+                        <h4 className="font-medium text-white">Optimize for Search Engines</h4>
+                        <p className="text-gray-400 text-sm mt-1">
+                          Your SEO score could be improved. Ensure meta descriptions, title tags, and structured data are properly configured.
+                        </p>
+                      </div>
+                    </div>
+                  )}
               
-              {audit.accessibilityScore < 90 && (
-                <div className="flex items-start gap-4 bg-white/5 rounded-xl p-4">
-                  <div className="w-8 h-8 rounded-full bg-[var(--accent-blue)]/20 flex items-center justify-center flex-shrink-0">
-                    <span className="text-[var(--accent-blue)] font-bold">3</span>
-                  </div>
-                  <div>
-                    <h4 className="font-medium text-white">Improve Accessibility</h4>
-                    <p className="text-gray-400 text-sm mt-1">
-                      Make your site more accessible by adding alt text to images, ensuring sufficient color contrast, and using proper heading hierarchy.
-                    </p>
-                  </div>
-                </div>
-              )}
+                  {audit.accessibilityScore < 90 && (
+                    <div className="flex items-start gap-4 bg-white/5 rounded-xl p-4">
+                      <div className="w-8 h-8 rounded-full bg-[var(--accent-blue)]/20 flex items-center justify-center flex-shrink-0">
+                        <span className="text-[var(--accent-blue)] font-bold">3</span>
+                      </div>
+                      <div>
+                        <h4 className="font-medium text-white">Improve Accessibility</h4>
+                        <p className="text-gray-400 text-sm mt-1">
+                          Make your site more accessible by adding alt text to images, ensuring sufficient color contrast, and using proper heading hierarchy.
+                        </p>
+                      </div>
+                    </div>
+                  )}
               
-              {audit.performanceScore >= 70 && audit.seoScore >= 80 && audit.accessibilityScore >= 90 && (
-                <div className="flex items-start gap-4 bg-[var(--accent-green)]/10 rounded-xl p-4">
-                  <div className="w-8 h-8 rounded-full bg-[var(--accent-green)]/20 flex items-center justify-center flex-shrink-0">
-                    <CheckCircle className="w-5 h-5 text-[var(--accent-green)]" />
-                  </div>
-                  <div>
-                    <h4 className="font-medium text-white">Great Job!</h4>
-                    <p className="text-gray-400 text-sm mt-1">
-                      Your website is performing well across all major categories. Keep monitoring and optimizing for best results.
-                    </p>
-                  </div>
-                </div>
+                  {audit.performanceScore >= 70 && audit.seoScore >= 80 && audit.accessibilityScore >= 90 && (
+                    <div className="flex items-start gap-4 bg-[var(--accent-green)]/10 rounded-xl p-4">
+                      <div className="w-8 h-8 rounded-full bg-[var(--accent-green)]/20 flex items-center justify-center flex-shrink-0">
+                        <CheckCircle className="w-5 h-5 text-[var(--accent-green)]" />
+                      </div>
+                      <div>
+                        <h4 className="font-medium text-white">Great Job!</h4>
+                        <p className="text-gray-400 text-sm mt-1">
+                          Your website is performing well across all major categories. Keep monitoring and optimizing for best results.
+                        </p>
+                      </div>
+                    </div>
+                  )}
+                </>
               )}
             </div>
           </CardContent>

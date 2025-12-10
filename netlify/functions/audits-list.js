@@ -122,6 +122,13 @@ export async function handler(event) {
         id: a.id,
         targetUrl: a.target_url,
         status: a.status,
+        scores: {
+          performance: a.performance_score,
+          seo: a.seo_score,
+          accessibility: a.accessibility_score,
+          bestPractices: a.best_practices_score
+        },
+        // Also include flat properties for compatibility
         scorePerformance: a.performance_score,
         scoreSeo: a.seo_score,
         scoreAccessibility: a.accessibility_score,
