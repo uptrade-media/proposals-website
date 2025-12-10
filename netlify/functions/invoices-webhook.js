@@ -1,13 +1,13 @@
 // netlify/functions/invoices-webhook.js
 import crypto from 'crypto'
-import { neon } from '@neondatabase/serverless'
-import { drizzle } from 'drizzle-orm/neon-http'
-import { eq } from 'drizzle-orm'
+import { createClient } from '@supabase/supabase-js'
 import { Resend } from 'resend'
-import * as schema from '../../src/db/schema.js'
 
+const supabase = createClient(
+  process.env.SUPABASE_URL,
+  process.env.SUPABASE_SERVICE_ROLE_KEY
+)
 const SQUARE_WEBHOOK_SIGNATURE_KEY = process.env.SQUARE_WEBHOOK_SIGNATURE_KEY
-const DATABASE_URL = process.env.DATABASE_URL
 const RESEND_API_KEY = process.env.RESEND_API_KEY
 const RESEND_FROM_EMAIL = process.env.RESEND_FROM_EMAIL || 'portal@send.uptrademedia.com'
 const ADMIN_EMAIL = process.env.ADMIN_EMAIL
@@ -70,18 +70,6 @@ export async function handler(event) {
 
     console.log('Received Square webhook:', type)
 
-    // Connect to database
-    if (!DATABASE_URL) {
-      return {
-        statusCode: 500,
-        headers,
-        body: JSON.stringify({ error: 'Database not configured' })
-      }
-    }
-
-    const sql = neon(DATABASE_URL)
-    const db = drizzle(sql, { schema })
-
     // Handle different webhook event types
     switch (type) {
       case 'payment.created':
@@ -98,15 +86,17 @@ export async function handler(event) {
           }
         }
 
-        // Find invoice by ID
-        const invoice = await db.query.invoices.findFirst({
-          where: eq(schema.invoices.id, referenceId),
-          with: {
-            contact: true
-          }
-        })
+        // Find invoice by ID with contact
+        const { data: invoice, error: invoiceError } = await supabase
+          .from('invoices')
+          .select(`
+            *,
+            contact:contacts!invoices_contact_id_fkey (*)
+          `)
+          .eq('id', referenceId)
+          .single()
 
-        if (!invoice) {
+        if (invoiceError || !invoice) {
           console.log(`Invoice ${referenceId} not found`)
           return {
             statusCode: 404,
@@ -117,41 +107,42 @@ export async function handler(event) {
 
         // Update invoice status based on payment status
         let newStatus = invoice.status
-        let paidAt = invoice.paidAt
+        let paidAt = invoice.paid_at
 
         if (payment.status === 'COMPLETED') {
           newStatus = 'paid'
-          paidAt = new Date()
+          paidAt = new Date().toISOString()
         } else if (payment.status === 'FAILED' || payment.status === 'CANCELED') {
           newStatus = 'failed'
         }
 
         // Only update if status changed
         if (newStatus !== invoice.status) {
-          await db.update(schema.invoices)
-            .set({
+          await supabase
+            .from('invoices')
+            .update({
               status: newStatus,
-              paidAt,
-              squarePaymentId: payment.id,
-              updatedAt: new Date()
+              paid_at: paidAt,
+              square_payment_id: payment.id,
+              updated_at: new Date().toISOString()
             })
-            .where(eq(schema.invoices.id, referenceId))
+            .eq('id', referenceId)
 
-          console.log(`Updated invoice ${invoice.invoiceNumber} to status: ${newStatus}`)
+          console.log(`Updated invoice ${invoice.invoice_number} to status: ${newStatus}`)
 
           // Send notification if payment failed
-          if (newStatus === 'failed' && RESEND_API_KEY && invoice.contact.email) {
+          if (newStatus === 'failed' && RESEND_API_KEY && invoice.contact?.email) {
             try {
               const resend = new Resend(RESEND_API_KEY)
               await resend.emails.send({
                 from: RESEND_FROM_EMAIL,
                 to: invoice.contact.email,
-                subject: `Payment Failed - Invoice ${invoice.invoiceNumber}`,
+                subject: `Payment Failed - Invoice ${invoice.invoice_number}`,
                 html: `
                   <h2>Payment Failed</h2>
                   <p>Hello ${invoice.contact.name},</p>
-                  <p>Unfortunately, your payment for invoice ${invoice.invoiceNumber} was not successful.</p>
-                  <p><strong>Amount:</strong> $${parseFloat(invoice.totalAmount).toFixed(2)}</p>
+                  <p>Unfortunately, your payment for invoice ${invoice.invoice_number} was not successful.</p>
+                  <p><strong>Amount:</strong> $${parseFloat(invoice.total_amount).toFixed(2)}</p>
                   <p>Please try again or contact us if you need assistance.</p>
                   <p><a href="${process.env.URL}/billing/invoices/${invoice.id}">Retry Payment</a></p>
                 `
@@ -173,14 +164,16 @@ export async function handler(event) {
         const squareInvoiceId = invoiceData.id
 
         // Find our invoice by Square invoice ID
-        const invoice = await db.query.invoices.findFirst({
-          where: eq(schema.invoices.squareInvoiceId, squareInvoiceId),
-          with: {
-            contact: true
-          }
-        })
+        const { data: invoice, error: invoiceError } = await supabase
+          .from('invoices')
+          .select(`
+            *,
+            contact:contacts!invoices_contact_id_fkey (*)
+          `)
+          .eq('square_invoice_id', squareInvoiceId)
+          .single()
 
-        if (!invoice) {
+        if (invoiceError || !invoice) {
           console.log(`Invoice with Square ID ${squareInvoiceId} not found`)
           return {
             statusCode: 404,
@@ -191,11 +184,11 @@ export async function handler(event) {
 
         // Update status based on Square invoice status
         let newStatus = invoice.status
-        let paidAt = invoice.paidAt
+        let paidAt = invoice.paid_at
 
         if (invoiceData.status === 'PAID') {
           newStatus = 'paid'
-          paidAt = new Date()
+          paidAt = new Date().toISOString()
         } else if (invoiceData.status === 'CANCELED' || type === 'invoice.canceled') {
           newStatus = 'cancelled'
         } else if (invoiceData.status === 'UNPAID' || invoiceData.status === 'PARTIALLY_PAID') {
@@ -203,31 +196,32 @@ export async function handler(event) {
         }
 
         if (newStatus !== invoice.status) {
-          await db.update(schema.invoices)
-            .set({
+          await supabase
+            .from('invoices')
+            .update({
               status: newStatus,
-              paidAt,
-              updatedAt: new Date()
+              paid_at: paidAt,
+              updated_at: new Date().toISOString()
             })
-            .where(eq(schema.invoices.squareInvoiceId, squareInvoiceId))
+            .eq('square_invoice_id', squareInvoiceId)
 
-          console.log(`Updated invoice ${invoice.invoiceNumber} to status: ${newStatus}`)
+          console.log(`Updated invoice ${invoice.invoice_number} to status: ${newStatus}`)
 
           // Send receipt if paid via Square invoice
-          if (newStatus === 'paid' && RESEND_API_KEY && invoice.contact.email) {
+          if (newStatus === 'paid' && RESEND_API_KEY && invoice.contact?.email) {
             try {
               const resend = new Resend(RESEND_API_KEY)
               await resend.emails.send({
                 from: RESEND_FROM_EMAIL,
                 to: invoice.contact.email,
-                subject: `Receipt for Invoice ${invoice.invoiceNumber}`,
+                subject: `Receipt for Invoice ${invoice.invoice_number}`,
                 html: `
                   <h2>Payment Receipt</h2>
                   <p>Hello ${invoice.contact.name},</p>
                   <p>Thank you for your payment!</p>
                   <table style="border-collapse: collapse; margin: 20px 0;">
-                    <tr><td style="padding: 8px;"><strong>Invoice Number:</strong></td><td style="padding: 8px;">${invoice.invoiceNumber}</td></tr>
-                    <tr><td style="padding: 8px;"><strong>Amount Paid:</strong></td><td style="padding: 8px;"><strong>$${parseFloat(invoice.totalAmount).toFixed(2)}</strong></td></tr>
+                    <tr><td style="padding: 8px;"><strong>Invoice Number:</strong></td><td style="padding: 8px;">${invoice.invoice_number}</td></tr>
+                    <tr><td style="padding: 8px;"><strong>Amount Paid:</strong></td><td style="padding: 8px;"><strong>$${parseFloat(invoice.total_amount).toFixed(2)}</strong></td></tr>
                     <tr><td style="padding: 8px;"><strong>Payment Date:</strong></td><td style="padding: 8px;">${new Date().toLocaleDateString()}</td></tr>
                   </table>
                   <p>You can view your receipt anytime at <a href="${process.env.URL}/billing/invoices/${invoice.id}">your billing portal</a>.</p>
@@ -240,12 +234,12 @@ export async function handler(event) {
                 await resend.emails.send({
                   from: RESEND_FROM_EMAIL,
                   to: ADMIN_EMAIL,
-                  subject: `Payment Received - Invoice ${invoice.invoiceNumber}`,
+                  subject: `Payment Received - Invoice ${invoice.invoice_number}`,
                   html: `
                     <h2>Payment Received via Square Invoice</h2>
-                    <p>Invoice ${invoice.invoiceNumber} has been paid.</p>
+                    <p>Invoice ${invoice.invoice_number} has been paid.</p>
                     <p><strong>Client:</strong> ${invoice.contact.name}</p>
-                    <p><strong>Amount:</strong> $${parseFloat(invoice.totalAmount).toFixed(2)}</p>
+                    <p><strong>Amount:</strong> $${parseFloat(invoice.total_amount).toFixed(2)}</p>
                     <p><a href="https://squareup.com/dashboard/invoices/${squareInvoiceId}">View in Square</a></p>
                   `
                 })
@@ -262,12 +256,12 @@ export async function handler(event) {
               await resend.emails.send({
                 from: RESEND_FROM_EMAIL,
                 to: ADMIN_EMAIL,
-                subject: `Invoice Cancelled - ${invoice.invoiceNumber}`,
+                subject: `Invoice Cancelled - ${invoice.invoice_number}`,
                 html: `
                   <h2>Invoice Cancelled</h2>
-                  <p>Invoice ${invoice.invoiceNumber} has been cancelled in Square.</p>
+                  <p>Invoice ${invoice.invoice_number} has been cancelled in Square.</p>
                   <p><strong>Client:</strong> ${invoice.contact.name}</p>
-                  <p><strong>Amount:</strong> $${parseFloat(invoice.totalAmount).toFixed(2)}</p>
+                  <p><strong>Amount:</strong> $${parseFloat(invoice.total_amount).toFixed(2)}</p>
                   <p><a href="https://squareup.com/dashboard/invoices/${squareInvoiceId}">View in Square</a></p>
                 `
               })
@@ -285,14 +279,16 @@ export async function handler(event) {
         const squareInvoiceId = invoiceData.id
 
         // Find our invoice by Square invoice ID
-        const invoice = await db.query.invoices.findFirst({
-          where: eq(schema.invoices.squareInvoiceId, squareInvoiceId),
-          with: {
-            contact: true
-          }
-        })
+        const { data: invoice, error: invoiceError } = await supabase
+          .from('invoices')
+          .select(`
+            *,
+            contact:contacts!invoices_contact_id_fkey (*)
+          `)
+          .eq('square_invoice_id', squareInvoiceId)
+          .single()
 
-        if (!invoice) {
+        if (invoiceError || !invoice) {
           console.log(`Invoice with Square ID ${squareInvoiceId} not found`)
           return {
             statusCode: 200,
@@ -302,30 +298,31 @@ export async function handler(event) {
         }
 
         // Update invoice status to refunded
-        await db.update(schema.invoices)
-          .set({
+        await supabase
+          .from('invoices')
+          .update({
             status: 'refunded',
-            updatedAt: new Date()
+            updated_at: new Date().toISOString()
           })
-          .where(eq(schema.invoices.squareInvoiceId, squareInvoiceId))
+          .eq('square_invoice_id', squareInvoiceId)
 
-        console.log(`Invoice ${invoice.invoiceNumber} marked as refunded`)
+        console.log(`Invoice ${invoice.invoice_number} marked as refunded`)
 
         // Notify client about refund
-        if (RESEND_API_KEY && invoice.contact.email) {
+        if (RESEND_API_KEY && invoice.contact?.email) {
           try {
             const resend = new Resend(RESEND_API_KEY)
             await resend.emails.send({
               from: RESEND_FROM_EMAIL,
               to: invoice.contact.email,
-              subject: `Refund Processed - Invoice ${invoice.invoiceNumber}`,
+              subject: `Refund Processed - Invoice ${invoice.invoice_number}`,
               html: `
                 <h2>Refund Processed</h2>
                 <p>Hello ${invoice.contact.name},</p>
-                <p>A refund has been processed for invoice ${invoice.invoiceNumber}.</p>
+                <p>A refund has been processed for invoice ${invoice.invoice_number}.</p>
                 <table style="border-collapse: collapse; margin: 20px 0;">
-                  <tr><td style="padding: 8px;"><strong>Invoice Number:</strong></td><td style="padding: 8px;">${invoice.invoiceNumber}</td></tr>
-                  <tr><td style="padding: 8px;"><strong>Refund Amount:</strong></td><td style="padding: 8px;"><strong>$${parseFloat(invoice.totalAmount).toFixed(2)}</strong></td></tr>
+                  <tr><td style="padding: 8px;"><strong>Invoice Number:</strong></td><td style="padding: 8px;">${invoice.invoice_number}</td></tr>
+                  <tr><td style="padding: 8px;"><strong>Refund Amount:</strong></td><td style="padding: 8px;"><strong>$${parseFloat(invoice.total_amount).toFixed(2)}</strong></td></tr>
                   <tr><td style="padding: 8px;"><strong>Refund Date:</strong></td><td style="padding: 8px;">${new Date().toLocaleDateString()}</td></tr>
                 </table>
                 <p>The refund will appear in your account within 5-10 business days.</p>
@@ -338,12 +335,12 @@ export async function handler(event) {
               await resend.emails.send({
                 from: RESEND_FROM_EMAIL,
                 to: ADMIN_EMAIL,
-                subject: `Refund Processed - Invoice ${invoice.invoiceNumber}`,
+                subject: `Refund Processed - Invoice ${invoice.invoice_number}`,
                 html: `
                   <h2>Refund Processed</h2>
-                  <p>Invoice ${invoice.invoiceNumber} has been refunded.</p>
+                  <p>Invoice ${invoice.invoice_number} has been refunded.</p>
                   <p><strong>Client:</strong> ${invoice.contact.name} (${invoice.contact.email})</p>
-                  <p><strong>Amount:</strong> $${parseFloat(invoice.totalAmount).toFixed(2)}</p>
+                  <p><strong>Amount:</strong> $${parseFloat(invoice.total_amount).toFixed(2)}</p>
                   <p><a href="https://squareup.com/dashboard/invoices/${squareInvoiceId}">View in Square</a></p>
                 `
               })
@@ -361,14 +358,16 @@ export async function handler(event) {
         const squareInvoiceId = invoiceData.id
 
         // Find our invoice by Square invoice ID
-        const invoice = await db.query.invoices.findFirst({
-          where: eq(schema.invoices.squareInvoiceId, squareInvoiceId),
-          with: {
-            contact: true
-          }
-        })
+        const { data: invoice, error: invoiceError } = await supabase
+          .from('invoices')
+          .select(`
+            *,
+            contact:contacts!invoices_contact_id_fkey (*)
+          `)
+          .eq('square_invoice_id', squareInvoiceId)
+          .single()
 
-        if (!invoice) {
+        if (invoiceError || !invoice) {
           console.log(`Invoice with Square ID ${squareInvoiceId} not found`)
           return {
             statusCode: 200,
@@ -377,7 +376,7 @@ export async function handler(event) {
           }
         }
 
-        console.log(`Scheduled charge failed for invoice ${invoice.invoiceNumber}`)
+        console.log(`Scheduled charge failed for invoice ${invoice.invoice_number}`)
 
         // Notify admin about failed payment
         if (RESEND_API_KEY && ADMIN_EMAIL) {
@@ -386,12 +385,12 @@ export async function handler(event) {
             await resend.emails.send({
               from: RESEND_FROM_EMAIL,
               to: ADMIN_EMAIL,
-              subject: `⚠️ Payment Failed - Invoice ${invoice.invoiceNumber}`,
+              subject: `⚠️ Payment Failed - Invoice ${invoice.invoice_number}`,
               html: `
                 <h2>Scheduled Payment Failed</h2>
-                <p>Automatic payment failed for invoice ${invoice.invoiceNumber}.</p>
+                <p>Automatic payment failed for invoice ${invoice.invoice_number}.</p>
                 <p><strong>Client:</strong> ${invoice.contact.name} (${invoice.contact.email})</p>
-                <p><strong>Amount:</strong> $${parseFloat(invoice.totalAmount).toFixed(2)}</p>
+                <p><strong>Amount:</strong> $${parseFloat(invoice.total_amount).toFixed(2)}</p>
                 <p><strong>Action Required:</strong> Contact the client to resolve payment issue.</p>
                 <p><a href="https://squareup.com/dashboard/invoices/${squareInvoiceId}">View in Square</a></p>
               `
@@ -402,20 +401,20 @@ export async function handler(event) {
         }
 
         // Optionally notify client (be tactful)
-        if (RESEND_API_KEY && invoice.contact.email) {
+        if (RESEND_API_KEY && invoice.contact?.email) {
           try {
             const resend = new Resend(RESEND_API_KEY)
             await resend.emails.send({
               from: RESEND_FROM_EMAIL,
               to: invoice.contact.email,
-              subject: `Payment Issue - Invoice ${invoice.invoiceNumber}`,
+              subject: `Payment Issue - Invoice ${invoice.invoice_number}`,
               html: `
                 <h2>Payment Could Not Be Processed</h2>
                 <p>Hello ${invoice.contact.name},</p>
-                <p>We were unable to process the payment for invoice ${invoice.invoiceNumber}.</p>
+                <p>We were unable to process the payment for invoice ${invoice.invoice_number}.</p>
                 <table style="border-collapse: collapse; margin: 20px 0;">
-                  <tr><td style="padding: 8px;"><strong>Invoice Number:</strong></td><td style="padding: 8px;">${invoice.invoiceNumber}</td></tr>
-                  <tr><td style="padding: 8px;"><strong>Amount Due:</strong></td><td style="padding: 8px;"><strong>$${parseFloat(invoice.totalAmount).toFixed(2)}</strong></td></tr>
+                  <tr><td style="padding: 8px;"><strong>Invoice Number:</strong></td><td style="padding: 8px;">${invoice.invoice_number}</td></tr>
+                  <tr><td style="padding: 8px;"><strong>Amount Due:</strong></td><td style="padding: 8px;"><strong>$${parseFloat(invoice.total_amount).toFixed(2)}</strong></td></tr>
                 </table>
                 <p>This may be due to insufficient funds, an expired card, or another issue with your payment method.</p>
                 <p>Please <a href="${process.env.URL}/billing/invoices/${invoice.id}">update your payment information</a> or contact us for assistance.</p>
@@ -436,14 +435,16 @@ export async function handler(event) {
         const paymentId = refund.paymentId
 
         // Find invoice by Square payment ID
-        const invoice = await db.query.invoices.findFirst({
-          where: eq(schema.invoices.squarePaymentId, paymentId),
-          with: {
-            contact: true
-          }
-        })
+        const { data: invoice, error: invoiceError } = await supabase
+          .from('invoices')
+          .select(`
+            *,
+            contact:contacts!invoices_contact_id_fkey (*)
+          `)
+          .eq('square_payment_id', paymentId)
+          .single()
 
-        if (!invoice) {
+        if (invoiceError || !invoice) {
           console.log(`Invoice with payment ID ${paymentId} not found`)
           return {
             statusCode: 200,
@@ -454,14 +455,15 @@ export async function handler(event) {
 
         // Update invoice status if refund is completed
         if (refund.status === 'COMPLETED') {
-          await db.update(schema.invoices)
-            .set({
+          await supabase
+            .from('invoices')
+            .update({
               status: 'refunded',
-              updatedAt: new Date()
+              updated_at: new Date().toISOString()
             })
-            .where(eq(schema.invoices.squarePaymentId, paymentId))
+            .eq('square_payment_id', paymentId)
 
-          console.log(`Invoice ${invoice.invoiceNumber} marked as refunded (via payment refund)`)
+          console.log(`Invoice ${invoice.invoice_number} marked as refunded (via payment refund)`)
 
           // Notify client and admin (similar to invoice.refunded above)
           if (RESEND_API_KEY) {
@@ -470,15 +472,15 @@ export async function handler(event) {
               const refundAmount = (parseInt(refund.amountMoney.amount) / 100).toFixed(2)
 
               // Notify client
-              if (invoice.contact.email) {
+              if (invoice.contact?.email) {
                 await resend.emails.send({
                   from: RESEND_FROM_EMAIL,
                   to: invoice.contact.email,
-                  subject: `Refund Processed - Invoice ${invoice.invoiceNumber}`,
+                  subject: `Refund Processed - Invoice ${invoice.invoice_number}`,
                   html: `
                     <h2>Refund Processed</h2>
                     <p>Hello ${invoice.contact.name},</p>
-                    <p>A refund of $${refundAmount} has been processed for invoice ${invoice.invoiceNumber}.</p>
+                    <p>A refund of $${refundAmount} has been processed for invoice ${invoice.invoice_number}.</p>
                     <p>The refund will appear in your account within 5-10 business days.</p>
                   `
                 })
@@ -489,10 +491,10 @@ export async function handler(event) {
                 await resend.emails.send({
                   from: RESEND_FROM_EMAIL,
                   to: ADMIN_EMAIL,
-                  subject: `Refund Completed - Invoice ${invoice.invoiceNumber}`,
+                  subject: `Refund Completed - Invoice ${invoice.invoice_number}`,
                   html: `
                     <h2>Refund Completed</h2>
-                    <p>Refund of $${refundAmount} completed for invoice ${invoice.invoiceNumber}.</p>
+                    <p>Refund of $${refundAmount} completed for invoice ${invoice.invoice_number}.</p>
                     <p><strong>Client:</strong> ${invoice.contact.name}</p>
                     <p><strong>Refund ID:</strong> ${refund.id}</p>
                   `

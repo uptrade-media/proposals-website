@@ -1,19 +1,17 @@
 // netlify/functions/messages-thread.js
-import jwt from 'jsonwebtoken'
-import { neon } from '@neondatabase/serverless'
-import { drizzle } from 'drizzle-orm/neon-http'
-import { eq, or, desc } from 'drizzle-orm'
-import * as schema from '../../src/db/schema.js'
+import { createClient } from '@supabase/supabase-js'
+import { getAuthenticatedUser } from './utils/supabase.js'
 
-const COOKIE_NAME = process.env.SESSION_COOKIE_NAME || 'um_session'
-const JWT_SECRET = process.env.AUTH_JWT_SECRET
-const DATABASE_URL = process.env.DATABASE_URL
+const supabase = createClient(
+  process.env.SUPABASE_URL,
+  process.env.SUPABASE_SERVICE_ROLE_KEY
+)
 
 export async function handler(event) {
   // CORS headers
   const headers = {
     'Access-Control-Allow-Origin': '*',
-    'Access-Control-Allow-Headers': 'Content-Type',
+    'Access-Control-Allow-Headers': 'Content-Type, Authorization',
     'Access-Control-Allow-Methods': 'GET, OPTIONS',
     'Content-Type': 'application/json'
   }
@@ -40,19 +38,10 @@ export async function handler(event) {
     }
   }
 
-  // Verify authentication
-  if (!JWT_SECRET) {
-    return {
-      statusCode: 500,
-      headers,
-      body: JSON.stringify({ error: 'Server not configured' })
-    }
-  }
-
-  const rawCookie = event.headers.cookie || ''
-  const token = rawCookie.split('; ').find(c => c.startsWith(`${COOKIE_NAME}=`))?.split('=')[1]
+  // Verify authentication using Supabase
+  const { user, contact, error: authError } = await getAuthenticatedUser(event)
   
-  if (!token) {
+  if (authError || !contact) {
     return {
       statusCode: 401,
       headers,
@@ -61,10 +50,8 @@ export async function handler(event) {
   }
 
   try {
-    const payload = jwt.verify(token, JWT_SECRET)
-    
-    // Only Google OAuth users can access message threads
-    if (payload.type !== 'google' && payload.role !== 'admin') {
+    // Only authenticated users can access message threads
+    if (contact.role !== 'admin' && contact.role !== 'client') {
       return {
         statusCode: 403,
         headers,
@@ -72,48 +59,19 @@ export async function handler(event) {
       }
     }
 
-    // Connect to database
-    if (!DATABASE_URL) {
-      return {
-        statusCode: 500,
-        headers,
-        body: JSON.stringify({ error: 'Database not configured' })
-      }
-    }
-
-    const sql = neon(DATABASE_URL)
-    const db = drizzle(sql, { schema })
-
     // Fetch root message
-    const rootMessage = await db.query.messages.findFirst({
-      where: eq(schema.messages.id, messageId),
-      with: {
-        sender: {
-          columns: {
-            id: true,
-            name: true,
-            email: true,
-            avatar: true
-          }
-        },
-        recipient: {
-          columns: {
-            id: true,
-            name: true,
-            email: true,
-            avatar: true
-          }
-        },
-        project: {
-          columns: {
-            id: true,
-            title: true
-          }
-        }
-      }
-    })
+    const { data: rootMessage, error: fetchError } = await supabase
+      .from('messages')
+      .select(`
+        *,
+        sender:contacts!messages_sender_id_fkey (id, name, email, avatar),
+        recipient:contacts!messages_recipient_id_fkey (id, name, email, avatar),
+        project:projects (id, title)
+      `)
+      .eq('id', messageId)
+      .single()
 
-    if (!rootMessage) {
+    if (fetchError || !rootMessage) {
       return {
         statusCode: 404,
         headers,
@@ -123,9 +81,9 @@ export async function handler(event) {
 
     // Check authorization
     // User must be sender or recipient
-    if (payload.role !== 'admin' && 
-        rootMessage.senderId !== payload.userId && 
-        rootMessage.recipientId !== payload.userId) {
+    if (contact.role !== 'admin' && 
+        rootMessage.sender_id !== contact.id && 
+        rootMessage.recipient_id !== contact.id) {
       return {
         statusCode: 403,
         headers,
@@ -135,109 +93,60 @@ export async function handler(event) {
 
     // If this is a reply, fetch the root message
     let threadRoot = rootMessage
-    if (rootMessage.parentId) {
-      threadRoot = await db.query.messages.findFirst({
-        where: eq(schema.messages.id, rootMessage.parentId),
-        with: {
-          sender: {
-            columns: {
-              id: true,
-              name: true,
-              email: true,
-              avatar: true
-            }
-          },
-          recipient: {
-            columns: {
-              id: true,
-              name: true,
-              email: true,
-              avatar: true
-            }
-          },
-          project: {
-            columns: {
-              id: true,
-              title: true
-            }
-          }
-        }
-      })
+    if (rootMessage.parent_id) {
+      const { data: parent } = await supabase
+        .from('messages')
+        .select(`
+          *,
+          sender:contacts!messages_sender_id_fkey (id, name, email, avatar),
+          recipient:contacts!messages_recipient_id_fkey (id, name, email, avatar),
+          project:projects (id, title)
+        `)
+        .eq('id', rootMessage.parent_id)
+        .single()
+      
+      if (parent) {
+        threadRoot = parent
+      }
     }
 
     // Fetch all replies to the root message
-    const replies = await db.query.messages.findMany({
-      where: eq(schema.messages.parentId, threadRoot.id),
-      orderBy: [desc(schema.messages.createdAt)],
-      with: {
-        sender: {
-          columns: {
-            id: true,
-            name: true,
-            email: true,
-            avatar: true
-          }
-        },
-        recipient: {
-          columns: {
-            id: true,
-            name: true,
-            email: true,
-            avatar: true
-          }
-        }
-      }
-    })
+    const { data: replies } = await supabase
+      .from('messages')
+      .select(`
+        *,
+        sender:contacts!messages_sender_id_fkey (id, name, email, avatar),
+        recipient:contacts!messages_recipient_id_fkey (id, name, email, avatar)
+      `)
+      .eq('parent_id', threadRoot.id)
+      .order('created_at', { ascending: false })
 
     // Format thread
     const thread = {
       root: {
         id: threadRoot.id,
-        senderId: threadRoot.senderId,
-        recipientId: threadRoot.recipientId,
+        senderId: threadRoot.sender_id,
+        recipientId: threadRoot.recipient_id,
         subject: threadRoot.subject,
         content: threadRoot.content,
-        readAt: threadRoot.readAt,
-        createdAt: threadRoot.createdAt,
-        sender: threadRoot.sender ? {
-          id: threadRoot.sender.id,
-          name: threadRoot.sender.name,
-          email: threadRoot.sender.email,
-          avatar: threadRoot.sender.avatar
-        } : null,
-        recipient: threadRoot.recipient ? {
-          id: threadRoot.recipient.id,
-          name: threadRoot.recipient.name,
-          email: threadRoot.recipient.email,
-          avatar: threadRoot.recipient.avatar
-        } : null,
-        project: threadRoot.project ? {
-          id: threadRoot.project.id,
-          title: threadRoot.project.title
-        } : null
+        readAt: threadRoot.read_at,
+        createdAt: threadRoot.created_at,
+        sender: threadRoot.sender,
+        recipient: threadRoot.recipient,
+        project: threadRoot.project
       },
-      replies: replies.map(r => ({
+      replies: (replies || []).map(r => ({
         id: r.id,
-        senderId: r.senderId,
-        recipientId: r.recipientId,
+        senderId: r.sender_id,
+        recipientId: r.recipient_id,
         subject: r.subject,
         content: r.content,
-        readAt: r.readAt,
-        createdAt: r.createdAt,
-        sender: r.sender ? {
-          id: r.sender.id,
-          name: r.sender.name,
-          email: r.sender.email,
-          avatar: r.sender.avatar
-        } : null,
-        recipient: r.recipient ? {
-          id: r.recipient.id,
-          name: r.recipient.name,
-          email: r.recipient.email,
-          avatar: r.recipient.avatar
-        } : null
+        readAt: r.read_at,
+        createdAt: r.created_at,
+        sender: r.sender,
+        recipient: r.recipient
       })),
-      totalMessages: 1 + replies.length
+      totalMessages: 1 + (replies?.length || 0)
     }
 
     return {
@@ -248,14 +157,6 @@ export async function handler(event) {
 
   } catch (error) {
     console.error('Error fetching message thread:', error)
-    
-    if (error.name === 'JsonWebTokenError' || error.name === 'TokenExpiredError') {
-      return {
-        statusCode: 401,
-        headers,
-        body: JSON.stringify({ error: 'Invalid or expired session' })
-      }
-    }
 
     return {
       statusCode: 500,

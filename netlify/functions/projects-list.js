@@ -1,10 +1,7 @@
 // netlify/functions/projects-list.js
 // Migrated to Supabase from Neon/Drizzle
-import jwt from 'jsonwebtoken'
 import { createClient } from '@supabase/supabase-js'
-
-const COOKIE_NAME = process.env.SESSION_COOKIE_NAME || 'um_session'
-const JWT_SECRET = process.env.AUTH_JWT_SECRET
+import { getAuthenticatedUser } from './utils/supabase.js'
 
 const supabase = createClient(
   process.env.SUPABASE_URL,
@@ -14,7 +11,7 @@ const supabase = createClient(
 export async function handler(event) {
   const headers = {
     'Access-Control-Allow-Origin': '*',
-    'Access-Control-Allow-Headers': 'Content-Type',
+    'Access-Control-Allow-Headers': 'Content-Type, Authorization',
     'Access-Control-Allow-Methods': 'GET, OPTIONS',
     'Content-Type': 'application/json'
   }
@@ -31,34 +28,14 @@ export async function handler(event) {
     }
   }
 
-  if (!JWT_SECRET) {
-    return {
-      statusCode: 500,
-      headers,
-      body: JSON.stringify({ error: 'Server not configured' })
-    }
-  }
-
-  const rawCookie = event.headers.cookie || ''
-  const token = rawCookie.split('; ').find(c => c.startsWith(`${COOKIE_NAME}=`))?.split('=')[1]
-  
-  if (!token) {
-    return {
-      statusCode: 401,
-      headers,
-      body: JSON.stringify({ error: 'Not authenticated' })
-    }
-  }
-
   try {
-    const payload = jwt.verify(token, JWT_SECRET)
-    
-    // Allow authenticated users with role-based access
-    if (!payload.userId && !payload.email) {
+    // Verify authentication via Supabase
+    const { user, contact, error: authError } = await getAuthenticatedUser(event)
+    if (authError || !user) {
       return {
-        statusCode: 403,
+        statusCode: 401,
         headers,
-        body: JSON.stringify({ error: 'Access denied' })
+        body: JSON.stringify({ error: authError || 'Not authenticated' })
       }
     }
 
@@ -91,8 +68,8 @@ export async function handler(event) {
       .range(offset, offset + limit - 1)
 
     // Filter by user role
-    if (payload.role !== 'admin') {
-      query = query.eq('contact_id', payload.userId)
+    if (contact.role !== 'admin') {
+      query = query.eq('contact_id', contact.id)
     } else if (contactId) {
       query = query.eq('contact_id', contactId)
     }
@@ -120,7 +97,7 @@ export async function handler(event) {
       createdAt: p.created_at,
       updatedAt: p.updated_at,
       // Include contact info for admin view
-      ...(payload.role === 'admin' && p.contact ? {
+      ...(contact.role === 'admin' && p.contact ? {
         contact: {
           id: p.contact.id,
           name: p.contact.name,

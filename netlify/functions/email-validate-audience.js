@@ -1,19 +1,26 @@
-import { neon } from '@neondatabase/serverless'
-import jwt from 'jsonwebtoken'
-
-const sql = neon(process.env.DATABASE_URL)
+import { createSupabaseAdmin, getAuthenticatedUser } from './utils/supabase.js'
 
 export async function handler(event) {
+  const headers = {
+    'Access-Control-Allow-Origin': '*',
+    'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+    'Access-Control-Allow-Methods': 'POST, OPTIONS',
+    'Content-Type': 'application/json'
+  }
+
+  if (event.httpMethod === 'OPTIONS') {
+    return { statusCode: 204, headers }
+  }
+
   try {
-    // Verify auth
-    const token = event.headers.cookie?.match(/um_session=([^;]+)/)?.[1]
-    if (!token) {
-      return { statusCode: 401, body: JSON.stringify({ error: 'Unauthorized' }) }
+    // Verify auth using Supabase
+    const { user, contact, error: authError } = await getAuthenticatedUser(event)
+    if (authError || !contact) {
+      return { statusCode: 401, headers, body: JSON.stringify({ error: 'Unauthorized' }) }
     }
 
-    const user = jwt.verify(token, process.env.AUTH_JWT_SECRET)
-    if (user.role !== 'admin') {
-      return { statusCode: 403, body: JSON.stringify({ error: 'Admin only' }) }
+    if (contact.role !== 'admin') {
+      return { statusCode: 403, headers, body: JSON.stringify({ error: 'Admin only' }) }
     }
 
     const body = JSON.parse(event.body || '{}')
@@ -26,24 +33,43 @@ export async function handler(event) {
       }
     }
 
+    const supabase = createSupabaseAdmin()
+
     // Count opt-in contacts in selected lists
     try {
-      const result = await sql`
-        SELECT COUNT(DISTINCT c.id) as count
-        FROM contacts c
-        WHERE c.consent_status = 'opt_in'
-          AND c.id IN (
-            SELECT contact_id FROM contact_list
-            WHERE list_id = ANY(${lists}::text[])
-          )
-          ${tags.length > 0 ? sql`AND c.tags @> ${JSON.stringify(tags)}::jsonb` : sql``}
-      `
+      // First get contact IDs from the selected lists
+      const { data: contactListData } = await supabase
+        .from('contact_list')
+        .select('contact_id')
+        .in('list_id', lists)
 
-      const count = result[0]?.count || 0
+      const contactIds = [...new Set(contactListData?.map(cl => cl.contact_id) || [])]
+
+      if (contactIds.length === 0) {
+        return {
+          statusCode: 200,
+          body: JSON.stringify({ count: 0 }),
+          headers: { 'Content-Type': 'application/json' }
+        }
+      }
+
+      // Count contacts that are opted in and in the selected lists
+      let query = supabase
+        .from('contacts')
+        .select('*', { count: 'exact', head: true })
+        .eq('consent_status', 'opt_in')
+        .in('id', contactIds)
+
+      // If tags are specified, filter by tags
+      if (tags.length > 0) {
+        query = query.contains('tags', tags)
+      }
+
+      const { count } = await query
 
       return {
         statusCode: 200,
-        body: JSON.stringify({ count }),
+        body: JSON.stringify({ count: count || 0 }),
         headers: { 'Content-Type': 'application/json' }
       }
     } catch (err) {

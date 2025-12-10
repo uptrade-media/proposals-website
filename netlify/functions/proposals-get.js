@@ -1,10 +1,7 @@
 // netlify/functions/proposals-get.js
-// Migrated to Supabase from Neon/Drizzle
-import jwt from 'jsonwebtoken'
+// Migrated to Supabase
 import { createClient } from '@supabase/supabase-js'
-
-const COOKIE_NAME = process.env.SESSION_COOKIE_NAME || 'um_session'
-const JWT_SECRET = process.env.AUTH_JWT_SECRET
+import { getAuthenticatedUser } from './utils/supabase.js'
 
 const supabase = createClient(
   process.env.SUPABASE_URL,
@@ -33,7 +30,6 @@ export async function handler(event) {
 
   // Get proposal slug or ID from query parameter or path
   const identifier = event.queryStringParameters?.id || event.path.split('/').pop()
-  const magicToken = event.queryStringParameters?.token
   
   if (!identifier || identifier === 'proposals-get') {
     return {
@@ -43,71 +39,18 @@ export async function handler(event) {
     }
   }
 
-  if (!JWT_SECRET) {
+  // Authenticate with Supabase session (magic links create sessions automatically)
+  const { contact, error: authError } = await getAuthenticatedUser(event)
+  
+  if (authError || !contact) {
     return {
-      statusCode: 500,
+      statusCode: 401,
       headers,
-      body: JSON.stringify({ error: 'Server not configured' })
-    }
-  }
-
-  // Try magic link token first, then session cookie
-  let authPayload = null
-  let isMagicLinkAccess = false
-  
-  if (magicToken) {
-    try {
-      const tokenPayload = jwt.verify(magicToken, JWT_SECRET)
-      // Verify magic token matches this proposal
-      if (tokenPayload.proposalId && tokenPayload.recipientEmail) {
-        authPayload = {
-          email: tokenPayload.recipientEmail,
-          role: 'prospect', // Limited role for magic link access
-          proposalId: tokenPayload.proposalId
-        }
-        isMagicLinkAccess = true
-      }
-    } catch (tokenErr) {
-      console.error('Invalid magic token:', tokenErr.message)
-      // Fall through to try session cookie
-    }
-  }
-  
-  // Try session cookie if no valid magic token
-  if (!authPayload) {
-    const rawCookie = event.headers.cookie || ''
-    const token = rawCookie.split('; ').find(c => c.startsWith(`${COOKIE_NAME}=`))?.split('=')[1]
-    
-    if (!token) {
-      return {
-        statusCode: 401,
-        headers,
-        body: JSON.stringify({ error: 'Not authenticated' })
-      }
-    }
-    
-    try {
-      authPayload = jwt.verify(token, JWT_SECRET)
-    } catch (sessionErr) {
-      return {
-        statusCode: 401,
-        headers,
-        body: JSON.stringify({ error: 'Invalid or expired session' })
-      }
+      body: JSON.stringify({ error: authError || 'Not authenticated' })
     }
   }
 
   try {
-    // Verify user is authenticated
-    if (!authPayload.userId && !authPayload.email) {
-      console.error('Invalid session token')
-      return {
-        statusCode: 403,
-        headers,
-        body: JSON.stringify({ error: 'Invalid session' })
-      }
-    }
-
     // Check if identifier is UUID or slug
     const isUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(identifier)
 
@@ -163,26 +106,8 @@ export async function handler(event) {
 
     // Check authorization
     // - Admins can see all proposals
-    // - Magic link access: must match the proposal ID from token
-    // - Regular clients: must own the proposal
-    if (authPayload.role === 'admin') {
-      // Admin access - allowed
-    } else if (isMagicLinkAccess) {
-      // Magic link access - verify proposal ID matches
-      const isUUIDToken = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(authPayload.proposalId)
-      const tokenMatchesProposal = isUUIDToken 
-        ? authPayload.proposalId === proposal.id
-        : authPayload.proposalId === proposal.slug
-      
-      if (!tokenMatchesProposal) {
-        return {
-          statusCode: 403,
-          headers,
-          body: JSON.stringify({ error: 'This link is not valid for this proposal' })
-        }
-      }
-    } else if (proposal.contact_id !== authPayload.userId) {
-      // Regular user - must own the proposal
+    // - Clients can see their own proposals (Supabase magic links create sessions)
+    if (contact.role !== 'admin' && proposal.contact_id !== contact.id) {
       return {
         statusCode: 403,
         headers,
@@ -190,8 +115,8 @@ export async function handler(event) {
       }
     }
 
-    // Record view if not admin (first view or magic link access)
-    if (authPayload.role !== 'admin') {
+    // Record view if not admin (first view)
+    if (contact.role !== 'admin') {
       const updateData = {}
       
       // Set viewed_at if first view

@@ -1,11 +1,9 @@
 // netlify/functions/proposals-create.js
-// Migrated to Supabase from Neon/Drizzle
-import jwt from 'jsonwebtoken'
+// Migrated to Supabase
 import { createClient } from '@supabase/supabase-js'
 import { Resend } from 'resend'
+import { getAuthenticatedUser } from './utils/supabase.js'
 
-const COOKIE_NAME = process.env.SESSION_COOKIE_NAME || 'um_session'
-const JWT_SECRET = process.env.AUTH_JWT_SECRET
 const RESEND_API_KEY = process.env.RESEND_API_KEY
 const RESEND_FROM_EMAIL = process.env.RESEND_FROM_EMAIL || 'portal@send.uptrademedia.com'
 const PORTAL_URL = process.env.URL || 'https://portal.uptrademedia.com'
@@ -44,30 +42,20 @@ export async function handler(event) {
     }
   }
 
-  if (!JWT_SECRET) {
-    return {
-      statusCode: 500,
-      headers,
-      body: JSON.stringify({ error: 'Server not configured' })
-    }
-  }
-
-  const rawCookie = event.headers.cookie || ''
-  const token = rawCookie.split('; ').find(c => c.startsWith(`${COOKIE_NAME}=`))?.split('=')[1]
-  
-  if (!token) {
-    return {
-      statusCode: 401,
-      headers,
-      body: JSON.stringify({ error: 'Not authenticated' })
-    }
-  }
-
   try {
-    const payload = jwt.verify(token, JWT_SECRET)
+    // Verify authentication
+    const { contact, error: authError } = await getAuthenticatedUser(event)
     
+    if (authError || !contact) {
+      return {
+        statusCode: 401,
+        headers,
+        body: JSON.stringify({ error: authError || 'Not authenticated' })
+      }
+    }
+
     // Only admins can create proposals
-    if (payload.role !== 'admin') {
+    if (contact.role !== 'admin') {
       return {
         statusCode: 403,
         headers,
@@ -214,129 +202,74 @@ export async function handler(event) {
         const resend = new Resend(RESEND_API_KEY)
         const needsSetup = contact.account_setup === false || contact.account_setup === 'false'
         
-        let authToken, emailSubject, emailBody
+        // Generate Supabase magic link
+        const redirectPath = needsSetup ? '/account-setup' : `/proposals/${proposal.slug}`
+        const { data: linkData, error: linkError } = await supabase.auth.admin.generateLink({
+          type: 'magiclink',
+          email: contact.email,
+          options: {
+            redirectTo: `${PORTAL_URL}${redirectPath}`
+          }
+        })
         
-        if (needsSetup) {
-          // Account setup token
-          authToken = jwt.sign(
-            {
-              email: contact.email,
-              type: 'account-setup',
-              contactId: contact.id,
-              redirectTo: `/proposals/${proposal.slug}`
-            },
-            JWT_SECRET,
-            { expiresIn: '24h' }
-          )
-          emailSubject = 'New Proposal Ready - Set Up Your Account'
-          const setupUrl = `${PORTAL_URL}/account-setup?token=${authToken}`
-          
-          emailBody = `
-            <!DOCTYPE html>
-            <html>
-            <head>
-              <meta charset="utf-8">
-              <meta name="viewport" content="width=device-width, initial-scale=1.0">
-            </head>
-            <body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Arial, sans-serif; margin: 0; padding: 0; background: #f4f4f4;">
-              <div style="max-width: 600px; margin: 40px auto; background: white; border-radius: 8px; overflow: hidden; box-shadow: 0 2px 8px rgba(0,0,0,0.1);">
-                <div style="background: linear-gradient(135deg, #4bbf39 0%, #2d7a24 100%); color: white; padding: 40px 30px; text-align: center;">
-                  <h1 style="margin: 0; font-size: 28px;">📋 New Proposal Ready!</h1>
-                </div>
-                
-                <div style="padding: 40px 30px;">
-                  <p style="margin: 0 0 20px; font-size: 16px;">Hi ${contact.name},</p>
-                  <p style="margin: 0 0 20px; font-size: 16px;">Great news! We've prepared a new proposal for you:</p>
-                  
-                  <div style="background: #f8f9fa; border-left: 4px solid #4bbf39; padding: 20px; border-radius: 6px; margin: 24px 0;">
-                    <h2 style="margin: 0 0 12px; font-size: 20px; color: #2d7a24;">${proposal.title}</h2>
-                    ${proposal.total_amount ? `<div style="margin: 8px 0; font-size: 14px; color: #555;"><strong>Total Investment:</strong> $${parseFloat(proposal.total_amount).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>` : ''}
-                    ${proposal.valid_until ? `<div style="margin: 8px 0; font-size: 14px; color: #555;"><strong>Valid Until:</strong> ${new Date(proposal.valid_until).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}</div>` : ''}
-                  </div>
-                  
-                  <div style="background: #fff8e6; border-left: 4px solid #ffc107; padding: 16px 20px; margin: 20px 0; border-radius: 4px;">
-                    <p style="margin: 0; font-size: 14px; color: #856404;"><strong>🎯 First Time Here?</strong> You'll need to set up your portal account to view this proposal.</p>
-                  </div>
-                  
-                  <div style="text-align: center;">
-                    <a href="${setupUrl}" style="display: inline-block; background: #4bbf39; color: white; text-decoration: none; padding: 14px 32px; border-radius: 6px; font-weight: 600; font-size: 16px; margin: 20px 0;">Set Up Account & View Proposal</a>
-                  </div>
-                  
-                  <div style="background: #fff3cd; border: 1px solid #ffc107; padding: 12px 16px; border-radius: 4px; margin: 20px 0; font-size: 14px; color: #856404;">
-                    ⏰ <strong>Important:</strong> This link expires in 24 hours.
-                  </div>
-                  
-                  <p style="margin-top: 30px; font-size: 16px;">
-                    <strong>The Uptrade Media Team</strong>
-                  </p>
-                </div>
-                
-                <div style="background: #f8f9fa; padding: 24px 30px; text-align: center; font-size: 14px; color: #666; border-top: 1px solid #e0e0e0;">
-                  <p style="margin: 0;">© ${new Date().getFullYear()} Uptrade Media. All rights reserved.</p>
-                </div>
-              </div>
-            </body>
-            </html>
-          `
-        } else {
-          // Magic link for existing users
-          authToken = jwt.sign(
-            {
-              email: contact.email,
-              userId: contact.id,
-              role: contact.role,
-              type: 'magic-link'
-            },
-            JWT_SECRET,
-            { expiresIn: '24h' }
-          )
-          emailSubject = `New Proposal: ${proposal.title}`
-          const magicUrl = `${PORTAL_URL}/auth/magic?token=${authToken}&redirect=/proposals/${proposal.slug}`
-          
-          emailBody = `
-            <!DOCTYPE html>
-            <html>
-            <head>
-              <meta charset="utf-8">
-              <meta name="viewport" content="width=device-width, initial-scale=1.0">
-            </head>
-            <body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Arial, sans-serif; margin: 0; padding: 0; background: #f4f4f4;">
-              <div style="max-width: 600px; margin: 40px auto; background: white; border-radius: 8px; overflow: hidden; box-shadow: 0 2px 8px rgba(0,0,0,0.1);">
-                <div style="background: linear-gradient(135deg, #4bbf39 0%, #2d7a24 100%); color: white; padding: 40px 30px; text-align: center;">
-                  <h1 style="margin: 0; font-size: 28px;">📋 New Proposal Ready!</h1>
-                </div>
-                
-                <div style="padding: 40px 30px;">
-                  <p style="margin: 0 0 20px; font-size: 16px;">Hi ${contact.name},</p>
-                  <p style="margin: 0 0 20px; font-size: 16px;">We've prepared a new proposal for your review:</p>
-                  
-                  <div style="background: #f8f9fa; border-left: 4px solid #4bbf39; padding: 20px; border-radius: 6px; margin: 24px 0;">
-                    <h2 style="margin: 0 0 12px; font-size: 20px; color: #2d7a24;">${proposal.title}</h2>
-                    ${proposal.total_amount ? `<div style="margin: 8px 0; font-size: 14px; color: #555;"><strong>Total Investment:</strong> $${parseFloat(proposal.total_amount).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>` : ''}
-                    ${proposal.valid_until ? `<div style="margin: 8px 0; font-size: 14px; color: #555;"><strong>Valid Until:</strong> ${new Date(proposal.valid_until).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}</div>` : ''}
-                  </div>
-                  
-                  <div style="text-align: center;">
-                    <a href="${magicUrl}" style="display: inline-block; background: #4bbf39; color: white; text-decoration: none; padding: 14px 32px; border-radius: 6px; font-weight: 600; font-size: 16px; margin: 20px 0;">View Proposal (Quick Login)</a>
-                  </div>
-                  
-                  <div style="background: #fff3cd; border: 1px solid #ffc107; padding: 12px 16px; border-radius: 4px; margin: 20px 0; font-size: 14px; color: #856404;">
-                    ⏰ This one-click login link expires in 24 hours. You can always sign in at <a href="${PORTAL_URL}/login">${PORTAL_URL}/login</a>
-                  </div>
-                  
-                  <p style="margin-top: 30px; font-size: 16px;">
-                    <strong>The Uptrade Media Team</strong>
-                  </p>
-                </div>
-                
-                <div style="background: #f8f9fa; padding: 24px 30px; text-align: center; font-size: 14px; color: #666; border-top: 1px solid #e0e0e0;">
-                  <p style="margin: 0;">© ${new Date().getFullYear()} Uptrade Media. All rights reserved.</p>
-                </div>
-              </div>
-            </body>
-            </html>
-          `
+        if (linkError) {
+          console.error('Error generating magic link:', linkError)
         }
+        
+        const magicUrl = linkData?.properties?.action_link || `${PORTAL_URL}/login`
+        const emailSubject = needsSetup 
+          ? 'New Proposal Ready - Set Up Your Account' 
+          : `New Proposal: ${proposal.title}`
+        
+        const emailBody = `
+          <!DOCTYPE html>
+          <html>
+          <head>
+            <meta charset="utf-8">
+            <meta name="viewport" content="width=device-width, initial-scale=1.0">
+          </head>
+          <body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Arial, sans-serif; margin: 0; padding: 0; background: #f4f4f4;">
+            <div style="max-width: 600px; margin: 40px auto; background: white; border-radius: 8px; overflow: hidden; box-shadow: 0 2px 8px rgba(0,0,0,0.1);">
+              <div style="background: linear-gradient(135deg, #4bbf39 0%, #2d7a24 100%); color: white; padding: 40px 30px; text-align: center;">
+                <h1 style="margin: 0; font-size: 28px;">📋 New Proposal Ready!</h1>
+              </div>
+              
+              <div style="padding: 40px 30px;">
+                <p style="margin: 0 0 20px; font-size: 16px;">Hi ${contact.name},</p>
+                <p style="margin: 0 0 20px; font-size: 16px;">${needsSetup ? 'Great news! We\'ve prepared a new proposal for you:' : 'We\'ve prepared a new proposal for your review:'}</p>
+                
+                <div style="background: #f8f9fa; border-left: 4px solid #4bbf39; padding: 20px; border-radius: 6px; margin: 24px 0;">
+                  <h2 style="margin: 0 0 12px; font-size: 20px; color: #2d7a24;">${proposal.title}</h2>
+                  ${proposal.total_amount ? `<div style="margin: 8px 0; font-size: 14px; color: #555;"><strong>Total Investment:</strong> $${parseFloat(proposal.total_amount).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>` : ''}
+                  ${proposal.valid_until ? `<div style="margin: 8px 0; font-size: 14px; color: #555;"><strong>Valid Until:</strong> ${new Date(proposal.valid_until).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}</div>` : ''}
+                </div>
+                
+                ${needsSetup ? `
+                <div style="background: #fff8e6; border-left: 4px solid #ffc107; padding: 16px 20px; margin: 20px 0; border-radius: 4px;">
+                  <p style="margin: 0; font-size: 14px; color: #856404;"><strong>🎯 First Time Here?</strong> You'll need to set up your portal account to view this proposal.</p>
+                </div>
+                ` : ''}
+                
+                <div style="text-align: center;">
+                  <a href="${magicUrl}" style="display: inline-block; background: #4bbf39; color: white; text-decoration: none; padding: 14px 32px; border-radius: 6px; font-weight: 600; font-size: 16px; margin: 20px 0;">${needsSetup ? 'Set Up Account & View Proposal' : 'View Proposal'}</a>
+                </div>
+                
+                <div style="background: #fff3cd; border: 1px solid #ffc107; padding: 12px 16px; border-radius: 4px; margin: 20px 0; font-size: 14px; color: #856404;">
+                  ⏰ This link expires in 24 hours. You can always sign in at <a href="${PORTAL_URL}/login">${PORTAL_URL}/login</a>
+                </div>
+                
+                <p style="margin-top: 30px; font-size: 16px;">
+                  <strong>The Uptrade Media Team</strong>
+                </p>
+              </div>
+              
+              <div style="background: #f8f9fa; padding: 24px 30px; text-align: center; font-size: 14px; color: #666; border-top: 1px solid #e0e0e0;">
+                <p style="margin: 0;">© ${new Date().getFullYear()} Uptrade Media. All rights reserved.</p>
+              </div>
+            </div>
+          </body>
+          </html>
+        `
         
         await resend.emails.send({
           from: RESEND_FROM_EMAIL,

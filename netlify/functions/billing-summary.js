@@ -1,19 +1,11 @@
 // netlify/functions/billing-summary.js
-import jwt from 'jsonwebtoken'
-import { neon } from '@neondatabase/serverless'
-import { drizzle } from 'drizzle-orm/neon-http'
-import { eq, and, lt, desc } from 'drizzle-orm'
-import * as schema from '../../src/db/schema.js'
-
-const COOKIE_NAME = process.env.SESSION_COOKIE_NAME || 'um_session'
-const JWT_SECRET = process.env.AUTH_JWT_SECRET
-const DATABASE_URL = process.env.DATABASE_URL
+import { createSupabaseAdmin, getAuthenticatedUser } from './utils/supabase.js'
 
 export async function handler(event) {
   // CORS headers
   const headers = {
     'Access-Control-Allow-Origin': '*',
-    'Access-Control-Allow-Headers': 'Content-Type',
+    'Access-Control-Allow-Headers': 'Content-Type, Authorization',
     'Access-Control-Allow-Methods': 'GET, OPTIONS',
     'Content-Type': 'application/json'
   }
@@ -30,19 +22,10 @@ export async function handler(event) {
     }
   }
 
-  // Verify authentication
-  if (!JWT_SECRET) {
-    return {
-      statusCode: 500,
-      headers,
-      body: JSON.stringify({ error: 'Server not configured' })
-    }
-  }
-
-  const rawCookie = event.headers.cookie || ''
-  const token = rawCookie.split('; ').find(c => c.startsWith(`${COOKIE_NAME}=`))?.split('=')[1]
-
-  if (!token) {
+  // Verify authentication using Supabase
+  const { user, contact, error: authError } = await getAuthenticatedUser(event)
+  
+  if (authError || !contact) {
     return {
       statusCode: 401,
       headers,
@@ -51,40 +34,27 @@ export async function handler(event) {
   }
 
   try {
-    const payload = jwt.verify(token, JWT_SECRET)
+    const supabase = createSupabaseAdmin()
 
-    // Connect to database
-    if (!DATABASE_URL) {
-      return {
-        statusCode: 500,
-        headers,
-        body: JSON.stringify({ error: 'Database not configured' })
-      }
-    }
+    // Build query based on role
+    let query = supabase
+      .from('invoices')
+      .select(`
+        *,
+        contact:contacts!contact_id(id, name, email, company),
+        project:projects!project_id(id, name)
+      `)
 
-    const sql = neon(DATABASE_URL)
-    const db = drizzle(sql, { schema })
-
-    // Build where conditions based on role
-    let whereConditions = []
-
-    if (payload.role !== 'admin') {
+    if (contact.role !== 'admin') {
       // Clients only see their own invoices
-      whereConditions.push(eq(schema.invoices.contactId, payload.userId))
+      query = query.eq('contact_id', contact.id)
     }
 
-    // Get all invoices for calculations
-    const allInvoices = await db.query.invoices.findMany({
-      where: whereConditions.length > 0 ? and(...whereConditions) : undefined,
-      with: {
-        contact: {
-          columns: { id: true, name: true, email: true, company: true }
-        },
-        project: {
-          columns: { id: true, name: true }
-        }
-      }
-    })
+    const { data: allInvoices, error } = await query
+
+    if (error) {
+      throw error
+    }
 
     // Calculate summary statistics
     const now = new Date()
@@ -96,15 +66,15 @@ export async function handler(event) {
     let overdueCount = 0
     let recentInvoices = []
 
-    allInvoices.forEach(invoice => {
-      const total = parseFloat(invoice.totalAmount) || 0
+    ;(allInvoices || []).forEach(invoice => {
+      const total = parseFloat(invoice.total_amount) || 0
 
       // Total revenue (all paid invoices)
       if (invoice.status === 'paid') {
         totalRevenue += total
 
         // This month's revenue
-        const paidDate = invoice.paidAt ? new Date(invoice.paidAt) : null
+        const paidDate = invoice.paid_at ? new Date(invoice.paid_at) : null
         if (paidDate && paidDate >= thisMonthStart) {
           thisMonthRevenue += total
         }
@@ -116,7 +86,7 @@ export async function handler(event) {
 
         // Count overdue
         if (invoice.status === 'pending') {
-          const dueDate = invoice.dueDate ? new Date(invoice.dueDate) : null
+          const dueDate = invoice.due_date ? new Date(invoice.due_date) : null
           if (dueDate && dueDate < now) {
             overdueCount += 1
           }
@@ -125,27 +95,27 @@ export async function handler(event) {
     })
 
     // Get recent invoices (5 most recent)
-    const sortedInvoices = allInvoices.sort((a, b) => {
-      const dateA = a.createdAt ? new Date(a.createdAt).getTime() : 0
-      const dateB = b.createdAt ? new Date(b.createdAt).getTime() : 0
+    const sortedInvoices = (allInvoices || []).sort((a, b) => {
+      const dateA = a.created_at ? new Date(a.created_at).getTime() : 0
+      const dateB = b.created_at ? new Date(b.created_at).getTime() : 0
       return dateB - dateA
     }).slice(0, 5)
 
     recentInvoices = sortedInvoices.map(inv => ({
       id: inv.id,
-      invoiceNumber: inv.invoiceNumber,
+      invoiceNumber: inv.invoice_number,
       amount: inv.amount ? parseFloat(inv.amount) : 0,
-      totalAmount: inv.totalAmount ? parseFloat(inv.totalAmount) : 0,
+      totalAmount: inv.total_amount ? parseFloat(inv.total_amount) : 0,
       status: inv.status,
       contactName: inv.contact?.name,
       projectName: inv.project?.name,
-      dueDate: inv.dueDate?.toISOString(),
-      createdAt: inv.createdAt?.toISOString()
+      dueDate: inv.due_date,
+      createdAt: inv.created_at
     }))
 
     // Get payment method breakdown (paid invoices)
-    const paidInvoices = allInvoices.filter(inv => inv.status === 'paid')
-    const squarePayments = paidInvoices.filter(inv => inv.squarePaymentId).length
+    const paidInvoices = (allInvoices || []).filter(inv => inv.status === 'paid')
+    const squarePayments = paidInvoices.filter(inv => inv.square_payment_id).length
     const otherPayments = paidInvoices.length - squarePayments
 
     const summary = {
@@ -153,12 +123,12 @@ export async function handler(event) {
       thisMonthRevenue: thisMonthRevenue,
       pendingAmount: pendingAmount,
       overdueCount: overdueCount,
-      invoiceCount: allInvoices.length,
-      paidCount: allInvoices.filter(inv => inv.status === 'paid').length,
-      pendingCount: allInvoices.filter(inv => inv.status === 'pending').length,
-      overdueAmount: allInvoices
-        .filter(inv => inv.status === 'pending' && inv.dueDate && new Date(inv.dueDate) < now)
-        .reduce((sum, inv) => sum + (parseFloat(inv.totalAmount) || 0), 0),
+      invoiceCount: (allInvoices || []).length,
+      paidCount: (allInvoices || []).filter(inv => inv.status === 'paid').length,
+      pendingCount: (allInvoices || []).filter(inv => inv.status === 'pending').length,
+      overdueAmount: (allInvoices || [])
+        .filter(inv => inv.status === 'pending' && inv.due_date && new Date(inv.due_date) < now)
+        .reduce((sum, inv) => sum + (parseFloat(inv.total_amount) || 0), 0),
       paymentMethods: {
         square: squarePayments,
         other: otherPayments,

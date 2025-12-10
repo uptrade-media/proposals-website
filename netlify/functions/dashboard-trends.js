@@ -1,24 +1,26 @@
-import { neon } from '@neondatabase/serverless'
-import jwt from 'jsonwebtoken'
+import { createSupabaseAdmin, getAuthenticatedUser } from './utils/supabase.js'
 
 export async function handler(event) {
-  try {
-    // 1. Verify authentication
-    const token = event.headers.cookie?.match(/um_session=([^;]+)/)?.[1]
-    if (!token) {
-      return {
-        statusCode: 401,
-        body: JSON.stringify({ error: 'Unauthorized' })
-      }
-    }
+  const headers = {
+    'Access-Control-Allow-Origin': '*',
+    'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+    'Access-Control-Allow-Methods': 'GET, OPTIONS',
+    'Content-Type': 'application/json'
+  }
 
-    let payload
-    try {
-      payload = jwt.verify(token, process.env.AUTH_JWT_SECRET)
-    } catch (err) {
+  if (event.httpMethod === 'OPTIONS') {
+    return { statusCode: 204, headers }
+  }
+
+  try {
+    // 1. Verify authentication using Supabase
+    const { user, contact, error: authError } = await getAuthenticatedUser(event)
+    
+    if (authError || !contact) {
       return {
         statusCode: 401,
-        body: JSON.stringify({ error: 'Invalid session' })
+        headers,
+        body: JSON.stringify({ error: 'Unauthorized' })
       }
     }
 
@@ -49,7 +51,7 @@ export async function handler(event) {
       previousPeriodEnd = currentPeriodStart
     }
 
-    const sql = neon(process.env.DATABASE_URL)
+    const supabase = createSupabaseAdmin()
 
     // 4. Get trends based on user type
     let trends = {
@@ -59,194 +61,156 @@ export async function handler(event) {
       messages: { current: 0, previous: 0 }
     }
 
-    if (payload.type === 'google' && payload.role === 'admin') {
+    if (contact.role === 'admin') {
       // Admin sees all company metrics
-      const results = await sql`
-        SELECT 
-          'revenue' as metric,
-          COALESCE(SUM(i.total_amount), 0) as current_value,
-          0 as previous_value
-        FROM invoices i
-        WHERE i.status = 'paid'
-        AND i.paid_at >= ${currentPeriodStart.toISOString()}
-        AND i.paid_at <= ${currentPeriodEnd.toISOString()}
-        
-        UNION ALL
-        
-        SELECT 
-          'revenue' as metric,
-          0 as current_value,
-          COALESCE(SUM(i.total_amount), 0) as previous_value
-        FROM invoices i
-        WHERE i.status = 'paid'
-        AND i.paid_at >= ${previousPeriodStart.toISOString()}
-        AND i.paid_at <= ${previousPeriodEnd.toISOString()}
-        
-        UNION ALL
-        
-        SELECT 
-          'projects' as metric,
-          COUNT(*)::float as current_value,
-          0 as previous_value
-        FROM projects p
-        WHERE p.created_at >= ${currentPeriodStart.toISOString()}
-        AND p.created_at <= ${currentPeriodEnd.toISOString()}
-        
-        UNION ALL
-        
-        SELECT 
-          'projects' as metric,
-          0 as current_value,
-          COUNT(*)::float as previous_value
-        FROM projects p
-        WHERE p.created_at >= ${previousPeriodStart.toISOString()}
-        AND p.created_at <= ${previousPeriodEnd.toISOString()}
-        
-        UNION ALL
-        
-        SELECT 
-          'invoices' as metric,
-          COUNT(*)::float as current_value,
-          0 as previous_value
-        FROM invoices i
-        WHERE i.created_at >= ${currentPeriodStart.toISOString()}
-        AND i.created_at <= ${currentPeriodEnd.toISOString()}
-        
-        UNION ALL
-        
-        SELECT 
-          'invoices' as metric,
-          0 as current_value,
-          COUNT(*)::float as previous_value
-        FROM invoices i
-        WHERE i.created_at >= ${previousPeriodStart.toISOString()}
-        AND i.created_at <= ${previousPeriodEnd.toISOString()}
-        
-        UNION ALL
-        
-        SELECT 
-          'messages' as metric,
-          COUNT(*)::float as current_value,
-          0 as previous_value
-        FROM messages m
-        WHERE m.created_at >= ${currentPeriodStart.toISOString()}
-        AND m.created_at <= ${currentPeriodEnd.toISOString()}
-        
-        UNION ALL
-        
-        SELECT 
-          'messages' as metric,
-          0 as current_value,
-          COUNT(*)::float as previous_value
-        FROM messages m
-        WHERE m.created_at >= ${previousPeriodStart.toISOString()}
-        AND m.created_at <= ${previousPeriodEnd.toISOString()}
-      `
+      
+      // Current period revenue
+      const { data: currentRevenue } = await supabase
+        .from('invoices')
+        .select('total_amount')
+        .eq('status', 'paid')
+        .gte('paid_at', currentPeriodStart.toISOString())
+        .lte('paid_at', currentPeriodEnd.toISOString())
+      
+      // Previous period revenue
+      const { data: previousRevenue } = await supabase
+        .from('invoices')
+        .select('total_amount')
+        .eq('status', 'paid')
+        .gte('paid_at', previousPeriodStart.toISOString())
+        .lte('paid_at', previousPeriodEnd.toISOString())
+      
+      // Current period projects
+      const { count: currentProjects } = await supabase
+        .from('projects')
+        .select('*', { count: 'exact', head: true })
+        .gte('created_at', currentPeriodStart.toISOString())
+        .lte('created_at', currentPeriodEnd.toISOString())
+      
+      // Previous period projects
+      const { count: previousProjects } = await supabase
+        .from('projects')
+        .select('*', { count: 'exact', head: true })
+        .gte('created_at', previousPeriodStart.toISOString())
+        .lte('created_at', previousPeriodEnd.toISOString())
+      
+      // Current period invoices
+      const { count: currentInvoices } = await supabase
+        .from('invoices')
+        .select('*', { count: 'exact', head: true })
+        .gte('created_at', currentPeriodStart.toISOString())
+        .lte('created_at', currentPeriodEnd.toISOString())
+      
+      // Previous period invoices
+      const { count: previousInvoices } = await supabase
+        .from('invoices')
+        .select('*', { count: 'exact', head: true })
+        .gte('created_at', previousPeriodStart.toISOString())
+        .lte('created_at', previousPeriodEnd.toISOString())
+      
+      // Current period messages
+      const { count: currentMessages } = await supabase
+        .from('messages')
+        .select('*', { count: 'exact', head: true })
+        .gte('created_at', currentPeriodStart.toISOString())
+        .lte('created_at', currentPeriodEnd.toISOString())
+      
+      // Previous period messages
+      const { count: previousMessages } = await supabase
+        .from('messages')
+        .select('*', { count: 'exact', head: true })
+        .gte('created_at', previousPeriodStart.toISOString())
+        .lte('created_at', previousPeriodEnd.toISOString())
 
       // Aggregate results
-      results.forEach(row => {
-        const metric = row.metric
-        trends[metric].current += parseFloat(row.current_value)
-        trends[metric].previous += parseFloat(row.previous_value)
-      })
+      trends.revenue.current = currentRevenue?.reduce((sum, i) => sum + (parseFloat(i.total_amount) || 0), 0) || 0
+      trends.revenue.previous = previousRevenue?.reduce((sum, i) => sum + (parseFloat(i.total_amount) || 0), 0) || 0
+      trends.projects.current = currentProjects || 0
+      trends.projects.previous = previousProjects || 0
+      trends.invoices.current = currentInvoices || 0
+      trends.invoices.previous = previousInvoices || 0
+      trends.messages.current = currentMessages || 0
+      trends.messages.previous = previousMessages || 0
+
     } else {
       // Client sees only their own metrics
-      const results = await sql`
-        SELECT 
-          'revenue' as metric,
-          COALESCE(SUM(i.total_amount), 0) as current_value,
-          0 as previous_value
-        FROM invoices i
-        WHERE i.contact_id = ${payload.userId}
-        AND i.status = 'paid'
-        AND i.paid_at >= ${currentPeriodStart.toISOString()}
-        AND i.paid_at <= ${currentPeriodEnd.toISOString()}
-        
-        UNION ALL
-        
-        SELECT 
-          'revenue' as metric,
-          0 as current_value,
-          COALESCE(SUM(i.total_amount), 0) as previous_value
-        FROM invoices i
-        WHERE i.contact_id = ${payload.userId}
-        AND i.status = 'paid'
-        AND i.paid_at >= ${previousPeriodStart.toISOString()}
-        AND i.paid_at <= ${previousPeriodEnd.toISOString()}
-        
-        UNION ALL
-        
-        SELECT 
-          'projects' as metric,
-          COUNT(*)::float as current_value,
-          0 as previous_value
-        FROM projects p
-        WHERE p.contact_id = ${payload.userId}
-        AND p.created_at >= ${currentPeriodStart.toISOString()}
-        AND p.created_at <= ${currentPeriodEnd.toISOString()}
-        
-        UNION ALL
-        
-        SELECT 
-          'projects' as metric,
-          0 as current_value,
-          COUNT(*)::float as previous_value
-        FROM projects p
-        WHERE p.contact_id = ${payload.userId}
-        AND p.created_at >= ${previousPeriodStart.toISOString()}
-        AND p.created_at <= ${previousPeriodEnd.toISOString()}
-        
-        UNION ALL
-        
-        SELECT 
-          'invoices' as metric,
-          COUNT(*)::float as current_value,
-          0 as previous_value
-        FROM invoices i
-        WHERE i.contact_id = ${payload.userId}
-        AND i.created_at >= ${currentPeriodStart.toISOString()}
-        AND i.created_at <= ${currentPeriodEnd.toISOString()}
-        
-        UNION ALL
-        
-        SELECT 
-          'invoices' as metric,
-          0 as current_value,
-          COUNT(*)::float as previous_value
-        FROM invoices i
-        WHERE i.contact_id = ${payload.userId}
-        AND i.created_at >= ${previousPeriodStart.toISOString()}
-        AND i.created_at <= ${previousPeriodEnd.toISOString()}
-        
-        UNION ALL
-        
-        SELECT 
-          'messages' as metric,
-          COUNT(*)::float as current_value,
-          0 as previous_value
-        FROM messages m
-        WHERE m.contact_id = ${payload.userId}
-        AND m.created_at >= ${currentPeriodStart.toISOString()}
-        AND m.created_at <= ${currentPeriodEnd.toISOString()}
-        
-        UNION ALL
-        
-        SELECT 
-          'messages' as metric,
-          0 as current_value,
-          COUNT(*)::float as previous_value
-        FROM messages m
-        WHERE m.contact_id = ${payload.userId}
-        AND m.created_at >= ${previousPeriodStart.toISOString()}
-        AND m.created_at <= ${previousPeriodEnd.toISOString()}
-      `
+      const contactId = contact.id
+      
+      // Current period revenue
+      const { data: currentRevenue } = await supabase
+        .from('invoices')
+        .select('total_amount')
+        .eq('contact_id', contactId)
+        .eq('status', 'paid')
+        .gte('paid_at', currentPeriodStart.toISOString())
+        .lte('paid_at', currentPeriodEnd.toISOString())
+      
+      // Previous period revenue
+      const { data: previousRevenue } = await supabase
+        .from('invoices')
+        .select('total_amount')
+        .eq('contact_id', contactId)
+        .eq('status', 'paid')
+        .gte('paid_at', previousPeriodStart.toISOString())
+        .lte('paid_at', previousPeriodEnd.toISOString())
+      
+      // Current period projects
+      const { count: currentProjects } = await supabase
+        .from('projects')
+        .select('*', { count: 'exact', head: true })
+        .eq('contact_id', contactId)
+        .gte('created_at', currentPeriodStart.toISOString())
+        .lte('created_at', currentPeriodEnd.toISOString())
+      
+      // Previous period projects
+      const { count: previousProjects } = await supabase
+        .from('projects')
+        .select('*', { count: 'exact', head: true })
+        .eq('contact_id', contactId)
+        .gte('created_at', previousPeriodStart.toISOString())
+        .lte('created_at', previousPeriodEnd.toISOString())
+      
+      // Current period invoices
+      const { count: currentInvoices } = await supabase
+        .from('invoices')
+        .select('*', { count: 'exact', head: true })
+        .eq('contact_id', contactId)
+        .gte('created_at', currentPeriodStart.toISOString())
+        .lte('created_at', currentPeriodEnd.toISOString())
+      
+      // Previous period invoices
+      const { count: previousInvoices } = await supabase
+        .from('invoices')
+        .select('*', { count: 'exact', head: true })
+        .eq('contact_id', contactId)
+        .gte('created_at', previousPeriodStart.toISOString())
+        .lte('created_at', previousPeriodEnd.toISOString())
+      
+      // Current period messages
+      const { count: currentMessages } = await supabase
+        .from('messages')
+        .select('*', { count: 'exact', head: true })
+        .eq('contact_id', contactId)
+        .gte('created_at', currentPeriodStart.toISOString())
+        .lte('created_at', currentPeriodEnd.toISOString())
+      
+      // Previous period messages
+      const { count: previousMessages } = await supabase
+        .from('messages')
+        .select('*', { count: 'exact', head: true })
+        .eq('contact_id', contactId)
+        .gte('created_at', previousPeriodStart.toISOString())
+        .lte('created_at', previousPeriodEnd.toISOString())
 
       // Aggregate results
-      results.forEach(row => {
-        const metric = row.metric
-        trends[metric].current += parseFloat(row.current_value)
-        trends[metric].previous += parseFloat(row.previous_value)
-      })
+      trends.revenue.current = currentRevenue?.reduce((sum, i) => sum + (parseFloat(i.total_amount) || 0), 0) || 0
+      trends.revenue.previous = previousRevenue?.reduce((sum, i) => sum + (parseFloat(i.total_amount) || 0), 0) || 0
+      trends.projects.current = currentProjects || 0
+      trends.projects.previous = previousProjects || 0
+      trends.invoices.current = currentInvoices || 0
+      trends.invoices.previous = previousInvoices || 0
+      trends.messages.current = currentMessages || 0
+      trends.messages.previous = previousMessages || 0
     }
 
     // 5. Calculate percentage changes

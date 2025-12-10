@@ -2,13 +2,9 @@
 // Scheduled function: runs every 5 minutes
 // Sends queued emails, respects daily caps, dayparting, warmup %
 
-import { neon } from '@neondatabase/serverless'
-import { drizzle } from 'drizzle-orm/neon-http'
-import { and, eq, isNull, lte, gte, count, sql } from 'drizzle-orm'
-import * as schema from '../../src/db/schema.js'
+import { createSupabaseAdmin } from './utils/supabase.js'
 import { Resend } from 'resend'
 
-const DATABASE_URL = process.env.DATABASE_URL
 const RESEND_API_KEY = process.env.RESEND_API_KEY
 const SENDING_DOMAIN = process.env.SENDING_DOMAIN || 'portal@send.uptrademedia.com'
 
@@ -23,23 +19,19 @@ function isBusinessHours() {
 }
 
 // Helper: Get daily send count for a campaign mailbox
-async function getDailySendCount(db, campaignId) {
+async function getDailySendCount(supabase, campaignId) {
   const today = new Date()
   today.setHours(0, 0, 0, 0)
   
   try {
-    const result = await db
-      .select({ count: count() })
-      .from(schema.events)
-      .where(
-        and(
-          eq(schema.events.campaignId, campaignId),
-          eq(schema.events.eventType, 'sent'),
-          gte(schema.events.createdAt, today)
-        )
-      )
+    const { count } = await supabase
+      .from('events')
+      .select('*', { count: 'exact', head: true })
+      .eq('campaign_id', campaignId)
+      .eq('event_type', 'sent')
+      .gte('created_at', today.toISOString())
     
-    return parseInt(result[0]?.count || 0)
+    return count || 0
   } catch (err) {
     console.warn(`[email-scheduler] Error counting daily sends:`, err.message)
     return 0
@@ -56,76 +48,76 @@ function shouldSendByWarmup(warmupPercent) {
 export async function handler(event) {
   console.log('[email-scheduler] Running scheduled function')
   
-  if (!DATABASE_URL) {
-    console.error('[email-scheduler] DATABASE_URL not configured')
-    return { statusCode: 500, body: JSON.stringify({ error: 'Database not configured' }) }
-  }
-
   if (!RESEND_API_KEY) {
     console.error('[email-scheduler] RESEND_API_KEY not configured')
     return { statusCode: 500, body: JSON.stringify({ error: 'Resend not configured' }) }
   }
 
   try {
-    const sql = neon(DATABASE_URL)
-    const db = drizzle(sql, { schema })
+    const supabase = createSupabaseAdmin()
     const resend = new Resend(RESEND_API_KEY)
 
     // 1. Get all campaigns that need to be sent
     // Status: scheduled, scheduledStart <= now, not yet marked as sending/done
-    const now = new Date()
-    const campaignsToSend = await db.query.campaigns.findMany({
-      where: and(
-        eq(schema.campaigns.status, 'scheduled'),
-        lte(schema.campaigns.scheduledStart, now),
-        isNull(schema.campaigns.sentAt)
-      ),
-      with: {
-        mailbox: true,
-        recipients: {
-          where: eq(schema.recipients.status, 'queued')
-        }
-      }
-    })
+    const now = new Date().toISOString()
+    
+    const { data: campaignsToSend, error: campaignsError } = await supabase
+      .from('campaigns')
+      .select('*, mailboxes(*)')
+      .eq('status', 'scheduled')
+      .lte('scheduled_start', now)
+      .is('sent_at', null)
 
-    console.log(`[email-scheduler] Found ${campaignsToSend.length} campaigns to process`)
+    if (campaignsError) {
+      console.error('[email-scheduler] Error fetching campaigns:', campaignsError)
+      return { statusCode: 500, body: JSON.stringify({ error: 'Failed to fetch campaigns' }) }
+    }
+
+    console.log(`[email-scheduler] Found ${campaignsToSend?.length || 0} campaigns to process`)
 
     let totalSent = 0
     let totalSkipped = 0
 
-    for (const campaign of campaignsToSend) {
-      console.log(`[email-scheduler] Processing campaign: ${campaign.id} (${campaign.recipients.length} recipients)`)
+    for (const campaign of (campaignsToSend || [])) {
+      // Get queued recipients for this campaign
+      const { data: recipients } = await supabase
+        .from('recipients')
+        .select('*')
+        .eq('campaign_id', campaign.id)
+        .eq('status', 'queued')
+
+      console.log(`[email-scheduler] Processing campaign: ${campaign.id} (${recipients?.length || 0} recipients)`)
 
       // Skip if no mailbox configured
-      if (!campaign.mailbox || !campaign.mailbox.fromEmail) {
+      if (!campaign.mailboxes || !campaign.mailboxes.from_email) {
         console.warn(`[email-scheduler] Campaign ${campaign.id} has no mailbox configured`)
         continue
       }
 
       // Check dayparting
-      if (campaign.daypartEnabled && !isBusinessHours()) {
+      if (campaign.daypart_enabled && !isBusinessHours()) {
         console.log(`[email-scheduler] Campaign ${campaign.id} dayparting enabled, outside business hours`)
-        totalSkipped += campaign.recipients.length
+        totalSkipped += recipients?.length || 0
         continue
       }
 
       // Get daily send count
-      const dailySendCount = await getDailySendCount(db, campaign.id)
-      const dailyCap = campaign.dailyCap || 1000
+      const dailySendCount = await getDailySendCount(supabase, campaign.id)
+      const dailyCap = campaign.daily_cap || 1000
       const remainingToday = Math.max(0, dailyCap - dailySendCount)
 
       if (remainingToday === 0) {
         console.log(`[email-scheduler] Campaign ${campaign.id} hit daily cap (${dailyCap})`)
-        totalSkipped += campaign.recipients.length
+        totalSkipped += recipients?.length || 0
         continue
       }
 
       // Process recipients up to daily cap
       let sentThisBatch = 0
 
-      for (const recipient of campaign.recipients.slice(0, remainingToday)) {
+      for (const recipient of (recipients || []).slice(0, remainingToday)) {
         // Check warmup %
-        if (!shouldSendByWarmup(campaign.warmupPercent || 100)) {
+        if (!shouldSendByWarmup(campaign.warmup_percent || 100)) {
           console.log(`[email-scheduler] Recipient ${recipient.id} skipped by warmup filter`)
           totalSkipped++
           continue
@@ -133,23 +125,25 @@ export async function handler(event) {
 
         try {
           // Get recipient contact info
-          const contact = await db.query.contacts.findFirst({
-            where: eq(schema.contacts.id, recipient.contactId)
-          })
+          const { data: contact } = await supabase
+            .from('contacts')
+            .select('*')
+            .eq('id', recipient.contact_id)
+            .single()
 
           if (!contact) {
-            console.warn(`[email-scheduler] Recipient contact not found: ${recipient.contactId}`)
+            console.warn(`[email-scheduler] Recipient contact not found: ${recipient.contact_id}`)
             totalSkipped++
             continue
           }
 
           // Get campaign step (subject, HTML)
-          const step = await db.query.campaignSteps.findFirst({
-            where: and(
-              eq(schema.campaignSteps.campaignId, campaign.id),
-              eq(schema.campaignSteps.stepIndex, recipient.currentStep || 0)
-            )
-          })
+          const { data: step } = await supabase
+            .from('campaign_steps')
+            .select('*')
+            .eq('campaign_id', campaign.id)
+            .eq('step_index', recipient.current_step || 0)
+            .single()
 
           if (!step) {
             console.warn(`[email-scheduler] Step not found for campaign ${campaign.id}`)
@@ -159,14 +153,14 @@ export async function handler(event) {
 
           // Send via Resend
           const result = await resend.emails.send({
-            from: campaign.mailbox.fromEmail,
+            from: campaign.mailboxes.from_email,
             to: contact.email,
-            subject: step.subject,
-            html: step.htmlContent,
+            subject: step.subject || step.subject_override,
+            html: step.html_content || step.html_override,
             headers: {
               'X-Campaign-ID': campaign.id,
               'X-Recipient-ID': recipient.id,
-              'X-Unsubscribe-Token': recipient.unsubscribeToken
+              'X-Unsubscribe-Token': recipient.unsubscribe_token
             }
           })
 
@@ -180,47 +174,52 @@ export async function handler(event) {
           console.log(`[email-scheduler] Sent email to ${contact.email} (messageId: ${result.data.id})`)
 
           // Update recipient status and message ID
-          await db.update(schema.recipients)
-            .set({
+          await supabase
+            .from('recipients')
+            .update({
               status: 'sent',
-              messageId: result.data.id,
-              sentAt: new Date()
+              message_id: result.data.id,
+              sent_at: new Date().toISOString()
             })
-            .where(eq(schema.recipients.id, recipient.id))
+            .eq('id', recipient.id)
 
           // Log event
-          await db.insert(schema.events).values({
-            campaignId: campaign.id,
-            recipientId: recipient.id,
-            eventType: 'sent',
-            messageId: result.data.id,
-            createdAt: new Date()
-          })
-
-          // If multi-step campaign, schedule next step
-          if (campaign.type === 'one_off' && step.stepIndex < 2) {
-            const nextStep = await db.query.campaignSteps.findFirst({
-              where: and(
-                eq(schema.campaignSteps.campaignId, campaign.id),
-                eq(schema.campaignSteps.stepIndex, step.stepIndex + 1)
-              )
+          await supabase
+            .from('events')
+            .insert({
+              campaign_id: campaign.id,
+              recipient_id: recipient.id,
+              event_type: 'sent',
+              message_id: result.data.id,
+              created_at: new Date().toISOString()
             })
 
-            if (nextStep && nextStep.delayDays) {
+          // If multi-step campaign, schedule next step
+          if (campaign.type === 'one_off' && (recipient.current_step || 0) < 2) {
+            const { data: nextStep } = await supabase
+              .from('campaign_steps')
+              .select('*')
+              .eq('campaign_id', campaign.id)
+              .eq('step_index', (recipient.current_step || 0) + 1)
+              .single()
+
+            if (nextStep && nextStep.delay_days) {
               // Create queued recipient for next step
               const nextStepDate = new Date()
-              nextStepDate.setDate(nextStepDate.getDate() + nextStep.delayDays)
+              nextStepDate.setDate(nextStepDate.getDate() + nextStep.delay_days)
 
-              await db.insert(schema.recipients).values({
-                campaignId: campaign.id,
-                contactId: recipient.contactId,
-                currentStep: step.stepIndex + 1,
-                status: 'queued',
-                scheduledAt: nextStepDate,
-                unsubscribeToken: recipient.unsubscribeToken
-              })
+              await supabase
+                .from('recipients')
+                .insert({
+                  campaign_id: campaign.id,
+                  contact_id: recipient.contact_id,
+                  current_step: (recipient.current_step || 0) + 1,
+                  status: 'queued',
+                  scheduled_at: nextStepDate.toISOString(),
+                  unsubscribe_token: recipient.unsubscribe_token
+                })
 
-              console.log(`[email-scheduler] Scheduled follow-up (step ${step.stepIndex + 1}) for ${contact.email} on ${nextStepDate.toISOString()}`)
+              console.log(`[email-scheduler] Scheduled follow-up (step ${(recipient.current_step || 0) + 1}) for ${contact.email} on ${nextStepDate.toISOString()}`)
             }
           }
 
@@ -233,23 +232,20 @@ export async function handler(event) {
       }
 
       // If all recipients sent, mark campaign as done
-      const remainingRecipients = await db
-        .select({ count: count() })
-        .from(schema.recipients)
-        .where(
-          and(
-            eq(schema.recipients.campaignId, campaign.id),
-            eq(schema.recipients.status, 'queued')
-          )
-        )
+      const { count: remainingRecipients } = await supabase
+        .from('recipients')
+        .select('*', { count: 'exact', head: true })
+        .eq('campaign_id', campaign.id)
+        .eq('status', 'queued')
 
-      if (parseInt(remainingRecipients[0]?.count || 0) === 0) {
-        await db.update(schema.campaigns)
-          .set({
+      if ((remainingRecipients || 0) === 0) {
+        await supabase
+          .from('campaigns')
+          .update({
             status: 'done',
-            sentAt: new Date()
+            sent_at: new Date().toISOString()
           })
-          .where(eq(schema.campaigns.id, campaign.id))
+          .eq('id', campaign.id)
 
         console.log(`[email-scheduler] Campaign ${campaign.id} completed`)
       }
@@ -263,8 +259,8 @@ export async function handler(event) {
         success: true,
         sent: totalSent,
         skipped: totalSkipped,
-        campaigns: campaignsToSend.length,
-        message: `Processed ${campaignsToSend.length} campaigns`
+        campaigns: campaignsToSend?.length || 0,
+        message: `Processed ${campaignsToSend?.length || 0} campaigns`
       })
     }
   } catch (err) {

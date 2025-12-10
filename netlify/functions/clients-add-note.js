@@ -1,15 +1,12 @@
 // netlify/functions/clients-add-note.js
-import { neon } from '@neondatabase/serverless'
-import jwt from 'jsonwebtoken'
-
-const sql = neon(process.env.DATABASE_URL)
+import { createSupabaseAdmin, getAuthenticatedUser } from './utils/supabase.js'
 
 export async function handler(event) {
   // CORS headers
   const origin = event.headers.origin || 'http://localhost:8888'
   const headers = {
     'Access-Control-Allow-Origin': origin,
-    'Access-Control-Allow-Headers': 'Content-Type',
+    'Access-Control-Allow-Headers': 'Content-Type, Authorization',
     'Access-Control-Allow-Methods': 'POST, OPTIONS',
     'Access-Control-Allow-Credentials': 'true',
     'Content-Type': 'application/json',
@@ -29,9 +26,10 @@ export async function handler(event) {
   }
 
   try {
-    // Verify authentication
-    const token = event.headers.cookie?.match(/um_session=([^;]+)/)?.[1]
-    if (!token) {
+    // Verify authentication using Supabase
+    const { user, contact, error: authError } = await getAuthenticatedUser(event)
+    
+    if (authError || !contact) {
       return {
         statusCode: 401,
         headers,
@@ -39,10 +37,8 @@ export async function handler(event) {
       }
     }
 
-    const payload = jwt.verify(token, process.env.AUTH_JWT_SECRET || process.env.JWT_SECRET)
-
     // Verify admin role
-    if (payload.role !== 'admin') {
+    if (contact.role !== 'admin') {
       return {
         statusCode: 403,
         headers,
@@ -71,13 +67,17 @@ export async function handler(event) {
     // Truncate note if too long (max 5000 chars)
     const truncatedNote = note.substring(0, 5000)
 
-    // Get current client
-    const clientResult = await sql`
-      SELECT id, notes FROM contacts
-      WHERE id = ${clientId}::uuid AND role = 'client'
-    `
+    const supabase = createSupabaseAdmin()
 
-    if (clientResult.length === 0) {
+    // Get current client
+    const { data: client, error: clientError } = await supabase
+      .from('contacts')
+      .select('id, notes')
+      .eq('id', clientId)
+      .eq('role', 'client')
+      .single()
+
+    if (clientError || !client) {
       return {
         statusCode: 404,
         headers,
@@ -85,7 +85,7 @@ export async function handler(event) {
       }
     }
 
-    const currentNotes = clientResult[0].notes || ''
+    const currentNotes = client.notes || ''
 
     // Format new note with timestamp
     const timestamp = new Date().toISOString()
@@ -94,14 +94,15 @@ export async function handler(event) {
       : `[${timestamp}] ${truncatedNote}`
 
     // Update client with new note
-    const updateResult = await sql`
-      UPDATE contacts
-      SET notes = ${newNote}, updated_at = NOW()
-      WHERE id = ${clientId}::uuid AND role = 'client'
-      RETURNING id, email, name, company, notes, updated_at
-    `
+    const { data: updateResult, error: updateError } = await supabase
+      .from('contacts')
+      .update({ notes: newNote, updated_at: new Date().toISOString() })
+      .eq('id', clientId)
+      .eq('role', 'client')
+      .select('id, email, name, company, notes, updated_at')
+      .single()
 
-    if (updateResult.length === 0) {
+    if (updateError || !updateResult) {
       return {
         statusCode: 500,
         headers,
@@ -111,15 +112,14 @@ export async function handler(event) {
 
     // Log activity
     try {
-      await sql`
-        INSERT INTO client_activity (contact_id, activity_type, description, metadata)
-        VALUES (
-          ${clientId}::uuid,
-          'note_added',
-          'Internal note added',
-          ${JSON.stringify({ note: truncatedNote.substring(0, 200), by: 'admin' })}
-        )
-      `
+      await supabase
+        .from('client_activity')
+        .insert({
+          contact_id: clientId,
+          activity_type: 'note_added',
+          description: 'Internal note added',
+          metadata: { note: truncatedNote.substring(0, 200), by: 'admin' }
+        })
     } catch (logError) {
       console.error('Failed to log note activity:', logError)
       // Don't fail the request if logging fails
@@ -131,7 +131,7 @@ export async function handler(event) {
       body: JSON.stringify({
         success: true,
         message: 'Note added successfully',
-        client: updateResult[0]
+        client: updateResult
       })
     }
   } catch (error) {

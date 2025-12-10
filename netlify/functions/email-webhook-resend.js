@@ -3,12 +3,8 @@
 // Events: sent, delivered, open, click, bounce, complaint, unsubscribe
 
 import crypto from 'crypto'
-import { neon } from '@neondatabase/serverless'
-import { drizzle } from 'drizzle-orm/neon-http'
-import { and, eq } from 'drizzle-orm'
-import * as schema from '../../src/db/schema.js'
+import { createSupabaseAdmin } from './utils/supabase.js'
 
-const DATABASE_URL = process.env.DATABASE_URL
 const RESEND_WEBHOOK_SECRET = process.env.RESEND_WEBHOOK_SECRET
 
 // Verify Resend webhook signature
@@ -18,16 +14,20 @@ function verifyWebhookSignature(payload, signature) {
     return true
   }
 
-  const hash = crypto
-    .createHmac('sha256', RESEND_WEBHOOK_SECRET)
-    .update(payload)
-    .digest('hex')
+  try {
+    const hash = crypto
+      .createHmac('sha256', RESEND_WEBHOOK_SECRET)
+      .update(payload)
+      .digest('hex')
 
-  return crypto.timingSafeEqual(hash, signature) || false
+    return crypto.timingSafeEqual(Buffer.from(hash), Buffer.from(signature))
+  } catch {
+    return false
+  }
 }
 
 // Handle auto-cancel rules
-async function handleAutoCancelRules(db, recipientId, eventType) {
+async function handleAutoCancelRules(supabase, recipientId, eventType) {
   // Auto-cancel follow-ups on:
   // - reply, bounce, complaint, unsubscribe, goal click
   const shouldCancel = ['reply', 'bounce', 'complaint', 'unsubscribe', 'goal'].includes(eventType)
@@ -35,27 +35,27 @@ async function handleAutoCancelRules(db, recipientId, eventType) {
   if (shouldCancel) {
     console.log(`[email-webhook-resend] Auto-canceling follow-ups for recipient ${recipientId} (${eventType})`)
 
-    // Get all queued follow-ups for this recipient
-    const recipient = await db.query.recipients.findFirst({
-      where: eq(schema.recipients.id, recipientId),
-      with: { campaign: true }
-    })
+    // Get recipient details
+    const { data: recipient } = await supabase
+      .from('recipients')
+      .select('*, campaigns(*)')
+      .eq('id', recipientId)
+      .single()
 
     if (recipient) {
-      // Find next steps in campaign
-      const nextSteps = await db.query.recipients.findMany({
-        where: and(
-          eq(schema.recipients.campaignId, recipient.campaignId),
-          eq(schema.recipients.contactId, recipient.contactId),
-          eq(schema.recipients.status, 'queued')
-        )
-      })
+      // Find next steps in campaign and mark as cancelled
+      const { data: nextSteps } = await supabase
+        .from('recipients')
+        .select('id')
+        .eq('campaign_id', recipient.campaign_id)
+        .eq('contact_id', recipient.contact_id)
+        .eq('status', 'queued')
 
-      // Mark as cancelled
-      for (const nextStep of nextSteps) {
-        await db.update(schema.recipients)
-          .set({ status: 'cancelled' })
-          .where(eq(schema.recipients.id, nextStep.id))
+      for (const nextStep of (nextSteps || [])) {
+        await supabase
+          .from('recipients')
+          .update({ status: 'cancelled' })
+          .eq('id', nextStep.id)
 
         console.log(`[email-webhook-resend] Cancelled follow-up ${nextStep.id}`)
       }
@@ -65,11 +65,6 @@ async function handleAutoCancelRules(db, recipientId, eventType) {
 
 export async function handler(event) {
   console.log('[email-webhook-resend] Received webhook')
-
-  if (!DATABASE_URL) {
-    console.error('[email-webhook-resend] DATABASE_URL not configured')
-    return { statusCode: 500, body: JSON.stringify({ error: 'Database not configured' }) }
-  }
 
   if (event.httpMethod !== 'POST') {
     return {
@@ -105,8 +100,7 @@ export async function handler(event) {
       }
     }
 
-    const sql = neon(DATABASE_URL)
-    const db = drizzle(sql, { schema })
+    const supabase = createSupabaseAdmin()
 
     // Map Resend event types to our event types
     const eventTypeMap = {
@@ -139,10 +133,11 @@ export async function handler(event) {
     }
 
     // Find recipient by message ID
-    const recipient = await db.query.recipients.findFirst({
-      where: eq(schema.recipients.messageId, messageId),
-      with: { campaign: true }
-    })
+    const { data: recipient } = await supabase
+      .from('recipients')
+      .select('*, campaigns(*)')
+      .eq('message_id', messageId)
+      .single()
 
     if (!recipient) {
       console.warn(`[email-webhook-resend] Recipient not found for message ${messageId}`)
@@ -153,71 +148,74 @@ export async function handler(event) {
     }
 
     // Log event
-    await db.insert(schema.events).values({
-      campaignId: recipient.campaignId,
-      recipientId: recipient.id,
-      messageId: messageId,
-      eventType: ourEventType,
-      metadata: JSON.stringify(data), // Store full Resend data
-      createdAt: new Date()
-    })
+    await supabase
+      .from('events')
+      .insert({
+        campaign_id: recipient.campaign_id,
+        recipient_id: recipient.id,
+        message_id: messageId,
+        event_type: ourEventType,
+        metadata: data, // Store full Resend data
+        created_at: new Date().toISOString()
+      })
 
     console.log(`[email-webhook-resend] Logged event: ${ourEventType} for recipient ${recipient.id}`)
 
     // Handle auto-cancel rules
-    await handleAutoCancelRules(db, recipient.id, ourEventType)
+    await handleAutoCancelRules(supabase, recipient.id, ourEventType)
 
     // Update recipient status if needed
     if (ourEventType === 'delivered') {
-      await db.update(schema.recipients)
-        .set({ status: 'delivered' })
-        .where(eq(schema.recipients.id, recipient.id))
+      await supabase
+        .from('recipients')
+        .update({ status: 'delivered' })
+        .eq('id', recipient.id)
     }
 
     if (ourEventType === 'unsubscribe') {
-      await db.update(schema.recipients)
-        .set({ status: 'unsubscribed' })
-        .where(eq(schema.recipients.id, recipient.id))
+      await supabase
+        .from('recipients')
+        .update({ status: 'unsubscribed' })
+        .eq('id', recipient.id)
 
       // Also add to suppressions table
-      await db.insert(schema.suppressions).values({
-        email: data.email || recipient.email,
-        reason: 'unsubscribe',
-        createdAt: new Date()
-      })
-
-      // Auto-cancel all follow-ups
-      const contact = await db.query.contacts.findFirst({
-        where: eq(schema.contacts.id, recipient.contactId)
-      })
-
-      if (contact) {
-        const followUps = await db.query.recipients.findMany({
-          where: and(
-            eq(schema.recipients.contactId, recipient.contactId),
-            eq(schema.recipients.status, 'queued')
-          )
+      await supabase
+        .from('suppressions')
+        .insert({
+          email: data.email || recipient.email,
+          reason: 'unsubscribe',
+          created_at: new Date().toISOString()
         })
 
-        for (const followUp of followUps) {
-          await db.update(schema.recipients)
-            .set({ status: 'cancelled' })
-            .where(eq(schema.recipients.id, followUp.id))
-        }
+      // Auto-cancel all follow-ups for this contact
+      const { data: followUps } = await supabase
+        .from('recipients')
+        .select('id')
+        .eq('contact_id', recipient.contact_id)
+        .eq('status', 'queued')
+
+      for (const followUp of (followUps || [])) {
+        await supabase
+          .from('recipients')
+          .update({ status: 'cancelled' })
+          .eq('id', followUp.id)
       }
     }
 
     if (ourEventType === 'bounce' || ourEventType === 'complaint') {
-      await db.update(schema.recipients)
-        .set({ status: 'failed' })
-        .where(eq(schema.recipients.id, recipient.id))
+      await supabase
+        .from('recipients')
+        .update({ status: 'failed' })
+        .eq('id', recipient.id)
 
       // Add to suppressions
-      await db.insert(schema.suppressions).values({
-        email: data.email || recipient.email,
-        reason: ourEventType,
-        createdAt: new Date()
-      })
+      await supabase
+        .from('suppressions')
+        .insert({
+          email: data.email || recipient.email,
+          reason: ourEventType,
+          created_at: new Date().toISOString()
+        })
     }
 
     return {

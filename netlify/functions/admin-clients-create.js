@@ -1,14 +1,7 @@
 // netlify/functions/admin-clients-create.js
-import jwt from 'jsonwebtoken'
-import { neon } from '@neondatabase/serverless'
-import { drizzle } from 'drizzle-orm/neon-http'
-import { eq } from 'drizzle-orm'
-import * as schema from '../../src/db/schema.js'
+import { createSupabaseAdmin, getAuthenticatedUser } from './utils/supabase.js'
 import { Resend } from 'resend'
 
-const COOKIE_NAME = process.env.SESSION_COOKIE_NAME || 'um_session'
-const JWT_SECRET = process.env.AUTH_JWT_SECRET
-const DATABASE_URL = process.env.DATABASE_URL
 const RESEND_API_KEY = process.env.RESEND_API_KEY
 const RESEND_FROM_EMAIL = process.env.RESEND_FROM_EMAIL || 'portal@send.uptrademedia.com'
 const PORTAL_URL = process.env.URL || 'http://localhost:8888'
@@ -17,7 +10,7 @@ export async function handler(event) {
   // CORS headers
   const headers = {
     'Access-Control-Allow-Origin': '*',
-    'Access-Control-Allow-Headers': 'Content-Type',
+    'Access-Control-Allow-Headers': 'Content-Type, Authorization',
     'Access-Control-Allow-Methods': 'POST, OPTIONS',
     'Content-Type': 'application/json'
   }
@@ -34,19 +27,10 @@ export async function handler(event) {
     }
   }
 
-  // Verify authentication
-  if (!JWT_SECRET) {
-    return {
-      statusCode: 500,
-      headers,
-      body: JSON.stringify({ error: 'Server not configured' })
-    }
-  }
-
-  const rawCookie = event.headers.cookie || ''
-  const token = rawCookie.split('; ').find(c => c.startsWith(`${COOKIE_NAME}=`))?.split('=')[1]
+  // Verify authentication using Supabase
+  const { user, contact, error: authError } = await getAuthenticatedUser(event)
   
-  if (!token) {
+  if (authError || !contact) {
     return {
       statusCode: 401,
       headers,
@@ -55,10 +39,8 @@ export async function handler(event) {
   }
 
   try {
-    const payload = jwt.verify(token, JWT_SECRET)
-    
     // Only admins can create clients
-    if (payload.role !== 'admin') {
+    if (contact.role !== 'admin') {
       return {
         statusCode: 403,
         headers,
@@ -89,22 +71,14 @@ export async function handler(event) {
       }
     }
 
-    // Connect to database
-    if (!DATABASE_URL) {
-      return {
-        statusCode: 500,
-        headers,
-        body: JSON.stringify({ error: 'Database not configured' })
-      }
-    }
-
-    const sql = neon(DATABASE_URL)
-    const db = drizzle(sql, { schema })
+    const supabase = createSupabaseAdmin()
 
     // Check if contact already exists
-    const existingContact = await db.query.contacts.findFirst({
-      where: eq(schema.contacts.email, email.toLowerCase())
-    })
+    const { data: existingContact, error: checkError } = await supabase
+      .from('contacts')
+      .select('id')
+      .eq('email', email.toLowerCase())
+      .single()
 
     if (existingContact) {
       return {
@@ -114,40 +88,56 @@ export async function handler(event) {
       }
     }
 
-    // Create contact with accountSetup = 'false'
-    const [contact] = await db.insert(schema.contacts).values({
-      email: email.toLowerCase(),
-      name,
-      company: company || null,
-      phone: phone || null,
-      website: website || null,
-      source: source || null,
-      role: 'client',
-      accountSetup: 'false', // Client needs to set up account
-      password: null, // No password yet
-      googleId: null
-    }).returning()
+    // Create contact with account_setup = 'false'
+    const { data: newContact, error: insertError } = await supabase
+      .from('contacts')
+      .insert({
+        email: email.toLowerCase(),
+        name,
+        company: company || null,
+        phone: phone || null,
+        website: website || null,
+        source: source || null,
+        role: 'client',
+        account_setup: 'false',
+        password: null,
+        google_id: null
+      })
+      .select()
+      .single()
 
-    // Generate magic link token (24 hour expiration)
-    const magicToken = jwt.sign(
-      {
-        email: contact.email,
-        type: 'account-setup',
-        contactId: contact.id
-      },
-      JWT_SECRET,
-      { expiresIn: '24h' }
-    )
+    if (insertError) {
+      console.error('Error creating contact:', insertError)
+      return {
+        statusCode: 500,
+        headers,
+        body: JSON.stringify({ error: 'Failed to create contact', message: insertError.message })
+      }
+    }
+
+    // Generate Supabase magic link for account setup
+    const { data: linkData, error: linkError } = await supabase.auth.admin.generateLink({
+      type: 'magiclink',
+      email: newContact.email,
+      options: {
+        redirectTo: `${PORTAL_URL}/account-setup`
+      }
+    })
+
+    if (linkError) {
+      console.error('Error generating magic link:', linkError)
+    }
+
+    const setupUrl = linkData?.properties?.action_link || `${PORTAL_URL}/login`
 
     // Send account setup email
     if (RESEND_API_KEY) {
       try {
         const resend = new Resend(RESEND_API_KEY)
-        const setupUrl = `${PORTAL_URL}/account-setup?token=${magicToken}`
         
-        const emailResult = await resend.emails.send({
+        await resend.emails.send({
           from: RESEND_FROM_EMAIL,
-          to: contact.email,
+          to: newContact.email,
           subject: 'Welcome to Uptrade Media Portal - Set Up Your Account',
           html: `
             <!DOCTYPE html>
@@ -262,7 +252,7 @@ export async function handler(event) {
                 </div>
                 
                 <div class="content">
-                  <p>Hi ${contact.name},</p>
+                  <p>Hi ${newContact.name},</p>
                   
                   <p>Your client portal account has been created. Get started by setting up your account credentials to access:</p>
                   
@@ -313,7 +303,6 @@ export async function handler(event) {
         })
       } catch (emailError) {
         console.error('[admin-clients-create] Failed to send account setup email:', emailError)
-        console.error('[admin-clients-create] Error details:', emailError.message, emailError.stack)
         // Don't fail the request if email fails
       }
     } else {
@@ -325,13 +314,13 @@ export async function handler(event) {
       headers,
       body: JSON.stringify({ 
         contact: {
-          id: contact.id,
-          email: contact.email,
-          name: contact.name,
-          company: contact.company,
-          role: contact.role,
-          accountSetup: contact.accountSetup,
-          createdAt: contact.createdAt
+          id: newContact.id,
+          email: newContact.email,
+          name: newContact.name,
+          company: newContact.company,
+          role: newContact.role,
+          accountSetup: newContact.account_setup,
+          createdAt: newContact.created_at
         },
         message: 'Client created and account setup email sent'
       })
@@ -339,14 +328,6 @@ export async function handler(event) {
 
   } catch (error) {
     console.error('Error creating client:', error)
-    
-    if (error.name === 'JsonWebTokenError' || error.name === 'TokenExpiredError') {
-      return {
-        statusCode: 401,
-        headers,
-        body: JSON.stringify({ error: 'Invalid or expired session' })
-      }
-    }
 
     return {
       statusCode: 500,

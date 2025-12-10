@@ -1,19 +1,11 @@
 // netlify/functions/admin-clients-delete.js
-import jwt from 'jsonwebtoken'
-import { neon } from '@neondatabase/serverless'
-import { drizzle } from 'drizzle-orm/neon-http'
-import { eq } from 'drizzle-orm'
-import * as schema from '../../src/db/schema.js'
-
-const COOKIE_NAME = process.env.SESSION_COOKIE_NAME || 'um_session'
-const JWT_SECRET = process.env.AUTH_JWT_SECRET
-const DATABASE_URL = process.env.DATABASE_URL
+import { createSupabaseAdmin, getAuthenticatedUser } from './utils/supabase.js'
 
 export async function handler(event) {
   // CORS headers
   const headers = {
     'Access-Control-Allow-Origin': '*',
-    'Access-Control-Allow-Headers': 'Content-Type',
+    'Access-Control-Allow-Headers': 'Content-Type, Authorization',
     'Access-Control-Allow-Methods': 'DELETE, OPTIONS',
     'Content-Type': 'application/json'
   }
@@ -30,19 +22,10 @@ export async function handler(event) {
     }
   }
 
-  // Verify authentication
-  if (!JWT_SECRET) {
-    return {
-      statusCode: 500,
-      headers,
-      body: JSON.stringify({ error: 'Server not configured' })
-    }
-  }
-
-  const rawCookie = event.headers.cookie || ''
-  const token = rawCookie.split('; ').find(c => c.startsWith(`${COOKIE_NAME}=`))?.split('=')[1]
+  // Verify authentication using Supabase
+  const { user, contact, error: authError } = await getAuthenticatedUser(event)
   
-  if (!token) {
+  if (authError || !contact) {
     return {
       statusCode: 401,
       headers,
@@ -51,10 +34,8 @@ export async function handler(event) {
   }
 
   try {
-    const payload = jwt.verify(token, JWT_SECRET)
-
     // Only admins can delete clients
-    if (payload.role !== 'admin') {
+    if (contact.role !== 'admin') {
       return {
         statusCode: 403,
         headers,
@@ -73,24 +54,16 @@ export async function handler(event) {
       }
     }
 
-    // Connect to database
-    if (!DATABASE_URL) {
-      return {
-        statusCode: 500,
-        headers,
-        body: JSON.stringify({ error: 'Database not configured' })
-      }
-    }
-
-    const sql = neon(DATABASE_URL)
-    const db = drizzle(sql, { schema })
+    const supabase = createSupabaseAdmin()
 
     // Verify client exists
-    const existingClient = await db.query.contacts.findFirst({
-      where: eq(schema.contacts.id, clientId)
-    })
+    const { data: existingClient, error: fetchError } = await supabase
+      .from('contacts')
+      .select('id, email')
+      .eq('id', clientId)
+      .single()
 
-    if (!existingClient) {
+    if (fetchError || !existingClient) {
       return {
         statusCode: 404,
         headers,
@@ -99,7 +72,7 @@ export async function handler(event) {
     }
 
     // Prevent deleting yourself
-    if (clientId === payload.userId) {
+    if (clientId === contact.id) {
       return {
         statusCode: 400,
         headers,
@@ -108,34 +81,38 @@ export async function handler(event) {
     }
 
     // Check if client has related data
-    const projects = await db.query.projects.findMany({
-      where: eq(schema.projects.contactId, clientId)
-    })
+    const { data: projects, error: projectsError } = await supabase
+      .from('projects')
+      .select('id')
+      .eq('contact_id', clientId)
 
-    const invoices = await db.query.invoices.findMany({
-      where: eq(schema.invoices.contactId, clientId)
-    })
+    const { data: invoices, error: invoicesError } = await supabase
+      .from('invoices')
+      .select('id')
+      .eq('contact_id', clientId)
 
-    const proposals = await db.query.proposals.findMany({
-      where: eq(schema.proposals.contactId, clientId)
-    })
+    const { data: proposals, error: proposalsError } = await supabase
+      .from('proposals')
+      .select('id')
+      .eq('contact_id', clientId)
 
-    const messages = await db.query.messages.findMany({
-      where: eq(schema.messages.contactId, clientId)
-    })
+    const { data: messages, error: messagesError } = await supabase
+      .from('messages')
+      .select('id')
+      .eq('contact_id', clientId)
 
-    const files = await db.query.files.findMany({
-      where: eq(schema.files.contactId, clientId)
-    })
+    const { data: files, error: filesError } = await supabase
+      .from('files')
+      .select('id')
+      .eq('contact_id', clientId)
 
     // If client has data, we should archive instead of delete
-    // For now, we'll return info about what would be deleted
     const hasRelatedData = 
-      projects.length > 0 || 
-      invoices.length > 0 || 
-      proposals.length > 0 || 
-      messages.length > 0 || 
-      files.length > 0
+      (projects && projects.length > 0) || 
+      (invoices && invoices.length > 0) || 
+      (proposals && proposals.length > 0) || 
+      (messages && messages.length > 0) || 
+      (files && files.length > 0)
 
     if (hasRelatedData) {
       return {
@@ -144,11 +121,11 @@ export async function handler(event) {
         body: JSON.stringify({ 
           error: 'Cannot delete client with existing data',
           details: {
-            projects: projects.length,
-            invoices: invoices.length,
-            proposals: proposals.length,
-            messages: messages.length,
-            files: files.length
+            projects: projects?.length || 0,
+            invoices: invoices?.length || 0,
+            proposals: proposals?.length || 0,
+            messages: messages?.length || 0,
+            files: files?.length || 0
           },
           suggestion: 'Consider updating the client role or company name instead of deleting'
         })
@@ -156,8 +133,19 @@ export async function handler(event) {
     }
 
     // Delete client (only if no related data)
-    await db.delete(schema.contacts)
-      .where(eq(schema.contacts.id, clientId))
+    const { error: deleteError } = await supabase
+      .from('contacts')
+      .delete()
+      .eq('id', clientId)
+
+    if (deleteError) {
+      console.error('Error deleting client:', deleteError)
+      return {
+        statusCode: 500,
+        headers,
+        body: JSON.stringify({ error: 'Failed to delete client', message: deleteError.message })
+      }
+    }
 
     return {
       statusCode: 200,
@@ -170,14 +158,6 @@ export async function handler(event) {
 
   } catch (error) {
     console.error('Error deleting client:', error)
-    
-    if (error.name === 'JsonWebTokenError' || error.name === 'TokenExpiredError') {
-      return {
-        statusCode: 401,
-        headers,
-        body: JSON.stringify({ error: 'Invalid or expired session' })
-      }
-    }
 
     return {
       statusCode: 500,

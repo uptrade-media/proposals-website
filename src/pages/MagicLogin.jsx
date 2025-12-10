@@ -1,45 +1,77 @@
 // src/pages/MagicLogin.jsx
+// Handles Supabase magic link authentication
+// Supabase redirects here with tokens in the URL hash after user clicks email link
 import { useEffect, useState } from 'react'
-import { useNavigate, useSearchParams } from 'react-router-dom'
+import { useNavigate } from 'react-router-dom'
 import { Card, CardContent } from '../components/ui/card'
-import { Loader2, CheckCircle2, XCircle, ArrowRight } from 'lucide-react'
+import { Loader2, CheckCircle2, XCircle } from 'lucide-react'
 import { Button } from '../components/ui/button'
-import api from '@/lib/api'
+import { supabase, getCurrentUser } from '../lib/supabase-auth'
+import useAuthStore from '../lib/auth-store'
 
 export default function MagicLogin() {
-  const [searchParams] = useSearchParams()
   const navigate = useNavigate()
+  const { setUser } = useAuthStore()
   
   const [status, setStatus] = useState('validating') // validating, success, error
   const [error, setError] = useState('')
 
   useEffect(() => {
-    const token = searchParams.get('token')
-    const redirect = searchParams.get('redirect') || '/dashboard'
+    handleMagicLinkAuth()
+    
+    // Listen for auth state change
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
+      console.log('[MagicLogin] Auth event:', event)
+      if (event === 'SIGNED_IN' && session) {
+        await handleSuccessfulAuth()
+      }
+    })
 
-    if (!token) {
-      setStatus('error')
-      setError('No authentication token provided')
-      return
-    }
+    return () => subscription.unsubscribe()
+  }, [])
 
-    authenticateWithMagicLink(token, redirect)
-  }, [searchParams])
-
-  const authenticateWithMagicLink = async (token, redirect) => {
+  const handleMagicLinkAuth = async () => {
     try {
-      const res = await api.post('/.netlify/functions/auth-magic-login', { token })
+      // Check if there's already a session (from magic link in URL hash)
+      const { data: { session }, error: sessionError } = await supabase.auth.getSession()
       
-      setStatus('success')
+      if (sessionError) {
+        throw sessionError
+      }
       
-      // Redirect after brief success message
-      setTimeout(() => {
-        navigate(redirect)
-      }, 1500)
+      if (session) {
+        await handleSuccessfulAuth()
+      } else {
+        // No session - might be an invalid or expired link
+        setStatus('error')
+        setError('Authentication failed. The link may have expired.')
+      }
+    } catch (err) {
+      console.error('[MagicLogin] Auth error:', err)
+      setStatus('error')
+      setError(err.message || 'Authentication failed')
+    }
+  }
+
+  const handleSuccessfulAuth = async () => {
+    try {
+      const contactUser = await getCurrentUser()
       
+      if (contactUser) {
+        setUser(contactUser)
+        setStatus('success')
+        
+        // Redirect after brief success message
+        setTimeout(() => {
+          const redirect = contactUser.role === 'admin' ? '/admin' : '/dashboard'
+          navigate(redirect, { replace: true })
+        }, 1500)
+      } else {
+        throw new Error('Account not found in system')
+      }
     } catch (err) {
       setStatus('error')
-      setError(err.response?.data?.error || 'Authentication failed')
+      setError(err.message || 'Failed to load user data')
     }
   }
 
@@ -89,7 +121,7 @@ export default function MagicLogin() {
                   {error}
                 </p>
                 <p className="text-[var(--text-tertiary)] text-sm">
-                  Magic links expire after 24 hours for security. Please request a new one from the login page.
+                  Magic links expire for security. Please request a new one from the login page.
                 </p>
               </div>
               <Button
@@ -98,7 +130,6 @@ export default function MagicLogin() {
                 className="w-full"
               >
                 Back to Login
-                <ArrowRight className="ml-2 h-4 w-4" />
               </Button>
             </div>
           )}

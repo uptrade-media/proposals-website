@@ -1,19 +1,11 @@
 // netlify/functions/admin-activity-log.js
-import jwt from 'jsonwebtoken'
-import { neon } from '@neondatabase/serverless'
-import { drizzle } from 'drizzle-orm/neon-http'
-import { sql } from 'drizzle-orm'
-import * as schema from '../../src/db/schema.js'
-
-const COOKIE_NAME = process.env.SESSION_COOKIE_NAME || 'um_session'
-const JWT_SECRET = process.env.AUTH_JWT_SECRET
-const DATABASE_URL = process.env.DATABASE_URL
+import { createSupabaseAdmin, getAuthenticatedUser } from './utils/supabase.js'
 
 export async function handler(event) {
   // CORS headers
   const headers = {
     'Access-Control-Allow-Origin': '*',
-    'Access-Control-Allow-Headers': 'Content-Type',
+    'Access-Control-Allow-Headers': 'Content-Type, Authorization',
     'Access-Control-Allow-Methods': 'GET, OPTIONS',
     'Content-Type': 'application/json'
   }
@@ -30,19 +22,10 @@ export async function handler(event) {
     }
   }
 
-  // Verify authentication
-  if (!JWT_SECRET) {
-    return {
-      statusCode: 500,
-      headers,
-      body: JSON.stringify({ error: 'Server not configured' })
-    }
-  }
-
-  const rawCookie = event.headers.cookie || ''
-  const token = rawCookie.split('; ').find(c => c.startsWith(`${COOKIE_NAME}=`))?.split('=')[1]
+  // Verify authentication using Supabase
+  const { user, contact, error: authError } = await getAuthenticatedUser(event)
   
-  if (!token) {
+  if (authError || !contact) {
     return {
       statusCode: 401,
       headers,
@@ -51,10 +34,8 @@ export async function handler(event) {
   }
 
   try {
-    const payload = jwt.verify(token, JWT_SECRET)
-
     // Only admins can view activity log
-    if (payload.role !== 'admin') {
+    if (contact.role !== 'admin') {
       return {
         statusCode: 403,
         headers,
@@ -62,16 +43,7 @@ export async function handler(event) {
       }
     }
 
-    // Connect to database
-    if (!DATABASE_URL) {
-      return {
-        statusCode: 500,
-        headers,
-        body: JSON.stringify({ error: 'Database not configured' })
-      }
-    }
-
-    const db = neon(DATABASE_URL)
+    const supabase = createSupabaseAdmin()
 
     // Parse query parameters
     const params = new URLSearchParams(event.queryStringParameters || {})
@@ -83,192 +55,207 @@ export async function handler(event) {
     const activities = []
 
     // Recent projects (created/updated)
-    let projectsQuery = `
-      SELECT 
-        'project_created' as type,
-        p.id as entity_id,
-        p.name as entity_name,
-        p.contact_id,
-        c.name as contact_name,
-        c.company as contact_company,
-        p.created_at as timestamp,
-        p.status as status
-      FROM projects p
-      JOIN contacts c ON c.id = p.contact_id
-      WHERE 1=1
-    `
-
-    if (contactId) {
-      projectsQuery += ` AND p.contact_id = '${contactId}'`
-    }
-
     if (!activityType || activityType === 'all' || activityType === 'projects') {
-      const projectsResult = await db(projectsQuery + ` ORDER BY p.created_at DESC LIMIT ${Math.min(limit, 50)}`)
-      activities.push(...projectsResult.map(row => ({
-        type: row.type,
-        entityId: row.entity_id,
-        entityName: row.entity_name,
-        contactId: row.contact_id,
-        contactName: row.contact_name,
-        contactCompany: row.contact_company,
-        timestamp: row.timestamp,
-        status: row.status,
-        description: `Project "${row.entity_name}" created`
-      })))
+      let projectsQuery = supabase
+        .from('projects')
+        .select(\`
+          id,
+          name,
+          contact_id,
+          created_at,
+          status,
+          contact:contacts!projects_contact_id_fkey (
+            name,
+            company
+          )
+        \`)
+        .order('created_at', { ascending: false })
+        .limit(Math.min(limit, 50))
+
+      if (contactId) {
+        projectsQuery = projectsQuery.eq('contact_id', contactId)
+      }
+
+      const { data: projects, error: projectsError } = await projectsQuery
+
+      if (!projectsError && projects) {
+        activities.push(...projects.map(row => ({
+          type: 'project_created',
+          entityId: row.id,
+          entityName: row.name,
+          contactId: row.contact_id,
+          contactName: row.contact?.name,
+          contactCompany: row.contact?.company,
+          timestamp: row.created_at,
+          status: row.status,
+          description: \`Project "\${row.name}" created\`
+        })))
+      }
     }
 
     // Recent proposals
-    let proposalsQuery = `
-      SELECT 
-        CASE 
-          WHEN pr.status = 'accepted' THEN 'proposal_accepted'
-          ELSE 'proposal_created'
-        END as type,
-        pr.id as entity_id,
-        pr.title as entity_name,
-        pr.contact_id,
-        c.name as contact_name,
-        c.company as contact_company,
-        pr.created_at as timestamp,
-        pr.status as status
-      FROM proposals pr
-      JOIN contacts c ON c.id = pr.contact_id
-      WHERE 1=1
-    `
-
-    if (contactId) {
-      proposalsQuery += ` AND pr.contact_id = '${contactId}'`
-    }
-
     if (!activityType || activityType === 'all' || activityType === 'proposals') {
-      const proposalsResult = await db(proposalsQuery + ` ORDER BY pr.created_at DESC LIMIT ${Math.min(limit, 50)}`)
-      activities.push(...proposalsResult.map(row => ({
-        type: row.type,
-        entityId: row.entity_id,
-        entityName: row.entity_name,
-        contactId: row.contact_id,
-        contactName: row.contact_name,
-        contactCompany: row.contact_company,
-        timestamp: row.timestamp,
-        status: row.status,
-        description: row.type === 'proposal_accepted' 
-          ? `Proposal "${row.entity_name}" accepted` 
-          : `Proposal "${row.entity_name}" created`
-      })))
+      let proposalsQuery = supabase
+        .from('proposals')
+        .select(\`
+          id,
+          title,
+          contact_id,
+          created_at,
+          status,
+          contact:contacts!proposals_contact_id_fkey (
+            name,
+            company
+          )
+        \`)
+        .order('created_at', { ascending: false })
+        .limit(Math.min(limit, 50))
+
+      if (contactId) {
+        proposalsQuery = proposalsQuery.eq('contact_id', contactId)
+      }
+
+      const { data: proposals, error: proposalsError } = await proposalsQuery
+
+      if (!proposalsError && proposals) {
+        activities.push(...proposals.map(row => ({
+          type: row.status === 'accepted' ? 'proposal_accepted' : 'proposal_created',
+          entityId: row.id,
+          entityName: row.title,
+          contactId: row.contact_id,
+          contactName: row.contact?.name,
+          contactCompany: row.contact?.company,
+          timestamp: row.created_at,
+          status: row.status,
+          description: row.status === 'accepted' 
+            ? \`Proposal "\${row.title}" accepted\` 
+            : \`Proposal "\${row.title}" created\`
+        })))
+      }
     }
 
     // Recent invoices
-    let invoicesQuery = `
-      SELECT 
-        CASE 
-          WHEN i.status = 'paid' THEN 'invoice_paid'
-          ELSE 'invoice_created'
-        END as type,
-        i.id as entity_id,
-        i.invoice_number as entity_name,
-        i.contact_id,
-        c.name as contact_name,
-        c.company as contact_company,
-        i.created_at as timestamp,
-        i.status as status,
-        i.total_amount
-      FROM invoices i
-      JOIN contacts c ON c.id = i.contact_id
-      WHERE 1=1
-    `
-
-    if (contactId) {
-      invoicesQuery += ` AND i.contact_id = '${contactId}'`
-    }
-
     if (!activityType || activityType === 'all' || activityType === 'invoices') {
-      const invoicesResult = await db(invoicesQuery + ` ORDER BY i.created_at DESC LIMIT ${Math.min(limit, 50)}`)
-      activities.push(...invoicesResult.map(row => ({
-        type: row.type,
-        entityId: row.entity_id,
-        entityName: row.entity_name,
-        contactId: row.contact_id,
-        contactName: row.contact_name,
-        contactCompany: row.contact_company,
-        timestamp: row.timestamp,
-        status: row.status,
-        amount: parseFloat(row.total_amount),
-        description: row.type === 'invoice_paid'
-          ? `Invoice ${row.entity_name} paid ($${parseFloat(row.total_amount).toFixed(2)})`
-          : `Invoice ${row.entity_name} created ($${parseFloat(row.total_amount).toFixed(2)})`
-      })))
+      let invoicesQuery = supabase
+        .from('invoices')
+        .select(\`
+          id,
+          invoice_number,
+          contact_id,
+          created_at,
+          status,
+          total_amount,
+          contact:contacts!invoices_contact_id_fkey (
+            name,
+            company
+          )
+        \`)
+        .order('created_at', { ascending: false })
+        .limit(Math.min(limit, 50))
+
+      if (contactId) {
+        invoicesQuery = invoicesQuery.eq('contact_id', contactId)
+      }
+
+      const { data: invoices, error: invoicesError } = await invoicesQuery
+
+      if (!invoicesError && invoices) {
+        activities.push(...invoices.map(row => ({
+          type: row.status === 'paid' ? 'invoice_paid' : 'invoice_created',
+          entityId: row.id,
+          entityName: row.invoice_number,
+          contactId: row.contact_id,
+          contactName: row.contact?.name,
+          contactCompany: row.contact?.company,
+          timestamp: row.created_at,
+          status: row.status,
+          amount: parseFloat(row.total_amount),
+          description: row.status === 'paid'
+            ? \`Invoice \${row.invoice_number} paid (\$\${parseFloat(row.total_amount).toFixed(2)})\`
+            : \`Invoice \${row.invoice_number} created (\$\${parseFloat(row.total_amount).toFixed(2)})\`
+        })))
+      }
     }
 
     // Recent messages
-    let messagesQuery = `
-      SELECT 
-        'message_sent' as type,
-        m.id as entity_id,
-        m.subject as entity_name,
-        m.contact_id,
-        c.name as contact_name,
-        c.company as contact_company,
-        m.created_at as timestamp,
-        m.sender as sender
-      FROM messages m
-      JOIN contacts c ON c.id = m.contact_id
-      WHERE m.parent_id IS NULL
-    `
-
-    if (contactId) {
-      messagesQuery += ` AND m.contact_id = '${contactId}'`
-    }
-
     if (!activityType || activityType === 'all' || activityType === 'messages') {
-      const messagesResult = await db(messagesQuery + ` ORDER BY m.created_at DESC LIMIT ${Math.min(limit, 50)}`)
-      activities.push(...messagesResult.map(row => ({
-        type: row.type,
-        entityId: row.entity_id,
-        entityName: row.entity_name,
-        contactId: row.contact_id,
-        contactName: row.contact_name,
-        contactCompany: row.contact_company,
-        timestamp: row.timestamp,
-        sender: row.sender,
-        description: `Message "${row.entity_name}" from ${row.sender === 'client' ? row.contact_name : 'team'}`
-      })))
+      let messagesQuery = supabase
+        .from('messages')
+        .select(\`
+          id,
+          subject,
+          contact_id,
+          created_at,
+          sender,
+          contact:contacts!messages_contact_id_fkey (
+            name,
+            company
+          )
+        \`)
+        .is('parent_id', null)
+        .order('created_at', { ascending: false })
+        .limit(Math.min(limit, 50))
+
+      if (contactId) {
+        messagesQuery = messagesQuery.eq('contact_id', contactId)
+      }
+
+      const { data: messages, error: messagesError } = await messagesQuery
+
+      if (!messagesError && messages) {
+        activities.push(...messages.map(row => ({
+          type: 'message_sent',
+          entityId: row.id,
+          entityName: row.subject,
+          contactId: row.contact_id,
+          contactName: row.contact?.name,
+          contactCompany: row.contact?.company,
+          timestamp: row.created_at,
+          sender: row.sender,
+          description: \`Message "\${row.subject}" from \${row.sender === 'client' ? row.contact?.name : 'team'}\`
+        })))
+      }
     }
 
     // Recent file uploads
-    let filesQuery = `
-      SELECT 
-        'file_uploaded' as type,
-        f.id as entity_id,
-        f.filename as entity_name,
-        f.contact_id,
-        c.name as contact_name,
-        c.company as contact_company,
-        f.uploaded_at as timestamp,
-        f.category as category,
-        f.size as size
-      FROM files f
-      JOIN contacts c ON c.id = f.contact_id
-      WHERE 1=1
-    `
-
-    if (contactId) {
-      filesQuery += ` AND f.contact_id = '${contactId}'`
-    }
-
     if (!activityType || activityType === 'all' || activityType === 'files') {
-      const filesResult = await db(filesQuery + ` ORDER BY f.uploaded_at DESC LIMIT ${Math.min(limit, 50)}`)
-      activities.push(...filesResult.map(row => ({
-        type: row.type,
-        entityId: row.entity_id,
-        entityName: row.entity_name,
-        contactId: row.contact_id,
-        contactName: row.contact_name,
-        contactCompany: row.contact_company,
-        timestamp: row.timestamp,
-        category: row.category,
-        size: row.size,
-        description: `File "${row.entity_name}" uploaded (${row.category})`
-      })))
+      let filesQuery = supabase
+        .from('files')
+        .select(\`
+          id,
+          filename,
+          contact_id,
+          uploaded_at,
+          category,
+          size,
+          contact:contacts!files_contact_id_fkey (
+            name,
+            company
+          )
+        \`)
+        .order('uploaded_at', { ascending: false })
+        .limit(Math.min(limit, 50))
+
+      if (contactId) {
+        filesQuery = filesQuery.eq('contact_id', contactId)
+      }
+
+      const { data: files, error: filesError } = await filesQuery
+
+      if (!filesError && files) {
+        activities.push(...files.map(row => ({
+          type: 'file_uploaded',
+          entityId: row.id,
+          entityName: row.filename,
+          contactId: row.contact_id,
+          contactName: row.contact?.name,
+          contactCompany: row.contact?.company,
+          timestamp: row.uploaded_at,
+          category: row.category,
+          size: row.size,
+          description: \`File "\${row.filename}" uploaded (\${row.category})\`
+        })))
+      }
     }
 
     // Sort all activities by timestamp (most recent first)
@@ -293,14 +280,6 @@ export async function handler(event) {
 
   } catch (error) {
     console.error('Error fetching activity log:', error)
-    
-    if (error.name === 'JsonWebTokenError' || error.name === 'TokenExpiredError') {
-      return {
-        statusCode: 401,
-        headers,
-        body: JSON.stringify({ error: 'Invalid or expired session' })
-      }
-    }
 
     return {
       statusCode: 500,

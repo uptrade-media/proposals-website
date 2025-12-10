@@ -34,7 +34,7 @@ api.interceptors.response.use(
     console.log('[API Response]', response.config.method?.toUpperCase(), response.config.url, 'Status:', response.status)
     return response
   },
-  (error) => {
+  async (error) => {
     // Log the error details
     console.error('[API Error]', {
       url: error.config?.url,
@@ -43,26 +43,25 @@ api.interceptors.response.use(
       message: error.message
     })
     
-    // If we get a 401, the session has expired
+    // If we get a 401, the session has expired or is invalid
     if (error.response?.status === 401) {
       console.error('[API] 401 Unauthorized - Session expired or invalid')
-      console.error('[API] Current path:', window.location.pathname)
-      console.error('[API] URL:', error.config?.url)
       
-      // Only redirect to login if:
-      // 1. We're not already on auth pages
-      // 2. The 401 is from auth-verify (session check), not from other endpoints
-      const isAuthVerify = error.config?.url?.includes('auth-verify')
+      // Check if we're on an auth page already
       const isOnAuthPage = window.location.pathname.includes('/login') ||
                            window.location.pathname.includes('/account-setup') ||
                            window.location.pathname.includes('/reset-password') ||
-                           window.location.pathname.includes('/magic-login')
+                           window.location.pathname.includes('/magic-login') ||
+                           window.location.pathname.includes('/auth/')
       
-      if (isAuthVerify && !isOnAuthPage) {
-        console.log('[API] Session expired, redirecting to login')
-        window.location.href = '/login'
-      } else if (!isAuthVerify) {
-        console.warn('[API] 401 from', error.config?.url, '- request failed but not redirecting (may be expected)')
+      if (!isOnAuthPage) {
+        // Try to refresh the session first
+        const { data: { session }, error: refreshError } = await supabase.auth.refreshSession()
+        
+        if (!session || refreshError) {
+          console.log('[API] Session expired, redirecting to login')
+          window.location.href = '/login'
+        }
       }
     }
     

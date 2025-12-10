@@ -1,14 +1,12 @@
 // netlify/functions/messages-send.js
-import jwt from 'jsonwebtoken'
-import { neon } from '@neondatabase/serverless'
-import { drizzle } from 'drizzle-orm/neon-http'
-import { eq } from 'drizzle-orm'
+import { createClient } from '@supabase/supabase-js'
 import { Resend } from 'resend'
-import * as schema from '../../src/db/schema.js'
+import { getAuthenticatedUser } from './utils/supabase.js'
 
-const COOKIE_NAME = process.env.SESSION_COOKIE_NAME || 'um_session'
-const JWT_SECRET = process.env.AUTH_JWT_SECRET
-const DATABASE_URL = process.env.DATABASE_URL
+const supabase = createClient(
+  process.env.SUPABASE_URL,
+  process.env.SUPABASE_SERVICE_ROLE_KEY
+)
 const RESEND_API_KEY = process.env.RESEND_API_KEY
 const RESEND_FROM_EMAIL = process.env.RESEND_FROM_EMAIL || 'portal@send.uptrademedia.com'
 
@@ -16,7 +14,7 @@ export async function handler(event) {
   // CORS headers
   const headers = {
     'Access-Control-Allow-Origin': '*',
-    'Access-Control-Allow-Headers': 'Content-Type',
+    'Access-Control-Allow-Headers': 'Content-Type, Authorization',
     'Access-Control-Allow-Methods': 'POST, OPTIONS',
     'Content-Type': 'application/json'
   }
@@ -33,19 +31,10 @@ export async function handler(event) {
     }
   }
 
-  // Verify authentication
-  if (!JWT_SECRET) {
-    return {
-      statusCode: 500,
-      headers,
-      body: JSON.stringify({ error: 'Server not configured' })
-    }
-  }
-
-  const rawCookie = event.headers.cookie || ''
-  const token = rawCookie.split('; ').find(c => c.startsWith(`${COOKIE_NAME}=`))?.split('=')[1]
+  // Verify authentication using Supabase
+  const { user, contact, error: authError } = await getAuthenticatedUser(event)
   
-  if (!token) {
+  if (authError || !contact) {
     return {
       statusCode: 401,
       headers,
@@ -54,10 +43,8 @@ export async function handler(event) {
   }
 
   try {
-    const payload = jwt.verify(token, JWT_SECRET)
-    
-    // Only Google OAuth users can send messages
-    if (payload.type !== 'google' && payload.role !== 'admin') {
+    // Only authenticated users can send messages
+    if (contact.role !== 'admin' && contact.role !== 'client') {
       return {
         statusCode: 403,
         headers,
@@ -67,7 +54,7 @@ export async function handler(event) {
 
     // Parse request body
     const body = JSON.parse(event.body || '{}')
-    const { 
+    const {
       recipientId,
       subject,
       content,
@@ -93,24 +80,14 @@ export async function handler(event) {
       }
     }
 
-    // Connect to database
-    if (!DATABASE_URL) {
-      return {
-        statusCode: 500,
-        headers,
-        body: JSON.stringify({ error: 'Database not configured' })
-      }
-    }
+    // Connect to database - verify recipient exists
+    const { data: recipient, error: recipientError } = await supabase
+      .from('contacts')
+      .select('id, name, email')
+      .eq('id', recipientId)
+      .single()
 
-    const sql = neon(DATABASE_URL)
-    const db = drizzle(sql, { schema })
-
-    // Verify recipient exists
-    const recipient = await db.query.contacts.findFirst({
-      where: eq(schema.contacts.id, recipientId)
-    })
-
-    if (!recipient) {
+    if (recipientError || !recipient) {
       return {
         statusCode: 404,
         headers,
@@ -120,11 +97,13 @@ export async function handler(event) {
 
     // If projectId provided, verify it exists
     if (projectId) {
-      const project = await db.query.projects.findFirst({
-        where: eq(schema.projects.id, projectId)
-      })
+      const { data: project, error: projectError } = await supabase
+        .from('projects')
+        .select('id')
+        .eq('id', projectId)
+        .single()
 
-      if (!project) {
+      if (projectError || !project) {
         return {
           statusCode: 404,
           headers,
@@ -136,33 +115,39 @@ export async function handler(event) {
     // If parentId provided, verify parent message exists
     let parentMessage = null
     if (parentId) {
-      parentMessage = await db.query.messages.findFirst({
-        where: eq(schema.messages.id, parentId)
-      })
+      const { data: parent, error: parentError } = await supabase
+        .from('messages')
+        .select('id, subject, project_id')
+        .eq('id', parentId)
+        .single()
 
-      if (!parentMessage) {
+      if (parentError || !parent) {
         return {
           statusCode: 404,
           headers,
           body: JSON.stringify({ error: 'Parent message not found' })
         }
       }
+      parentMessage = parent
     }
 
-    // Get sender info for email
-    const sender = await db.query.contacts.findFirst({
-      where: eq(schema.contacts.id, payload.userId)
-    })
-
     // Create message
-    const [message] = await db.insert(schema.messages).values({
-      senderId: payload.userId,
-      recipientId,
-      subject: subject || parentMessage?.subject || 'Re: Conversation',
-      content,
-      projectId: projectId || parentMessage?.projectId || null,
-      parentId: parentId || null
-    }).returning()
+    const { data: message, error: insertError } = await supabase
+      .from('messages')
+      .insert({
+        sender_id: contact.id,
+        recipient_id: recipientId,
+        subject: subject || parentMessage?.subject || 'Re: Conversation',
+        content,
+        project_id: projectId || parentMessage?.project_id || null,
+        parent_id: parentId || null
+      })
+      .select()
+      .single()
+
+    if (insertError) {
+      throw insertError
+    }
 
     // Send email notification to recipient
     if (RESEND_API_KEY && recipient.email) {
@@ -176,7 +161,7 @@ export async function handler(event) {
           subject: isReply ? `Re: ${message.subject}` : `New Message: ${message.subject}`,
           html: `
             <h2>${isReply ? 'New Reply' : 'New Message'}</h2>
-            <p><strong>From:</strong> ${sender?.name || 'Team'} (${sender?.email || ''})</p>
+            <p><strong>From:</strong> ${contact.name || 'Team'} (${contact.email || ''})</p>
             <p><strong>Subject:</strong> ${message.subject}</p>
             <div style="margin: 20px 0; padding: 15px; background: #f5f5f5; border-left: 4px solid #007bff;">
               ${content.replace(/\n/g, '<br>')}
@@ -193,14 +178,14 @@ export async function handler(event) {
     // Format response
     const formattedMessage = {
       id: message.id,
-      senderId: message.senderId,
-      recipientId: message.recipientId,
+      senderId: message.sender_id,
+      recipientId: message.recipient_id,
       subject: message.subject,
       content: message.content,
-      projectId: message.projectId,
-      parentId: message.parentId,
-      readAt: message.readAt,
-      createdAt: message.createdAt
+      projectId: message.project_id,
+      parentId: message.parent_id,
+      readAt: message.read_at,
+      createdAt: message.created_at
     }
 
     return {
@@ -214,14 +199,6 @@ export async function handler(event) {
 
   } catch (error) {
     console.error('Error sending message:', error)
-    
-    if (error.name === 'JsonWebTokenError' || error.name === 'TokenExpiredError') {
-      return {
-        statusCode: 401,
-        headers,
-        body: JSON.stringify({ error: 'Invalid or expired session' })
-      }
-    }
 
     return {
       statusCode: 500,

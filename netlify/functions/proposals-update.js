@@ -1,10 +1,7 @@
 // netlify/functions/proposals-update.js
-// Migrated to Supabase from Neon/Drizzle
-import jwt from 'jsonwebtoken'
+// Migrated to Supabase
 import { createClient } from '@supabase/supabase-js'
-
-const COOKIE_NAME = process.env.SESSION_COOKIE_NAME || 'um_session'
-const JWT_SECRET = process.env.AUTH_JWT_SECRET
+import { getAuthenticatedUser } from './utils/supabase.js'
 
 const supabase = createClient(
   process.env.SUPABASE_URL,
@@ -41,30 +38,20 @@ export async function handler(event) {
     }
   }
 
-  if (!JWT_SECRET) {
-    return {
-      statusCode: 500,
-      headers,
-      body: JSON.stringify({ error: 'Server not configured' })
-    }
-  }
-
-  const rawCookie = event.headers.cookie || ''
-  const token = rawCookie.split('; ').find(c => c.startsWith(`${COOKIE_NAME}=`))?.split('=')[1]
-  
-  if (!token) {
-    return {
-      statusCode: 401,
-      headers,
-      body: JSON.stringify({ error: 'Not authenticated' })
-    }
-  }
-
   try {
-    const payload = jwt.verify(token, JWT_SECRET)
+    // Verify authentication
+    const { contact, error: authError } = await getAuthenticatedUser(event)
     
+    if (authError || !contact) {
+      return {
+        statusCode: 401,
+        headers,
+        body: JSON.stringify({ error: authError || 'Not authenticated' })
+      }
+    }
+
     // Only admins can update proposals
-    if (payload.role !== 'admin') {
+    if (contact.role !== 'admin') {
       return {
         statusCode: 403,
         headers,

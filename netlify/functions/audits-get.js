@@ -1,19 +1,11 @@
 // netlify/functions/audits-get.js
-import jwt from 'jsonwebtoken'
-import { neon } from '@neondatabase/serverless'
-import { drizzle } from 'drizzle-orm/neon-http'
-import { and, eq } from 'drizzle-orm'
-import * as schema from '../../src/db/schema.js'
-
-const COOKIE_NAME = process.env.SESSION_COOKIE_NAME || 'um_session'
-const JWT_SECRET = process.env.AUTH_JWT_SECRET
-const DATABASE_URL = process.env.DATABASE_URL
+import { createSupabaseAdmin, getAuthenticatedUser } from './utils/supabase.js'
 
 export async function handler(event) {
   // CORS headers
   const headers = {
     'Access-Control-Allow-Origin': '*',
-    'Access-Control-Allow-Headers': 'Content-Type',
+    'Access-Control-Allow-Headers': 'Content-Type, Authorization',
     'Access-Control-Allow-Methods': 'GET, OPTIONS',
     'Content-Type': 'application/json'
   }
@@ -30,19 +22,10 @@ export async function handler(event) {
     }
   }
 
-  // Verify authentication
-  if (!JWT_SECRET) {
-    return {
-      statusCode: 500,
-      headers,
-      body: JSON.stringify({ error: 'Server not configured' })
-    }
-  }
-
-  const rawCookie = event.headers.cookie || ''
-  const token = rawCookie.split('; ').find(c => c.startsWith(`${COOKIE_NAME}=`))?.split('=')[1]
+  // Verify authentication using Supabase
+  const { user, contact, error: authError } = await getAuthenticatedUser(event)
   
-  if (!token) {
+  if (authError || !contact) {
     return {
       statusCode: 401,
       headers,
@@ -62,8 +45,7 @@ export async function handler(event) {
   }
 
   try {
-    const payload = jwt.verify(token, JWT_SECRET)
-    const userId = payload.userId || payload.sub
+    const userId = contact.id
 
     if (!userId) {
       return {
@@ -73,27 +55,17 @@ export async function handler(event) {
       }
     }
 
-    // Connect to database
-    if (!DATABASE_URL) {
-      return {
-        statusCode: 500,
-        headers,
-        body: JSON.stringify({ error: 'Database not configured' })
-      }
-    }
-
-    const sql = neon(DATABASE_URL)
-    const db = drizzle(sql, { schema })
+    const supabase = createSupabaseAdmin()
 
     // Fetch audit with security check (only user's own audits)
-    const audit = await db.query.audits.findFirst({
-      where: and(
-        eq(schema.audits.id, auditId),
-        eq(schema.audits.contactId, userId)
-      )
-    })
+    const { data: audit, error } = await supabase
+      .from('audits')
+      .select('*')
+      .eq('id', auditId)
+      .eq('contact_id', userId)
+      .single()
 
-    if (!audit) {
+    if (error || !audit) {
       return {
         statusCode: 404,
         headers,

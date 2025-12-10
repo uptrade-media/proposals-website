@@ -42,15 +42,16 @@ export const useProposalsStore = create((set, get) => ({
     }
   },
 
+  // Fetch proposal templates
   fetchTemplates: async () => {
     set({ isLoading: true, error: null })
     try {
       const response = await api.get('/.netlify/functions/proposal-templates-list')
       set({ templates: response.data.templates || [], isLoading: false })
-      return { success: true }
+      return { success: true, templates: response.data.templates }
     } catch (err) {
       const error = err.response?.data?.error || 'Failed to fetch templates'
-      set({ error, isLoading: false })
+      set({ error, templates: [], isLoading: false })
       return { success: false, error }
     }
   },
@@ -164,7 +165,7 @@ export const useProposalsStore = create((set, get) => ({
   // ========== Activity & Tracking ==========
   trackProposalView: async (id) => {
     try {
-      await api.post(`/.netlify/functions/proposal-track-view?id=${id}`, {})
+      await api.post(`/.netlify/functions/proposals-track-view?id=${id}`, {})
       // Update local state if needed
       set(state => {
         if (state.currentProposal?.id === id) {

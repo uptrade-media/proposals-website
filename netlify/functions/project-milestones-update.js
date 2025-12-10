@@ -1,17 +1,15 @@
-import jwt from 'jsonwebtoken'
-import { neon } from '@neondatabase/serverless'
-import { drizzle } from 'drizzle-orm/neon-http'
-import { eq } from 'drizzle-orm'
-import * as schema from '../../src/db/schema.js'
+import { createClient } from '@supabase/supabase-js'
+import { getAuthenticatedUser } from './utils/supabase.js'
 
-const COOKIE_NAME = process.env.SESSION_COOKIE_NAME || 'um_session'
-const JWT_SECRET = process.env.AUTH_JWT_SECRET
-const DATABASE_URL = process.env.DATABASE_URL
+const supabase = createClient(
+  process.env.SUPABASE_URL,
+  process.env.SUPABASE_SERVICE_ROLE_KEY
+)
 
 export async function handler(event) {
   const headers = {
     'Access-Control-Allow-Origin': '*',
-    'Access-Control-Allow-Headers': 'Content-Type',
+    'Access-Control-Allow-Headers': 'Content-Type, Authorization',
     'Access-Control-Allow-Methods': 'PUT, OPTIONS',
     'Content-Type': 'application/json'
   }
@@ -29,30 +27,18 @@ export async function handler(event) {
   }
 
   try {
-    // Verify authentication
-    if (!JWT_SECRET) {
-      return {
-        statusCode: 500,
-        headers,
-        body: JSON.stringify({ error: 'Server not configured' })
-      }
-    }
-
-    const rawCookie = event.headers.cookie || ''
-    const token = rawCookie.split('; ').find(c => c.startsWith(`${COOKIE_NAME}=`))?.split('=')[1]
-
-    if (!token) {
+    // Verify authentication via Supabase
+    const { user, contact, error: authError } = await getAuthenticatedUser(event)
+    if (authError || !user) {
       return {
         statusCode: 401,
         headers,
-        body: JSON.stringify({ error: 'Not authenticated' })
+        body: JSON.stringify({ error: authError || 'Not authenticated' })
       }
     }
 
-    const payload = jwt.verify(token, JWT_SECRET)
-
     // Only admins can update milestones
-    if (payload.role !== 'admin') {
+    if (contact.role !== 'admin') {
       return {
         statusCode: 403,
         headers,
@@ -76,23 +62,14 @@ export async function handler(event) {
     const body = JSON.parse(event.body || '{}')
     const { title, description, status, dueDate, completedAt, order } = body
 
-    if (!DATABASE_URL) {
-      return {
-        statusCode: 500,
-        headers,
-        body: JSON.stringify({ error: 'Database not configured' })
-      }
-    }
-
-    const sql = neon(DATABASE_URL)
-    const db = drizzle(sql, { schema })
-
     // Verify milestone exists and belongs to project
-    const milestone = await db.query.projectMilestones.findFirst({
-      where: eq(schema.projectMilestones.id, milestoneId)
-    })
+    const { data: milestone, error: fetchError } = await supabase
+      .from('project_milestones')
+      .select('id, project_id')
+      .eq('id', milestoneId)
+      .single()
 
-    if (!milestone || milestone.projectId !== projectId) {
+    if (fetchError || !milestone || milestone.project_id !== projectId) {
       return {
         statusCode: 404,
         headers,
@@ -102,24 +79,27 @@ export async function handler(event) {
 
     // Build update object
     const updateData = {
-      updatedAt: new Date()
+      updated_at: new Date().toISOString()
     }
 
     if (title !== undefined) updateData.title = title
     if (description !== undefined) updateData.description = description
     if (status !== undefined) updateData.status = status
-    if (dueDate !== undefined) updateData.dueDate = dueDate ? new Date(dueDate) : null
-    if (completedAt !== undefined) updateData.completedAt = completedAt ? new Date(completedAt) : null
+    if (dueDate !== undefined) updateData.due_date = dueDate ? new Date(dueDate).toISOString() : null
+    if (completedAt !== undefined) updateData.completed_at = completedAt ? new Date(completedAt).toISOString() : null
     if (order !== undefined) updateData.order = order
 
     // Update milestone
-    const updated = await db
-      .update(schema.projectMilestones)
-      .set(updateData)
-      .where(eq(schema.projectMilestones.id, milestoneId))
-      .returning()
+    const { data: updatedMilestone, error: updateError } = await supabase
+      .from('project_milestones')
+      .update(updateData)
+      .eq('id', milestoneId)
+      .select()
+      .single()
 
-    const updatedMilestone = updated[0]
+    if (updateError) {
+      throw updateError
+    }
 
     return {
       statusCode: 200,
@@ -127,28 +107,20 @@ export async function handler(event) {
       body: JSON.stringify({
         milestone: {
           id: updatedMilestone.id,
-          projectId: updatedMilestone.projectId,
+          projectId: updatedMilestone.project_id,
           title: updatedMilestone.title,
           description: updatedMilestone.description,
           status: updatedMilestone.status,
-          dueDate: updatedMilestone.dueDate,
-          completedAt: updatedMilestone.completedAt,
+          dueDate: updatedMilestone.due_date,
+          completedAt: updatedMilestone.completed_at,
           order: updatedMilestone.order,
-          createdAt: updatedMilestone.createdAt,
-          updatedAt: updatedMilestone.updatedAt
+          createdAt: updatedMilestone.created_at,
+          updatedAt: updatedMilestone.updated_at
         }
       })
     }
   } catch (error) {
     console.error('Error updating milestone:', error)
-
-    if (error.name === 'JsonWebTokenError' || error.name === 'TokenExpiredError') {
-      return {
-        statusCode: 401,
-        headers,
-        body: JSON.stringify({ error: 'Invalid or expired session' })
-      }
-    }
 
     return {
       statusCode: 500,

@@ -1,9 +1,11 @@
 // netlify/functions/messages-contacts.js
-import jwt from 'jsonwebtoken'
-import { neon } from '@neondatabase/serverless'
+import { createClient } from '@supabase/supabase-js'
+import { getAuthenticatedUser } from './utils/supabase.js'
 
-const JWT_SECRET = process.env.AUTH_JWT_SECRET
-const COOKIE_NAME = process.env.SESSION_COOKIE_NAME || 'um_session'
+const supabase = createClient(
+  process.env.SUPABASE_URL,
+  process.env.SUPABASE_SERVICE_ROLE_KEY
+)
 
 export async function handler(event) {
   // CORS headers
@@ -26,11 +28,10 @@ export async function handler(event) {
     }
   }
 
-  // Verify authentication
-  const cookie = event.headers.cookie || ''
-  const token = cookie.split('; ').find(c => c.startsWith(`${COOKIE_NAME}=`))?.split('=')[1]
+  // Verify authentication using Supabase
+  const { user, contact, error: authError } = await getAuthenticatedUser(event)
   
-  if (!token) {
+  if (authError || !contact) {
     return {
       statusCode: 401,
       headers,
@@ -39,8 +40,7 @@ export async function handler(event) {
   }
 
   try {
-    const payload = jwt.verify(token, JWT_SECRET)
-    const userId = payload.userId || payload.sub
+    const userId = contact.id
 
     if (!userId) {
       return {
@@ -51,65 +51,25 @@ export async function handler(event) {
     }
 
     // Connect to database
-    const sql = neon(process.env.DATABASE_URL)
+    const targetRole = contact.role === 'admin' ? 'client' : 'admin'
+    
+    const { data: contacts, error: fetchError } = await supabase
+      .from('contacts')
+      .select('id, name, email, company, role')
+      .eq('role', targetRole)
+      .order('name')
 
-    // Get all contacts (users who can receive messages)
-    // For admin users, get all clients
-    // For client users, get admin users
-    const userRole = payload.role || 'client'
-
-    let contacts
-    if (userRole === 'admin') {
-      // Admin can message all clients
-      contacts = await sql`
-        SELECT 
-          id,
-          name,
-          email,
-          company,
-          role
-        FROM contacts
-        WHERE role = 'client'
-        ORDER BY name ASC
-      `
-    } else {
-      // Clients can message admins
-      contacts = await sql`
-        SELECT 
-          id,
-          name,
-          email,
-          company,
-          role
-        FROM contacts
-        WHERE role = 'admin'
-        ORDER BY name ASC
-      `
+    if (fetchError) {
+      throw fetchError
     }
 
     return {
       statusCode: 200,
       headers,
-      body: JSON.stringify({
-        contacts: contacts.map(c => ({
-          id: c.id,
-          name: c.name,
-          email: c.email,
-          company: c.company,
-          role: c.role
-        }))
-      })
+      body: JSON.stringify({ contacts: contacts || [] })
     }
   } catch (error) {
     console.error('[messages-contacts] Error:', error)
-    
-    if (error.name === 'JsonWebTokenError' || error.name === 'TokenExpiredError') {
-      return {
-        statusCode: 401,
-        headers,
-        body: JSON.stringify({ error: 'INVALID_TOKEN' })
-      }
-    }
 
     return {
       statusCode: 500,

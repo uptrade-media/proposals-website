@@ -1,5 +1,5 @@
 // netlify/functions/upload-image.js
-import jwt from 'jsonwebtoken'
+import { getAuthenticatedUser } from './utils/supabase.js'
 
 // For Cloudinary - alternative: use formidable or busboy to parse multipart
 // This function accepts base64 images or uses Cloudinary's upload widget
@@ -29,8 +29,9 @@ export async function handler(event) {
 
   try {
     // Verify authentication
-    const token = event.headers.cookie?.match(/um_session=([^;]+)/)?.[1]
-    if (!token) {
+    const { contact, error: authError } = await getAuthenticatedUser(event)
+    
+    if (authError || !contact) {
       return {
         statusCode: 401,
         headers,
@@ -38,10 +39,8 @@ export async function handler(event) {
       }
     }
 
-    const payload = jwt.verify(token, process.env.AUTH_JWT_SECRET || process.env.JWT_SECRET)
-
     // Verify admin role
-    if (payload.role !== 'admin') {
+    if (contact.role !== 'admin') {
       return {
         statusCode: 403,
         headers,

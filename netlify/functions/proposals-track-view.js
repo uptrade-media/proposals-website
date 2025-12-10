@@ -1,9 +1,6 @@
 // netlify/functions/proposals-track-view.js
 // Track proposal view analytics
-import jwt from 'jsonwebtoken'
 import { createClient } from '@supabase/supabase-js'
-
-const JWT_SECRET = process.env.AUTH_JWT_SECRET
 
 const supabase = createClient(
   process.env.SUPABASE_URL,

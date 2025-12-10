@@ -1,17 +1,15 @@
-import jwt from 'jsonwebtoken'
-import { neon } from '@neondatabase/serverless'
-import { drizzle } from 'drizzle-orm/neon-http'
-import { eq } from 'drizzle-orm'
-import * as schema from '../../src/db/schema.js'
+import { createClient } from '@supabase/supabase-js'
+import { getAuthenticatedUser } from './utils/supabase.js'
 
-const COOKIE_NAME = process.env.SESSION_COOKIE_NAME || 'um_session'
-const JWT_SECRET = process.env.AUTH_JWT_SECRET
-const DATABASE_URL = process.env.DATABASE_URL
+const supabase = createClient(
+  process.env.SUPABASE_URL,
+  process.env.SUPABASE_SERVICE_ROLE_KEY
+)
 
 export async function handler(event) {
   const headers = {
     'Access-Control-Allow-Origin': '*',
-    'Access-Control-Allow-Headers': 'Content-Type',
+    'Access-Control-Allow-Headers': 'Content-Type, Authorization',
     'Access-Control-Allow-Methods': 'DELETE, OPTIONS',
     'Content-Type': 'application/json'
   }
@@ -29,30 +27,18 @@ export async function handler(event) {
   }
 
   try {
-    // Verify authentication
-    if (!JWT_SECRET) {
-      return {
-        statusCode: 500,
-        headers,
-        body: JSON.stringify({ error: 'Server not configured' })
-      }
-    }
-
-    const rawCookie = event.headers.cookie || ''
-    const token = rawCookie.split('; ').find(c => c.startsWith(`${COOKIE_NAME}=`))?.split('=')[1]
-
-    if (!token) {
+    // Verify authentication via Supabase
+    const { user, contact, error: authError } = await getAuthenticatedUser(event)
+    if (authError || !user) {
       return {
         statusCode: 401,
         headers,
-        body: JSON.stringify({ error: 'Not authenticated' })
+        body: JSON.stringify({ error: authError || 'Not authenticated' })
       }
     }
 
-    const payload = jwt.verify(token, JWT_SECRET)
-
     // Only admins can delete milestones
-    if (payload.role !== 'admin') {
+    if (contact.role !== 'admin') {
       return {
         statusCode: 403,
         headers,
@@ -72,23 +58,14 @@ export async function handler(event) {
       }
     }
 
-    if (!DATABASE_URL) {
-      return {
-        statusCode: 500,
-        headers,
-        body: JSON.stringify({ error: 'Database not configured' })
-      }
-    }
-
-    const sql = neon(DATABASE_URL)
-    const db = drizzle(sql, { schema })
-
     // Verify milestone exists and belongs to project
-    const milestone = await db.query.projectMilestones.findFirst({
-      where: eq(schema.projectMilestones.id, milestoneId)
-    })
+    const { data: milestone, error: fetchError } = await supabase
+      .from('project_milestones')
+      .select('id, project_id')
+      .eq('id', milestoneId)
+      .single()
 
-    if (!milestone || milestone.projectId !== projectId) {
+    if (fetchError || !milestone || milestone.project_id !== projectId) {
       return {
         statusCode: 404,
         headers,
@@ -97,22 +74,28 @@ export async function handler(event) {
     }
 
     // Delete the milestone
-    await db
-      .delete(schema.projectMilestones)
-      .where(eq(schema.projectMilestones.id, milestoneId))
+    const { error: deleteError } = await supabase
+      .from('project_milestones')
+      .delete()
+      .eq('id', milestoneId)
+
+    if (deleteError) {
+      throw deleteError
+    }
 
     // Reorder remaining milestones
-    const remainingMilestones = await db
-      .select()
-      .from(schema.projectMilestones)
-      .where(eq(schema.projectMilestones.projectId, projectId))
+    const { data: remainingMilestones } = await supabase
+      .from('project_milestones')
+      .select('id')
+      .eq('project_id', projectId)
+      .order('order')
 
     // Update orders for remaining milestones
-    for (let i = 0; i < remainingMilestones.length; i++) {
-      await db
-        .update(schema.projectMilestones)
-        .set({ order: i })
-        .where(eq(schema.projectMilestones.id, remainingMilestones[i].id))
+    for (let i = 0; i < (remainingMilestones?.length || 0); i++) {
+      await supabase
+        .from('project_milestones')
+        .update({ order: i })
+        .eq('id', remainingMilestones[i].id)
     }
 
     return {
@@ -125,14 +108,6 @@ export async function handler(event) {
     }
   } catch (error) {
     console.error('Error deleting milestone:', error)
-
-    if (error.name === 'JsonWebTokenError' || error.name === 'TokenExpiredError') {
-      return {
-        statusCode: 401,
-        headers,
-        body: JSON.stringify({ error: 'Invalid or expired session' })
-      }
-    }
 
     return {
       statusCode: 500,

@@ -19,7 +19,7 @@
  * }
  */
 
-import { checkConnection } from './utils/db.js'
+import { createClient } from '@supabase/supabase-js'
 
 export async function handler(event) {
   const startTime = Date.now()
@@ -29,10 +29,16 @@ export async function handler(event) {
   // Check database connection
   try {
     const dbStart = Date.now()
-    const isHealthy = await checkConnection()
+    const supabase = createClient(
+      process.env.SUPABASE_URL,
+      process.env.SUPABASE_SERVICE_ROLE_KEY
+    )
+    const { error } = await supabase.from('contacts').select('id').limit(1)
+    const isHealthy = !error
     checks.database = {
       status: isHealthy ? 'healthy' : 'unhealthy',
-      responseTime: Date.now() - dbStart
+      responseTime: Date.now() - dbStart,
+      ...(error && { error: error.message })
     }
     if (!isHealthy) overallStatus = 'degraded'
   } catch (error) {
@@ -53,8 +59,8 @@ export async function handler(event) {
 
   // Check critical environment variables
   const requiredEnvVars = [
-    'DATABASE_URL',
-    'AUTH_JWT_SECRET',
+    'SUPABASE_URL',
+    'SUPABASE_SERVICE_ROLE_KEY',
     'GOOGLE_CLIENT_ID',
     'RESEND_API_KEY',
     'ADMIN_EMAIL'

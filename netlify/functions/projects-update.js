@@ -1,19 +1,17 @@
 // netlify/functions/projects-update.js
-import jwt from 'jsonwebtoken'
-import { neon } from '@neondatabase/serverless'
-import { drizzle } from 'drizzle-orm/neon-http'
-import { eq } from 'drizzle-orm'
-import * as schema from '../../src/db/schema.js'
+import { createClient } from '@supabase/supabase-js'
+import { getAuthenticatedUser } from './utils/supabase.js'
 
-const COOKIE_NAME = process.env.SESSION_COOKIE_NAME || 'um_session'
-const JWT_SECRET = process.env.AUTH_JWT_SECRET
-const DATABASE_URL = process.env.DATABASE_URL
+const supabase = createClient(
+  process.env.SUPABASE_URL,
+  process.env.SUPABASE_SERVICE_ROLE_KEY
+)
 
 export async function handler(event) {
   // CORS headers
   const headers = {
     'Access-Control-Allow-Origin': '*',
-    'Access-Control-Allow-Headers': 'Content-Type',
+    'Access-Control-Allow-Headers': 'Content-Type, Authorization',
     'Access-Control-Allow-Methods': 'PUT, PATCH, OPTIONS',
     'Content-Type': 'application/json'
   }
@@ -40,31 +38,19 @@ export async function handler(event) {
     }
   }
 
-  // Verify authentication
-  if (!JWT_SECRET) {
-    return {
-      statusCode: 500,
-      headers,
-      body: JSON.stringify({ error: 'Server not configured' })
-    }
-  }
-
-  const rawCookie = event.headers.cookie || ''
-  const token = rawCookie.split('; ').find(c => c.startsWith(`${COOKIE_NAME}=`))?.split('=')[1]
-  
-  if (!token) {
-    return {
-      statusCode: 401,
-      headers,
-      body: JSON.stringify({ error: 'Not authenticated' })
-    }
-  }
-
   try {
-    const payload = jwt.verify(token, JWT_SECRET)
-    
+    // Verify authentication via Supabase
+    const { user, contact, error: authError } = await getAuthenticatedUser(event)
+    if (authError || !user) {
+      return {
+        statusCode: 401,
+        headers,
+        body: JSON.stringify({ error: authError || 'Not authenticated' })
+      }
+    }
+
     // Only admins can update projects
-    if (payload.role !== 'admin') {
+    if (contact.role !== 'admin') {
       return {
         statusCode: 403,
         headers,
@@ -83,24 +69,14 @@ export async function handler(event) {
       endDate
     } = body
 
-    // Connect to database
-    if (!DATABASE_URL) {
-      return {
-        statusCode: 500,
-        headers,
-        body: JSON.stringify({ error: 'Database not configured' })
-      }
-    }
-
-    const sql = neon(DATABASE_URL)
-    const db = drizzle(sql, { schema })
-
     // Check if project exists
-    const existingProject = await db.query.projects.findFirst({
-      where: eq(schema.projects.id, projectId)
-    })
+    const { data: existingProject, error: fetchError } = await supabase
+      .from('projects')
+      .select('id')
+      .eq('id', projectId)
+      .single()
 
-    if (!existingProject) {
+    if (fetchError || !existingProject) {
       return {
         statusCode: 404,
         headers,
@@ -110,35 +86,40 @@ export async function handler(event) {
 
     // Build update object (only include fields that were provided)
     const updates = {
-      updatedAt: new Date()
+      updated_at: new Date().toISOString()
     }
 
     if (title !== undefined) updates.title = title
     if (description !== undefined) updates.description = description
     if (status !== undefined) updates.status = status
     if (budget !== undefined) updates.budget = budget ? String(budget) : null
-    if (startDate !== undefined) updates.startDate = startDate ? new Date(startDate) : null
-    if (endDate !== undefined) updates.endDate = endDate ? new Date(endDate) : null
+    if (startDate !== undefined) updates.start_date = startDate ? new Date(startDate).toISOString() : null
+    if (endDate !== undefined) updates.end_date = endDate ? new Date(endDate).toISOString() : null
 
     // Update project
-    const [updatedProject] = await db
-      .update(schema.projects)
-      .set(updates)
-      .where(eq(schema.projects.id, projectId))
-      .returning()
+    const { data: updatedProject, error: updateError } = await supabase
+      .from('projects')
+      .update(updates)
+      .eq('id', projectId)
+      .select()
+      .single()
+
+    if (updateError) {
+      throw updateError
+    }
 
     // Format response
     const formattedProject = {
       id: updatedProject.id,
-      contactId: updatedProject.contactId,
+      contactId: updatedProject.contact_id,
       title: updatedProject.title,
       description: updatedProject.description,
       status: updatedProject.status,
       budget: updatedProject.budget ? parseFloat(updatedProject.budget) : null,
-      startDate: updatedProject.startDate,
-      endDate: updatedProject.endDate,
-      createdAt: updatedProject.createdAt,
-      updatedAt: updatedProject.updatedAt
+      startDate: updatedProject.start_date,
+      endDate: updatedProject.end_date,
+      createdAt: updatedProject.created_at,
+      updatedAt: updatedProject.updated_at
     }
 
     return {
@@ -152,14 +133,6 @@ export async function handler(event) {
 
   } catch (error) {
     console.error('Error updating project:', error)
-    
-    if (error.name === 'JsonWebTokenError' || error.name === 'TokenExpiredError') {
-      return {
-        statusCode: 401,
-        headers,
-        body: JSON.stringify({ error: 'Invalid or expired session' })
-      }
-    }
 
     return {
       statusCode: 500,

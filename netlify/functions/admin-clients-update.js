@@ -1,20 +1,12 @@
 // netlify/functions/admin-clients-update.js
-import jwt from 'jsonwebtoken'
-import { neon } from '@neondatabase/serverless'
-import { drizzle } from 'drizzle-orm/neon-http'
-import { eq } from 'drizzle-orm'
+import { createSupabaseAdmin, getAuthenticatedUser } from './utils/supabase.js'
 import bcrypt from 'bcryptjs'
-import * as schema from '../../src/db/schema.js'
-
-const COOKIE_NAME = process.env.SESSION_COOKIE_NAME || 'um_session'
-const JWT_SECRET = process.env.AUTH_JWT_SECRET
-const DATABASE_URL = process.env.DATABASE_URL
 
 export async function handler(event) {
   // CORS headers
   const headers = {
     'Access-Control-Allow-Origin': '*',
-    'Access-Control-Allow-Headers': 'Content-Type',
+    'Access-Control-Allow-Headers': 'Content-Type, Authorization',
     'Access-Control-Allow-Methods': 'PUT, OPTIONS',
     'Content-Type': 'application/json'
   }
@@ -31,19 +23,10 @@ export async function handler(event) {
     }
   }
 
-  // Verify authentication
-  if (!JWT_SECRET) {
-    return {
-      statusCode: 500,
-      headers,
-      body: JSON.stringify({ error: 'Server not configured' })
-    }
-  }
-
-  const rawCookie = event.headers.cookie || ''
-  const token = rawCookie.split('; ').find(c => c.startsWith(`${COOKIE_NAME}=`))?.split('=')[1]
+  // Verify authentication using Supabase
+  const { user, contact, error: authError } = await getAuthenticatedUser(event)
   
-  if (!token) {
+  if (authError || !contact) {
     return {
       statusCode: 401,
       headers,
@@ -52,10 +35,8 @@ export async function handler(event) {
   }
 
   try {
-    const payload = jwt.verify(token, JWT_SECRET)
-
     // Only admins can update clients
-    if (payload.role !== 'admin') {
+    if (contact.role !== 'admin') {
       return {
         statusCode: 403,
         headers,
@@ -78,24 +59,16 @@ export async function handler(event) {
     const body = JSON.parse(event.body || '{}')
     const { name, company, phone, website, source, role, password } = body
 
-    // Connect to database
-    if (!DATABASE_URL) {
-      return {
-        statusCode: 500,
-        headers,
-        body: JSON.stringify({ error: 'Database not configured' })
-      }
-    }
-
-    const sql = neon(DATABASE_URL)
-    const db = drizzle(sql, { schema })
+    const supabase = createSupabaseAdmin()
 
     // Verify client exists
-    const existingClient = await db.query.contacts.findFirst({
-      where: eq(schema.contacts.id, clientId)
-    })
+    const { data: existingClient, error: fetchError } = await supabase
+      .from('contacts')
+      .select('id, email')
+      .eq('id', clientId)
+      .single()
 
-    if (!existingClient) {
+    if (fetchError || !existingClient) {
       return {
         statusCode: 404,
         headers,
@@ -153,10 +126,21 @@ export async function handler(event) {
     }
 
     // Perform update
-    const [updatedClient] = await db.update(schema.contacts)
-      .set(updates)
-      .where(eq(schema.contacts.id, clientId))
-      .returning()
+    const { data: updatedClient, error: updateError } = await supabase
+      .from('contacts')
+      .update(updates)
+      .eq('id', clientId)
+      .select()
+      .single()
+
+    if (updateError) {
+      console.error('Error updating client:', updateError)
+      return {
+        statusCode: 500,
+        headers,
+        body: JSON.stringify({ error: 'Failed to update client', message: updateError.message })
+      }
+    }
 
     // Format response (exclude password)
     const formattedClient = {
@@ -168,10 +152,10 @@ export async function handler(event) {
       website: updatedClient.website,
       source: updatedClient.source,
       role: updatedClient.role,
-      accountSetup: updatedClient.accountSetup,
-      hasGoogleAuth: !!updatedClient.googleId,
+      accountSetup: updatedClient.account_setup,
+      hasGoogleAuth: !!updatedClient.google_id,
       avatar: updatedClient.avatar,
-      createdAt: updatedClient.createdAt
+      createdAt: updatedClient.created_at
     }
 
     return {
@@ -185,14 +169,6 @@ export async function handler(event) {
 
   } catch (error) {
     console.error('Error updating client:', error)
-    
-    if (error.name === 'JsonWebTokenError' || error.name === 'TokenExpiredError') {
-      return {
-        statusCode: 401,
-        headers,
-        body: JSON.stringify({ error: 'Invalid or expired session' })
-      }
-    }
 
     return {
       statusCode: 500,

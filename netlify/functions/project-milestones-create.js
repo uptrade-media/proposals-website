@@ -1,17 +1,15 @@
-import jwt from 'jsonwebtoken'
-import { neon } from '@neondatabase/serverless'
-import { drizzle } from 'drizzle-orm/neon-http'
-import { eq } from 'drizzle-orm'
-import * as schema from '../../src/db/schema.js'
+import { createClient } from '@supabase/supabase-js'
+import { getAuthenticatedUser } from './utils/supabase.js'
 
-const COOKIE_NAME = process.env.SESSION_COOKIE_NAME || 'um_session'
-const JWT_SECRET = process.env.AUTH_JWT_SECRET
-const DATABASE_URL = process.env.DATABASE_URL
+const supabase = createClient(
+  process.env.SUPABASE_URL,
+  process.env.SUPABASE_SERVICE_ROLE_KEY
+)
 
 export async function handler(event) {
   const headers = {
     'Access-Control-Allow-Origin': '*',
-    'Access-Control-Allow-Headers': 'Content-Type',
+    'Access-Control-Allow-Headers': 'Content-Type, Authorization',
     'Access-Control-Allow-Methods': 'POST, OPTIONS',
     'Content-Type': 'application/json'
   }
@@ -29,30 +27,18 @@ export async function handler(event) {
   }
 
   try {
-    // Verify authentication
-    if (!JWT_SECRET) {
-      return {
-        statusCode: 500,
-        headers,
-        body: JSON.stringify({ error: 'Server not configured' })
-      }
-    }
-
-    const rawCookie = event.headers.cookie || ''
-    const token = rawCookie.split('; ').find(c => c.startsWith(`${COOKIE_NAME}=`))?.split('=')[1]
-
-    if (!token) {
+    // Verify authentication via Supabase
+    const { user, contact, error: authError } = await getAuthenticatedUser(event)
+    if (authError || !user) {
       return {
         statusCode: 401,
         headers,
-        body: JSON.stringify({ error: 'Not authenticated' })
+        body: JSON.stringify({ error: authError || 'Not authenticated' })
       }
     }
 
-    const payload = jwt.verify(token, JWT_SECRET)
-
     // Only admins can create milestones
-    if (payload.role !== 'admin') {
+    if (contact.role !== 'admin') {
       return {
         statusCode: 403,
         headers,
@@ -82,23 +68,14 @@ export async function handler(event) {
       }
     }
 
-    if (!DATABASE_URL) {
-      return {
-        statusCode: 500,
-        headers,
-        body: JSON.stringify({ error: 'Database not configured' })
-      }
-    }
-
-    const sql = neon(DATABASE_URL)
-    const db = drizzle(sql, { schema })
-
     // Verify project exists
-    const project = await db.query.projects.findFirst({
-      where: eq(schema.projects.id, projectId)
-    })
+    const { data: project, error: projectError } = await supabase
+      .from('projects')
+      .select('id')
+      .eq('id', projectId)
+      .single()
 
-    if (!project) {
+    if (projectError || !project) {
       return {
         statusCode: 404,
         headers,
@@ -107,27 +84,30 @@ export async function handler(event) {
     }
 
     // Get next order number
-    const existingMilestones = await db
-      .select()
-      .from(schema.projectMilestones)
-      .where(eq(schema.projectMilestones.projectId, projectId))
+    const { data: existingMilestones } = await supabase
+      .from('project_milestones')
+      .select('id')
+      .eq('project_id', projectId)
 
-    const nextOrder = existingMilestones.length
+    const nextOrder = existingMilestones?.length || 0
 
     // Create milestone
-    const milestone = await db
-      .insert(schema.projectMilestones)
-      .values({
-        projectId,
+    const { data: createdMilestone, error: insertError } = await supabase
+      .from('project_milestones')
+      .insert({
+        project_id: projectId,
         title,
         description: description || null,
         status,
-        dueDate: dueDate ? new Date(dueDate) : null,
+        due_date: dueDate ? new Date(dueDate).toISOString() : null,
         order: nextOrder
       })
-      .returning()
+      .select()
+      .single()
 
-    const createdMilestone = milestone[0]
+    if (insertError) {
+      throw insertError
+    }
 
     return {
       statusCode: 201,
@@ -135,28 +115,20 @@ export async function handler(event) {
       body: JSON.stringify({
         milestone: {
           id: createdMilestone.id,
-          projectId: createdMilestone.projectId,
+          projectId: createdMilestone.project_id,
           title: createdMilestone.title,
           description: createdMilestone.description,
           status: createdMilestone.status,
-          dueDate: createdMilestone.dueDate,
-          completedAt: createdMilestone.completedAt,
+          dueDate: createdMilestone.due_date,
+          completedAt: createdMilestone.completed_at,
           order: createdMilestone.order,
-          createdAt: createdMilestone.createdAt,
-          updatedAt: createdMilestone.updatedAt
+          createdAt: createdMilestone.created_at,
+          updatedAt: createdMilestone.updated_at
         }
       })
     }
   } catch (error) {
     console.error('Error creating milestone:', error)
-
-    if (error.name === 'JsonWebTokenError' || error.name === 'TokenExpiredError') {
-      return {
-        statusCode: 401,
-        headers,
-        body: JSON.stringify({ error: 'Invalid or expired session' })
-      }
-    }
 
     return {
       statusCode: 500,

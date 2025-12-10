@@ -1,12 +1,10 @@
-import jwt from 'jsonwebtoken'
-
-const JWT_SECRET = process.env.AUTH_JWT_SECRET || process.env.JWT_SECRET
+import { getAuthenticatedUser } from './utils/supabase.js'
 
 export async function handler(event) {
   const origin = event.headers.origin || 'http://localhost:8888'
   const headers = {
     'Access-Control-Allow-Origin': origin,
-    'Access-Control-Allow-Headers': 'Content-Type',
+    'Access-Control-Allow-Headers': 'Content-Type, Authorization',
     'Access-Control-Allow-Methods': 'GET, OPTIONS',
     'Access-Control-Allow-Credentials': 'true',
     'Content-Type': 'application/json',
@@ -25,17 +23,15 @@ export async function handler(event) {
   }
 
   try {
-    // Verify authentication
-    const token = event.headers.cookie?.match(/um_session=([^;]+)/)?.[1]
-    if (!token) {
+    // Verify authentication using Supabase
+    const { user, contact, error: authError } = await getAuthenticatedUser(event)
+    if (authError || !contact) {
       return {
         statusCode: 401,
         headers,
         body: JSON.stringify({ error: 'Unauthorized' })
       }
     }
-
-    jwt.verify(token, JWT_SECRET)
 
     // Return predefined file categories
     const categories = [

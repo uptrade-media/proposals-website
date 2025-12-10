@@ -1,21 +1,29 @@
 import { Resend } from 'resend'
-import { neon } from '@neondatabase/serverless'
-import jwt from 'jsonwebtoken'
+import { createSupabaseAdmin, getAuthenticatedUser } from './utils/supabase.js'
 
 const resend = new Resend(process.env.RESEND_API_KEY)
-const sql = neon(process.env.DATABASE_URL)
 
 export async function handler(event) {
+  const headers = {
+    'Access-Control-Allow-Origin': '*',
+    'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+    'Access-Control-Allow-Methods': 'GET, OPTIONS',
+    'Content-Type': 'application/json'
+  }
+
+  if (event.httpMethod === 'OPTIONS') {
+    return { statusCode: 204, headers }
+  }
+
   try {
-    // Verify auth
-    const token = event.headers.cookie?.match(/um_session=([^;]+)/)?.[1]
-    if (!token) {
-      return { statusCode: 401, body: JSON.stringify({ error: 'Unauthorized' }) }
+    // Verify auth using Supabase
+    const { user, contact, error: authError } = await getAuthenticatedUser(event)
+    if (authError || !contact) {
+      return { statusCode: 401, headers, body: JSON.stringify({ error: 'Unauthorized' }) }
     }
 
-    const user = jwt.verify(token, process.env.AUTH_JWT_SECRET)
-    if (user.role !== 'admin') {
-      return { statusCode: 403, body: JSON.stringify({ error: 'Admin only' }) }
+    if (contact.role !== 'admin') {
+      return { statusCode: 403, headers, body: JSON.stringify({ error: 'Admin only' }) }
     }
 
     if (event.httpMethod === 'GET') {
@@ -26,18 +34,25 @@ export async function handler(event) {
         return { statusCode: 400, body: JSON.stringify({ error: 'Query too short' }) }
       }
 
-      const contacts = await sql`
-        SELECT id, email, name, company 
-        FROM contacts 
-        WHERE email ILIKE ${'%' + q + '%'} 
-          OR name ILIKE ${'%' + q + '%'} 
-          OR company ILIKE ${'%' + q + '%'}
-        LIMIT 20
-      `
+      const supabase = createSupabaseAdmin()
+
+      const { data: contacts, error } = await supabase
+        .from('contacts')
+        .select('id, email, name, company')
+        .or(`email.ilike.%${q}%,name.ilike.%${q}%,company.ilike.%${q}%`)
+        .limit(20)
+
+      if (error) {
+        console.error('Search error:', error)
+        return {
+          statusCode: 500,
+          body: JSON.stringify({ error: 'Failed to search contacts' })
+        }
+      }
 
       return {
         statusCode: 200,
-        body: JSON.stringify({ contacts }),
+        body: JSON.stringify({ contacts: contacts || [] }),
         headers: { 'Content-Type': 'application/json' }
       }
     }

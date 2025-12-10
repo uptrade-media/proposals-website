@@ -1,6 +1,6 @@
 // netlify/functions/portfolio-ai-generate.js
-import jwt from 'jsonwebtoken'
 import OpenAI from 'openai'
+import { getAuthenticatedUser } from './utils/supabase.js'
 
 const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY
@@ -32,30 +32,15 @@ Icon Names Available (use exactly these names):
 - Technical: Gauge, Shield, Smartphone, BarChart3, Database, Server
 - Project: Calendar, Clock, Users, Building, MapPin`
 
-// Helper to verify auth
-function verifyAuth(event) {
-  const cookie = event.headers.cookie || ''
-  const tokenMatch = cookie.match(/um_session=([^;]+)/)
-  if (!tokenMatch) return null
-
-  try {
-    const payload = jwt.verify(tokenMatch[1], process.env.AUTH_JWT_SECRET)
-    if (payload.role !== 'admin') return null
-    return payload
-  } catch {
-    return null
-  }
-}
-
 export async function handler(event) {
   // Only POST
   if (event.httpMethod !== 'POST') {
     return { statusCode: 405, body: JSON.stringify({ error: 'Method not allowed' }) }
   }
 
-  // Verify admin auth
-  const user = verifyAuth(event)
-  if (!user) {
+  // Verify admin auth using Supabase
+  const { user, contact, error: authError } = await getAuthenticatedUser(event)
+  if (authError || !contact || contact.role !== 'admin') {
     return { statusCode: 401, body: JSON.stringify({ error: 'Unauthorized' }) }
   }
 

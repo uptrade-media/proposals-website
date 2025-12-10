@@ -1,15 +1,12 @@
 // netlify/functions/clients-get.js
-import { neon } from '@neondatabase/serverless'
-import jwt from 'jsonwebtoken'
-
-const sql = neon(process.env.DATABASE_URL)
+import { createSupabaseAdmin, getAuthenticatedUser } from './utils/supabase.js'
 
 export async function handler(event) {
   // CORS headers
   const origin = event.headers.origin || 'http://localhost:8888'
   const headers = {
     'Access-Control-Allow-Origin': origin,
-    'Access-Control-Allow-Headers': 'Content-Type',
+    'Access-Control-Allow-Headers': 'Content-Type, Authorization',
     'Access-Control-Allow-Methods': 'GET, OPTIONS',
     'Access-Control-Allow-Credentials': 'true',
     'Content-Type': 'application/json',
@@ -29,9 +26,10 @@ export async function handler(event) {
   }
 
   try {
-    // Verify authentication
-    const token = event.headers.cookie?.match(/um_session=([^;]+)/)?.[1]
-    if (!token) {
+    // Verify authentication using Supabase
+    const { user, contact, error: authError } = await getAuthenticatedUser(event)
+    
+    if (authError || !contact) {
       return {
         statusCode: 401,
         headers,
@@ -39,10 +37,8 @@ export async function handler(event) {
       }
     }
 
-    const payload = jwt.verify(token, process.env.AUTH_JWT_SECRET || process.env.JWT_SECRET)
-
     // Verify admin role
-    if (payload.role !== 'admin') {
+    if (contact.role !== 'admin') {
       return {
         statusCode: 403,
         headers,
@@ -62,16 +58,17 @@ export async function handler(event) {
       }
     }
 
-    // Get client details
-    const client = await sql`
-      SELECT 
-        id, email, name, company, phone, role, subscribed, source, 
-        notes, tags, last_login, created_at, updated_at
-      FROM contacts 
-      WHERE id = ${clientId} AND role = 'client'
-    `
+    const supabase = createSupabaseAdmin()
 
-    if (client.length === 0) {
+    // Get client details
+    const { data: client, error: clientError } = await supabase
+      .from('contacts')
+      .select('id, email, name, company, phone, role, subscribed, source, notes, tags, last_login, created_at, updated_at')
+      .eq('id', clientId)
+      .eq('role', 'client')
+      .single()
+
+    if (clientError || !client) {
       return {
         statusCode: 404,
         headers,
@@ -80,48 +77,60 @@ export async function handler(event) {
     }
 
     // Get client activity (recent interactions)
-    const activity = await sql`
-      SELECT id, activity_type, description, metadata, created_at
-      FROM client_activity
-      WHERE contact_id = ${clientId}
-      ORDER BY created_at DESC
-      LIMIT 20
-    `
+    const { data: activity, error: activityError } = await supabase
+      .from('client_activity')
+      .select('id, activity_type, description, metadata, created_at')
+      .eq('contact_id', clientId)
+      .order('created_at', { ascending: false })
+      .limit(20)
+
+    if (activityError) {
+      console.error('Error fetching activity:', activityError)
+    }
 
     // Get client projects
-    const projects = await sql`
-      SELECT id, title, status, budget, start_date, end_date, created_at
-      FROM projects
-      WHERE contact_id = ${clientId}
-      ORDER BY created_at DESC
-    `
+    const { data: projects, error: projectsError } = await supabase
+      .from('projects')
+      .select('id, title, status, budget, start_date, end_date, created_at')
+      .eq('contact_id', clientId)
+      .order('created_at', { ascending: false })
+
+    if (projectsError) {
+      console.error('Error fetching projects:', projectsError)
+    }
 
     // Get client proposals
-    const proposals = await sql`
-      SELECT id, slug, title, status, total_amount, sent_at, viewed_at, created_at
-      FROM proposals
-      WHERE contact_id = ${clientId}
-      ORDER BY created_at DESC
-    `
+    const { data: proposals, error: proposalsError } = await supabase
+      .from('proposals')
+      .select('id, slug, title, status, total_amount, sent_at, viewed_at, created_at')
+      .eq('contact_id', clientId)
+      .order('created_at', { ascending: false })
+
+    if (proposalsError) {
+      console.error('Error fetching proposals:', proposalsError)
+    }
 
     // Get client invoices
-    const invoices = await sql`
-      SELECT id, invoice_number, amount, status, due_date, created_at
-      FROM invoices
-      WHERE contact_id = ${clientId}
-      ORDER BY created_at DESC
-    `
+    const { data: invoices, error: invoicesError } = await supabase
+      .from('invoices')
+      .select('id, invoice_number, amount, status, due_date, created_at')
+      .eq('contact_id', clientId)
+      .order('created_at', { ascending: false })
+
+    if (invoicesError) {
+      console.error('Error fetching invoices:', invoicesError)
+    }
 
     return {
       statusCode: 200,
       headers,
       body: JSON.stringify({
         success: true,
-        client: client[0],
-        activity,
-        projects,
-        proposals,
-        invoices
+        client,
+        activity: activity || [],
+        projects: projects || [],
+        proposals: proposals || [],
+        invoices: invoices || []
       })
     }
   } catch (error) {

@@ -1,15 +1,12 @@
 // netlify/functions/clients-activity-log.js
-import { neon } from '@neondatabase/serverless'
-import jwt from 'jsonwebtoken'
-
-const sql = neon(process.env.DATABASE_URL)
+import { createSupabaseAdmin, getAuthenticatedUser } from './utils/supabase.js'
 
 export async function handler(event) {
   // CORS headers
   const origin = event.headers.origin || 'http://localhost:8888'
   const headers = {
     'Access-Control-Allow-Origin': origin,
-    'Access-Control-Allow-Headers': 'Content-Type',
+    'Access-Control-Allow-Headers': 'Content-Type, Authorization',
     'Access-Control-Allow-Methods': 'POST, GET, OPTIONS',
     'Access-Control-Allow-Credentials': 'true',
     'Content-Type': 'application/json',
@@ -20,9 +17,10 @@ export async function handler(event) {
     return { statusCode: 204, headers, body: '' }
   }
 
-  // Verify authentication
-  const token = event.headers.cookie?.match(/um_session=([^;]+)/)?.[1]
-  if (!token) {
+  // Verify authentication using Supabase
+  const { user, contact, error: authError } = await getAuthenticatedUser(event)
+  
+  if (authError || !contact) {
     return {
       statusCode: 401,
       headers,
@@ -30,10 +28,8 @@ export async function handler(event) {
     }
   }
 
-  const payload = jwt.verify(token, process.env.AUTH_JWT_SECRET || process.env.JWT_SECRET)
-
   // Verify admin role
-  if (payload.role !== 'admin') {
+  if (contact.role !== 'admin') {
     return {
       statusCode: 403,
       headers,
@@ -42,6 +38,8 @@ export async function handler(event) {
   }
 
   try {
+    const supabase = createSupabaseAdmin()
+
     // GET: Fetch activity log
     if (event.httpMethod === 'GET') {
       const clientId = event.queryStringParameters?.clientId
@@ -57,11 +55,14 @@ export async function handler(event) {
       }
 
       // Verify client exists
-      const clientExists = await sql`
-        SELECT id FROM contacts WHERE id = ${clientId}::uuid AND role = 'client'
-      `
+      const { data: clientExists, error: clientError } = await supabase
+        .from('contacts')
+        .select('id')
+        .eq('id', clientId)
+        .eq('role', 'client')
+        .single()
 
-      if (clientExists.length === 0) {
+      if (clientError || !clientExists) {
         return {
           statusCode: 404,
           headers,
@@ -70,35 +71,35 @@ export async function handler(event) {
       }
 
       // Fetch activity log
-      const activity = await sql`
-        SELECT 
-          id, 
-          contact_id, 
-          activity_type, 
-          description, 
-          metadata, 
-          created_at
-        FROM client_activity
-        WHERE contact_id = ${clientId}::uuid
-        ORDER BY created_at DESC
-        LIMIT ${limit} OFFSET ${offset}
-      `
+      const { data: activity, error: activityError } = await supabase
+        .from('client_activity')
+        .select('id, contact_id, activity_type, description, metadata, created_at')
+        .eq('contact_id', clientId)
+        .order('created_at', { ascending: false })
+        .range(offset, offset + limit - 1)
 
-      const totalResult = await sql`
-        SELECT COUNT(*) as count FROM client_activity
-        WHERE contact_id = ${clientId}::uuid
-      `
+      if (activityError) {
+        throw activityError
+      }
 
-      const total = totalResult[0].count
+      // Get total count
+      const { count: total, error: countError } = await supabase
+        .from('client_activity')
+        .select('*', { count: 'exact', head: true })
+        .eq('contact_id', clientId)
+
+      if (countError) {
+        throw countError
+      }
 
       return {
         statusCode: 200,
         headers,
         body: JSON.stringify({
           success: true,
-          activity,
-          total,
-          count: activity.length,
+          activity: activity || [],
+          total: total || 0,
+          count: (activity || []).length,
           limit,
           offset
         })
@@ -118,11 +119,14 @@ export async function handler(event) {
       }
 
       // Verify client exists
-      const clientExists = await sql`
-        SELECT id FROM contacts WHERE id = ${clientId}::uuid AND role = 'client'
-      `
+      const { data: clientExists, error: clientError } = await supabase
+        .from('contacts')
+        .select('id')
+        .eq('id', clientId)
+        .eq('role', 'client')
+        .single()
 
-      if (clientExists.length === 0) {
+      if (clientError || !clientExists) {
         return {
           statusCode: 404,
           headers,
@@ -160,16 +164,20 @@ export async function handler(event) {
       }
 
       // Create activity record
-      const result = await sql`
-        INSERT INTO client_activity (contact_id, activity_type, description, metadata)
-        VALUES (
-          ${clientId}::uuid,
-          ${activityType},
-          ${description},
-          ${metadata ? JSON.stringify(metadata) : null}
-        )
-        RETURNING id, contact_id, activity_type, description, metadata, created_at
-      `
+      const { data: result, error: insertError } = await supabase
+        .from('client_activity')
+        .insert({
+          contact_id: clientId,
+          activity_type: activityType,
+          description: description,
+          metadata: metadata || null
+        })
+        .select()
+        .single()
+
+      if (insertError) {
+        throw insertError
+      }
 
       return {
         statusCode: 201,
@@ -177,7 +185,7 @@ export async function handler(event) {
         body: JSON.stringify({
           success: true,
           message: 'Activity logged successfully',
-          activity: result[0]
+          activity: result
         })
       }
     }

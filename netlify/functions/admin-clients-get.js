@@ -1,19 +1,11 @@
 // netlify/functions/admin-clients-get.js
-import jwt from 'jsonwebtoken'
-import { neon } from '@neondatabase/serverless'
-import { drizzle } from 'drizzle-orm/neon-http'
-import { eq } from 'drizzle-orm'
-import * as schema from '../../src/db/schema.js'
-
-const COOKIE_NAME = process.env.SESSION_COOKIE_NAME || 'um_session'
-const JWT_SECRET = process.env.AUTH_JWT_SECRET
-const DATABASE_URL = process.env.DATABASE_URL
+import { createSupabaseAdmin, getAuthenticatedUser } from './utils/supabase.js'
 
 export async function handler(event) {
   // CORS headers
   const headers = {
     'Access-Control-Allow-Origin': '*',
-    'Access-Control-Allow-Headers': 'Content-Type',
+    'Access-Control-Allow-Headers': 'Content-Type, Authorization',
     'Access-Control-Allow-Methods': 'GET, OPTIONS',
     'Content-Type': 'application/json'
   }
@@ -30,19 +22,10 @@ export async function handler(event) {
     }
   }
 
-  // Verify authentication
-  if (!JWT_SECRET) {
-    return {
-      statusCode: 500,
-      headers,
-      body: JSON.stringify({ error: 'Server not configured' })
-    }
-  }
-
-  const rawCookie = event.headers.cookie || ''
-  const token = rawCookie.split('; ').find(c => c.startsWith(`${COOKIE_NAME}=`))?.split('=')[1]
+  // Verify authentication using Supabase
+  const { user, contact, error: authError } = await getAuthenticatedUser(event)
   
-  if (!token) {
+  if (authError || !contact) {
     return {
       statusCode: 401,
       headers,
@@ -51,10 +34,8 @@ export async function handler(event) {
   }
 
   try {
-    const payload = jwt.verify(token, JWT_SECRET)
-
     // Only admins can view client details
-    if (payload.role !== 'admin') {
+    if (contact.role !== 'admin') {
       return {
         statusCode: 403,
         headers,
@@ -73,47 +54,16 @@ export async function handler(event) {
       }
     }
 
-    // Connect to database
-    if (!DATABASE_URL) {
-      return {
-        statusCode: 500,
-        headers,
-        body: JSON.stringify({ error: 'Database not configured' })
-      }
-    }
+    const supabase = createSupabaseAdmin()
 
-    const sql = neon(DATABASE_URL)
-    const db = drizzle(sql, { schema })
+    // Fetch client basic info
+    const { data: client, error: clientError } = await supabase
+      .from('contacts')
+      .select('*')
+      .eq('id', clientId)
+      .single()
 
-    // Fetch client with all related data
-    const client = await db.query.contacts.findFirst({
-      where: eq(schema.contacts.id, clientId),
-      with: {
-        projects: {
-          orderBy: (projects, { desc }) => [desc(projects.createdAt)],
-          limit: 5
-        },
-        proposals: {
-          orderBy: (proposals, { desc }) => [desc(proposals.createdAt)],
-          limit: 5
-        },
-        invoices: {
-          orderBy: (invoices, { desc }) => [desc(invoices.createdAt)],
-          limit: 5
-        },
-        messages: {
-          where: (messages, { isNull }) => isNull(messages.parentId),
-          orderBy: (messages, { desc }) => [desc(messages.createdAt)],
-          limit: 5
-        },
-        files: {
-          orderBy: (files, { desc }) => [desc(files.uploadedAt)],
-          limit: 5
-        }
-      }
-    })
-
-    if (!client) {
+    if (clientError || !client) {
       return {
         statusCode: 404,
         headers,
@@ -121,38 +71,93 @@ export async function handler(event) {
       }
     }
 
+    // Fetch related data in parallel
+    const [
+      projectsResult,
+      proposalsResult,
+      invoicesResult,
+      messagesResult,
+      filesResult
+    ] = await Promise.all([
+      // Recent projects
+      supabase
+        .from('projects')
+        .select('*')
+        .eq('contact_id', clientId)
+        .order('created_at', { ascending: false })
+        .limit(5),
+      
+      // Recent proposals
+      supabase
+        .from('proposals')
+        .select('*')
+        .eq('contact_id', clientId)
+        .order('created_at', { ascending: false })
+        .limit(5),
+      
+      // All invoices for stats
+      supabase
+        .from('invoices')
+        .select('*')
+        .eq('contact_id', clientId)
+        .order('created_at', { ascending: false }),
+      
+      // Recent messages (threads only, no parent_id)
+      supabase
+        .from('messages')
+        .select('*')
+        .eq('contact_id', clientId)
+        .is('parent_id', null)
+        .order('created_at', { ascending: false })
+        .limit(5),
+      
+      // Recent files
+      supabase
+        .from('files')
+        .select('*')
+        .eq('contact_id', clientId)
+        .order('uploaded_at', { ascending: false })
+        .limit(5)
+    ])
+
+    const projects = projectsResult.data || []
+    const proposals = proposalsResult.data || []
+    const invoices = invoicesResult.data || []
+    const messages = messagesResult.data || []
+    const files = filesResult.data || []
+
+    // Fetch all projects for stats
+    const { data: allProjects } = await supabase
+      .from('projects')
+      .select('id, status')
+      .eq('contact_id', clientId)
+
+    // Fetch all messages for stats
+    const { data: allMessages } = await supabase
+      .from('messages')
+      .select('id, sender, read_at')
+      .eq('contact_id', clientId)
+
     // Calculate statistics
-    const allProjects = await db.query.projects.findMany({
-      where: eq(schema.projects.contactId, clientId)
-    })
-
-    const allInvoices = await db.query.invoices.findMany({
-      where: eq(schema.invoices.contactId, clientId)
-    })
-
-    const allMessages = await db.query.messages.findMany({
-      where: eq(schema.messages.contactId, clientId)
-    })
-
     const stats = {
-      totalProjects: allProjects.length,
-      activeProjects: allProjects.filter(p => p.status === 'active').length,
-      completedProjects: allProjects.filter(p => p.status === 'completed').length,
-      totalProposals: client.proposals.length,
-      pendingProposals: client.proposals.filter(p => p.status === 'sent').length,
-      acceptedProposals: client.proposals.filter(p => p.status === 'accepted').length,
-      totalInvoices: allInvoices.length,
-      pendingInvoices: allInvoices.filter(i => i.status === 'pending').length,
-      paidInvoices: allInvoices.filter(i => i.status === 'paid').length,
-      totalPendingAmount: allInvoices
+      totalProjects: allProjects?.length || 0,
+      activeProjects: allProjects?.filter(p => p.status === 'active').length || 0,
+      completedProjects: allProjects?.filter(p => p.status === 'completed').length || 0,
+      totalProposals: proposals.length,
+      pendingProposals: proposals.filter(p => p.status === 'sent').length,
+      acceptedProposals: proposals.filter(p => p.status === 'accepted').length,
+      totalInvoices: invoices.length,
+      pendingInvoices: invoices.filter(i => i.status === 'pending').length,
+      paidInvoices: invoices.filter(i => i.status === 'paid').length,
+      totalPendingAmount: invoices
         .filter(i => i.status === 'pending')
-        .reduce((sum, i) => sum + parseFloat(i.totalAmount), 0),
-      totalPaidAmount: allInvoices
+        .reduce((sum, i) => sum + parseFloat(i.total_amount || 0), 0),
+      totalPaidAmount: invoices
         .filter(i => i.status === 'paid')
-        .reduce((sum, i) => sum + parseFloat(i.totalAmount), 0),
-      totalMessages: allMessages.length,
-      unreadMessages: allMessages.filter(m => m.sender === 'client' && !m.readAt).length,
-      totalFiles: client.files.length
+        .reduce((sum, i) => sum + parseFloat(i.total_amount || 0), 0),
+      totalMessages: allMessages?.length || 0,
+      unreadMessages: allMessages?.filter(m => m.sender === 'client' && !m.read_at).length || 0,
+      totalFiles: files.length
     }
 
     // Format response
@@ -161,51 +166,54 @@ export async function handler(event) {
       email: client.email,
       name: client.name,
       company: client.company,
+      phone: client.phone,
+      website: client.website,
+      source: client.source,
       role: client.role,
-      accountSetup: client.accountSetup,
-      hasGoogleAuth: !!client.googleId,
+      accountSetup: client.account_setup,
+      hasGoogleAuth: !!client.google_id,
       avatar: client.avatar,
-      createdAt: client.createdAt,
+      createdAt: client.created_at,
       stats,
-      recentProjects: client.projects.map(p => ({
+      recentProjects: projects.map(p => ({
         id: p.id,
         name: p.name,
         status: p.status,
         budget: p.budget ? parseFloat(p.budget) : null,
-        startDate: p.startDate,
-        endDate: p.endDate,
-        createdAt: p.createdAt
+        startDate: p.start_date,
+        endDate: p.end_date,
+        createdAt: p.created_at
       })),
-      recentProposals: client.proposals.map(p => ({
+      recentProposals: proposals.map(p => ({
         id: p.id,
         title: p.title,
         status: p.status,
-        totalAmount: parseFloat(p.totalAmount),
-        validUntil: p.validUntil,
-        createdAt: p.createdAt
+        totalAmount: parseFloat(p.total_amount || 0),
+        validUntil: p.valid_until,
+        createdAt: p.created_at
       })),
-      recentInvoices: client.invoices.map(i => ({
+      recentInvoices: invoices.slice(0, 5).map(i => ({
         id: i.id,
-        invoiceNumber: i.invoiceNumber,
+        invoiceNumber: i.invoice_number,
         status: i.status,
-        totalAmount: parseFloat(i.totalAmount),
-        dueDate: i.dueDate,
-        paidAt: i.paidAt,
-        createdAt: i.createdAt
+        totalAmount: parseFloat(i.total_amount || 0),
+        dueDate: i.due_date,
+        paidAt: i.paid_at,
+        createdAt: i.created_at
       })),
-      recentMessages: client.messages.map(m => ({
+      recentMessages: messages.map(m => ({
         id: m.id,
         subject: m.subject,
         sender: m.sender,
-        readAt: m.readAt,
-        createdAt: m.createdAt
+        readAt: m.read_at,
+        createdAt: m.created_at
       })),
-      recentFiles: client.files.map(f => ({
+      recentFiles: files.map(f => ({
         id: f.id,
         filename: f.filename,
         category: f.category,
         size: f.size,
-        uploadedAt: f.uploadedAt
+        uploadedAt: f.uploaded_at
       }))
     }
 
@@ -217,14 +225,6 @@ export async function handler(event) {
 
   } catch (error) {
     console.error('Error fetching client details:', error)
-    
-    if (error.name === 'JsonWebTokenError' || error.name === 'TokenExpiredError') {
-      return {
-        statusCode: 401,
-        headers,
-        body: JSON.stringify({ error: 'Invalid or expired session' })
-      }
-    }
 
     return {
       statusCode: 500,

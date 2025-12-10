@@ -1,14 +1,11 @@
-import jwt from 'jsonwebtoken'
-import { neon } from '@neondatabase/serverless'
-import { drizzle } from 'drizzle-orm/neon-http'
-import { eq } from 'drizzle-orm'
-import * as schema from '../../src/db/schema.js'
+import { createClient } from '@supabase/supabase-js'
 import { Resend } from 'resend'
+import { getAuthenticatedUser, createSupabaseAdmin } from './utils/supabase.js'
 
-const COOKIE_NAME = process.env.SESSION_COOKIE_NAME || 'um_session'
-const JWT_SECRET = process.env.AUTH_JWT_SECRET
-const PROPOSAL_SECRET = process.env.PROPOSAL_TOKEN_SECRET || JWT_SECRET
-const DATABASE_URL = process.env.DATABASE_URL
+const supabase = createClient(
+  process.env.SUPABASE_URL,
+  process.env.SUPABASE_SERVICE_ROLE_KEY
+)
 const RESEND_API_KEY = process.env.RESEND_API_KEY
 const RESEND_FROM_EMAIL = process.env.RESEND_FROM_EMAIL || 'portal@send.uptrademedia.com'
 const ADMIN_EMAIL = process.env.ADMIN_EMAIL || 'ramsey@uptrademedia.com'
@@ -17,7 +14,7 @@ const PORTAL_BASE_URL = process.env.URL || process.env.PORTAL_BASE_URL || 'https
 export async function handler(event) {
   const headers = {
     'Access-Control-Allow-Origin': event.headers.origin || '*',
-    'Access-Control-Allow-Headers': 'Content-Type',
+    'Access-Control-Allow-Headers': 'Content-Type, Authorization',
     'Access-Control-Allow-Methods': 'POST, OPTIONS',
     'Access-Control-Allow-Credentials': 'true',
     'Content-Type': 'application/json'
@@ -37,29 +34,18 @@ export async function handler(event) {
 
   try {
     // Verify authentication
-    if (!JWT_SECRET) {
-      return {
-        statusCode: 500,
-        headers,
-        body: JSON.stringify({ error: 'Server not configured' })
-      }
-    }
-
-    const rawCookie = event.headers.cookie || ''
-    const token = rawCookie.split('; ').find(c => c.startsWith(`${COOKIE_NAME}=`))?.split('=')[1]
-
-    if (!token) {
+    const { contact, error: authError } = await getAuthenticatedUser(event)
+    
+    if (authError || !contact) {
       return {
         statusCode: 401,
         headers,
-        body: JSON.stringify({ error: 'Not authenticated' })
+        body: JSON.stringify({ error: authError || 'Not authenticated' })
       }
     }
 
-    const payload = jwt.verify(token, JWT_SECRET)
-
     // Only admins can send proposals
-    if (payload.role !== 'admin') {
+    if (contact.role !== 'admin') {
       return {
         statusCode: 403,
         headers,
@@ -90,24 +76,17 @@ export async function handler(event) {
       }
     }
 
-    if (!DATABASE_URL) {
-      return {
-        statusCode: 500,
-        headers,
-        body: JSON.stringify({ error: 'Database not configured' })
-      }
-    }
+    // Fetch proposal with contact
+    const { data: proposal, error: proposalError } = await supabase
+      .from('proposals')
+      .select(`
+        *,
+        contact:contacts!proposals_contact_id_fkey (*)
+      `)
+      .eq('id', proposalId)
+      .single()
 
-    const sql = neon(DATABASE_URL)
-    const db = drizzle(sql, { schema })
-
-    // Verify proposal exists
-    const proposal = await db.query.proposals.findFirst({
-      where: eq(schema.proposals.id, proposalId),
-      with: { contact: true }
-    })
-
-    if (!proposal) {
+    if (proposalError || !proposal) {
       return {
         statusCode: 404,
         headers,
@@ -116,52 +95,58 @@ export async function handler(event) {
     }
 
     // Update proposal status and timestamps
-    const updated = await db
-      .update(schema.proposals)
-      .set({
+    const { data: updatedProposal, error: updateError } = await supabase
+      .from('proposals')
+      .update({
         status: 'sent',
-        sentAt: new Date(),
-        clientEmail: recipientEmail,
-        version: proposal.version + 1,
-        updatedAt: new Date()
+        sent_at: new Date().toISOString(),
+        client_email: recipientEmail,
+        version: (proposal.version || 0) + 1,
+        updated_at: new Date().toISOString()
       })
-      .where(eq(schema.proposals.id, proposalId))
-      .returning()
+      .eq('id', proposalId)
+      .select()
+      .single()
 
-    const updatedProposal = updated[0]
+    if (updateError) {
+      throw updateError
+    }
 
     // Log activity: proposal sent
-    await db.insert(schema.proposalActivity).values({
-      proposalId: proposalId,
-      action: 'sent',
-      performedBy: payload.userId,
-      metadata: JSON.stringify({
-        recipientEmail: recipientEmail,
-        timestamp: new Date().toISOString()
+    await supabase
+      .from('proposal_activity')
+      .insert({
+        proposal_id: proposalId,
+        action: 'sent',
+        performed_by: contact.id,
+        metadata: JSON.stringify({
+          recipientEmail: recipientEmail,
+          timestamp: new Date().toISOString()
+        })
       })
-    }).catch(err => console.error('Error logging proposal send:', err))
+      .then(({ error }) => {
+        if (error) console.error('Error logging proposal send:', error)
+      })
 
-    // Generate magic link token (7 days expiry)
-    const magicToken = jwt.sign(
-      {
-        proposalId: proposal.id,
-        email: recipientEmail,
-        contactId: proposal.contactId,
-        type: 'proposal_view',
-        exp: Math.floor(Date.now() / 1000) + (7 * 24 * 60 * 60)
-      },
-      PROPOSAL_SECRET
-    )
+    // Generate Supabase magic link for proposal access
+    const supabaseAdmin = createSupabaseAdmin()
+    const { data: linkData, error: linkError } = await supabaseAdmin.auth.admin.generateLink({
+      type: 'magiclink',
+      email: recipientEmail,
+      options: {
+        redirectTo: `${PORTAL_BASE_URL}/p/${proposal.slug}`
+      }
+    })
 
-    // Generate magic link URL
-    const proposalUrl = `${PORTAL_BASE_URL}/p/${proposal.slug}?token=${magicToken}`
+    // Use the generated link or fall back to direct URL
+    const proposalUrl = linkData?.properties?.action_link || `${PORTAL_BASE_URL}/p/${proposal.slug}`
 
     // Calculate days until expiry for urgency messaging
-    const daysLeft = proposal.validUntil 
-      ? Math.ceil((new Date(proposal.validUntil) - new Date()) / (1000 * 60 * 60 * 24))
+    const daysLeft = proposal.valid_until 
+      ? Math.ceil((new Date(proposal.valid_until) - new Date()) / (1000 * 60 * 60 * 24))
       : null
-    const validUntilFormatted = proposal.validUntil 
-      ? new Date(proposal.validUntil).toLocaleDateString('en-US', { 
+    const validUntilFormatted = proposal.valid_until 
+      ? new Date(proposal.valid_until).toLocaleDateString('en-US', { 
           month: 'long', 
           day: 'numeric', 
           year: 'numeric' 
@@ -239,7 +224,7 @@ export async function handler(event) {
           <div class="proposal-meta">
             <div class="meta-item">
               <span class="meta-label">Investment</span>
-              <span class="meta-value price">$${parseFloat(proposal.totalAmount || 0).toLocaleString()}</span>
+              <span class="meta-value price">$${parseFloat(proposal.total_amount || 0).toLocaleString()}</span>
             </div>
             ${validUntilFormatted ? `
               <div class="meta-item">
@@ -302,8 +287,8 @@ export async function handler(event) {
               <h3>Proposal Sent Successfully</h3>
               <p><strong>Proposal:</strong> ${proposal.title}</p>
               <p><strong>Sent to:</strong> ${recipientEmail}</p>
-              <p><strong>Amount:</strong> $${parseFloat(proposal.totalAmount || 0).toLocaleString()}</p>
-              <p><strong>Sent by:</strong> ${payload.email}</p>
+              <p><strong>Amount:</strong> $${parseFloat(proposal.total_amount || 0).toLocaleString()}</p>
+              <p><strong>Sent by:</strong> ${contact.email}</p>
               <p style="margin-top: 20px;">
                 <a href="${proposalUrl}" style="color: #667eea;">View Proposal</a>
               </p>
@@ -326,8 +311,8 @@ export async function handler(event) {
           slug: updatedProposal.slug,
           title: updatedProposal.title,
           status: updatedProposal.status,
-          sentAt: updatedProposal.sentAt,
-          clientEmail: updatedProposal.clientEmail,
+          sentAt: updatedProposal.sent_at,
+          clientEmail: updatedProposal.client_email,
           version: updatedProposal.version
         },
         magicLink: proposalUrl,
@@ -337,14 +322,6 @@ export async function handler(event) {
     }
   } catch (error) {
     console.error('Error sending proposal:', error)
-
-    if (error.name === 'JsonWebTokenError' || error.name === 'TokenExpiredError') {
-      return {
-        statusCode: 401,
-        headers,
-        body: JSON.stringify({ error: 'Invalid or expired session' })
-      }
-    }
 
     return {
       statusCode: 500,

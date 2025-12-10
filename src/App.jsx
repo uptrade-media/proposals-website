@@ -12,15 +12,12 @@ import LoginPage from './pages/LoginPage'
 import Dashboard from './pages/Dashboard'
 
 // Lazy load less critical routes for code splitting
-const AccountSetup = lazy(() => import('./pages/AccountSetup'))
 const MagicLogin = lazy(() => import('./pages/MagicLogin'))
 const ResetPassword = lazy(() => import('./pages/ResetPassword'))
 const ProposalGate = lazy(() => import('./components/ProposalGate'))
 const AuditGate = lazy(() => import('./components/AuditGate'))
 const Audits = lazy(() => import('./pages/Audits'))
 const AuditDetail = lazy(() => import('./pages/AuditDetail'))
-const Auth2FASetup = lazy(() => import('./pages/Auth2FASetup'))
-const Auth2FAVerify = lazy(() => import('./pages/Auth2FAVerify'))
 const UserProfile = lazy(() => import('./pages/UserProfile'))
 const AuthCallback = lazy(() => import('./pages/AuthCallback'))
 
@@ -73,11 +70,8 @@ export default function App() {
                 element={isAuthenticated ? <Navigate to="/dashboard" replace /> : <Navigate to="/login" replace />} 
               />
               <Route path="/login" element={<LoginPage />} />
-              <Route path="/account-setup" element={<AccountSetup />} />
               <Route path="/auth/callback" element={<AuthCallback />} />
               <Route path="/auth/magic" element={<MagicLogin />} />
-              <Route path="/auth/setup-2fa" element={<Auth2FASetup />} />
-              <Route path="/auth/verify-2fa" element={<Auth2FAVerify />} />
               <Route path="/reset-password" element={<ResetPassword />} />
               <Route path="/p/:slug" element={<ProposalGate />} />
               <Route path="/audit/:id" element={<AuditGate />} />

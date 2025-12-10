@@ -1,10 +1,15 @@
-const { neon } = require('@neondatabase/serverless')
-const jwt = require('jsonwebtoken')
+import { createClient } from '@supabase/supabase-js'
+import { getAuthenticatedUser } from './utils/supabase.js'
 
-exports.handler = async (event) => {
+const supabase = createClient(
+  process.env.SUPABASE_URL,
+  process.env.SUPABASE_SERVICE_ROLE_KEY
+)
+
+export async function handler(event) {
   const headers = {
     'Access-Control-Allow-Origin': '*',
-    'Access-Control-Allow-Headers': 'Content-Type',
+    'Access-Control-Allow-Headers': 'Content-Type, Authorization',
     'Access-Control-Allow-Methods': 'DELETE, OPTIONS'
   }
 
@@ -22,19 +27,18 @@ exports.handler = async (event) => {
 
   try {
     // Verify authentication
-    const token = event.headers.cookie?.match(/um_session=([^;]+)/)?.[1]
-    if (!token) {
+    const { contact, error: authError } = await getAuthenticatedUser(event)
+    
+    if (authError || !contact) {
       return {
         statusCode: 401,
         headers,
-        body: JSON.stringify({ error: 'Unauthorized' })
+        body: JSON.stringify({ error: authError || 'Unauthorized' })
       }
     }
 
-    const payload = jwt.verify(token, process.env.AUTH_JWT_SECRET)
-    
     // Only admins can delete proposals
-    if (payload.role !== 'admin') {
+    if (contact.role !== 'admin') {
       return {
         statusCode: 403,
         headers,
@@ -52,17 +56,14 @@ exports.handler = async (event) => {
       }
     }
 
-    // Connect to database
-    const sql = neon(process.env.DATABASE_URL)
-
     // Check if proposal exists
-    const existingProposal = await sql`
-      SELECT id, title, status 
-      FROM proposals 
-      WHERE id = ${proposalId}
-    `
+    const { data: existingProposal, error: fetchError } = await supabase
+      .from('proposals')
+      .select('id, title, status')
+      .eq('id', proposalId)
+      .single()
 
-    if (existingProposal.length === 0) {
+    if (fetchError || !existingProposal) {
       return {
         statusCode: 404,
         headers,
@@ -71,7 +72,7 @@ exports.handler = async (event) => {
     }
 
     // Check if proposal is already signed (prevent deletion of signed proposals)
-    if (existingProposal[0].status === 'signed' || existingProposal[0].status === 'fully_executed') {
+    if (existingProposal.status === 'signed' || existingProposal.status === 'fully_executed') {
       return {
         statusCode: 400,
         headers,
@@ -83,12 +84,16 @@ exports.handler = async (event) => {
     }
 
     // Delete the proposal
-    await sql`
-      DELETE FROM proposals 
-      WHERE id = ${proposalId}
-    `
+    const { error: deleteError } = await supabase
+      .from('proposals')
+      .delete()
+      .eq('id', proposalId)
 
-    console.log(`Proposal deleted: ${proposalId} (${existingProposal[0].title})`)
+    if (deleteError) {
+      throw deleteError
+    }
+
+    console.log(`Proposal deleted: ${proposalId} (${existingProposal.title})`)
 
     return {
       statusCode: 200,
@@ -100,14 +105,6 @@ exports.handler = async (event) => {
     }
   } catch (error) {
     console.error('Error deleting proposal:', error)
-    
-    if (error.name === 'JsonWebTokenError') {
-      return {
-        statusCode: 401,
-        headers,
-        body: JSON.stringify({ error: 'Invalid token' })
-      }
-    }
 
     return {
       statusCode: 500,

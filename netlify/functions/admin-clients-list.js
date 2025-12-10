@@ -1,19 +1,11 @@
 // netlify/functions/admin-clients-list.js
-import jwt from 'jsonwebtoken'
-import { neon } from '@neondatabase/serverless'
-import { drizzle } from 'drizzle-orm/neon-http'
-import { eq, ilike, or, sql, desc } from 'drizzle-orm'
-import * as schema from '../../src/db/schema.js'
-
-const COOKIE_NAME = process.env.SESSION_COOKIE_NAME || 'um_session'
-const JWT_SECRET = process.env.AUTH_JWT_SECRET
-const DATABASE_URL = process.env.DATABASE_URL
+import { createSupabaseAdmin, getAuthenticatedUser } from './utils/supabase.js'
 
 export async function handler(event) {
   // CORS headers
   const headers = {
     'Access-Control-Allow-Origin': '*',
-    'Access-Control-Allow-Headers': 'Content-Type',
+    'Access-Control-Allow-Headers': 'Content-Type, Authorization',
     'Access-Control-Allow-Methods': 'GET, OPTIONS',
     'Content-Type': 'application/json'
   }
@@ -30,19 +22,10 @@ export async function handler(event) {
     }
   }
 
-  // Verify authentication
-  if (!JWT_SECRET) {
-    return {
-      statusCode: 500,
-      headers,
-      body: JSON.stringify({ error: 'Server not configured' })
-    }
-  }
-
-  const rawCookie = event.headers.cookie || ''
-  const token = rawCookie.split('; ').find(c => c.startsWith(`${COOKIE_NAME}=`))?.split('=')[1]
+  // Verify authentication using Supabase
+  const { user, contact, error: authError } = await getAuthenticatedUser(event)
   
-  if (!token) {
+  if (authError || !contact) {
     return {
       statusCode: 401,
       headers,
@@ -51,10 +34,8 @@ export async function handler(event) {
   }
 
   try {
-    const payload = jwt.verify(token, JWT_SECRET)
-
     // Only admins can list clients
-    if (payload.role !== 'admin') {
+    if (contact.role !== 'admin') {
       return {
         statusCode: 403,
         headers,
@@ -62,17 +43,7 @@ export async function handler(event) {
       }
     }
 
-    // Connect to database
-    if (!DATABASE_URL) {
-      return {
-        statusCode: 500,
-        headers,
-        body: JSON.stringify({ error: 'Database not configured' })
-      }
-    }
-
-    const db = neon(DATABASE_URL)
-    const drizzleDb = drizzle(db, { schema })
+    const supabase = createSupabaseAdmin()
 
     // Parse query parameters (for future filtering)
     const params = new URLSearchParams(event.queryStringParameters || {})
@@ -80,35 +51,50 @@ export async function handler(event) {
     const role = params.get('role') // 'client' or 'admin'
     const accountSetup = params.get('accountSetup') // 'true' or 'false'
 
-    // Simple query using tagged-template syntax (required by Neon serverless)
-    // Note: Complex joins and dynamic filtering removed for now due to Neon limitations
-    const result = await db`
-      SELECT 
-        id,
-        email,
-        name,
-        company,
-        role,
-        account_setup,
-        google_id,
-        avatar,
-        created_at
-      FROM contacts
-      WHERE role != 'admin'
-      ORDER BY created_at DESC
-    `
+    // Build query
+    let query = supabase
+      .from('contacts')
+      .select('id, email, name, company, role, account_setup, google_id, avatar, created_at')
+      .neq('role', 'admin')
+      .order('created_at', { ascending: false })
+
+    // Apply search filter if provided
+    if (search) {
+      query = query.or(`name.ilike.%${search}%,email.ilike.%${search}%,company.ilike.%${search}%`)
+    }
+
+    // Apply role filter if provided
+    if (role) {
+      query = query.eq('role', role)
+    }
+
+    // Apply accountSetup filter if provided
+    if (accountSetup) {
+      query = query.eq('account_setup', accountSetup)
+    }
+
+    const { data: result, error: queryError } = await query
+
+    if (queryError) {
+      console.error('Error querying contacts:', queryError)
+      return {
+        statusCode: 500,
+        headers,
+        body: JSON.stringify({ error: 'Failed to query contacts', message: queryError.message })
+      }
+    }
 
     // Format results
-    const clients = result.map(row => ({
+    const clients = (result || []).map(row => ({
       id: row.id,
       email: row.email,
       name: row.name,
       company: row.company,
       role: row.role,
-      accountSetup: row.accountSetup,
-      hasGoogleAuth: !!row.googleId,
+      accountSetup: row.account_setup,
+      hasGoogleAuth: !!row.google_id,
       avatar: row.avatar,
-      createdAt: row.createdAt,
+      createdAt: row.created_at,
       stats: {
         projectCount: 0,
         proposalCount: 0,
@@ -126,7 +112,7 @@ export async function handler(event) {
       totalClientsWithProjects: clients.filter(c => c.stats.projectCount > 0).length,
       totalPendingAmount: clients.reduce((sum, c) => sum + c.stats.pendingAmount, 0),
       totalPaidAmount: clients.reduce((sum, c) => sum + c.stats.paidAmount, 0),
-      clientsWithAccountSetup: clients.filter(c => c.accountSetup).length,
+      clientsWithAccountSetup: clients.filter(c => c.accountSetup === 'true').length,
       clientsWithGoogleAuth: clients.filter(c => c.hasGoogleAuth).length
     }
 
@@ -146,14 +132,6 @@ export async function handler(event) {
 
   } catch (error) {
     console.error('Error listing clients:', error)
-    
-    if (error.name === 'JsonWebTokenError' || error.name === 'TokenExpiredError') {
-      return {
-        statusCode: 401,
-        headers,
-        body: JSON.stringify({ error: 'Invalid or expired session' })
-      }
-    }
 
     return {
       statusCode: 500,

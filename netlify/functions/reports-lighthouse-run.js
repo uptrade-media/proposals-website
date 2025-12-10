@@ -1,13 +1,11 @@
 // netlify/functions/reports-lighthouse-run.js
-import jwt from 'jsonwebtoken'
-import { neon } from '@neondatabase/serverless'
-import { drizzle } from 'drizzle-orm/neon-http'
-import { eq, and } from 'drizzle-orm'
-import * as schema from '../../src/db/schema.js'
+import { createClient } from '@supabase/supabase-js'
+import { getAuthenticatedUser } from './utils/supabase.js'
 
-const COOKIE_NAME = process.env.SESSION_COOKIE_NAME || 'um_session'
-const JWT_SECRET = process.env.AUTH_JWT_SECRET
-const DATABASE_URL = process.env.DATABASE_URL
+const supabase = createClient(
+  process.env.SUPABASE_URL,
+  process.env.SUPABASE_SERVICE_ROLE_KEY
+)
 
 // Import Lighthouse (lazy load)
 let lighthouse = null
@@ -36,21 +34,19 @@ export async function handler(event) {
     return { statusCode: 200, headers }
   }
 
-  // Get and verify auth token
-  const token = event.headers.cookie?.match(/um_session=([^;]+)/)?.[1]
-
-  if (!token) {
-    return {
-      statusCode: 401,
-      headers,
-      body: JSON.stringify({ error: 'Not authenticated' })
-    }
-  }
-
   try {
-    const payload = jwt.verify(token, JWT_SECRET)
+    // Verify authentication
+    const { contact, error: authError } = await getAuthenticatedUser(event)
+    
+    if (authError || !contact) {
+      return {
+        statusCode: 401,
+        headers,
+        body: JSON.stringify({ error: authError || 'Not authenticated' })
+      }
+    }
 
-    if (payload.role !== 'admin') {
+    if (contact.role !== 'admin') {
       return {
         statusCode: 403,
         headers,
@@ -80,23 +76,14 @@ export async function handler(event) {
       }
     }
 
-    if (!DATABASE_URL) {
-      return {
-        statusCode: 500,
-        headers,
-        body: JSON.stringify({ error: 'Database not configured' })
-      }
-    }
+    // Check if project exists
+    const { data: project, error: projectError } = await supabase
+      .from('projects')
+      .select('*')
+      .eq('id', projectId)
+      .single()
 
-    const db = neon(DATABASE_URL)
-    const drizzleDb = drizzle(db, { schema })
-
-    // Check if project exists and user has access
-    const project = await drizzleDb.query.projects.findFirst({
-      where: eq(schema.projects.id, projectId)
-    })
-
-    if (!project) {
+    if (projectError || !project) {
       return {
         statusCode: 404,
         headers,
@@ -105,19 +92,24 @@ export async function handler(event) {
     }
 
     // Create audit record with pending status
-    const audit = await drizzleDb
-      .insert(schema.audits)
-      .values({
-        projectId,
-        contactId: project.contactId,
-        targetUrl,
-        deviceType,
+    const { data: audit, error: auditError } = await supabase
+      .from('audits')
+      .insert({
+        project_id: projectId,
+        contact_id: project.contact_id,
+        target_url: targetUrl,
+        device_type: deviceType,
         status: 'running',
-        throttlingProfile: '4g'
+        throttling_profile: '4g'
       })
-      .returning()
+      .select()
+      .single()
 
-    const auditId = audit[0].id
+    if (auditError) {
+      throw auditError
+    }
+
+    const auditId = audit.id
 
     // Load Lighthouse library
     const lh = await loadLighthouse()
@@ -139,7 +131,7 @@ export async function handler(event) {
 
     // Run Lighthouse audit in background
     // Don't wait for it - return immediately
-    runAuditInBackground(auditId, projectId, targetUrl, deviceType, project.contactId, drizzleDb)
+    runAuditInBackground(auditId, projectId, targetUrl, deviceType, project.contact_id, supabase)
 
     return {
       statusCode: 202,
@@ -155,14 +147,6 @@ export async function handler(event) {
   } catch (error) {
     console.error('Error starting Lighthouse audit:', error)
 
-    if (error.name === 'JsonWebTokenError' || error.name === 'TokenExpiredError') {
-      return {
-        statusCode: 401,
-        headers,
-        body: JSON.stringify({ error: 'Invalid or expired session' })
-      }
-    }
-
     return {
       statusCode: 500,
       headers,
@@ -177,7 +161,7 @@ export async function handler(event) {
 /**
  * Run Lighthouse audit in background (async, doesn't block response)
  */
-async function runAuditInBackground(auditId, projectId, targetUrl, deviceType, contactId, drizzleDb) {
+async function runAuditInBackground(auditId, projectId, targetUrl, deviceType, contactId, supabaseClient) {
   try {
     // Load Lighthouse library
     const lh = await loadLighthouse()
@@ -222,26 +206,26 @@ async function runAuditInBackground(auditId, projectId, targetUrl, deviceType, c
     const speedIndexMs = metrics.speed_index_ms
 
     // Update audit record with results
-    await drizzleDb
-      .update(schema.audits)
-      .set({
+    await supabaseClient
+      .from('audits')
+      .update({
         status: 'completed',
-        performanceScore,
-        accessibilityScore,
-        bestPracticesScore,
-        seoScore,
-        pwascore: pwaScore,
-        lcpMs: lcpMs ? String(lcpMs) : null,
-        fidMs: fidMs ? String(fidMs) : null,
-        clsScore: clsScore ? String(clsScore) : null,
-        fcpMs: fcpMs ? String(fcpMs) : null,
-        ttiMs: ttiMs ? String(ttiMs) : null,
-        tbtMs: tbtMs ? String(tbtMs) : null,
-        speedIndexMs: speedIndexMs ? String(speedIndexMs) : null,
-        fullAuditJson: JSON.stringify(lighthouseResult),
-        completedAt: new Date().toISOString()
+        performance_score: performanceScore,
+        accessibility_score: accessibilityScore,
+        best_practices_score: bestPracticesScore,
+        seo_score: seoScore,
+        pwa_score: pwaScore,
+        lcp_ms: lcpMs ? String(lcpMs) : null,
+        fid_ms: fidMs ? String(fidMs) : null,
+        cls_score: clsScore ? String(clsScore) : null,
+        fcp_ms: fcpMs ? String(fcpMs) : null,
+        tti_ms: ttiMs ? String(ttiMs) : null,
+        tbt_ms: tbtMs ? String(tbtMs) : null,
+        speed_index_ms: speedIndexMs ? String(speedIndexMs) : null,
+        full_audit_json: JSON.stringify(lighthouseResult),
+        completed_at: new Date().toISOString()
       })
-      .where(eq(schema.audits.id, auditId))
+      .eq('id', auditId)
 
     // Store individual metrics for trend tracking
     const metricsToStore = [
@@ -260,17 +244,16 @@ async function runAuditInBackground(auditId, projectId, targetUrl, deviceType, c
     ]
 
     for (const metric of metricsToStore) {
-      await drizzleDb
-        .insert(schema.lighthouseMetrics)
-        .values({
-          auditId,
-          projectId,
-          metricName: metric.name,
+      await supabaseClient
+        .from('lighthouse_metrics')
+        .upsert({
+          audit_id: auditId,
+          project_id: projectId,
+          metric_name: metric.name,
           score: metric.score,
           value: metric.value ? String(metric.value) : null,
           unit: metric.unit
-        })
-        .onConflictDoNothing()
+        }, { onConflict: 'audit_id,metric_name' })
     }
 
     console.log(`[Lighthouse] Audit ${auditId} completed successfully`)
@@ -279,14 +262,14 @@ async function runAuditInBackground(auditId, projectId, targetUrl, deviceType, c
 
     // Update audit record with error
     try {
-      await drizzleDb
-        .update(schema.audits)
-        .set({
+      await supabaseClient
+        .from('audits')
+        .update({
           status: 'failed',
-          errorMessage: error.message,
-          completedAt: new Date().toISOString()
+          error_message: error.message,
+          completed_at: new Date().toISOString()
         })
-        .where(eq(schema.audits.id, auditId))
+        .eq('id', auditId)
     } catch (updateErr) {
       console.error('Failed to update audit status:', updateErr)
     }

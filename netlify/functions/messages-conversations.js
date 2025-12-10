@@ -1,9 +1,11 @@
 // netlify/functions/messages-conversations.js
-import jwt from 'jsonwebtoken'
-import { neon } from '@neondatabase/serverless'
+import { createClient } from '@supabase/supabase-js'
+import { getAuthenticatedUser } from './utils/supabase.js'
 
-const JWT_SECRET = process.env.AUTH_JWT_SECRET
-const COOKIE_NAME = process.env.SESSION_COOKIE_NAME || 'um_session'
+const supabase = createClient(
+  process.env.SUPABASE_URL,
+  process.env.SUPABASE_SERVICE_ROLE_KEY
+)
 
 export async function handler(event) {
   // CORS headers
@@ -26,11 +28,10 @@ export async function handler(event) {
     }
   }
 
-  // Verify authentication
-  const cookie = event.headers.cookie || ''
-  const token = cookie.split('; ').find(c => c.startsWith(`${COOKIE_NAME}=`))?.split('=')[1]
+  // Verify authentication using Supabase
+  const { user, contact, error: authError } = await getAuthenticatedUser(event)
   
-  if (!token) {
+  if (authError || !contact) {
     return {
       statusCode: 401,
       headers,
@@ -39,8 +40,7 @@ export async function handler(event) {
   }
 
   try {
-    const payload = jwt.verify(token, JWT_SECRET)
-    const userId = payload.userId || payload.sub
+    const userId = contact.id
 
     if (!userId) {
       return {
@@ -50,101 +50,67 @@ export async function handler(event) {
       }
     }
 
-    // Connect to database
-    const sql = neon(process.env.DATABASE_URL)
+    // Get all messages where user is sender or recipient
+    const { data: allMessages, error: fetchError } = await supabase
+      .from('messages')
+      .select(`
+        id,
+        subject,
+        content,
+        created_at,
+        read_at,
+        sender_id,
+        recipient_id,
+        sender:contacts!messages_sender_id_fkey (id, name, email, company),
+        recipient:contacts!messages_recipient_id_fkey (id, name, email, company)
+      `)
+      .or(`sender_id.eq.${userId},recipient_id.eq.${userId}`)
+      .order('created_at', { ascending: false })
 
-    // Get conversations: unique users this person has messaged with
-    // Include most recent message for each conversation
-    const conversations = await sql`
-      WITH latest_messages AS (
-        SELECT DISTINCT ON (
-          CASE 
-            WHEN sender_id = ${userId} THEN recipient_id
-            ELSE sender_id
-          END
-        )
-          CASE 
-            WHEN sender_id = ${userId} THEN recipient_id
-            ELSE sender_id
-          END as partner_id,
-          id as message_id,
-          subject,
-          content,
-          created_at,
-          read_at,
-          sender_id
-        FROM messages
-        WHERE sender_id = ${userId} OR recipient_id = ${userId}
-        ORDER BY 
-          CASE 
-            WHEN sender_id = ${userId} THEN recipient_id
-            ELSE sender_id
-          END,
-          created_at DESC
-      )
-      SELECT 
-        lm.partner_id,
-        lm.message_id,
-        lm.subject,
-        lm.content,
-        lm.created_at,
-        lm.read_at,
-        lm.sender_id,
-        c.name as partner_name,
-        c.email as partner_email,
-        c.company as partner_company,
-        COUNT(CASE WHEN m.read_at IS NULL AND m.recipient_id = ${userId} THEN 1 END) as unread_count
-      FROM latest_messages lm
-      JOIN contacts c ON c.id = lm.partner_id
-      LEFT JOIN messages m ON (
-        (m.sender_id = lm.partner_id AND m.recipient_id = ${userId})
-        OR (m.sender_id = ${userId} AND m.recipient_id = lm.partner_id)
-      )
-      GROUP BY 
-        lm.partner_id, 
-        lm.message_id, 
-        lm.subject, 
-        lm.content, 
-        lm.created_at, 
-        lm.read_at, 
-        lm.sender_id,
-        c.name,
-        c.email,
-        c.company
-      ORDER BY lm.created_at DESC
-    `
+    if (fetchError) {
+      throw fetchError
+    }
+
+    // Group by conversation partner and get latest message + unread count
+    const conversationMap = new Map()
+    
+    for (const msg of allMessages || []) {
+      const partnerId = msg.sender_id === userId ? msg.recipient_id : msg.sender_id
+      const partner = msg.sender_id === userId ? msg.recipient : msg.sender
+      
+      if (!conversationMap.has(partnerId)) {
+        conversationMap.set(partnerId, {
+          partnerId,
+          partnerName: partner?.name,
+          partnerEmail: partner?.email,
+          partnerCompany: partner?.company,
+          lastMessage: {
+            id: msg.id,
+            subject: msg.subject,
+            content: msg.content,
+            createdAt: msg.created_at,
+            readAt: msg.read_at,
+            isFromMe: msg.sender_id === userId
+          },
+          unreadCount: 0
+        })
+      }
+      
+      // Count unread messages from this partner
+      if (msg.recipient_id === userId && !msg.read_at) {
+        conversationMap.get(partnerId).unreadCount++
+      }
+    }
+
+    const conversations = Array.from(conversationMap.values())
 
     return {
       statusCode: 200,
       headers,
-      body: JSON.stringify({
-        conversations: conversations.map(conv => ({
-          partnerId: conv.partner_id,
-          partnerName: conv.partner_name,
-          partnerEmail: conv.partner_email,
-          partnerCompany: conv.partner_company,
-          lastMessage: {
-            id: conv.message_id,
-            subject: conv.subject,
-            content: conv.content,
-            createdAt: conv.created_at,
-            readAt: conv.read_at,
-            isFromMe: conv.sender_id === userId
-          },
-          unreadCount: parseInt(conv.unread_count) || 0
-        }))
-      })
+      body: JSON.stringify({ conversations })
     }
   } catch (error) {
     console.error('[messages-conversations] Error:', error)
-    
-    if (error.name === 'JsonWebTokenError' || error.name === 'TokenExpiredError') {
-      return {
-        statusCode: 401,
-        headers,
-        body: JSON.stringify({ error: 'INVALID_TOKEN' })
-      }
-    }
 
     return {
       statusCode: 500,

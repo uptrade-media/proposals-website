@@ -50,6 +50,47 @@ export async function signInWithPassword(email, password) {
 }
 
 /**
+ * Sign up with email/password
+ */
+export async function signUp(email, password, metadata = {}) {
+  const { data, error } = await supabase.auth.signUp({
+    email,
+    password,
+    options: {
+      data: metadata // { name, company, etc. }
+    }
+  })
+  
+  if (error) throw error
+  return data
+}
+
+/**
+ * Reset password for email
+ */
+export async function resetPasswordForEmail(email) {
+  const redirectUrl = `${window.location.origin}/reset-password`
+  const { data, error } = await supabase.auth.resetPasswordForEmail(email, {
+    redirectTo: redirectUrl
+  })
+  
+  if (error) throw error
+  return data
+}
+
+/**
+ * Update user password (for reset password page)
+ */
+export async function updatePassword(newPassword) {
+  const { data, error } = await supabase.auth.updateUser({
+    password: newPassword
+  })
+  
+  if (error) throw error
+  return data
+}
+
+/**
  * Sign out
  */
 export async function signOut() {
@@ -119,4 +160,20 @@ export function onAuthStateChange(callback) {
 export async function isAdmin() {
   const user = await getCurrentUser()
   return user?.role === 'admin'
+}
+
+/**
+ * Send magic link to email
+ */
+export async function sendMagicLink(email) {
+  const redirectUrl = `${window.location.origin}/auth/callback`
+  const { data, error } = await supabase.auth.signInWithOtp({
+    email,
+    options: {
+      emailRedirectTo: redirectUrl
+    }
+  })
+  
+  if (error) throw error
+  return data
 }

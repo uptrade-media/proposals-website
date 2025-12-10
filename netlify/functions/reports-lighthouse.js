@@ -1,13 +1,11 @@
 // netlify/functions/reports-lighthouse.js
-import jwt from 'jsonwebtoken'
-import { neon } from '@neondatabase/serverless'
-import { drizzle } from 'drizzle-orm/neon-http'
-import { eq, desc, and, gte, lte, sql } from 'drizzle-orm'
-import * as schema from '../../src/db/schema.js'
+import { createClient } from '@supabase/supabase-js'
+import { getAuthenticatedUser } from './utils/supabase.js'
 
-const COOKIE_NAME = process.env.SESSION_COOKIE_NAME || 'um_session'
-const JWT_SECRET = process.env.AUTH_JWT_SECRET
-const DATABASE_URL = process.env.DATABASE_URL
+const supabase = createClient(
+  process.env.SUPABASE_URL,
+  process.env.SUPABASE_SERVICE_ROLE_KEY
+)
 
 const headers = {
   'Content-Type': 'application/json',
@@ -21,30 +19,17 @@ export async function handler(event) {
     return { statusCode: 200, headers }
   }
 
-  // Get and verify auth token
-  const token = event.headers.cookie?.match(/um_session=([^;]+)/)?.[1]
-
-  if (!token) {
-    return {
-      statusCode: 401,
-      headers,
-      body: JSON.stringify({ error: 'Not authenticated' })
-    }
-  }
-
   try {
-    const payload = jwt.verify(token, JWT_SECRET)
-
-    if (!DATABASE_URL) {
+    // Verify authentication
+    const { contact, error: authError } = await getAuthenticatedUser(event)
+    
+    if (authError || !contact) {
       return {
-        statusCode: 500,
+        statusCode: 401,
         headers,
-        body: JSON.stringify({ error: 'Database not configured' })
+        body: JSON.stringify({ error: authError || 'Not authenticated' })
       }
     }
-
-    const db = neon(DATABASE_URL)
-    const drizzleDb = drizzle(db, { schema })
 
     // Parse query parameters
     const params = new URLSearchParams(event.queryStringParameters || {})
@@ -54,16 +39,17 @@ export async function handler(event) {
 
     // If auditId provided, return specific audit
     if (auditId) {
-      const audit = await drizzleDb.query.audits.findFirst({
-        where: eq(schema.audits.id, auditId),
-        with: {
-          metrics: true,
-          project: true,
-          contact: true
-        }
-      })
+      const { data: audit, error: auditError } = await supabase
+        .from('audits')
+        .select(`
+          *,
+          project:projects!audits_project_id_fkey (*),
+          contact:contacts!audits_contact_id_fkey (*)
+        `)
+        .eq('id', auditId)
+        .single()
 
-      if (!audit) {
+      if (auditError || !audit) {
         return {
           statusCode: 404,
           headers,
@@ -72,7 +58,7 @@ export async function handler(event) {
       }
 
       // Check access: admin can see all, clients can only see their own projects
-      if (payload.role !== 'admin' && audit.project.contactId !== payload.userId) {
+      if (contact.role !== 'admin' && audit.project?.contact_id !== contact.id) {
         return {
           statusCode: 403,
           headers,
@@ -81,7 +67,7 @@ export async function handler(event) {
       }
 
       // Parse full audit JSON if exists
-      const fullAudit = audit.fullAuditJson ? JSON.parse(audit.fullAuditJson) : null
+      const fullAudit = audit.full_audit_json ? JSON.parse(audit.full_audit_json) : null
 
       return {
         statusCode: 200,
@@ -89,29 +75,29 @@ export async function handler(event) {
         body: JSON.stringify({
           audit: {
             id: audit.id,
-            projectId: audit.projectId,
-            targetUrl: audit.targetUrl,
+            projectId: audit.project_id,
+            targetUrl: audit.target_url,
             status: audit.status,
-            deviceType: audit.deviceType,
+            deviceType: audit.device_type,
             scores: {
-              performance: audit.performanceScore,
-              accessibility: audit.accessibilityScore,
-              bestPractices: audit.bestPracticesScore,
-              seo: audit.seoScore,
-              pwa: audit.pwascore
+              performance: audit.performance_score,
+              accessibility: audit.accessibility_score,
+              bestPractices: audit.best_practices_score,
+              seo: audit.seo_score,
+              pwa: audit.pwa_score
             },
             metrics: {
-              lcp: audit.lcpMs,
-              fid: audit.fidMs,
-              cls: audit.clsScore,
-              fcp: audit.fcpMs,
-              tti: audit.ttiMs,
-              tbt: audit.tbtMs,
-              speedIndex: audit.speedIndexMs
+              lcp: audit.lcp_ms,
+              fid: audit.fid_ms,
+              cls: audit.cls_score,
+              fcp: audit.fcp_ms,
+              tti: audit.tti_ms,
+              tbt: audit.tbt_ms,
+              speedIndex: audit.speed_index_ms
             },
-            createdAt: audit.createdAt,
-            completedAt: audit.completedAt,
-            errorMessage: audit.errorMessage,
+            createdAt: audit.created_at,
+            completedAt: audit.completed_at,
+            errorMessage: audit.error_message,
             fullAudit: fullAudit ? extractKeyAudits(fullAudit) : null
           }
         })
@@ -120,11 +106,13 @@ export async function handler(event) {
 
     // If projectId provided, return audits for that project
     if (projectId) {
-      const project = await drizzleDb.query.projects.findFirst({
-        where: eq(schema.projects.id, projectId)
-      })
+      const { data: project, error: projectError } = await supabase
+        .from('projects')
+        .select('*')
+        .eq('id', projectId)
+        .single()
 
-      if (!project) {
+      if (projectError || !project) {
         return {
           statusCode: 404,
           headers,
@@ -133,7 +121,7 @@ export async function handler(event) {
       }
 
       // Check access
-      if (payload.role !== 'admin' && project.contactId !== payload.userId) {
+      if (contact.role !== 'admin' && project.contact_id !== contact.id) {
         return {
           statusCode: 403,
           headers,
@@ -142,62 +130,64 @@ export async function handler(event) {
       }
 
       // Fetch audits for this project
-      const audits = await drizzleDb.query.audits.findMany({
-        where: eq(schema.audits.projectId, projectId),
-        orderBy: [desc(schema.audits.createdAt)],
-        limit,
-        with: {
-          metrics: true
-        }
-      })
+      const { data: audits, error: auditsError } = await supabase
+        .from('audits')
+        .select('*')
+        .eq('project_id', projectId)
+        .order('created_at', { ascending: false })
+        .limit(limit)
+
+      if (auditsError) {
+        throw auditsError
+      }
 
       // Calculate trends
-      const trends = calculateTrends(audits)
+      const trends = calculateTrends(audits || [])
 
       // Get latest audit
-      const latestAudit = audits[0]
+      const latestAudit = audits?.[0]
 
       return {
         statusCode: 200,
         headers,
         body: JSON.stringify({
           projectId,
-          audits: audits.map(audit => ({
+          audits: (audits || []).map(audit => ({
             id: audit.id,
-            targetUrl: audit.targetUrl,
+            targetUrl: audit.target_url,
             status: audit.status,
-            deviceType: audit.deviceType,
+            deviceType: audit.device_type,
             scores: {
-              performance: audit.performanceScore,
-              accessibility: audit.accessibilityScore,
-              bestPractices: audit.bestPracticesScore,
-              seo: audit.seoScore,
-              pwa: audit.pwascore
+              performance: audit.performance_score,
+              accessibility: audit.accessibility_score,
+              bestPractices: audit.best_practices_score,
+              seo: audit.seo_score,
+              pwa: audit.pwa_score
             },
             metrics: {
-              lcp: audit.lcpMs,
-              fid: audit.fidMs,
-              cls: audit.clsScore,
-              fcp: audit.fcpMs,
-              tti: audit.ttiMs,
-              tbt: audit.tbtMs,
-              speedIndex: audit.speedIndexMs
+              lcp: audit.lcp_ms,
+              fid: audit.fid_ms,
+              cls: audit.cls_score,
+              fcp: audit.fcp_ms,
+              tti: audit.tti_ms,
+              tbt: audit.tbt_ms,
+              speedIndex: audit.speed_index_ms
             },
-            createdAt: audit.createdAt,
-            completedAt: audit.completedAt
+            createdAt: audit.created_at,
+            completedAt: audit.completed_at
           })),
           summary: {
-            totalAudits: audits.length,
+            totalAudits: audits?.length || 0,
             latestAudit: latestAudit
               ? {
-                  date: latestAudit.completedAt || latestAudit.createdAt,
+                  date: latestAudit.completed_at || latestAudit.created_at,
                   status: latestAudit.status,
                   scores: {
-                    performance: latestAudit.performanceScore,
-                    accessibility: latestAudit.accessibilityScore,
-                    bestPractices: latestAudit.bestPracticesScore,
-                    seo: latestAudit.seoScore,
-                    pwa: latestAudit.pwascore
+                    performance: latestAudit.performance_score,
+                    accessibility: latestAudit.accessibility_score,
+                    bestPractices: latestAudit.best_practices_score,
+                    seo: latestAudit.seo_score,
+                    pwa: latestAudit.pwa_score
                   }
                 }
               : null,
@@ -208,80 +198,65 @@ export async function handler(event) {
     }
 
     // If no projectId, return all audits for admin or user's projects
-    let auditQuery
-    if (payload.role === 'admin') {
-      auditQuery = await drizzleDb.query.audits.findMany({
-        orderBy: [desc(schema.audits.createdAt)],
-        limit,
-        with: {
-          project: true,
-          metrics: true
-        }
-      })
+    let auditsQuery
+    if (contact.role === 'admin') {
+      const { data, error } = await supabase
+        .from('audits')
+        .select(`
+          *,
+          project:projects!audits_project_id_fkey (*)
+        `)
+        .order('created_at', { ascending: false })
+        .limit(limit)
+      
+      if (error) throw error
+      auditsQuery = data || []
     } else {
-      auditQuery = await drizzleDb.query.audits.findMany({
-        where: eq(schema.audits.contactId, payload.userId),
-        orderBy: [desc(schema.audits.createdAt)],
-        limit,
-        with: {
-          project: true,
-          metrics: true
-        }
-      })
+      const { data, error } = await supabase
+        .from('audits')
+        .select(`
+          *,
+          project:projects!audits_project_id_fkey (*)
+        `)
+        .eq('contact_id', contact.id)
+        .order('created_at', { ascending: false })
+        .limit(limit)
+      
+      if (error) throw error
+      auditsQuery = data || []
     }
 
     return {
       statusCode: 200,
       headers,
       body: JSON.stringify({
-        audits: auditQuery.map(audit => ({
+        audits: auditsQuery.map(audit => ({
           id: audit.id,
-          projectId: audit.projectId,
+          projectId: audit.project_id,
           projectTitle: audit.project?.title,
-          targetUrl: audit.targetUrl,
+          targetUrl: audit.target_url,
           status: audit.status,
-          deviceType: audit.deviceType,
+          deviceType: audit.device_type,
           scores: {
-            performance: audit.performanceScore,
-            accessibility: audit.accessibilityScore,
-            bestPractices: audit.bestPracticesScore,
-            seo: audit.seoScore,
-            pwa: audit.pwascore
+            performance: audit.performance_score,
+            accessibility: audit.accessibility_score,
+            bestPractices: audit.best_practices_score,
+            seo: audit.seo_score,
+            pwa: audit.pwa_score
           },
-          createdAt: audit.createdAt,
-          completedAt: audit.completedAt
-        })),
-        summary: {
-          totalAudits: auditQuery.length,
-          completedAudits: auditQuery.filter(a => a.status === 'completed').length,
-          failedAudits: auditQuery.filter(a => a.status === 'failed').length,
-          averagePerformanceScore:
-            auditQuery.filter(a => a.performanceScore).length > 0
-              ? Math.round(
-                  auditQuery
-                    .filter(a => a.performanceScore)
-                    .reduce((sum, a) => sum + a.performanceScore, 0) / auditQuery.filter(a => a.performanceScore).length
-                )
-              : null
-        }
+          createdAt: audit.created_at,
+          completedAt: audit.completed_at
+        }))
       })
     }
   } catch (error) {
-    console.error('Error fetching Lighthouse data:', error)
-
-    if (error.name === 'JsonWebTokenError' || error.name === 'TokenExpiredError') {
-      return {
-        statusCode: 401,
-        headers,
-        body: JSON.stringify({ error: 'Invalid or expired session' })
-      }
-    }
+    console.error('Error fetching lighthouse audits:', error)
 
     return {
       statusCode: 500,
       headers,
       body: JSON.stringify({
-        error: 'Failed to fetch Lighthouse data',
+        error: 'Failed to fetch audits',
         message: error.message
       })
     }
@@ -340,24 +315,24 @@ function calculateTrends(audits) {
 
   return {
     performance: {
-      current: latest.performanceScore,
-      previous: previous.performanceScore,
-      change: latest.performanceScore - previous.performanceScore
+      current: latest.performance_score,
+      previous: previous.performance_score,
+      change: (latest.performance_score || 0) - (previous.performance_score || 0)
     },
     accessibility: {
-      current: latest.accessibilityScore,
-      previous: previous.accessibilityScore,
-      change: latest.accessibilityScore - previous.accessibilityScore
+      current: latest.accessibility_score,
+      previous: previous.accessibility_score,
+      change: (latest.accessibility_score || 0) - (previous.accessibility_score || 0)
     },
     bestPractices: {
-      current: latest.bestPracticesScore,
-      previous: previous.bestPracticesScore,
-      change: latest.bestPracticesScore - previous.bestPracticesScore
+      current: latest.best_practices_score,
+      previous: previous.best_practices_score,
+      change: (latest.best_practices_score || 0) - (previous.best_practices_score || 0)
     },
     seo: {
-      current: latest.seoScore,
-      previous: previous.seoScore,
-      change: latest.seoScore - previous.seoScore
+      current: latest.seo_score,
+      previous: previous.seo_score,
+      change: (latest.seo_score || 0) - (previous.seo_score || 0)
     }
   }
 }

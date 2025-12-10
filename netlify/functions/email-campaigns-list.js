@@ -1,19 +1,26 @@
-import { neon } from '@neondatabase/serverless'
-import jwt from 'jsonwebtoken'
-
-const sql = neon(process.env.DATABASE_URL)
+import { createSupabaseAdmin, getAuthenticatedUser } from './utils/supabase.js'
 
 export async function handler(event) {
+  const headers = {
+    'Access-Control-Allow-Origin': '*',
+    'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+    'Access-Control-Allow-Methods': 'GET, OPTIONS',
+    'Content-Type': 'application/json'
+  }
+
+  if (event.httpMethod === 'OPTIONS') {
+    return { statusCode: 204, headers }
+  }
+
   try {
-    // Verify auth
-    const token = event.headers.cookie?.match(/um_session=([^;]+)/)?.[1]
-    if (!token) {
-      return { statusCode: 401, body: JSON.stringify({ error: 'Unauthorized' }) }
+    // Verify auth using Supabase
+    const { user, contact, error: authError } = await getAuthenticatedUser(event)
+    if (authError || !contact) {
+      return { statusCode: 401, headers, body: JSON.stringify({ error: 'Unauthorized' }) }
     }
 
-    const user = jwt.verify(token, process.env.AUTH_JWT_SECRET)
-    if (user.role !== 'admin') {
-      return { statusCode: 403, body: JSON.stringify({ error: 'Admin only' }) }
+    if (contact.role !== 'admin') {
+      return { statusCode: 403, headers, body: JSON.stringify({ error: 'Admin only' }) }
     }
 
     // Get query params
@@ -21,33 +28,34 @@ export async function handler(event) {
     const limit = parseInt(event.queryStringParameters?.limit || '50')
     const offset = parseInt(event.queryStringParameters?.offset || '0')
 
+    const supabase = createSupabaseAdmin()
+
     // Build query
-    let typeWhere = ''
+    let query = supabase
+      .from('campaigns')
+      .select('id, type, name, status, scheduled_start, created_at, updated_at', { count: 'exact' })
+      .order('created_at', { ascending: false })
+      .range(offset, offset + limit - 1)
+
     if (type !== 'all') {
-      typeWhere = `AND type = '${type}'`
+      query = query.eq('type', type)
     }
 
-    const campaigns = await sql`
-      SELECT 
-        id, type, name, status, scheduled_start,
-        created_at, updated_at
-      FROM campaigns
-      WHERE 1=1 ${type !== 'all' ? sql`AND type = ${type}` : sql``}
-      ORDER BY created_at DESC
-      LIMIT ${limit}
-      OFFSET ${offset}
-    `
+    const { data: campaigns, count, error } = await query
 
-    const countResult = await sql`
-      SELECT COUNT(*) as count FROM campaigns
-      WHERE 1=1 ${type !== 'all' ? sql`AND type = ${type}` : sql``}
-    `
+    if (error) {
+      console.error('Query error:', error)
+      return {
+        statusCode: 500,
+        body: JSON.stringify({ error: 'Failed to list campaigns' })
+      }
+    }
 
     return {
       statusCode: 200,
       body: JSON.stringify({
-        campaigns,
-        total: countResult[0]?.count || 0,
+        campaigns: campaigns || [],
+        total: count || 0,
         limit,
         offset
       }),

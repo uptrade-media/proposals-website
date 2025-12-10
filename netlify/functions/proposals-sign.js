@@ -1,11 +1,9 @@
 // netlify/functions/proposals-sign.js
-// Migrated to Supabase from Neon - Stores signatures in Supabase Storage
-import jwt from 'jsonwebtoken'
+// Migrated to Supabase - Stores signatures in Supabase Storage
 import { createClient } from '@supabase/supabase-js'
 import { Resend } from 'resend'
+import { getAuthenticatedUser } from './utils/supabase.js'
 
-const COOKIE_NAME = process.env.SESSION_COOKIE_NAME || 'um_session'
-const JWT_SECRET = process.env.AUTH_JWT_SECRET
 const ADMIN_EMAIL = process.env.ADMIN_EMAIL || 'admin@uptrademedia.com'
 const PORTAL_URL = process.env.PORTAL_BASE_URL || process.env.URL || 'https://portal.uptrademedia.com'
 
@@ -41,7 +39,7 @@ async function uploadSignature(proposalId, signatureData, type) {
     const base64Data = signatureData.replace(/^data:image\/\w+;base64,/, '')
     const buffer = Buffer.from(base64Data, 'base64')
     
-    const fileName = \`\${proposalId}/\${type}-signature-\${Date.now()}.png\`
+    const fileName = `${proposalId}/${type}-signature-${Date.now()}.png`
     
     const { data, error } = await supabase.storage
       .from('signatures')
@@ -71,6 +69,15 @@ async function uploadSignature(proposalId, signatureData, type) {
 async function sendAdminCounterSignatureEmail(proposalData) {
   const { proposalId, proposalTitle, clientName, clientEmail, clientSignatureUrl } = proposalData
   
+  const signatureSection = clientSignatureUrl ? `
+    <div style="margin-top: 30px; padding-top: 20px; border-top: 1px solid #ddd;">
+      <p style="font-size: 12px; color: #666;">
+        <strong>Client's Signature:</strong><br>
+        <img src="${clientSignatureUrl}" alt="Client Signature" style="max-width: 300px; border: 1px solid #ddd; padding: 10px; margin-top: 10px; background: white;">
+      </p>
+    </div>
+  ` : ''
+  
   try {
     await resend.emails.send({
       from: process.env.RESEND_FROM_EMAIL || 'proposals@send.uptrademedia.com',
@@ -86,7 +93,7 @@ async function sendAdminCounterSignatureEmail(proposalData) {
             <p style="font-size: 16px; color: #333;">Hi Admin,</p>
             
             <p style="font-size: 16px; color: #333;">
-              <strong>\${clientName}</strong> has signed the proposal <strong>"\${proposalTitle}"</strong>.
+              <strong>${clientName}</strong> has signed the proposal <strong>"${proposalTitle}"</strong>.
             </p>
             
             <p style="font-size: 16px; color: #333;">
@@ -95,14 +102,14 @@ async function sendAdminCounterSignatureEmail(proposalData) {
             
             <div style="background: white; border-left: 4px solid #4bbf39; padding: 20px; margin: 20px 0;">
               <h3 style="margin-top: 0; color: #333;">Proposal Details</h3>
-              <p style="margin: 5px 0;"><strong>Title:</strong> \${proposalTitle}</p>
-              <p style="margin: 5px 0;"><strong>Client:</strong> \${clientName}</p>
-              <p style="margin: 5px 0;"><strong>Email:</strong> \${clientEmail}</p>
-              <p style="margin: 5px 0;"><strong>Signed:</strong> \${new Date().toLocaleString()}</p>
+              <p style="margin: 5px 0;"><strong>Title:</strong> ${proposalTitle}</p>
+              <p style="margin: 5px 0;"><strong>Client:</strong> ${clientName}</p>
+              <p style="margin: 5px 0;"><strong>Email:</strong> ${clientEmail}</p>
+              <p style="margin: 5px 0;"><strong>Signed:</strong> ${new Date().toLocaleString()}</p>
             </div>
             
             <div style="text-align: center; margin: 30px 0;">
-              <a href="\${PORTAL_URL}/admin/proposals/\${proposalId}/counter-sign" 
+              <a href="${PORTAL_URL}/admin/proposals/${proposalId}/counter-sign" 
                  style="background: linear-gradient(135deg, #4bbf39 0%, #39bfb0 100%); 
                         color: white; 
                         padding: 15px 40px; 
@@ -115,21 +122,14 @@ async function sendAdminCounterSignatureEmail(proposalData) {
               </a>
             </div>
             
-            \${clientSignatureUrl ? \`
-            <div style="margin-top: 30px; padding-top: 20px; border-top: 1px solid #ddd;">
-              <p style="font-size: 12px; color: #666;">
-                <strong>Client's Signature:</strong><br>
-                <img src="\${clientSignatureUrl}" alt="Client Signature" style="max-width: 300px; border: 1px solid #ddd; padding: 10px; margin-top: 10px; background: white;">
-              </p>
-            </div>
-            \` : ''}
+            ${signatureSection}
           </div>
           
           <div style="background: #333; color: white; padding: 20px; text-align: center; font-size: 12px;">
-            <p style="margin: 0;">© \${new Date().getFullYear()} Uptrade Media. All rights reserved.</p>
+            <p style="margin: 0;">© ${new Date().getFullYear()} Uptrade Media. All rights reserved.</p>
           </div>
         </div>
-      \`
+      `
     })
   } catch (emailError) {
     console.error('Failed to send counter-signature email:', emailError)
@@ -140,7 +140,23 @@ async function sendAdminCounterSignatureEmail(proposalData) {
 async function sendFullyExecutedContract(proposalData) {
   const { proposalId, proposalTitle, clientName, clientEmail, clientSignatureUrl, adminSignatureUrl } = proposalData
   
-  const emailContent = \`
+  const clientSignatureSection = clientSignatureUrl ? `
+    <div style="margin-bottom: 20px;">
+      <p style="margin: 5px 0; font-weight: bold;">Client Signature:</p>
+      <img src="${clientSignatureUrl}" alt="Client Signature" style="max-width: 250px; border: 1px solid #ddd; padding: 10px; background: white;">
+      <p style="margin: 5px 0; font-size: 12px; color: #666;">Signed by: ${clientName}</p>
+    </div>
+  ` : ''
+  
+  const adminSignatureSection = adminSignatureUrl ? `
+    <div>
+      <p style="margin: 5px 0; font-weight: bold;">Uptrade Media Signature:</p>
+      <img src="${adminSignatureUrl}" alt="Admin Signature" style="max-width: 250px; border: 1px solid #ddd; padding: 10px; background: white;">
+      <p style="margin: 5px 0; font-size: 12px; color: #666;">Signed by: Uptrade Media</p>
+    </div>
+  ` : ''
+  
+  const emailContent = `
     <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
       <div style="background: linear-gradient(135deg, #4bbf39 0%, #39bfb0 100%); padding: 30px; text-align: center;">
         <h1 style="color: white; margin: 0;">✓ Contract Fully Executed</h1>
@@ -148,19 +164,19 @@ async function sendFullyExecutedContract(proposalData) {
       
       <div style="padding: 30px; background: #f9f9f9;">
         <p style="font-size: 16px; color: #333;">
-          Great news! The proposal <strong>"\${proposalTitle}"</strong> has been fully executed by both parties.
+          Great news! The proposal <strong>"${proposalTitle}"</strong> has been fully executed by both parties.
         </p>
         
         <div style="background: white; border-left: 4px solid #4bbf39; padding: 20px; margin: 20px 0;">
           <h3 style="margin-top: 0; color: #333;">Contract Details</h3>
-          <p style="margin: 5px 0;"><strong>Title:</strong> \${proposalTitle}</p>
-          <p style="margin: 5px 0;"><strong>Client:</strong> \${clientName}</p>
+          <p style="margin: 5px 0;"><strong>Title:</strong> ${proposalTitle}</p>
+          <p style="margin: 5px 0;"><strong>Client:</strong> ${clientName}</p>
           <p style="margin: 5px 0;"><strong>Status:</strong> Fully Executed</p>
-          <p style="margin: 5px 0;"><strong>Date:</strong> \${new Date().toLocaleString()}</p>
+          <p style="margin: 5px 0;"><strong>Date:</strong> ${new Date().toLocaleString()}</p>
         </div>
         
         <div style="text-align: center; margin: 30px 0;">
-          <a href="\${PORTAL_URL}/proposals/\${proposalId}" 
+          <a href="${PORTAL_URL}/proposals/${proposalId}" 
              style="background: linear-gradient(135deg, #4bbf39 0%, #39bfb0 100%); 
                     color: white; 
                     padding: 15px 40px; 
@@ -175,22 +191,8 @@ async function sendFullyExecutedContract(proposalData) {
         
         <div style="background: #e8f5e9; padding: 20px; border-radius: 5px; margin: 20px 0;">
           <h4 style="margin-top: 0; color: #2e7d32;">Signatures</h4>
-          
-          \${clientSignatureUrl ? \`
-          <div style="margin-bottom: 20px;">
-            <p style="margin: 5px 0; font-weight: bold;">Client Signature:</p>
-            <img src="\${clientSignatureUrl}" alt="Client Signature" style="max-width: 250px; border: 1px solid #ddd; padding: 10px; background: white;">
-            <p style="margin: 5px 0; font-size: 12px; color: #666;">Signed by: \${clientName}</p>
-          </div>
-          \` : ''}
-          
-          \${adminSignatureUrl ? \`
-          <div>
-            <p style="margin: 5px 0; font-weight: bold;">Uptrade Media Signature:</p>
-            <img src="\${adminSignatureUrl}" alt="Admin Signature" style="max-width: 250px; border: 1px solid #ddd; padding: 10px; background: white;">
-            <p style="margin: 5px 0; font-size: 12px; color: #666;">Signed by: Uptrade Media</p>
-          </div>
-          \` : ''}
+          ${clientSignatureSection}
+          ${adminSignatureSection}
         </div>
         
         <p style="font-size: 14px; color: #666;">
@@ -200,13 +202,13 @@ async function sendFullyExecutedContract(proposalData) {
       </div>
       
       <div style="background: #333; color: white; padding: 20px; text-align: center; font-size: 12px;">
-        <p style="margin: 0;">© \${new Date().getFullYear()} Uptrade Media. All rights reserved.</p>
+        <p style="margin: 0;">© ${new Date().getFullYear()} Uptrade Media. All rights reserved.</p>
       </div>
     </div>
-  \`
+  `
   
   try {
-// Send to client
+    // Send to client
     await resend.emails.send({
       from: process.env.RESEND_FROM_EMAIL || 'proposals@send.uptrademedia.com',
       to: clientEmail,
@@ -393,13 +395,20 @@ export async function handler(event) {
         
         // Send account setup email if not already set up
         if (!contact.account_setup || contact.account_setup === 'false') {
-          const setupToken = jwt.sign(
-            { contactId: contact.id, email: contact.email, purpose: 'account_setup' },
-            JWT_SECRET,
-            { expiresIn: '7d' }
-          )
+          // Generate Supabase magic link for account setup
+          const { data: linkData, error: linkError } = await supabase.auth.admin.generateLink({
+            type: 'magiclink',
+            email: contact.email,
+            options: {
+              redirectTo: `${PORTAL_URL}/account-setup`
+            }
+          })
           
-          const setupUrl = `${PORTAL_URL}/setup-account?token=${setupToken}`
+          if (linkError) {
+            console.error('Error generating magic link:', linkError)
+          }
+          
+          const setupUrl = linkData?.properties?.action_link || `${PORTAL_URL}/login`
           
           await resend.emails.send({
             from: process.env.RESEND_FROM_EMAIL || 'portal@send.uptrademedia.com',

@@ -1,9 +1,7 @@
 // netlify/functions/proposals-analytics.js
 // Fetch proposal analytics and activity data
-import jwt from 'jsonwebtoken'
 import { createClient } from '@supabase/supabase-js'
-
-const JWT_SECRET = process.env.AUTH_JWT_SECRET
+import { getAuthenticatedUser } from './utils/supabase.js'
 
 const supabase = createClient(
   process.env.SUPABASE_URL,
@@ -32,31 +30,18 @@ export async function handler(event) {
 
   try {
     // Verify admin authentication
-    const authHeader = event.headers.authorization
-    const cookieToken = event.headers.cookie?.match(/um_session=([^;]+)/)?.[1]
-    const token = authHeader?.replace('Bearer ', '') || cookieToken
-
-    if (!token) {
+    const { contact, error: authError } = await getAuthenticatedUser(event)
+    
+    if (authError || !contact) {
       return {
         statusCode: 401,
         headers,
-        body: JSON.stringify({ error: 'No authentication token provided' })
-      }
-    }
-
-    let user
-    try {
-      user = jwt.verify(token, JWT_SECRET)
-    } catch (err) {
-      return {
-        statusCode: 401,
-        headers,
-        body: JSON.stringify({ error: 'Invalid or expired token' })
+        body: JSON.stringify({ error: authError || 'No authentication token provided' })
       }
     }
 
     // Only admins can view analytics
-    if (user.role !== 'admin') {
+    if (contact.role !== 'admin') {
       return {
         statusCode: 403,
         headers,

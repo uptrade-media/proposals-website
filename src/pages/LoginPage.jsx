@@ -8,7 +8,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../co
 import { Lock, Mail, Eye, EyeOff, ShieldCheck, Loader2, HelpCircle, ChevronRight } from 'lucide-react'
 const logo = '/logo.svg'
 import useAuthStore from '../lib/auth-store'
-import { signInWithGoogle } from '../lib/supabase-auth'
+import { signInWithGoogle, resetPasswordForEmail } from '../lib/supabase-auth'
 
 // purely visual; server enforces access
 const BRAND_UI = {
@@ -161,14 +161,8 @@ export default function LoginPage() {
     setForgotLoading(true)
     setForgotMsg('')
     try {
-      // adjust to your actual function name if different
-      const res = await fetch('/.netlify/functions/auth-forgot', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email: (forgotEmail || email).trim() })
-      })
-      const data = await res.json().catch(() => ({}))
-      if (!res.ok) throw new Error(data.error || 'Unable to process request')
+      // Use Supabase password reset
+      await resetPasswordForEmail((forgotEmail || email).trim())
       setForgotMsg('If your account exists, we emailed instructions to reset access.')
     } catch (err) {
       const msg = (err && typeof err === 'object' && 'message' in err) ? err.message : String(err || '')

@@ -7,7 +7,7 @@
 
 import { createPortfolioItem, captureTrifolioScreenshot, uploadPortfolioImage } from '../../src/lib/portfolio-admin.js'
 import { createClient } from '@supabase/supabase-js'
-import jwt from 'jsonwebtoken'
+import { getAuthenticatedUser } from './utils/supabase.js'
 
 const supabase = createClient(
   process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL,
@@ -24,19 +24,17 @@ export async function handler(event) {
   }
 
   try {
-    // 1. Verify authentication
-    const token = event.headers.cookie?.match(/um_session=([^;]+)/)?.[1]
-    if (!token) {
+    // 1. Verify authentication using Supabase
+    const { user, contact, error: authError } = await getAuthenticatedUser(event)
+    if (authError || !contact) {
       return {
         statusCode: 401,
         body: JSON.stringify({ error: 'Unauthorized' })
       }
     }
-
-    const user = jwt.verify(token, process.env.AUTH_JWT_SECRET)
     
     // 2. Check admin role
-    if (user.role !== 'admin') {
+    if (contact.role !== 'admin') {
       return {
         statusCode: 403,
         body: JSON.stringify({ error: 'Admin privileges required' })

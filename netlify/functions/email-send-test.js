@@ -1,21 +1,29 @@
 import { Resend } from 'resend'
-import { neon } from '@neondatabase/serverless'
-import jwt from 'jsonwebtoken'
+import { createSupabaseAdmin, getAuthenticatedUser } from './utils/supabase.js'
 
 const resend = new Resend(process.env.RESEND_API_KEY)
-const sql = neon(process.env.DATABASE_URL)
 
 export async function handler(event) {
+  const headers = {
+    'Access-Control-Allow-Origin': '*',
+    'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+    'Access-Control-Allow-Methods': 'POST, OPTIONS',
+    'Content-Type': 'application/json'
+  }
+
+  if (event.httpMethod === 'OPTIONS') {
+    return { statusCode: 204, headers }
+  }
+
   try {
-    // Verify auth
-    const token = event.headers.cookie?.match(/um_session=([^;]+)/)?.[1]
-    if (!token) {
-      return { statusCode: 401, body: JSON.stringify({ error: 'Unauthorized' }) }
+    // Verify auth using Supabase
+    const { user, contact, error: authError } = await getAuthenticatedUser(event)
+    if (authError || !contact) {
+      return { statusCode: 401, headers, body: JSON.stringify({ error: 'Unauthorized' }) }
     }
 
-    const user = jwt.verify(token, process.env.AUTH_JWT_SECRET)
-    if (user.role !== 'admin') {
-      return { statusCode: 403, body: JSON.stringify({ error: 'Admin only' }) }
+    if (contact.role !== 'admin') {
+      return { statusCode: 403, headers, body: JSON.stringify({ error: 'Admin only' }) }
     }
 
     const body = JSON.parse(event.body || '{}')
@@ -28,12 +36,16 @@ export async function handler(event) {
       }
     }
 
-    // Get contact
-    const [contact] = await sql`
-      SELECT email, name FROM contacts WHERE id = ${contactId}
-    `
+    const supabase = createSupabaseAdmin()
 
-    if (!contact) {
+    // Get contact
+    const { data: targetContact, error: contactError } = await supabase
+      .from('contacts')
+      .select('email, name')
+      .eq('id', contactId)
+      .single()
+
+    if (contactError || !targetContact) {
       return {
         statusCode: 404,
         body: JSON.stringify({ error: 'Contact not found' })
@@ -47,7 +59,7 @@ export async function handler(event) {
 
     const response = await resend.emails.send({
       from: fromEmail,
-      to: contact.email,
+      to: targetContact.email,
       subject: `[TEST] ${subject}`,
       html: `<p><strong>[This is a test email]</strong></p>${html}`,
     })
@@ -57,7 +69,7 @@ export async function handler(event) {
       body: JSON.stringify({
         success: true,
         messageId: response.data?.id,
-        email: contact.email
+        email: targetContact.email
       }),
       headers: { 'Content-Type': 'application/json' }
     }

@@ -1,11 +1,8 @@
 // netlify/functions/proposals-create-ai.js
 // AI-powered proposal generator - similar to blog-create-ai.js
-import jwt from 'jsonwebtoken'
 import { createClient } from '@supabase/supabase-js'
 import OpenAI from 'openai'
-
-const COOKIE_NAME = process.env.SESSION_COOKIE_NAME || 'um_session'
-const JWT_SECRET = process.env.AUTH_JWT_SECRET
+import { getAuthenticatedUser } from './utils/supabase.js'
 
 const supabase = createClient(
   process.env.SUPABASE_URL,
@@ -122,18 +119,10 @@ export async function handler(event) {
     }
   }
 
-  if (!JWT_SECRET) {
-    return {
-      statusCode: 500,
-      headers,
-      body: JSON.stringify({ error: 'Server not configured' })
-    }
-  }
-
-  const rawCookie = event.headers.cookie || ''
-  const token = rawCookie.split('; ').find(c => c.startsWith(`${COOKIE_NAME}=`))?.split('=')[1]
+  // Authenticate using Supabase
+  const { contact, error: authError } = await getAuthenticatedUser(event)
   
-  if (!token) {
+  if (authError || !contact) {
     return {
       statusCode: 401,
       headers,
@@ -141,17 +130,16 @@ export async function handler(event) {
     }
   }
 
-  try {
-    const payload = jwt.verify(token, JWT_SECRET)
-    
-    // Only admins can create proposals
-    if (payload.role !== 'admin') {
-      return {
-        statusCode: 403,
-        headers,
-        body: JSON.stringify({ error: 'Only admins can create proposals' })
-      }
+  // Only admins can create proposals
+  if (contact.role !== 'admin') {
+    return {
+      statusCode: 403,
+      headers,
+      body: JSON.stringify({ error: 'Only admins can create proposals' })
     }
+  }
+
+  try {
 
     // Parse request body
     const formData = JSON.parse(event.body || '{}')

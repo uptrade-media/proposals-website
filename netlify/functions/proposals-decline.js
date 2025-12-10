@@ -1,13 +1,11 @@
-import jwt from 'jsonwebtoken'
-import { neon } from '@neondatabase/serverless'
-import { drizzle } from 'drizzle-orm/neon-http'
-import { eq } from 'drizzle-orm'
-import * as schema from '../../src/db/schema.js'
+import { createClient } from '@supabase/supabase-js'
 import { Resend } from 'resend'
+import { getAuthenticatedUser } from './utils/supabase.js'
 
-const COOKIE_NAME = process.env.SESSION_COOKIE_NAME || 'um_session'
-const JWT_SECRET = process.env.AUTH_JWT_SECRET
-const DATABASE_URL = process.env.DATABASE_URL
+const supabase = createClient(
+  process.env.SUPABASE_URL,
+  process.env.SUPABASE_SERVICE_ROLE_KEY
+)
 const RESEND_API_KEY = process.env.RESEND_API_KEY
 const RESEND_FROM_EMAIL = process.env.RESEND_FROM_EMAIL || 'portal@send.uptrademedia.com'
 const ADMIN_EMAIL = process.env.ADMIN_EMAIL || 'ramsey@uptrademedia.com'
@@ -15,7 +13,7 @@ const ADMIN_EMAIL = process.env.ADMIN_EMAIL || 'ramsey@uptrademedia.com'
 export async function handler(event) {
   const headers = {
     'Access-Control-Allow-Origin': '*',
-    'Access-Control-Allow-Headers': 'Content-Type',
+    'Access-Control-Allow-Headers': 'Content-Type, Authorization',
     'Access-Control-Allow-Methods': 'POST, OPTIONS',
     'Content-Type': 'application/json'
   }
@@ -33,27 +31,16 @@ export async function handler(event) {
   }
 
   try {
-    // Verify authentication - can be called by client or admin
-    if (!JWT_SECRET) {
-      return {
-        statusCode: 500,
-        headers,
-        body: JSON.stringify({ error: 'Server not configured' })
-      }
-    }
-
-    const rawCookie = event.headers.cookie || ''
-    const token = rawCookie.split('; ').find(c => c.startsWith(`${COOKIE_NAME}=`))?.split('=')[1]
-
-    if (!token) {
+    // Verify authentication
+    const { contact, error: authError } = await getAuthenticatedUser(event)
+    
+    if (authError || !contact) {
       return {
         statusCode: 401,
         headers,
-        body: JSON.stringify({ error: 'Not authenticated' })
+        body: JSON.stringify({ error: authError || 'Not authenticated' })
       }
     }
-
-    const payload = jwt.verify(token, JWT_SECRET)
 
     // Get proposal ID from query
     const proposalId = event.queryStringParameters?.id
@@ -69,24 +56,17 @@ export async function handler(event) {
     const body = JSON.parse(event.body || '{}')
     const { reason } = body
 
-    if (!DATABASE_URL) {
-      return {
-        statusCode: 500,
-        headers,
-        body: JSON.stringify({ error: 'Database not configured' })
-      }
-    }
+    // Fetch proposal with contact
+    const { data: proposal, error: proposalError } = await supabase
+      .from('proposals')
+      .select(`
+        *,
+        contact:contacts!proposals_contact_id_fkey (*)
+      `)
+      .eq('id', proposalId)
+      .single()
 
-    const sql = neon(DATABASE_URL)
-    const db = drizzle(sql, { schema })
-
-    // Verify proposal exists
-    const proposal = await db.query.proposals.findFirst({
-      where: eq(schema.proposals.id, proposalId),
-      with: { contact: true }
-    })
-
-    if (!proposal) {
+    if (proposalError || !proposal) {
       return {
         statusCode: 404,
         headers,
@@ -95,7 +75,7 @@ export async function handler(event) {
     }
 
     // Verify authorization: client can only decline their own, admin can decline any
-    if (payload.role !== 'admin' && proposal.contactId !== payload.userId) {
+    if (contact.role !== 'admin' && proposal.contact_id !== contact.id) {
       return {
         statusCode: 403,
         headers,
@@ -104,28 +84,36 @@ export async function handler(event) {
     }
 
     // Update proposal status
-    const updated = await db
-      .update(schema.proposals)
-      .set({
+    const { data: updatedProposal, error: updateError } = await supabase
+      .from('proposals')
+      .update({
         status: 'declined',
-        version: proposal.version + 1,
-        updatedAt: new Date()
+        version: (proposal.version || 0) + 1,
+        updated_at: new Date().toISOString()
       })
-      .where(eq(schema.proposals.id, proposalId))
-      .returning()
+      .eq('id', proposalId)
+      .select()
+      .single()
 
-    const updatedProposal = updated[0]
+    if (updateError) {
+      throw updateError
+    }
 
     // Log activity: proposal declined
-    await db.insert(schema.proposalActivity).values({
-      proposalId: proposalId,
-      action: 'declined',
-      performedBy: payload.userId,
-      metadata: JSON.stringify({
-        reason: reason || 'No reason provided',
-        timestamp: new Date().toISOString()
+    await supabase
+      .from('proposal_activity')
+      .insert({
+        proposal_id: proposalId,
+        action: 'declined',
+        performed_by: contact.id,
+        metadata: JSON.stringify({
+          reason: reason || 'No reason provided',
+          timestamp: new Date().toISOString()
+        })
       })
-    }).catch(err => console.error('Error logging proposal decline:', err))
+      .then(({ error }) => {
+        if (error) console.error('Error logging proposal decline:', error)
+      })
 
     // Send emails
     if (RESEND_API_KEY) {
@@ -184,14 +172,6 @@ export async function handler(event) {
     }
   } catch (error) {
     console.error('Error declining proposal:', error)
-
-    if (error.name === 'JsonWebTokenError' || error.name === 'TokenExpiredError') {
-      return {
-        statusCode: 401,
-        headers,
-        body: JSON.stringify({ error: 'Invalid or expired session' })
-      }
-    }
 
     return {
       statusCode: 500,

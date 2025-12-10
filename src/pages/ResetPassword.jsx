@@ -1,49 +1,59 @@
 // src/pages/ResetPassword.jsx
+// Uses Supabase Auth for password reset - user clicks link in email,
+// Supabase establishes session, then they can update password here
 import { useState, useEffect } from 'react'
-import { useNavigate, useSearchParams } from 'react-router-dom'
+import { useNavigate } from 'react-router-dom'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../components/ui/card'
 import { Button } from '../components/ui/button'
 import { Input } from '../components/ui/input'
 import { Label } from '../components/ui/label'
 import { Alert, AlertDescription } from '../components/ui/alert'
-import { Loader2, Eye, EyeOff, Lock, CheckCircle2, ShieldCheck, ArrowRight } from 'lucide-react'
-import api from '@/lib/api'
+import { Loader2, Eye, EyeOff, Lock, CheckCircle2, ShieldCheck, ArrowRight, XCircle } from 'lucide-react'
+import { supabase, updatePassword, getSession } from '../lib/supabase-auth'
 
 export default function ResetPassword() {
-  const [searchParams] = useSearchParams()
   const navigate = useNavigate()
   
-  const [token, setToken] = useState(searchParams.get('token'))
-  const [tokenData, setTokenData] = useState(null)
   const [isValidating, setIsValidating] = useState(true)
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [error, setError] = useState('')
   const [success, setSuccess] = useState(false)
+  const [hasSession, setHasSession] = useState(false)
   
   const [newPassword, setNewPassword] = useState('')
   const [confirmPassword, setConfirmPassword] = useState('')
   const [showPassword, setShowPassword] = useState(false)
 
-  // Validate token on mount
+  // Check for Supabase session on mount (set by clicking email link)
   useEffect(() => {
-    if (!token) {
-      setError('No reset token provided')
-      setIsValidating(false)
-      return
-    }
+    checkSession()
+    
+    // Listen for auth state change (Supabase sets session from email link)
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+      console.log('[ResetPassword] Auth event:', event)
+      if (event === 'PASSWORD_RECOVERY') {
+        // User clicked password recovery link
+        setHasSession(true)
+        setIsValidating(false)
+      } else if (event === 'SIGNED_IN' && session) {
+        setHasSession(true)
+        setIsValidating(false)
+      }
+    })
 
-    validateToken()
-  }, [token])
+    return () => subscription.unsubscribe()
+  }, [])
 
-  const validateToken = async () => {
+  const checkSession = async () => {
     try {
-      const res = await api.post('/.netlify/functions/auth-validate-reset-token', { token })
-      setTokenData(res.data)
-      setIsValidating(false)
+      const { data: { session } } = await getSession()
+      if (session) {
+        setHasSession(true)
+      }
     } catch (err) {
-      setError(err.response?.data?.error || 'Invalid or expired reset link')
-      setIsValidating(false)
+      console.error('[ResetPassword] Session check error:', err)
     }
+    setIsValidating(false)
   }
 
   const handleSubmit = async (e) => {
@@ -64,11 +74,7 @@ export default function ResetPassword() {
     setIsSubmitting(true)
 
     try {
-      const res = await api.post('/.netlify/functions/auth-reset-password', {
-        token,
-        newPassword
-      })
-
+      await updatePassword(newPassword)
       setSuccess(true)
 
       // Redirect to dashboard after 2 seconds
@@ -76,7 +82,8 @@ export default function ResetPassword() {
         navigate('/dashboard')
       }, 2000)
     } catch (err) {
-      setError(err.response?.data?.error || 'Failed to reset password')
+      console.error('[ResetPassword] Update error:', err)
+      setError(err.message || 'Failed to reset password')
     } finally {
       setIsSubmitting(false)
     }
@@ -102,8 +109,8 @@ export default function ResetPassword() {
     )
   }
 
-  // Error state (invalid token)
-  if (error && !tokenData) {
+  // No session state (invalid/expired link)
+  if (!hasSession) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-[var(--surface-primary)] relative overflow-hidden p-4">
         <div className="absolute inset-0 overflow-hidden pointer-events-none">
@@ -112,12 +119,19 @@ export default function ResetPassword() {
         </div>
         <Card className="relative w-full max-w-md bg-[var(--glass-bg)] backdrop-blur-xl border-[var(--glass-border)] shadow-[var(--shadow-lg)]">
           <CardHeader className="text-center">
+            <div className="flex justify-center mb-4">
+              <div className="h-16 w-16 rounded-full bg-[var(--accent-error)]/10 flex items-center justify-center">
+                <XCircle className="h-8 w-8 text-[var(--accent-error)]" />
+              </div>
+            </div>
             <CardTitle className="text-[var(--accent-error)]">Reset Link Invalid</CardTitle>
-            <CardDescription className="text-[var(--text-secondary)]">{error}</CardDescription>
+            <CardDescription className="text-[var(--text-secondary)]">
+              This reset link may have expired or is invalid.
+            </CardDescription>
           </CardHeader>
           <CardContent>
             <p className="text-sm text-[var(--text-tertiary)] mb-6 text-center">
-              This reset link may have expired or is invalid. Please request a new password reset from the login page.
+              Please request a new password reset from the login page.
             </p>
             <Button onClick={() => navigate('/login')} variant="glass-primary" className="w-full">
               Back to Login
@@ -171,7 +185,7 @@ export default function ResetPassword() {
           </div>
           <CardTitle className="text-2xl font-semibold text-[var(--text-primary)]">Reset Your Password</CardTitle>
           <CardDescription className="text-[var(--text-secondary)]">
-            Hi {tokenData?.name}! Choose a new secure password
+            Choose a new secure password for your account
           </CardDescription>
         </CardHeader>
 

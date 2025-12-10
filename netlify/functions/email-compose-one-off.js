@@ -1,22 +1,30 @@
 import { Resend } from 'resend'
-import { neon } from '@neondatabase/serverless'
-import jwt from 'jsonwebtoken'
+import { createSupabaseAdmin, getAuthenticatedUser } from './utils/supabase.js'
 import crypto from 'crypto'
 
 const resend = new Resend(process.env.RESEND_API_KEY)
-const sql = neon(process.env.DATABASE_URL)
 
 export async function handler(event) {
+  const headers = {
+    'Access-Control-Allow-Origin': '*',
+    'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+    'Access-Control-Allow-Methods': 'POST, OPTIONS',
+    'Content-Type': 'application/json'
+  }
+
+  if (event.httpMethod === 'OPTIONS') {
+    return { statusCode: 204, headers }
+  }
+
   try {
-    // Verify auth
-    const token = event.headers.cookie?.match(/um_session=([^;]+)/)?.[1]
-    if (!token) {
-      return { statusCode: 401, body: JSON.stringify({ error: 'Unauthorized' }) }
+    // Verify auth using Supabase
+    const { user, contact, error: authError } = await getAuthenticatedUser(event)
+    if (authError || !contact) {
+      return { statusCode: 401, headers, body: JSON.stringify({ error: 'Unauthorized' }) }
     }
 
-    const user = jwt.verify(token, process.env.AUTH_JWT_SECRET)
-    if (user.role !== 'admin') {
-      return { statusCode: 403, body: JSON.stringify({ error: 'Admin only' }) }
+    if (contact.role !== 'admin') {
+      return { statusCode: 403, headers, body: JSON.stringify({ error: 'Admin only' }) }
     }
 
     const body = JSON.parse(event.body || '{}')
@@ -43,12 +51,17 @@ export async function handler(event) {
       }
     }
 
-    // Get contact
-    const [contact] = await sql`
-      SELECT * FROM contacts WHERE id = ${contactId} AND role = 'client'
-    `
+    const supabase = createSupabaseAdmin()
 
-    if (!contact) {
+    // Get contact
+    const { data: targetContact, error: contactError } = await supabase
+      .from('contacts')
+      .select('*')
+      .eq('id', contactId)
+      .eq('role', 'client')
+      .single()
+
+    if (contactError || !targetContact) {
       return {
         statusCode: 404,
         body: JSON.stringify({ error: 'Contact not found' })
@@ -57,65 +70,96 @@ export async function handler(event) {
 
     // Create campaign
     const campaignId = crypto.randomUUID()
-    const now = new Date()
-    const scheduledStart = scheduleType === 'later' ? new Date(scheduledTime) : now
+    const now = new Date().toISOString()
+    const scheduledStart = scheduleType === 'later' ? new Date(scheduledTime).toISOString() : now
 
-    await sql`
-      INSERT INTO campaigns (
-        id, type, name, mailbox_id, status, scheduled_start,
-        window_start_local, window_end_local, daily_cap, warmup_percent,
-        goal_url, daypart_enabled, created_at
-      ) VALUES (
-        ${campaignId}, 'one_off', ${name}, ${mailboxId}, 'scheduled',
-        ${scheduledStart},
-        ${daypartEnabled ? 9 : 0}, ${daypartEnabled ? 17 : 23}, ${dailyCap}, ${warmupPercent},
-        ${goalUrl || null}, ${daypartEnabled}, ${now}
-      )
-    `
+    const { error: campaignError } = await supabase
+      .from('campaigns')
+      .insert({
+        id: campaignId,
+        type: 'one_off',
+        name,
+        mailbox_id: mailboxId,
+        status: 'scheduled',
+        scheduled_start: scheduledStart,
+        window_start_local: daypartEnabled ? 9 : 0,
+        window_end_local: daypartEnabled ? 17 : 23,
+        daily_cap: dailyCap,
+        warmup_percent: warmupPercent,
+        goal_url: goalUrl || null,
+        daypart_enabled: daypartEnabled,
+        created_at: now
+      })
+
+    if (campaignError) {
+      console.error('Campaign insert error:', campaignError)
+      return {
+        statusCode: 500,
+        body: JSON.stringify({ error: 'Failed to create campaign' })
+      }
+    }
 
     // Create initial step
-    await sql`
-      INSERT INTO campaign_steps (
-        id, campaign_id, step_index, delay_days, subject_override, html_override
-      ) VALUES (
-        ${crypto.randomUUID()}, ${campaignId}, 0, 0, ${subject}, ${html}
-      )
-    `
+    const { error: stepError } = await supabase
+      .from('campaign_steps')
+      .insert({
+        id: crypto.randomUUID(),
+        campaign_id: campaignId,
+        step_index: 0,
+        delay_days: 0,
+        subject_override: subject,
+        html_override: html
+      })
+
+    if (stepError) {
+      console.error('Step insert error:', stepError)
+    }
 
     // Create follow-up steps
     for (let i = 0; i < followUpSteps.length; i++) {
       const step = followUpSteps[i]
-      await sql`
-        INSERT INTO campaign_steps (
-          id, campaign_id, step_index, delay_days, subject_override, html_override
-        ) VALUES (
-          ${crypto.randomUUID()}, ${campaignId}, ${i + 1}, ${step.delayDays},
-          ${step.subjectOverride}, ${step.htmlOverride}
-        )
-      `
+      await supabase
+        .from('campaign_steps')
+        .insert({
+          id: crypto.randomUUID(),
+          campaign_id: campaignId,
+          step_index: i + 1,
+          delay_days: step.delayDays,
+          subject_override: step.subjectOverride,
+          html_override: step.htmlOverride
+        })
     }
 
     // Create recipient
     const unsubToken = crypto.randomUUID()
     const recipientId = crypto.randomUUID()
 
-    await sql`
-      INSERT INTO recipients (
-        id, campaign_id, contact_id, step_index, status, unsubscribe_token, created_at
-      ) VALUES (
-        ${recipientId}, ${campaignId}, ${contactId}, 0, 'queued', ${unsubToken}, ${now}
-      )
-    `
+    const { error: recipientError } = await supabase
+      .from('recipients')
+      .insert({
+        id: recipientId,
+        campaign_id: campaignId,
+        contact_id: contactId,
+        step_index: 0,
+        status: 'queued',
+        unsubscribe_token: unsubToken,
+        created_at: now
+      })
+
+    if (recipientError) {
+      console.error('Recipient insert error:', recipientError)
+    }
 
     // Log activity
-    await sql`
-      INSERT INTO client_activity (
-        id, contact_id, activity_type, description, created_at
-      ) VALUES (
-        ${crypto.randomUUID()}, ${contactId}, 'email_campaign_created',
-        ${'One-off campaign: ' + name}, ${now}
-      )
-    `
+    await supabase
+      .from('client_activity')
+      .insert({
+        id: crypto.randomUUID(),
+        contact_id: contactId,
+        activity_type: 'email_campaign_created',
+        description: `One-off campaign: ${name}`,
+        created_at: now
+      })
 
     return {
       statusCode: 200,

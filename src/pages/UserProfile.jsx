@@ -5,7 +5,6 @@ import { Button } from '@/components/ui/button'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { ArrowLeft, User, Lock, Bell } from 'lucide-react'
 import useAuthStore from '@/lib/auth-store'
-import TwoFactorSettings from '@/components/TwoFactorSettings'
 
 export default function UserProfile() {
   const navigate = useNavigate()
@@ -109,7 +108,22 @@ export default function UserProfile() {
 
           {/* Security Tab */}
           <TabsContent value="security">
-            <TwoFactorSettings userEmail={user.email} />
+            <Card className="bg-[var(--glass-bg)] backdrop-blur-xl border-[var(--glass-border)]">
+              <CardHeader>
+                <CardTitle className="text-[var(--text-primary)]">Security Settings</CardTitle>
+                <CardDescription className="text-[var(--text-secondary)]">
+                  Manage your account security
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-6">
+                <div className="p-4 bg-[var(--brand-primary)]/5 border border-[var(--brand-primary)]/20 rounded-xl">
+                  <p className="text-sm text-[var(--text-primary)]">
+                    🔐 Your account is secured with {user.googleId ? 'Google Sign-In' : 'email and password'}. 
+                    To change your password, use the "Forgot Password" option on the login page.
+                  </p>
+                </div>
+              </CardContent>
+            </Card>
           </TabsContent>
 
           {/* Notifications Tab */}

@@ -1,5 +1,5 @@
 import { create } from 'zustand'
-import { supabase, getCurrentUser, getSession, signOut } from './supabase-auth'
+import { supabase, getCurrentUser, getSession, signOut, signInWithPassword, signUp as supabaseSignUp } from './supabase-auth'
 
 // Global flag to prevent multiple simultaneous auth checks
 let isCheckingAuth = false
@@ -82,49 +82,36 @@ const useAuthStore = create((set, get) => ({
     return authCheckPromise
   },
 
-  // Login function (cookie-based via Netlify function)
+  // Login function using Supabase Auth
   login: async (email, password, nextPath = '/') => {
     set({ isLoading: true, error: null })
     
     try {
-      const response = await fetch('/.netlify/functions/auth-login', {
-        method: 'POST',
-        credentials: 'include',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ 
-          email: email.trim(), 
-          password,
-          next: nextPath
-        })
-      })
-
-      let data = {}
-      try { data = await response.json() } catch {}
-
-      if (!response.ok) {
-        const errorMessage = data?.error || 'Login failed'
-        set({ 
-          isLoading: false, 
-          error: errorMessage,
-          isAuthenticated: false
-        })
-        return { success: false, error: errorMessage }
-      }
-
-      // Check if 2FA is required
-      if (data.requiresMfa) {
-        console.log('[AuthStore] 2FA required for login')
-        set({ isLoading: false })
-        return { success: true, requiresMfa: true }
-      }
-
-      // Cookie is set by server, fetch user data
-      await get().checkAuth()
+      // Use Supabase signInWithPassword
+      const { user, session } = await signInWithPassword(email.trim(), password)
       
-      set({ isLoading: false })
-      return { success: true, redirect: data.redirect || '/' }
+      if (!session) {
+        throw new Error('Login failed - no session returned')
+      }
+      
+      console.log('[AuthStore] Supabase login successful, fetching user data...')
+      
+      // Fetch user data from contacts table
+      const contactUser = await getCurrentUser()
+      
+      if (contactUser) {
+        get().setUser(contactUser)
+        set({ isLoading: false })
+        
+        // Determine redirect based on role
+        const redirect = contactUser.role === 'admin' ? '/admin' : (nextPath || '/dashboard')
+        return { success: true, redirect }
+      } else {
+        throw new Error('Account not found in system')
+      }
       
     } catch (error) {
+      console.error('[AuthStore] Login error:', error)
       const errorMessage = error.message || 'Login failed'
       set({ 
         isLoading: false, 
@@ -148,43 +135,34 @@ const useAuthStore = create((set, get) => ({
     window.location.href = '/login'
   },
 
-  // Sign up function (create new account)
+  // Sign up function using Supabase Auth
   signup: async (email, password, name, nextPath = '/') => {
     set({ isLoading: true, error: null })
     
     try {
-      const response = await fetch('/.netlify/functions/auth-signup', {
-        method: 'POST',
-        credentials: 'include',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ 
-          email: email.trim(), 
-          password,
-          name: name.trim(),
-          next: nextPath
-        })
-      })
-
-      let data = {}
-      try { data = await response.json() } catch {}
-
-      if (!response.ok) {
-        const errorMessage = data?.error || 'Sign up failed'
-        set({ 
-          isLoading: false, 
-          error: errorMessage,
-          isAuthenticated: false
-        })
-        return { success: false, error: errorMessage }
+      // Use Supabase signUp
+      const { user, session } = await supabaseSignUp(email.trim(), password, { name: name.trim() })
+      
+      if (!session) {
+        // Supabase might require email confirmation
+        set({ isLoading: false })
+        return { 
+          success: true, 
+          requiresConfirmation: true,
+          message: 'Please check your email to confirm your account.'
+        }
       }
-
-      // Cookie is set by server, fetch user data
+      
+      console.log('[AuthStore] Supabase signup successful')
+      
+      // Fetch user data from contacts table
       await get().checkAuth()
       
       set({ isLoading: false })
-      return { success: true, redirect: data.redirect || '/' }
+      return { success: true, redirect: nextPath || '/dashboard' }
       
     } catch (error) {
+      console.error('[AuthStore] Signup error:', error)
       const errorMessage = error.message || 'Sign up failed'
       set({ 
         isLoading: false, 

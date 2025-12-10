@@ -1,14 +1,12 @@
 // netlify/functions/proposals-accept.js
-import jwt from 'jsonwebtoken'
-import { neon } from '@neondatabase/serverless'
-import { drizzle } from 'drizzle-orm/neon-http'
-import { eq } from 'drizzle-orm'
+import { createClient } from '@supabase/supabase-js'
 import { Resend } from 'resend'
-import * as schema from '../../src/db/schema.js'
+import { getAuthenticatedUser } from './utils/supabase.js'
 
-const COOKIE_NAME = process.env.SESSION_COOKIE_NAME || 'um_session'
-const JWT_SECRET = process.env.AUTH_JWT_SECRET
-const DATABASE_URL = process.env.DATABASE_URL
+const supabase = createClient(
+  process.env.SUPABASE_URL,
+  process.env.SUPABASE_SERVICE_ROLE_KEY
+)
 const RESEND_API_KEY = process.env.RESEND_API_KEY
 const RESEND_FROM_EMAIL = process.env.RESEND_FROM_EMAIL || 'portal@send.uptrademedia.com'
 const ADMIN_EMAIL = process.env.ADMIN_EMAIL
@@ -17,7 +15,7 @@ export async function handler(event) {
   // CORS headers
   const headers = {
     'Access-Control-Allow-Origin': '*',
-    'Access-Control-Allow-Headers': 'Content-Type',
+    'Access-Control-Allow-Headers': 'Content-Type, Authorization',
     'Access-Control-Allow-Methods': 'POST, OPTIONS',
     'Content-Type': 'application/json'
   }
@@ -44,59 +42,29 @@ export async function handler(event) {
     }
   }
 
-  // Verify authentication
-  if (!JWT_SECRET) {
-    return {
-      statusCode: 500,
-      headers,
-      body: JSON.stringify({ error: 'Server not configured' })
-    }
-  }
-
-  const rawCookie = event.headers.cookie || ''
-  const token = rawCookie.split('; ').find(c => c.startsWith(`${COOKIE_NAME}=`))?.split('=')[1]
-  
-  if (!token) {
-    return {
-      statusCode: 401,
-      headers,
-      body: JSON.stringify({ error: 'Not authenticated' })
-    }
-  }
-
   try {
-    const payload = jwt.verify(token, JWT_SECRET)
+    // Verify authentication
+    const { contact, error: authError } = await getAuthenticatedUser(event)
     
-    // Verify user is authenticated (accept all auth types: google, password, email, etc)
-    if (!payload.userId && !payload.email) {
+    if (authError || !contact) {
       return {
-        statusCode: 403,
+        statusCode: 401,
         headers,
-        body: JSON.stringify({ error: 'Invalid session' })
+        body: JSON.stringify({ error: authError || 'Not authenticated' })
       }
     }
 
-    // Connect to database
-    if (!DATABASE_URL) {
-      return {
-        statusCode: 500,
-        headers,
-        body: JSON.stringify({ error: 'Database not configured' })
-      }
-    }
+    // Fetch proposal with contact
+    const { data: proposal, error: proposalError } = await supabase
+      .from('proposals')
+      .select(`
+        *,
+        contact:contacts!proposals_contact_id_fkey (*)
+      `)
+      .eq('id', proposalId)
+      .single()
 
-    const sql = neon(DATABASE_URL)
-    const db = drizzle(sql, { schema })
-
-    // Fetch proposal
-    const proposal = await db.query.proposals.findFirst({
-      where: eq(schema.proposals.id, proposalId),
-      with: {
-        contact: true
-      }
-    })
-
-    if (!proposal) {
+    if (proposalError || !proposal) {
       return {
         statusCode: 404,
         headers,
@@ -105,7 +73,7 @@ export async function handler(event) {
     }
 
     // Verify user owns this proposal
-    if (proposal.contactId !== payload.userId) {
+    if (proposal.contact_id !== contact.id) {
       return {
         statusCode: 403,
         headers,
@@ -114,7 +82,7 @@ export async function handler(event) {
     }
 
     // Check if already accepted
-    if (proposal.status === 'accepted' || proposal.signedAt) {
+    if (proposal.status === 'accepted' || proposal.signed_at) {
       return {
         statusCode: 400,
         headers,
@@ -122,44 +90,60 @@ export async function handler(event) {
       }
     }
 
-    // Start transaction: update proposal and create project
-    const now = new Date()
-    
     // Update proposal status
-    const [updatedProposal] = await db
-      .update(schema.proposals)
-      .set({
+    const now = new Date().toISOString()
+    
+    const { data: updatedProposal, error: updateError } = await supabase
+      .from('proposals')
+      .update({
         status: 'accepted',
-        signedAt: now,
-        updatedAt: now
+        signed_at: now,
+        updated_at: now
       })
-      .where(eq(schema.proposals.id, proposalId))
-      .returning()
+      .eq('id', proposalId)
+      .select()
+      .single()
+
+    if (updateError) {
+      throw updateError
+    }
 
     // Create project if not already linked
     let project = null
-    if (!proposal.projectId) {
-      const [newProject] = await db.insert(schema.projects).values({
-        contactId: proposal.contactId,
-        title: proposal.title,
-        description: `Project created from proposal: ${proposal.title}`,
-        status: 'planning',
-        budget: proposal.totalAmount,
-        startDate: now
-      }).returning()
+    if (!proposal.project_id) {
+      const { data: newProject, error: projectError } = await supabase
+        .from('projects')
+        .insert({
+          contact_id: proposal.contact_id,
+          title: proposal.title,
+          description: `Project created from proposal: ${proposal.title}`,
+          status: 'planning',
+          budget: proposal.total_amount,
+          start_date: now
+        })
+        .select()
+        .single()
       
-      project = newProject
+      if (projectError) {
+        console.error('Error creating project:', projectError)
+      } else {
+        project = newProject
 
-      // Link proposal to project
-      await db
-        .update(schema.proposals)
-        .set({ projectId: project.id })
-        .where(eq(schema.proposals.id, proposalId))
+        // Link proposal to project
+        await supabase
+          .from('proposals')
+          .update({ project_id: project.id })
+          .eq('id', proposalId)
+      }
     } else {
       // Fetch existing project
-      project = await db.query.projects.findFirst({
-        where: eq(schema.projects.id, proposal.projectId)
-      })
+      const { data: existingProject } = await supabase
+        .from('projects')
+        .select('*')
+        .eq('id', proposal.project_id)
+        .single()
+      
+      project = existingProject
     }
 
     // Send email notification to admin
@@ -174,8 +158,8 @@ export async function handler(event) {
             <h2>Proposal Accepted</h2>
             <p><strong>${proposal.contact.name}</strong> (${proposal.contact.email}) has accepted the proposal:</p>
             <p><strong>Title:</strong> ${proposal.title}</p>
-            <p><strong>Amount:</strong> $${proposal.totalAmount ? parseFloat(proposal.totalAmount).toFixed(2) : '0.00'}</p>
-            <p><strong>Accepted:</strong> ${now.toLocaleString()}</p>
+            <p><strong>Amount:</strong> $${proposal.total_amount ? parseFloat(proposal.total_amount).toFixed(2) : '0.00'}</p>
+            <p><strong>Accepted:</strong> ${new Date(now).toLocaleString()}</p>
             ${project ? `<p><strong>Project Created:</strong> ${project.title}</p>` : ''}
             <p><a href="${process.env.URL}/admin/proposals/${proposal.id}">View Proposal</a></p>
           `
@@ -194,7 +178,7 @@ export async function handler(event) {
         proposal: {
           id: updatedProposal.id,
           status: updatedProposal.status,
-          signedAt: updatedProposal.signedAt
+          signedAt: updatedProposal.signed_at
         },
         project: project ? {
           id: project.id,
@@ -203,24 +187,15 @@ export async function handler(event) {
         } : null
       })
     }
-
   } catch (error) {
     console.error('Error accepting proposal:', error)
-    
-    if (error.name === 'JsonWebTokenError' || error.name === 'TokenExpiredError') {
-      return {
-        statusCode: 401,
-        headers,
-        body: JSON.stringify({ error: 'Invalid or expired session' })
-      }
-    }
 
     return {
       statusCode: 500,
       headers,
-      body: JSON.stringify({ 
+      body: JSON.stringify({
         error: 'Failed to accept proposal',
-        message: error.message 
+        message: error.message
       })
     }
   }

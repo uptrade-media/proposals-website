@@ -1,15 +1,12 @@
 // netlify/functions/clients-update.js
-import { neon } from '@neondatabase/serverless'
-import jwt from 'jsonwebtoken'
-
-const sql = neon(process.env.DATABASE_URL)
+import { createSupabaseAdmin, getAuthenticatedUser } from './utils/supabase.js'
 
 export async function handler(event) {
   // CORS headers
   const origin = event.headers.origin || 'http://localhost:8888'
   const headers = {
     'Access-Control-Allow-Origin': origin,
-    'Access-Control-Allow-Headers': 'Content-Type',
+    'Access-Control-Allow-Headers': 'Content-Type, Authorization',
     'Access-Control-Allow-Methods': 'PUT, OPTIONS',
     'Access-Control-Allow-Credentials': 'true',
     'Content-Type': 'application/json',
@@ -29,9 +26,10 @@ export async function handler(event) {
   }
 
   try {
-    // Verify authentication
-    const token = event.headers.cookie?.match(/um_session=([^;]+)/)?.[1]
-    if (!token) {
+    // Verify authentication using Supabase
+    const { user, contact, error: authError } = await getAuthenticatedUser(event)
+    
+    if (authError || !contact) {
       return {
         statusCode: 401,
         headers,
@@ -39,10 +37,8 @@ export async function handler(event) {
       }
     }
 
-    const payload = jwt.verify(token, process.env.AUTH_JWT_SECRET || process.env.JWT_SECRET)
-
     // Verify admin role
-    if (payload.role !== 'admin') {
+    if (contact.role !== 'admin') {
       return {
         statusCode: 403,
         headers,
@@ -60,60 +56,19 @@ export async function handler(event) {
       }
     }
 
-    // Build dynamic update query
-    const updates = []
-    const params = [id]
-    let paramCount = 2
+    // Build update object with only provided fields
+    const updates = {}
+    
+    if (name !== undefined) updates.name = name
+    if (email !== undefined) updates.email = email
+    if (company !== undefined) updates.company = company
+    if (phone !== undefined) updates.phone = phone
+    if (subscribed !== undefined) updates.subscribed = subscribed
+    if (notes !== undefined) updates.notes = notes
+    if (source !== undefined) updates.source = source
+    if (tags !== undefined) updates.tags = tags
 
-    if (name !== undefined) {
-      updates.push(`name = $${paramCount}`)
-      params.push(name)
-      paramCount++
-    }
-
-    if (email !== undefined) {
-      updates.push(`email = $${paramCount}`)
-      params.push(email)
-      paramCount++
-    }
-
-    if (company !== undefined) {
-      updates.push(`company = $${paramCount}`)
-      params.push(company)
-      paramCount++
-    }
-
-    if (phone !== undefined) {
-      updates.push(`phone = $${paramCount}`)
-      params.push(phone)
-      paramCount++
-    }
-
-    if (subscribed !== undefined) {
-      updates.push(`subscribed = $${paramCount}`)
-      params.push(subscribed)
-      paramCount++
-    }
-
-    if (notes !== undefined) {
-      updates.push(`notes = $${paramCount}`)
-      params.push(notes)
-      paramCount++
-    }
-
-    if (source !== undefined) {
-      updates.push(`source = $${paramCount}`)
-      params.push(source)
-      paramCount++
-    }
-
-    if (tags !== undefined) {
-      updates.push(`tags = $${paramCount}`)
-      params.push(tags ? JSON.stringify(tags) : null)
-      paramCount++
-    }
-
-    if (updates.length === 0) {
+    if (Object.keys(updates).length === 0) {
       return {
         statusCode: 400,
         headers,
@@ -121,18 +76,19 @@ export async function handler(event) {
       }
     }
 
-    updates.push('updated_at = NOW()')
+    updates.updated_at = new Date().toISOString()
 
-    const query = `
-      UPDATE contacts
-      SET ${updates.join(', ')}
-      WHERE id = $1 AND role = 'client'
-      RETURNING id, email, name, company, phone, role, subscribed, source, notes, tags, created_at, updated_at
-    `
+    const supabase = createSupabaseAdmin()
 
-    const result = await sql(query, params)
+    const { data: result, error: updateError } = await supabase
+      .from('contacts')
+      .update(updates)
+      .eq('id', id)
+      .eq('role', 'client')
+      .select('id, email, name, company, phone, role, subscribed, source, notes, tags, created_at, updated_at')
+      .single()
 
-    if (result.length === 0) {
+    if (updateError || !result) {
       return {
         statusCode: 404,
         headers,
@@ -145,7 +101,7 @@ export async function handler(event) {
       headers,
       body: JSON.stringify({
         success: true,
-        client: result[0],
+        client: result,
         message: 'Client updated successfully'
       })
     }

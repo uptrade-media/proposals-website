@@ -1,17 +1,15 @@
-import jwt from 'jsonwebtoken'
-import { neon } from '@neondatabase/serverless'
-import { drizzle } from 'drizzle-orm/neon-http'
-import { eq, and } from 'drizzle-orm'
-import * as schema from '../../src/db/schema.js'
+import { createClient } from '@supabase/supabase-js'
+import { getAuthenticatedUser } from './utils/supabase.js'
 
-const COOKIE_NAME = process.env.SESSION_COOKIE_NAME || 'um_session'
-const JWT_SECRET = process.env.AUTH_JWT_SECRET
-const DATABASE_URL = process.env.DATABASE_URL
+const supabase = createClient(
+  process.env.SUPABASE_URL,
+  process.env.SUPABASE_SERVICE_ROLE_KEY
+)
 
 export async function handler(event) {
   const headers = {
     'Access-Control-Allow-Origin': '*',
-    'Access-Control-Allow-Headers': 'Content-Type',
+    'Access-Control-Allow-Headers': 'Content-Type, Authorization',
     'Access-Control-Allow-Methods': 'DELETE, OPTIONS',
     'Content-Type': 'application/json'
   }
@@ -29,19 +27,10 @@ export async function handler(event) {
   }
 
   try {
-    // Verify authentication
-    if (!JWT_SECRET) {
-      return {
-        statusCode: 500,
-        headers,
-        body: JSON.stringify({ error: 'Server not configured' })
-      }
-    }
-
-    const rawCookie = event.headers.cookie || ''
-    const token = rawCookie.split('; ').find(c => c.startsWith(`${COOKIE_NAME}=`))?.split('=')[1]
-
-    if (!token) {
+    // Verify authentication using Supabase
+    const { user, contact, error: authError } = await getAuthenticatedUser(event)
+    
+    if (authError || !contact) {
       return {
         statusCode: 401,
         headers,
@@ -49,10 +38,8 @@ export async function handler(event) {
       }
     }
 
-    const payload = jwt.verify(token, JWT_SECRET)
-
     // Only admins can remove team members
-    if (payload.role !== 'admin') {
+    if (contact.role !== 'admin') {
       return {
         statusCode: 403,
         headers,
@@ -72,23 +59,14 @@ export async function handler(event) {
       }
     }
 
-    if (!DATABASE_URL) {
-      return {
-        statusCode: 500,
-        headers,
-        body: JSON.stringify({ error: 'Database not configured' })
-      }
-    }
-
-    const sql = neon(DATABASE_URL)
-    const db = drizzle(sql, { schema })
-
     // Verify project exists
-    const project = await db.query.projects.findFirst({
-      where: eq(schema.projects.id, projectId)
-    })
+    const { data: project, error: projectError } = await supabase
+      .from('projects')
+      .select('id')
+      .eq('id', projectId)
+      .single()
 
-    if (!project) {
+    if (projectError || !project) {
       return {
         statusCode: 404,
         headers,
@@ -97,14 +75,14 @@ export async function handler(event) {
     }
 
     // Verify membership exists
-    const membership = await db.query.projectMembers.findFirst({
-      where: and(
-        eq(schema.projectMembers.projectId, projectId),
-        eq(schema.projectMembers.memberId, memberId)
-      )
-    })
+    const { data: membership, error: membershipError } = await supabase
+      .from('project_members')
+      .select('id')
+      .eq('project_id', projectId)
+      .eq('member_id', memberId)
+      .single()
 
-    if (!membership) {
+    if (membershipError || !membership) {
       return {
         statusCode: 404,
         headers,
@@ -113,14 +91,15 @@ export async function handler(event) {
     }
 
     // Remove team member
-    await db
-      .delete(schema.projectMembers)
-      .where(
-        and(
-          eq(schema.projectMembers.projectId, projectId),
-          eq(schema.projectMembers.memberId, memberId)
-        )
-      )
+    const { error: deleteError } = await supabase
+      .from('project_members')
+      .delete()
+      .eq('project_id', projectId)
+      .eq('member_id', memberId)
+
+    if (deleteError) {
+      throw deleteError
+    }
 
     return {
       statusCode: 200,
@@ -132,14 +111,6 @@ export async function handler(event) {
     }
   } catch (error) {
     console.error('Error removing team member:', error)
-
-    if (error.name === 'JsonWebTokenError' || error.name === 'TokenExpiredError') {
-      return {
-        statusCode: 401,
-        headers,
-        body: JSON.stringify({ error: 'Invalid or expired session' })
-      }
-    }
 
     return {
       statusCode: 500,

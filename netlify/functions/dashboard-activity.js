@@ -1,24 +1,26 @@
-import { neon } from '@neondatabase/serverless'
-import jwt from 'jsonwebtoken'
+import { createSupabaseAdmin, getAuthenticatedUser } from './utils/supabase.js'
 
 export async function handler(event) {
-  try {
-    // 1. Verify authentication
-    const token = event.headers.cookie?.match(/um_session=([^;]+)/)?.[1]
-    if (!token) {
-      return {
-        statusCode: 401,
-        body: JSON.stringify({ error: 'Unauthorized' })
-      }
-    }
+  const headers = {
+    'Access-Control-Allow-Origin': '*',
+    'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+    'Access-Control-Allow-Methods': 'GET, OPTIONS',
+    'Content-Type': 'application/json'
+  }
 
-    let payload
-    try {
-      payload = jwt.verify(token, process.env.AUTH_JWT_SECRET)
-    } catch (err) {
+  if (event.httpMethod === 'OPTIONS') {
+    return { statusCode: 204, headers }
+  }
+
+  try {
+    // 1. Verify authentication using Supabase
+    const { user, contact, error: authError } = await getAuthenticatedUser(event)
+    
+    if (authError || !contact) {
       return {
         statusCode: 401,
-        body: JSON.stringify({ error: 'Invalid session' })
+        headers,
+        body: JSON.stringify({ error: 'Unauthorized' })
       }
     }
 
@@ -28,133 +30,218 @@ export async function handler(event) {
     const queryOffset = parseInt(offset)
 
     // 3. Get activity based on user type
-    const sql = neon(process.env.DATABASE_URL)
+    const supabase = createSupabaseAdmin()
+    
+    // Calculate 30 days ago
+    const thirtyDaysAgo = new Date()
+    thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30)
+    const thirtyDaysAgoISO = thirtyDaysAgo.toISOString()
 
     let activities = []
 
-    if (payload.type === 'google' && payload.role === 'admin') {
+    if (contact.role === 'admin') {
       // Admin sees all activity across all clients
-      activities = await sql`
-        SELECT 
-          'project' as type,
-          'updated' as action,
-          p.name as title,
-          'Project status changed' as description,
-          p.id as related_id,
-          p.updated_at as timestamp,
-          c.email as user_email
-        FROM projects p
-        JOIN contacts c ON p.contact_id = c.id
-        WHERE p.updated_at > NOW() - INTERVAL '30 days'
-        
-        UNION ALL
-        
-        SELECT 
-          'invoice' as type,
-          'created' as action,
-          'Invoice #' || i.id::text as title,
-          'New invoice created' as description,
-          i.id as related_id,
-          i.created_at as timestamp,
-          c.email as user_email
-        FROM invoices i
-        JOIN contacts c ON i.contact_id = c.id
-        WHERE i.created_at > NOW() - INTERVAL '30 days'
-        
-        UNION ALL
-        
-        SELECT 
-          'message' as type,
-          'received' as action,
-          c.name as title,
-          'New message: ' || m.content::text as description,
-          m.id as related_id,
-          m.created_at as timestamp,
-          c.email as user_email
-        FROM messages m
-        JOIN contacts c ON m.contact_id = c.id
-        WHERE m.created_at > NOW() - INTERVAL '30 days'
-        
-        UNION ALL
-        
-        SELECT 
-          'proposal' as type,
-          'accepted' as action,
-          pr.title as title,
-          'Proposal accepted by ' || c.name as description,
-          pr.id as related_id,
-          pr.accepted_at as timestamp,
-          c.email as user_email
-        FROM proposals pr
-        JOIN contacts c ON pr.contact_id = c.id
-        WHERE pr.status = 'accepted' AND pr.accepted_at > NOW() - INTERVAL '30 days'
-        
-        ORDER BY timestamp DESC
-        LIMIT ${queryLimit}
-        OFFSET ${queryOffset}
-      `
+      // Fetch from multiple tables and combine
+      
+      // Projects updated in last 30 days
+      const { data: projectActivities } = await supabase
+        .from('projects')
+        .select('id, name, updated_at, contact_id, contacts!inner(email)')
+        .gte('updated_at', thirtyDaysAgoISO)
+        .order('updated_at', { ascending: false })
+        .limit(queryLimit)
+      
+      // Invoices created in last 30 days
+      const { data: invoiceActivities } = await supabase
+        .from('invoices')
+        .select('id, created_at, contact_id, contacts!inner(email)')
+        .gte('created_at', thirtyDaysAgoISO)
+        .order('created_at', { ascending: false })
+        .limit(queryLimit)
+      
+      // Messages received in last 30 days
+      const { data: messageActivities } = await supabase
+        .from('messages')
+        .select('id, content, created_at, contact_id, contacts!inner(email, name)')
+        .gte('created_at', thirtyDaysAgoISO)
+        .order('created_at', { ascending: false })
+        .limit(queryLimit)
+      
+      // Proposals accepted in last 30 days
+      const { data: proposalActivities } = await supabase
+        .from('proposals')
+        .select('id, title, accepted_at, contact_id, contacts!inner(email, name)')
+        .eq('status', 'accepted')
+        .gte('accepted_at', thirtyDaysAgoISO)
+        .order('accepted_at', { ascending: false })
+        .limit(queryLimit)
+
+      // Combine and format activities
+      const allActivities = []
+      
+      if (projectActivities) {
+        projectActivities.forEach(p => {
+          allActivities.push({
+            type: 'project',
+            action: 'updated',
+            title: p.name,
+            description: 'Project status changed',
+            related_id: p.id,
+            timestamp: p.updated_at,
+            user_email: p.contacts?.email
+          })
+        })
+      }
+      
+      if (invoiceActivities) {
+        invoiceActivities.forEach(i => {
+          allActivities.push({
+            type: 'invoice',
+            action: 'created',
+            title: `Invoice #${i.id}`,
+            description: 'New invoice created',
+            related_id: i.id,
+            timestamp: i.created_at,
+            user_email: i.contacts?.email
+          })
+        })
+      }
+      
+      if (messageActivities) {
+        messageActivities.forEach(m => {
+          allActivities.push({
+            type: 'message',
+            action: 'received',
+            title: m.contacts?.name || 'Client',
+            description: `New message: ${m.content?.substring(0, 50)}...`,
+            related_id: m.id,
+            timestamp: m.created_at,
+            user_email: m.contacts?.email
+          })
+        })
+      }
+      
+      if (proposalActivities) {
+        proposalActivities.forEach(pr => {
+          allActivities.push({
+            type: 'proposal',
+            action: 'accepted',
+            title: pr.title,
+            description: `Proposal accepted by ${pr.contacts?.name}`,
+            related_id: pr.id,
+            timestamp: pr.accepted_at,
+            user_email: pr.contacts?.email
+          })
+        })
+      }
+
+      // Sort by timestamp and apply pagination
+      activities = allActivities
+        .sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp))
+        .slice(queryOffset, queryOffset + queryLimit)
+
     } else {
       // Client sees only their own activity
-      activities = await sql`
-        SELECT 
-          'project' as type,
-          'updated' as action,
-          p.name as title,
-          'Project status: ' || p.status as description,
-          p.id as related_id,
-          p.updated_at as timestamp,
-          'You' as user_email
-        FROM projects p
-        WHERE p.contact_id = ${payload.userId}
-        AND p.updated_at > NOW() - INTERVAL '30 days'
-        
-        UNION ALL
-        
-        SELECT 
-          'invoice' as type,
-          'created' as action,
-          'Invoice #' || i.id::text as title,
-          'Invoice amount: $' || i.total_amount::text as description,
-          i.id as related_id,
-          i.created_at as timestamp,
-          'You' as user_email
-        FROM invoices i
-        WHERE i.contact_id = ${payload.userId}
-        AND i.created_at > NOW() - INTERVAL '30 days'
-        
-        UNION ALL
-        
-        SELECT 
-          'message' as type,
-          'received' as action,
-          'Team Message' as title,
-          m.content as description,
-          m.id as related_id,
-          m.created_at as timestamp,
-          'Team' as user_email
-        FROM messages m
-        WHERE m.contact_id = ${payload.userId}
-        AND m.created_at > NOW() - INTERVAL '30 days'
-        
-        UNION ALL
-        
-        SELECT 
-          'proposal' as type,
-          'accepted' as action,
-          pr.title as title,
-          'You accepted this proposal' as description,
-          pr.id as related_id,
-          pr.accepted_at as timestamp,
-          'You' as user_email
-        FROM proposals pr
-        WHERE pr.contact_id = ${payload.userId}
-        AND pr.status = 'accepted' 
-        AND pr.accepted_at > NOW() - INTERVAL '30 days'
-        
-        ORDER BY timestamp DESC
-        LIMIT ${queryLimit}
-        OFFSET ${queryOffset}
-      `
+      const contactId = contact.id
+
+      // Projects
+      const { data: projectActivities } = await supabase
+        .from('projects')
+        .select('id, name, status, updated_at')
+        .eq('contact_id', contactId)
+        .gte('updated_at', thirtyDaysAgoISO)
+        .order('updated_at', { ascending: false })
+        .limit(queryLimit)
+      
+      // Invoices
+      const { data: invoiceActivities } = await supabase
+        .from('invoices')
+        .select('id, total_amount, created_at')
+        .eq('contact_id', contactId)
+        .gte('created_at', thirtyDaysAgoISO)
+        .order('created_at', { ascending: false })
+        .limit(queryLimit)
+      
+      // Messages
+      const { data: messageActivities } = await supabase
+        .from('messages')
+        .select('id, content, created_at')
+        .eq('contact_id', contactId)
+        .gte('created_at', thirtyDaysAgoISO)
+        .order('created_at', { ascending: false })
+        .limit(queryLimit)
+      
+      // Proposals
+      const { data: proposalActivities } = await supabase
+        .from('proposals')
+        .select('id, title, accepted_at')
+        .eq('contact_id', contactId)
+        .eq('status', 'accepted')
+        .gte('accepted_at', thirtyDaysAgoISO)
+        .order('accepted_at', { ascending: false })
+        .limit(queryLimit)
+
+      const allActivities = []
+      
+      if (projectActivities) {
+        projectActivities.forEach(p => {
+          allActivities.push({
+            type: 'project',
+            action: 'updated',
+            title: p.name,
+            description: `Project status: ${p.status}`,
+            related_id: p.id,
+            timestamp: p.updated_at,
+            user_email: 'You'
+          })
+        })
+      }
+      
+      if (invoiceActivities) {
+        invoiceActivities.forEach(i => {
+          allActivities.push({
+            type: 'invoice',
+            action: 'created',
+            title: `Invoice #${i.id}`,
+            description: `Invoice amount: $${i.total_amount}`,
+            related_id: i.id,
+            timestamp: i.created_at,
+            user_email: 'You'
+          })
+        })
+      }
+      
+      if (messageActivities) {
+        messageActivities.forEach(m => {
+          allActivities.push({
+            type: 'message',
+            action: 'received',
+            title: 'Team Message',
+            description: m.content?.substring(0, 100) || '',
+            related_id: m.id,
+            timestamp: m.created_at,
+            user_email: 'Team'
+          })
+        })
+      }
+      
+      if (proposalActivities) {
+        proposalActivities.forEach(pr => {
+          allActivities.push({
+            type: 'proposal',
+            action: 'accepted',
+            title: pr.title,
+            description: 'You accepted this proposal',
+            related_id: pr.id,
+            timestamp: pr.accepted_at,
+            user_email: 'You'
+          })
+        })
+      }
+
+      activities = allActivities
+        .sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp))
+        .slice(queryOffset, queryOffset + queryLimit)
     }
 
     return {

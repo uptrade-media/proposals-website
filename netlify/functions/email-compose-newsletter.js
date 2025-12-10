@@ -1,20 +1,27 @@
-import { neon } from '@neondatabase/serverless'
-import jwt from 'jsonwebtoken'
+import { createSupabaseAdmin, getAuthenticatedUser } from './utils/supabase.js'
 import crypto from 'crypto'
 
-const sql = neon(process.env.DATABASE_URL)
-
 export async function handler(event) {
+  const headers = {
+    'Access-Control-Allow-Origin': '*',
+    'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+    'Access-Control-Allow-Methods': 'POST, OPTIONS',
+    'Content-Type': 'application/json'
+  }
+
+  if (event.httpMethod === 'OPTIONS') {
+    return { statusCode: 204, headers }
+  }
+
   try {
-    // Verify auth
-    const token = event.headers.cookie?.match(/um_session=([^;]+)/)?.[1]
-    if (!token) {
-      return { statusCode: 401, body: JSON.stringify({ error: 'Unauthorized' }) }
+    // Verify auth using Supabase
+    const { user, contact, error: authError } = await getAuthenticatedUser(event)
+    if (authError || !contact) {
+      return { statusCode: 401, headers, body: JSON.stringify({ error: 'Unauthorized' }) }
     }
 
-    const user = jwt.verify(token, process.env.AUTH_JWT_SECRET)
-    if (user.role !== 'admin') {
-      return { statusCode: 403, body: JSON.stringify({ error: 'Admin only' }) }
+    if (contact.role !== 'admin') {
+      return { statusCode: 403, headers, body: JSON.stringify({ error: 'Admin only' }) }
     }
 
     const body = JSON.parse(event.body || '{}')
@@ -51,56 +58,84 @@ export async function handler(event) {
       }
     }
 
+    const supabase = createSupabaseAdmin()
+
     // Create campaign
     const campaignId = crypto.randomUUID()
-    const now = new Date()
-    const scheduledStart = scheduleType === 'later' ? new Date(scheduledTime) : now
+    const now = new Date().toISOString()
+    const scheduledStart = scheduleType === 'later' ? new Date(scheduledTime).toISOString() : now
 
-    await sql`
-      INSERT INTO campaigns (
-        id, type, name, mailbox_id, status, scheduled_start,
-        preheader, ab_test_enabled, ab_split_percent, ab_metric,
-        ab_evaluation_window_hours, resend_to_non_openers, resend_delay_days,
-        resend_subject, view_in_browser_enabled, utm_preset, created_at
-      ) VALUES (
-        ${campaignId}, 'newsletter', ${name}, ${mailboxId}, 'scheduled',
-        ${scheduledStart},
-        ${preheader}, ${abTestEnabled}, ${abSplitPercent}, ${abMetric},
-        ${abEvaluationWindowHours}, ${resendEnabled}, ${resendDelayDays},
-        ${resendSubject || null}, ${viewInBrowserEnabled}, ${utmPreset}, ${now}
-      )
-    `
+    const { error: campaignError } = await supabase
+      .from('campaigns')
+      .insert({
+        id: campaignId,
+        type: 'newsletter',
+        name,
+        mailbox_id: mailboxId,
+        status: 'scheduled',
+        scheduled_start: scheduledStart,
+        preheader,
+        ab_test_enabled: abTestEnabled,
+        ab_split_percent: abSplitPercent,
+        ab_metric: abMetric,
+        ab_evaluation_window_hours: abEvaluationWindowHours,
+        resend_to_non_openers: resendEnabled,
+        resend_delay_days: resendDelayDays,
+        resend_subject: resendSubject || null,
+        view_in_browser_enabled: viewInBrowserEnabled,
+        utm_preset: utmPreset,
+        created_at: now
+      })
+
+    if (campaignError) {
+      console.error('Campaign insert error:', campaignError)
+      return {
+        statusCode: 500,
+        body: JSON.stringify({ error: 'Failed to create campaign' })
+      }
+    }
 
     // Create audience
     const audienceId = crypto.randomUUID()
-    await sql`
-      INSERT INTO campaign_audiences (
-        id, campaign_id, lists, tags, computed_count
-      ) VALUES (
-        ${audienceId}, ${campaignId}, ${JSON.stringify(lists)}, ${JSON.stringify(tags)}, 0
-      )
-    `
+    const { error: audienceError } = await supabase
+      .from('campaign_audiences')
+      .insert({
+        id: audienceId,
+        campaign_id: campaignId,
+        lists: lists,
+        tags: tags,
+        computed_count: 0
+      })
+
+    if (audienceError) {
+      console.error('Audience insert error:', audienceError)
+    }
 
     // Get opt-in contacts for audience count
-    const listsPlaceholder = lists.map((_, i) => '$' + (i + 1)).join(',')
-    const countResult = await sql`
-      SELECT COUNT(*) as count FROM contacts
-      WHERE consent_status = 'opt_in'
-        AND id IN (
-          SELECT contact_id FROM contact_list
-          WHERE list_id IN (${lists.join(',')})
+    let estimatedCount = 0
+    try {
+      // Count contacts that are opted in and in the selected lists
+      const { count } = await supabase
+        .from('contacts')
+        .select('*', { count: 'exact', head: true })
+        .eq('consent_status', 'opt_in')
+        .in('id', 
+          supabase
+            .from('contact_list')
+            .select('contact_id')
+            .in('list_id', lists)
         )
-      ${tags.length > 0 ? sql`AND tags @> ${JSON.stringify(tags)}` : sql``}
-    `
 
-    const estimatedCount = countResult[0]?.count || 0
+      estimatedCount = count || 0
+    } catch (countErr) {
+      console.error('Count error:', countErr)
+    }
 
     // Update audience count
-    await sql`
-      UPDATE campaign_audiences
-      SET computed_count = ${estimatedCount}
-      WHERE id = ${audienceId}
-    `
+    await supabase
+      .from('campaign_audiences')
+      .update({ computed_count: estimatedCount })
+      .eq('id', audienceId)
 
     return {
       statusCode: 200,
