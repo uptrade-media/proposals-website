@@ -1,6 +1,13 @@
 import { create } from 'zustand'
 
-const ANALYTICS_API_BASE = 'https://uptrademedia.com/api/analytics'
+// Use proxy to avoid CORS issues with main site API
+const ANALYTICS_PROXY = '/.netlify/functions/analytics-proxy'
+
+// Helper to build proxy URL
+const buildProxyUrl = (endpoint, params = {}) => {
+  const searchParams = new URLSearchParams({ endpoint, ...params })
+  return `${ANALYTICS_PROXY}?${searchParams.toString()}`
+}
 
 const useSiteAnalyticsStore = create((set, get) => ({
   // State
@@ -25,7 +32,7 @@ const useSiteAnalyticsStore = create((set, get) => ({
     set({ isLoading: true, error: null })
     
     try {
-      const response = await fetch(`${ANALYTICS_API_BASE}/overview?days=${period}`)
+      const response = await fetch(buildProxyUrl('overview', { days: period }))
       
       if (!response.ok) {
         throw new Error(`API returned ${response.status}`)
@@ -51,7 +58,7 @@ const useSiteAnalyticsStore = create((set, get) => ({
     
     try {
       const response = await fetch(
-        `${ANALYTICS_API_BASE}/page-views?days=${period}&groupBy=path&limit=${limit}`
+        buildProxyUrl('page-views', { days: period, groupBy: 'path', limit })
       )
       
       if (!response.ok) {
@@ -78,7 +85,7 @@ const useSiteAnalyticsStore = create((set, get) => ({
     
     try {
       const response = await fetch(
-        `${ANALYTICS_API_BASE}/page-views?days=${period}&groupBy=day`
+        buildProxyUrl('page-views', { days: period, groupBy: 'day' })
       )
       
       if (!response.ok) {
@@ -105,7 +112,7 @@ const useSiteAnalyticsStore = create((set, get) => ({
     
     try {
       const response = await fetch(
-        `${ANALYTICS_API_BASE}/page-views?days=${period}&groupBy=hour`
+        buildProxyUrl('page-views', { days: period, groupBy: 'hour' })
       )
       
       if (!response.ok) {
@@ -131,12 +138,12 @@ const useSiteAnalyticsStore = create((set, get) => ({
     set({ isLoading: true, error: null })
     
     try {
-      // Fetch all data in parallel
+      // Fetch all data in parallel via proxy
       const [overviewRes, topPagesRes, dailyRes, hourlyRes] = await Promise.all([
-        fetch(`${ANALYTICS_API_BASE}/overview?days=${period}`),
-        fetch(`${ANALYTICS_API_BASE}/page-views?days=${period}&groupBy=path&limit=20`),
-        fetch(`${ANALYTICS_API_BASE}/page-views?days=${period}&groupBy=day`),
-        fetch(`${ANALYTICS_API_BASE}/page-views?days=${period}&groupBy=hour`)
+        fetch(buildProxyUrl('overview', { days: period })),
+        fetch(buildProxyUrl('page-views', { days: period, groupBy: 'path', limit: 20 })),
+        fetch(buildProxyUrl('page-views', { days: period, groupBy: 'day' })),
+        fetch(buildProxyUrl('page-views', { days: period, groupBy: 'hour' }))
       ])
 
       // Check for errors

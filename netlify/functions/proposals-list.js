@@ -74,8 +74,8 @@ export async function handler(event) {
       .order('created_at', { ascending: false })
 
     // Filter by user role
-    if (payload.role !== 'admin') {
-      query = query.eq('contact_id', payload.userId)
+    if (contact.role !== 'admin') {
+      query = query.eq('contact_id', contact.id)
     } else if (contactId) {
       // Admins can filter by specific contact
       query = query.eq('contact_id', contactId)
@@ -114,7 +114,7 @@ export async function handler(event) {
       createdAt: p.created_at,
       updatedAt: p.updated_at,
       // Include contact info for admin view
-      ...(payload.role === 'admin' && p.contact ? {
+      ...(contact.role === 'admin' && p.contact ? {
         contact: {
           id: p.contact.id,
           name: p.contact.name,
