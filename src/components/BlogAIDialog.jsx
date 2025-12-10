@@ -295,10 +295,10 @@ export default function BlogAIDialog({ onSuccess }) {
             
             {!uploadedImage ? (
               <div
-                className={`border-2 border-dashed rounded-lg p-8 text-center transition-colors ${
+                className={`border-2 border-dashed rounded-xl p-8 text-center transition-all duration-300 ${
                   dragActive 
-                    ? 'border-blue-500 bg-blue-50' 
-                    : 'border-[var(--glass-border)] hover:border-[var(--text-tertiary)]'
+                    ? 'border-emerald-500 bg-emerald-50 scale-[1.02]' 
+                    : 'border-[var(--glass-border)] hover:border-emerald-400 hover:bg-emerald-50/30'
                 } ${isUploading ? 'opacity-50 cursor-wait' : 'cursor-pointer'}`}
                 onDragEnter={handleDrag}
                 onDragLeave={handleDrag}
@@ -317,35 +317,46 @@ export default function BlogAIDialog({ onSuccess }) {
                 
                 {isUploading ? (
                   <div className="flex flex-col items-center gap-2">
-                    <Loader2 className="w-8 h-8 animate-spin text-[var(--text-tertiary)]" />
+                    <Loader2 className="w-10 h-10 animate-spin text-emerald-500" />
                     <p className="text-sm text-[var(--text-secondary)]">Uploading image...</p>
                   </div>
                 ) : (
-                  <div className="flex flex-col items-center gap-2">
-                    <Upload className="w-8 h-8 text-[var(--text-tertiary)]" />
-                    <p className="text-sm text-[var(--text-secondary)]">
-                      <span className="font-medium text-blue-600">Click to upload</span> or drag and drop
-                    </p>
-                    <p className="text-xs text-[var(--text-tertiary)]">PNG, JPG, WebP up to 5MB</p>
+                  <div className="flex flex-col items-center gap-3">
+                    <div className="w-14 h-14 rounded-full bg-emerald-100 flex items-center justify-center">
+                      <Upload className="w-7 h-7 text-emerald-600" />
+                    </div>
+                    <div>
+                      <p className="text-sm text-[var(--text-secondary)]">
+                        <span className="font-semibold text-emerald-600">Click to upload</span> or drag and drop
+                      </p>
+                      <p className="text-xs text-[var(--text-tertiary)] mt-1">PNG, JPG, WebP up to 5MB</p>
+                    </div>
                   </div>
                 )}
               </div>
             ) : (
-              <div className="relative border rounded-lg overflow-hidden">
+              <div className="relative rounded-xl overflow-hidden border-2 border-emerald-200 shadow-lg">
                 <img 
                   src={uploadedImage.url} 
                   alt="Featured" 
-                  className="w-full h-48 object-cover"
+                  className="w-full h-52 object-cover"
                 />
+                {/* Success indicator overlay */}
+                <div className="absolute top-3 left-3 flex items-center gap-2 bg-emerald-500 text-white text-xs font-medium px-3 py-1.5 rounded-full shadow-md">
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                  </svg>
+                  Image uploaded
+                </div>
                 <button
                   type="button"
                   onClick={removeImage}
-                  className="absolute top-2 right-2 bg-red-500 text-white rounded-full p-1 hover:bg-red-600 transition-colors"
+                  className="absolute top-3 right-3 bg-red-500 text-white rounded-full p-1.5 hover:bg-red-600 transition-colors shadow-md"
                 >
                   <X className="w-4 h-4" />
                 </button>
-                <div className="p-2 bg-[var(--surface-secondary)]">
-                  <p className="text-sm text-[var(--text-secondary)] truncate">{uploadedImage.name}</p>
+                <div className="p-3 bg-gradient-to-r from-emerald-50 to-teal-50 border-t border-emerald-100">
+                  <p className="text-sm font-medium text-emerald-700 truncate">{uploadedImage.name}</p>
                 </div>
               </div>
             )}

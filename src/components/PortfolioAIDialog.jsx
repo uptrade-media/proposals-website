@@ -80,6 +80,7 @@ const BLOCK_TYPES = [
   { id: 'technical_innovations', label: 'Tech', icon: Code, description: 'Technical highlights' },
   { id: 'comprehensive_results', label: 'Results', icon: Award, description: 'Outcomes' },
   { id: 'challenges', label: 'Challenges', icon: AlertCircle, description: 'Problems solved' },
+  { id: 'tech_stack', label: 'Tech Stack', icon: Layers, description: 'Technologies used' },
   { id: 'testimonial', label: 'Testimonial', icon: Quote, description: 'Client quote' }
 ]
 
@@ -517,6 +518,7 @@ export default function PortfolioAIDialog({ open, onOpenChange, onSuccess }) {
           technical_innovations: generated.technical_innovations || null,
           comprehensive_results: generated.comprehensive_results || null,
           challenges: generated.challenges || null,
+          tech_stack: generated.tech_stack || null,
           testimonial: formData.clientTestimonial ? {
             quote: formData.clientTestimonial,
             author: 'Client',
@@ -538,7 +540,7 @@ export default function PortfolioAIDialog({ open, onOpenChange, onSuccess }) {
         setChatMessages(prev => [...prev, {
           id: Date.now(),
           role: 'assistant',
-          content: `🎉 Done! I've generated ${blockCount} content blocks:\n\n• "${generated.subtitle}"\n• ${generated.services_showcase?.length || 0} services highlighted\n• ${generated.comprehensive_results?.length || 0} measurable results\n• ${generated.strategic_approach?.length || 0} strategy phases\n\nYou can review and edit everything in the next step, or ask me to tweak any section!`
+          content: `🎉 Done! I've generated ${blockCount} content blocks:\n\n• "${generated.subtitle}"\n• ${generated.services_showcase?.length || 0} services highlighted\n• ${generated.comprehensive_results?.length || 0} measurable results\n• ${generated.strategic_approach?.length || 0} strategy phases\n• ${generated.challenges?.length || 0} challenges solved\n• ${generated.tech_stack?.length || 0} technologies\n\nYou can review and edit everything in the next step, or ask me to tweak any section!`
         }])
       }
     } catch (err) {

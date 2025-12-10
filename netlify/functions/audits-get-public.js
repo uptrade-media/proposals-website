@@ -1,5 +1,6 @@
 // netlify/functions/audits-get-public.js
 // Public endpoint for magic link access to audits
+// Supports: 1) Supabase Bearer token auth, 2) Legacy magic_token query param
 import { createClient } from '@supabase/supabase-js'
 
 const supabase = createClient(
@@ -10,7 +11,7 @@ const supabase = createClient(
 export async function handler(event) {
   const headers = {
     'Access-Control-Allow-Origin': '*',
-    'Access-Control-Allow-Headers': 'Content-Type',
+    'Access-Control-Allow-Headers': 'Content-Type, Authorization',
     'Access-Control-Allow-Methods': 'GET, OPTIONS',
     'Content-Type': 'application/json'
   }
@@ -30,6 +31,7 @@ export async function handler(event) {
   try {
     const auditId = event.queryStringParameters?.id
     const magicToken = event.queryStringParameters?.token
+    const authHeader = event.headers?.authorization || event.headers?.Authorization
 
     if (!auditId) {
       return {
@@ -39,43 +41,87 @@ export async function handler(event) {
       }
     }
 
-    if (!magicToken) {
-      return {
-        statusCode: 401,
-        headers,
-        body: JSON.stringify({ error: 'Access token is required' })
-      }
-    }
+    let audit = null
+    let authMethod = null
 
-    // Fetch audit with magic token validation
-    const { data: audit, error: auditError } = await supabase
-      .from('audits')
-      .select(`
-        *,
-        contact:contacts(id, name, email, company)
-      `)
-      .eq('id', auditId)
-      .eq('magic_token', magicToken)
-      .single()
-
-    if (auditError || !audit) {
-      console.error('Audit fetch error:', auditError)
-      return {
-        statusCode: 404,
-        headers,
-        body: JSON.stringify({ error: 'Invalid or expired link' })
-      }
-    }
-
-    // Check token expiration
-    if (audit.magic_token_expires_at) {
-      const expiresAt = new Date(audit.magic_token_expires_at)
-      if (expiresAt < new Date()) {
-        return {
-          statusCode: 410,
-          headers,
-          body: JSON.stringify({ error: 'This link has expired. Please request a new audit.' })
+    // Method 1: Supabase Bearer token auth (from magic link session)
+    if (authHeader?.startsWith('Bearer ')) {
+      const accessToken = authHeader.replace('Bearer ', '')
+      
+      // Verify the JWT and get user
+      const { data: { user }, error: authError } = await supabase.auth.getUser(accessToken)
+      
+      if (!authError && user) {
+        authMethod = 'supabase_session'
+        
+        // Fetch audit - user must own it (via contact email match)
+        const { data, error } = await supabase
+          .from('audits')
+          .select(`
+            *,
+            contact:contacts(id, name, email, company)
+          `)
+          .eq('id', auditId)
+          .single()
+        
+        if (!error && data) {
+          // Verify user has access (email matches contact)
+          if (data.contact?.email === user.email) {
+            audit = data
+          } else {
+            // Admin users can access any audit
+            const { data: contact } = await supabase
+              .from('contacts')
+              .select('role')
+              .eq('email', user.email)
+              .single()
+            
+            if (contact?.role === 'admin') {
+              audit = data
+            }
+          }
         }
+      }
+    }
+
+    // Method 2: Legacy magic_token query param (fallback)
+    if (!audit && magicToken) {
+      authMethod = 'magic_token'
+      
+      const { data, error } = await supabase
+        .from('audits')
+        .select(`
+          *,
+          contact:contacts(id, name, email, company)
+        `)
+        .eq('id', auditId)
+        .eq('magic_token', magicToken)
+        .single()
+
+      if (!error && data) {
+        // Check token expiration
+        if (data.magic_token_expires_at) {
+          const expiresAt = new Date(data.magic_token_expires_at)
+          if (expiresAt < new Date()) {
+            return {
+              statusCode: 410,
+              headers,
+              body: JSON.stringify({ error: 'This link has expired. Please request a new audit.' })
+            }
+          }
+        }
+        audit = data
+      }
+    }
+
+    // No valid auth method succeeded
+    if (!audit) {
+      return {
+        statusCode: authHeader || magicToken ? 403 : 401,
+        headers,
+        body: JSON.stringify({ 
+          error: authHeader || magicToken ? 'Access denied' : 'Authentication required' 
+        })
       }
     }
 

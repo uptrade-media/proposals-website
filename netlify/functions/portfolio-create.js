@@ -2,10 +2,10 @@
  * Portfolio Create Function
  * 
  * Creates a new portfolio item with pre-generated AI content
- * Supports both legacy flow (calls createPortfolioItem) and new flow (direct DB insert)
+ * Screenshot capture happens on PUBLISH (see portfolio-publish.js)
  */
 
-import { createPortfolioItem, captureTrifolioScreenshot, uploadPortfolioImage } from '../../src/lib/portfolio-admin.js'
+import { createPortfolioItem } from '../../src/lib/portfolio-admin.js'
 import { createClient } from '@supabase/supabase-js'
 import { getAuthenticatedUser } from './utils/supabase.js'
 
@@ -194,54 +194,15 @@ async function createPortfolioWithPregenerated(data) {
 
   console.log(`[Portfolio API] Portfolio created with ID: ${insertedItem.id}`)
 
-  // Capture screenshot asynchronously (don't wait for it)
-  captureAndUpdateScreenshot(insertedItem.id, finalSlug).catch(err => {
-    console.error('[Portfolio API] Screenshot capture failed:', err)
-  })
-
   return {
     statusCode: 200,
     body: JSON.stringify({
       success: true,
       data: insertedItem,
-      message: `Portfolio item "${companyName}" created successfully`,
+      message: `Portfolio item "${companyName}" created as ${status}. ${status === 'published' ? 'Screenshot capture started.' : 'Publish to capture screenshot.'}`,
       previewUrl: `https://uptrademedia.com/portfolio/${finalSlug}/`,
       trifolioUrl: `https://uptrademedia.com/portfolio/${finalSlug}/trifolio/`
     })
-  }
-}
-
-// Helper to capture and update screenshot in background
-async function captureAndUpdateScreenshot(portfolioId, slug) {
-  try {
-    console.log('[Portfolio API] Capturing screenshot in background...')
-    
-    // Wait for DB replication
-    await new Promise(resolve => setTimeout(resolve, 3000))
-
-    const screenshot = await captureTrifolioScreenshot(
-      slug,
-      process.env.VITE_MAIN_SITE_URL || 'https://uptrademedia.com'
-    )
-
-    const imageData = await uploadPortfolioImage(
-      screenshot.buffer,
-      screenshot.filename,
-      'design'
-    )
-
-    await supabase
-      .from('portfolio_items')
-      .update({
-        hero_image: imageData.publicUrl,
-        hero_image_width: screenshot.width || imageData.width,
-        hero_image_height: screenshot.height || imageData.height
-      })
-      .eq('id', portfolioId)
-
-    console.log('[Portfolio API] Screenshot updated successfully')
-  } catch (error) {
-    console.error('[Portfolio API] Background screenshot failed:', error)
   }
 }
 
