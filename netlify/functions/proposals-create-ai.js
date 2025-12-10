@@ -189,7 +189,7 @@ export async function handler(event) {
 
     // Generate AI content
     const response = await openai.chat.completions.create({
-      model: 'gpt-4.5-preview',
+      model: 'gpt-5.1',
       messages: [
         { role: 'system', content: PROPOSAL_STYLE },
         { 

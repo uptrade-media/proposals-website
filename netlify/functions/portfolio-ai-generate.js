@@ -238,7 +238,7 @@ Generate ALL of the following sections in a single JSON response:
 Return ONLY valid JSON. Do not include markdown code fences or explanations. Ensure all arrays have realistic, high-quality content based on the project details provided.`
 
   const response = await openai.chat.completions.create({
-    model: 'gpt-4.5-preview',
+    model: 'gpt-5.1',
     messages: [
       { role: 'system', content: SYSTEM_PROMPT },
       { role: 'user', content: prompt }
@@ -281,7 +281,7 @@ async function regenerateSpecificBlock(blockId, formData) {
   const prompt = blockPrompts[blockId] || `Generate the ${blockId} block for ${formData.companyName}.`
 
   const response = await openai.chat.completions.create({
-    model: 'gpt-4.5-preview',
+    model: 'gpt-5.1',
     messages: [
       { role: 'system', content: SYSTEM_PROMPT },
       { role: 'user', content: `${prompt}\n\nReturn ONLY valid JSON (array or object as appropriate). No markdown fences.` }
@@ -322,7 +322,7 @@ If user says "change the subtitle", update subtitle.
 Return ONLY valid JSON. Include only the fields that need to change, plus "message".`
 
   const response = await openai.chat.completions.create({
-    model: 'gpt-4.5-preview',
+    model: 'gpt-5.1',
     messages: [
       { role: 'system', content: SYSTEM_PROMPT },
       { role: 'user', content: prompt }

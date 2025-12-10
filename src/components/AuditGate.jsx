@@ -1,12 +1,34 @@
 // src/components/AuditGate.jsx
-// Public gate for magic link access to audits (similar to ProposalGate)
+// Public gate for magic link access to audits
+// Validates token via main site API per AUDIT-SYSTEM-REFERENCE.md
 import { useParams, useSearchParams } from 'react-router-dom'
 import { useEffect, useState } from 'react'
-import api from '@/lib/api'
 import UptradeLoading from './UptradeLoading'
 import AuditPublicView from './AuditPublicView'
 import { AlertTriangle, RefreshCw } from 'lucide-react'
-import { Button } from './ui/button'
+
+// Main site API for token validation
+const MAIN_SITE_API = 'https://uptrademedia.com/api/audit-validate-token'
+
+// Error messages for better UX
+const errorMessages = {
+  'No access token provided': {
+    title: 'Invalid Link',
+    message: 'This link is missing the access token. Please use the link from your email.'
+  },
+  'Invalid token': {
+    title: 'Access Denied',
+    message: 'This link is not valid. Please request a new audit or contact support.'
+  },
+  'Token expired': {
+    title: 'Link Expired',
+    message: 'This link has expired (30 days). Please request a new audit to get a fresh link.'
+  },
+  'Audit not found': {
+    title: 'Audit Not Found',
+    message: 'This audit does not exist. It may have been deleted.'
+  }
+}
 
 export default function AuditGate() {
   const { id } = useParams()
@@ -17,7 +39,7 @@ export default function AuditGate() {
   const [error, setError] = useState(null)
 
   useEffect(() => {
-    const fetchAudit = async () => {
+    const validateAndFetchAudit = async () => {
       try {
         setIsLoading(true)
         setError(null)
@@ -26,39 +48,62 @@ export default function AuditGate() {
         const token = searchParams.get('token')
         
         if (!token) {
-          setError('Invalid link. No access token provided.')
+          setError('No access token provided')
           return
         }
         
-        // Fetch audit with magic token
-        const params = new URLSearchParams({ id, token })
-        const response = await api.get(`/.netlify/functions/audits-get-public?${params.toString()}`)
-        
-        setAudit(response.data.audit)
-        setContact(response.data.contact)
-        
-        // Track view
-        api.post('/.netlify/functions/audits-track-view', {
-          auditId: response.data.audit.id,
-          event: 'view',
-          metadata: {
-            accessType: 'magic_link',
-            userAgent: navigator.userAgent,
-            referrer: document.referrer
+        // Check session cache first (1 hour)
+        const cacheKey = `audit_${id}`
+        const cached = sessionStorage.getItem(cacheKey)
+        if (cached) {
+          try {
+            const cachedData = JSON.parse(cached)
+            if (Date.now() - cachedData._cachedAt < 3600000) {
+              setAudit(cachedData.audit)
+              setContact(cachedData.contact)
+              setIsLoading(false)
+              return
+            }
+          } catch (e) {
+            // Invalid cache, continue to validate
+            sessionStorage.removeItem(cacheKey)
           }
-        }).catch(err => console.warn('Failed to track view:', err))
+        }
+        
+        // Validate token with main site API
+        const response = await fetch(MAIN_SITE_API, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ auditId: id, token })
+        })
+        
+        const data = await response.json()
+        
+        if (!response.ok || !data.valid) {
+          setError(data.error || 'Failed to validate token')
+          return
+        }
+        
+        // Cache for session
+        sessionStorage.setItem(cacheKey, JSON.stringify({
+          audit: data.audit,
+          contact: data.audit?.contact || null,
+          _cachedAt: Date.now()
+        }))
+        
+        setAudit(data.audit)
+        setContact(data.audit?.contact || null)
         
       } catch (err) {
-        console.error('Failed to fetch audit:', err)
-        const errorMsg = err.response?.data?.error || 'Failed to load audit report'
-        setError(errorMsg)
+        console.error('Failed to validate audit token:', err)
+        setError('Failed to load audit report. Please try again.')
       } finally {
         setIsLoading(false)
       }
     }
 
     if (id) {
-      fetchAudit()
+      validateAndFetchAudit()
     }
   }, [id, searchParams])
 
@@ -67,6 +112,11 @@ export default function AuditGate() {
   }
 
   if (error || !audit) {
+    const errorInfo = errorMessages[error] || {
+      title: 'Unable to Load Audit',
+      message: error || 'Audit not found'
+    }
+    
     return (
       <div className="min-h-screen bg-[var(--surface-page)] flex items-center justify-center px-4">
         <div className="max-w-md text-center">
@@ -74,9 +124,9 @@ export default function AuditGate() {
             <AlertTriangle className="w-8 h-8 text-[var(--accent-red)]" />
           </div>
           <h1 className="text-2xl font-bold text-[var(--text-primary)] mb-2">
-            Unable to Load Audit
+            {errorInfo.title}
           </h1>
-          <p className="text-[var(--text-secondary)] mb-6">{error || 'Audit not found'}</p>
+          <p className="text-[var(--text-secondary)] mb-6">{errorInfo.message}</p>
           <a 
             href="https://uptrademedia.com/free-audit/"
             className="inline-flex items-center justify-center px-6 py-3 bg-gradient-to-r from-[var(--brand-primary)] to-[var(--brand-secondary)] text-white font-semibold rounded-xl hover:shadow-lg transition-all"

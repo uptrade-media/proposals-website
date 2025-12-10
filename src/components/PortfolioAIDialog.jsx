@@ -650,7 +650,11 @@ export default function PortfolioAIDialog({ open, onOpenChange, onSuccess }) {
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-4xl w-[95vw] max-h-[90vh] p-0 overflow-hidden bg-[var(--surface-primary)] border-[var(--glass-border)] flex flex-col">
+      <DialogContent className={cn(
+        "w-[95vw] max-h-[90vh] p-0 overflow-hidden bg-[var(--surface-primary)] border-[var(--glass-border)] flex flex-col",
+        // Wider modal for Generate and Review steps
+        currentStep >= 3 ? "max-w-7xl" : "max-w-4xl"
+      )}>
         {/* Header */}
         <DialogHeader className="px-6 py-4 border-b border-[var(--glass-border)] bg-[var(--glass-bg)] shrink-0">
           <div className="flex flex-col gap-4">
@@ -899,7 +903,7 @@ export default function PortfolioAIDialog({ open, onOpenChange, onSuccess }) {
                 </div>
                 
                 <ScrollArea className="flex-1 p-6">
-                  <div className="space-y-4 max-w-2xl mx-auto">
+                  <div className="space-y-4 max-w-4xl mx-auto">
                     {chatMessages.map((msg) => (
                       <ChatMessage key={msg.id} message={msg} isUser={msg.role === 'user'} />
                     ))}
@@ -921,7 +925,7 @@ export default function PortfolioAIDialog({ open, onOpenChange, onSuccess }) {
                 </ScrollArea>
 
                 <div className="p-4 border-t border-[var(--glass-border)] bg-[var(--glass-bg)]">
-                  <div className="flex gap-3 max-w-2xl mx-auto">
+                  <div className="flex gap-3 max-w-4xl mx-auto">
                     <Input
                       ref={chatInputRef}
                       placeholder="Ask AI to modify content... (e.g., 'Make results more impressive')"
@@ -1002,7 +1006,7 @@ export default function PortfolioAIDialog({ open, onOpenChange, onSuccess }) {
           {/* Step 4: Review & Edit */}
           {currentStep === 4 && (
             <ScrollArea className="h-full">
-              <div className="p-8 max-w-3xl mx-auto">
+              <div className="p-8 max-w-5xl mx-auto">
                 <div className="text-center mb-8">
                   <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-amber-500 to-orange-500 flex items-center justify-center mx-auto mb-4 shadow-lg">
                     <Eye className="w-8 h-8 text-white" />

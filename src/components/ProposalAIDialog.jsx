@@ -9,7 +9,7 @@
  * - Website URL for audits (website_rebuild type)
  * - AI clarification conversation
  * 
- * Uses GPT-4.5 for ultra-high-quality proposals
+ * Uses GPT-5.1 for ultra-high-quality proposals
  */
 import React, { useState, useEffect, useMemo } from 'react'
 import { 
@@ -1100,7 +1100,7 @@ export default function ProposalAIDialog({
                   <Sparkles className="w-5 h-5 text-[var(--brand-primary)] mt-0.5" />
                   <div>
                     <p className="font-medium text-[var(--text-primary)]">Ready to generate</p>
-                    <p className="text-sm text-[var(--text-secondary)]">GPT-4.5 will create a high-converting proposal with urgency triggers, your brand identity, and professional terms. Generation takes 30-60 seconds.</p>
+                    <p className="text-sm text-[var(--text-secondary)]">GPT-5.1 will create a high-converting proposal with urgency triggers, your brand identity, and professional terms. Generation takes 30-60 seconds.</p>
                   </div>
                 </div>
               </div>

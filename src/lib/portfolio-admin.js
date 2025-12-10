@@ -113,7 +113,7 @@ Return ONLY valid JSON. Do not include markdown code fences or explanations.
 `
 
   const response = await openai.chat.completions.create({
-    model: 'gpt-4-turbo-preview',
+    model: 'gpt-5.1',
     messages: [
       { role: 'system', content: SYSTEM_PROMPT },
       { role: 'user', content: prompt }

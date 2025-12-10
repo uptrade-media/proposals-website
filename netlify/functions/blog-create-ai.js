@@ -67,7 +67,7 @@ export async function handler(event) {
 
     // Generate AI content
     const response = await openai.chat.completions.create({
-      model: 'gpt-4-turbo-preview',
+      model: 'gpt-5.1',
       messages: [
         { role: 'system', content: UPTRADE_WRITING_STYLE },
         { 

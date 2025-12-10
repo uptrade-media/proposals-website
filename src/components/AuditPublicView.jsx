@@ -176,16 +176,34 @@ export default function AuditPublicView({ audit, contact }) {
     }, { passive: true })
   }
   
-  // Use grade from API or calculate from scores
-  const grade = audit.grade || calculateGrade(audit)
+  // Normalize scores - handle both flat properties and nested scores object
+  // Main site API returns: { scores: { performance, seo, accessibility, security, overall } }
+  // Portal API returns: { performanceScore, seoScore, accessibilityScore, ... }
+  const scores = {
+    performance: audit.scores?.performance ?? audit.performanceScore ?? null,
+    seo: audit.scores?.seo ?? audit.seoScore ?? null,
+    accessibility: audit.scores?.accessibility ?? audit.accessibilityScore ?? null,
+    bestPractices: audit.scores?.bestPractices ?? audit.bestPracticesScore ?? null,
+    security: audit.scores?.security ?? audit.securityScore ?? null,
+    overall: audit.scores?.overall ?? audit.overallScore ?? null
+  }
+  
+  // Use grade from API or calculate from normalized scores
+  const grade = audit.grade || calculateGrade({ 
+    performanceScore: scores.performance,
+    seoScore: scores.seo,
+    accessibilityScore: scores.accessibility,
+    bestPracticesScore: scores.bestPractices
+  })
   const gradeColor = gradeColors[grade] || gradeColors['N/A']
   
-  // Issues are now sent directly from API (extracted from summary)
-  const seoIssues = audit.seoIssues || []
-  const securityIssues = audit.securityIssues || {}
-  const performanceIssues = audit.performanceIssues || []
-  const priorityActions = audit.priorityActions || []
-  const insightsSummary = audit.insightsSummary || null
+  // Issues from summary object (main site) or flat properties (portal)
+  const summary = audit.summary || {}
+  const seoIssues = audit.seoIssues || summary.seoIssues || []
+  const securityIssues = audit.securityIssues || summary.securityIssues || {}
+  const performanceIssues = audit.performanceIssues || summary.performanceIssues || []
+  const priorityActions = audit.priorityActions || summary.priorityActions || []
+  const insightsSummary = audit.insightsSummary || summary.insightsSummary || null
   
   return (
     <div className="min-h-screen bg-[var(--surface-page)]">
@@ -252,25 +270,25 @@ export default function AuditPublicView({ audit, contact }) {
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
             <ScoreCard 
               label="Performance" 
-              value={audit.performanceScore} 
+              value={scores.performance} 
               icon={Zap}
               description="Page speed & responsiveness"
             />
             <ScoreCard 
               label="SEO" 
-              value={audit.seoScore} 
+              value={scores.seo} 
               icon={Search}
               description="Search engine optimization"
             />
             <ScoreCard 
               label="Accessibility" 
-              value={audit.accessibilityScore} 
+              value={scores.accessibility} 
               icon={Eye}
               description="Usability for all users"
             />
             <ScoreCard 
               label="Best Practices" 
-              value={audit.bestPracticesScore} 
+              value={scores.bestPractices} 
               icon={Shield}
               description="Security & modern standards"
             />
@@ -428,7 +446,7 @@ export default function AuditPublicView({ audit, contact }) {
                 ))
               ) : (
                 <>
-                  {audit.performanceScore < 70 && (
+                  {scores.performance < 70 && (
                     <div className="flex items-start gap-4 bg-white/5 rounded-xl p-4">
                       <div className="w-8 h-8 rounded-full bg-[var(--accent-red)]/20 flex items-center justify-center flex-shrink-0">
                         <span className="text-[var(--accent-red)] font-bold">1</span>
@@ -436,14 +454,14 @@ export default function AuditPublicView({ audit, contact }) {
                       <div>
                         <h4 className="font-medium text-white">Improve Page Speed</h4>
                         <p className="text-gray-400 text-sm mt-1">
-                          Your performance score of {audit.performanceScore} is below optimal. Consider optimizing images, 
+                          Your performance score of {scores.performance} is below optimal. Consider optimizing images, 
                           minifying CSS/JS, and implementing lazy loading.
                         </p>
                       </div>
                     </div>
                   )}
               
-                  {audit.seoScore < 80 && (
+                  {scores.seo < 80 && (
                     <div className="flex items-start gap-4 bg-white/5 rounded-xl p-4">
                       <div className="w-8 h-8 rounded-full bg-[var(--accent-orange)]/20 flex items-center justify-center flex-shrink-0">
                         <span className="text-[var(--accent-orange)] font-bold">2</span>
@@ -457,7 +475,7 @@ export default function AuditPublicView({ audit, contact }) {
                     </div>
                   )}
               
-                  {audit.accessibilityScore < 90 && (
+                  {scores.accessibility < 90 && (
                     <div className="flex items-start gap-4 bg-white/5 rounded-xl p-4">
                       <div className="w-8 h-8 rounded-full bg-[var(--accent-blue)]/20 flex items-center justify-center flex-shrink-0">
                         <span className="text-[var(--accent-blue)] font-bold">3</span>
@@ -471,7 +489,7 @@ export default function AuditPublicView({ audit, contact }) {
                     </div>
                   )}
               
-                  {audit.performanceScore >= 70 && audit.seoScore >= 80 && audit.accessibilityScore >= 90 && (
+                  {scores.performance >= 70 && scores.seo >= 80 && scores.accessibility >= 90 && (
                     <div className="flex items-start gap-4 bg-[var(--accent-green)]/10 rounded-xl p-4">
                       <div className="w-8 h-8 rounded-full bg-[var(--accent-green)]/20 flex items-center justify-center flex-shrink-0">
                         <CheckCircle className="w-5 h-5 text-[var(--accent-green)]" />

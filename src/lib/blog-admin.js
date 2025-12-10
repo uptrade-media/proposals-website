@@ -113,7 +113,7 @@ Return ONLY valid JSON. Do not include markdown code fences or explanations.
     console.log('[Blog AI] Generating content for topic:', formData.topic)
     
     const response = await openai.chat.completions.create({
-      model: 'gpt-4.5-preview',
+      model: 'gpt-5.1',
       messages: [
         { role: 'system', content: UPTRADE_WRITING_STYLE },
         { role: 'user', content: prompt }
