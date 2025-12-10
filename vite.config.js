@@ -18,16 +18,6 @@ export default defineConfig(({ mode }) => {
       svgr(), // import icons as React: import Logo from './logo.svg?react'
     ],
 
-    // Suppress "use client" directive warnings from Tremor/React Server Components
-    build: {
-      rollupOptions: {
-        onwarn(warning, warn) {
-          if (warning.code === 'MODULE_LEVEL_DIRECTIVE' && warning.message.includes('"use client"')) {
-            return
-          }
-          warn(warning)
-        },
-
     resolve: {
       alias: {
         '@': path.resolve(process.cwd(), './src'),
@@ -63,6 +53,13 @@ export default defineConfig(({ mode }) => {
       // Increase chunk size warning limit (we'll optimize below)
       chunkSizeWarningLimit: 1000,
       rollupOptions: {
+        // Suppress "use client" directive warnings from Tremor/React Server Components
+        onwarn(warning, warn) {
+          if (warning.code === 'MODULE_LEVEL_DIRECTIVE' && warning.message.includes('"use client"')) {
+            return
+          }
+          warn(warning)
+        },
         output: {
           // Better code splitting with manual chunks
           manualChunks: (id) => {
