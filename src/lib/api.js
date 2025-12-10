@@ -49,9 +49,7 @@ api.interceptors.response.use(
       
       // Check if we're on an auth page already
       const isOnAuthPage = window.location.pathname.includes('/login') ||
-                           window.location.pathname.includes('/account-setup') ||
                            window.location.pathname.includes('/reset-password') ||
-                           window.location.pathname.includes('/magic-login') ||
                            window.location.pathname.includes('/auth/')
       
       if (!isOnAuthPage) {
