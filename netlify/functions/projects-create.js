@@ -71,13 +71,13 @@ export async function handler(event) {
     }
 
     // Verify contact exists
-    const { data: contact, error: contactError } = await supabase
+    const { data: targetContact, error: contactError } = await supabase
       .from('contacts')
       .select('id')
       .eq('id', contactId)
       .single()
 
-    if (contactError || !contact) {
+    if (contactError || !targetContact) {
       return {
         statusCode: 404,
         headers,

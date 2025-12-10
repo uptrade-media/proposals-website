@@ -88,13 +88,13 @@ export async function handler(event) {
     }
 
     // Verify contact exists
-    const { data: contact, error: contactError } = await supabase
+    const { data: targetContact, error: contactError } = await supabase
       .from('contacts')
       .select('id, email, name, account_setup, role')
       .eq('id', contactId)
       .single()
 
-    if (contactError || !contact) {
+    if (contactError || !targetContact) {
       return {
         statusCode: 404,
         headers,
@@ -200,13 +200,13 @@ export async function handler(event) {
     if (RESEND_API_KEY && status !== 'draft') {
       try {
         const resend = new Resend(RESEND_API_KEY)
-        const needsSetup = contact.account_setup === false || contact.account_setup === 'false'
+        const needsSetup = targetContact.account_setup === false || targetContact.account_setup === 'false'
         
         // Generate Supabase magic link
         const redirectPath = needsSetup ? '/account-setup' : `/proposals/${proposal.slug}`
         const { data: linkData, error: linkError } = await supabase.auth.admin.generateLink({
           type: 'magiclink',
-          email: contact.email,
+          email: targetContact.email,
           options: {
             redirectTo: `${PORTAL_URL}${redirectPath}`
           }
@@ -235,7 +235,7 @@ export async function handler(event) {
               </div>
               
               <div style="padding: 40px 30px;">
-                <p style="margin: 0 0 20px; font-size: 16px;">Hi ${contact.name},</p>
+                <p style="margin: 0 0 20px; font-size: 16px;">Hi ${targetContact.name},</p>
                 <p style="margin: 0 0 20px; font-size: 16px;">${needsSetup ? 'Great news! We\'ve prepared a new proposal for you:' : 'We\'ve prepared a new proposal for your review:'}</p>
                 
                 <div style="background: #f8f9fa; border-left: 4px solid #4bbf39; padding: 20px; border-radius: 6px; margin: 24px 0;">
@@ -273,12 +273,12 @@ export async function handler(event) {
         
         await resend.emails.send({
           from: RESEND_FROM_EMAIL,
-          to: contact.email,
+          to: targetContact.email,
           subject: emailSubject,
           html: emailBody
         })
 
-        console.log(`Proposal notification sent to ${contact.email}`)
+        console.log(`Proposal notification sent to ${targetContact.email}`)
       } catch (emailError) {
         console.error('Failed to send proposal notification:', emailError)
       }

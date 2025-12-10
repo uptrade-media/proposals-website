@@ -8,7 +8,7 @@ import { createSupabaseAdmin } from './utils/supabase.js'
 import { createHash, createHmac } from 'crypto'
 import OpenAI from 'openai'
 
-const OPENPHONE_WEBHOOK_SECRET = 'ZlA4OUE4UURZVkdPaGNZWFl4QlViN2tOZmZzRlRXeFY='
+const OPENPHONE_WEBHOOK_SECRET = process.env.OPENPHONE_WEBHOOK_SECRET
 
 /**
  * Verify OpenPhone webhook signature

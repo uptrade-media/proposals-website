@@ -58,17 +58,7 @@ export async function handler(event) {
     if (!activityType || activityType === 'all' || activityType === 'projects') {
       let projectsQuery = supabase
         .from('projects')
-        .select(\`
-          id,
-          name,
-          contact_id,
-          created_at,
-          status,
-          contact:contacts!projects_contact_id_fkey (
-            name,
-            company
-          )
-        \`)
+        .select('id, name, contact_id, created_at, status, contact:contacts!projects_contact_id_fkey (name, company)')
         .order('created_at', { ascending: false })
         .limit(Math.min(limit, 50))
 
@@ -88,7 +78,7 @@ export async function handler(event) {
           contactCompany: row.contact?.company,
           timestamp: row.created_at,
           status: row.status,
-          description: \`Project "\${row.name}" created\`
+          description: 'Project "' + row.name + '" created'
         })))
       }
     }
@@ -97,17 +87,7 @@ export async function handler(event) {
     if (!activityType || activityType === 'all' || activityType === 'proposals') {
       let proposalsQuery = supabase
         .from('proposals')
-        .select(\`
-          id,
-          title,
-          contact_id,
-          created_at,
-          status,
-          contact:contacts!proposals_contact_id_fkey (
-            name,
-            company
-          )
-        \`)
+        .select('id, title, contact_id, created_at, status, contact:contacts!proposals_contact_id_fkey (name, company)')
         .order('created_at', { ascending: false })
         .limit(Math.min(limit, 50))
 
@@ -128,8 +108,8 @@ export async function handler(event) {
           timestamp: row.created_at,
           status: row.status,
           description: row.status === 'accepted' 
-            ? \`Proposal "\${row.title}" accepted\` 
-            : \`Proposal "\${row.title}" created\`
+            ? 'Proposal "' + row.title + '" accepted'
+            : 'Proposal "' + row.title + '" created'
         })))
       }
     }
@@ -138,18 +118,7 @@ export async function handler(event) {
     if (!activityType || activityType === 'all' || activityType === 'invoices') {
       let invoicesQuery = supabase
         .from('invoices')
-        .select(\`
-          id,
-          invoice_number,
-          contact_id,
-          created_at,
-          status,
-          total_amount,
-          contact:contacts!invoices_contact_id_fkey (
-            name,
-            company
-          )
-        \`)
+        .select('id, invoice_number, contact_id, created_at, status, total_amount, contact:contacts!invoices_contact_id_fkey (name, company)')
         .order('created_at', { ascending: false })
         .limit(Math.min(limit, 50))
 
@@ -171,8 +140,8 @@ export async function handler(event) {
           status: row.status,
           amount: parseFloat(row.total_amount),
           description: row.status === 'paid'
-            ? \`Invoice \${row.invoice_number} paid (\$\${parseFloat(row.total_amount).toFixed(2)})\`
-            : \`Invoice \${row.invoice_number} created (\$\${parseFloat(row.total_amount).toFixed(2)})\`
+            ? 'Invoice ' + row.invoice_number + ' paid ($' + parseFloat(row.total_amount).toFixed(2) + ')'
+            : 'Invoice ' + row.invoice_number + ' created ($' + parseFloat(row.total_amount).toFixed(2) + ')'
         })))
       }
     }
@@ -181,17 +150,7 @@ export async function handler(event) {
     if (!activityType || activityType === 'all' || activityType === 'messages') {
       let messagesQuery = supabase
         .from('messages')
-        .select(\`
-          id,
-          subject,
-          contact_id,
-          created_at,
-          sender,
-          contact:contacts!messages_contact_id_fkey (
-            name,
-            company
-          )
-        \`)
+        .select('id, subject, contact_id, created_at, sender, contact:contacts!messages_contact_id_fkey (name, company)')
         .is('parent_id', null)
         .order('created_at', { ascending: false })
         .limit(Math.min(limit, 50))
@@ -212,7 +171,7 @@ export async function handler(event) {
           contactCompany: row.contact?.company,
           timestamp: row.created_at,
           sender: row.sender,
-          description: \`Message "\${row.subject}" from \${row.sender === 'client' ? row.contact?.name : 'team'}\`
+          description: 'Message "' + row.subject + '" from ' + (row.sender === 'client' ? row.contact?.name : 'team')
         })))
       }
     }
@@ -221,18 +180,7 @@ export async function handler(event) {
     if (!activityType || activityType === 'all' || activityType === 'files') {
       let filesQuery = supabase
         .from('files')
-        .select(\`
-          id,
-          filename,
-          contact_id,
-          uploaded_at,
-          category,
-          size,
-          contact:contacts!files_contact_id_fkey (
-            name,
-            company
-          )
-        \`)
+        .select('id, filename, contact_id, uploaded_at, category, size, contact:contacts!files_contact_id_fkey (name, company)')
         .order('uploaded_at', { ascending: false })
         .limit(Math.min(limit, 50))
 
@@ -253,7 +201,7 @@ export async function handler(event) {
           timestamp: row.uploaded_at,
           category: row.category,
           size: row.size,
-          description: \`File "\${row.filename}" uploaded (\${row.category})\`
+          description: 'File "' + row.filename + '" uploaded (' + row.category + ')'
         })))
       }
     }
