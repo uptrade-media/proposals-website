@@ -1,10 +1,10 @@
-const jwt = require('jsonwebtoken')
-const { neon } = require('@neondatabase/serverless')
-const { Resend } = require('resend')
+import jwt from 'jsonwebtoken'
+import { createSupabaseAdmin, getAuthenticatedUser } from './utils/supabase.js'
+import { Resend } from 'resend'
 
 const resend = new Resend(process.env.RESEND_API_KEY)
 
-exports.handler = async (event) => {
+export async function handler(event) {
   // Only allow POST
   if (event.httpMethod !== 'POST') {
     return {
@@ -14,43 +14,45 @@ exports.handler = async (event) => {
   }
 
   try {
-    // Verify admin authentication
-    const token = event.headers.cookie?.match(/um_session=([^;]+)/)?.[1]
-    if (!token) {
+    // Verify admin authentication using Supabase
+    const { user, contact, error: authError } = await getAuthenticatedUser(event)
+    
+    if (authError || !contact) {
       return { statusCode: 401, body: JSON.stringify({ error: 'Unauthorized' }) }
     }
-
-    const payload = jwt.verify(token, process.env.AUTH_JWT_SECRET)
-    if (payload.role !== 'admin') {
+    
+    if (contact.role !== 'admin') {
       return { statusCode: 403, body: JSON.stringify({ error: 'Admin access required' }) }
     }
 
-    // Parse request
-    const { clientId } = JSON.parse(event.body || '{}')
+    // Parse request - support both clientId and contactId for backwards compatibility
+    const body = JSON.parse(event.body || '{}')
+    const clientId = body.clientId || body.contactId
     if (!clientId) {
       return { statusCode: 400, body: JSON.stringify({ error: 'Client ID is required' }) }
     }
 
     // Get client from database
-    const sql = neon(process.env.DATABASE_URL)
-    const contacts = await sql`
-      SELECT id, email, name, "accountSetup"
-      FROM contacts
-      WHERE id = ${clientId}
-      LIMIT 1
-    `
+    const supabase = createSupabaseAdmin()
+    const { data: contacts, error: fetchError } = await supabase
+      .from('contacts')
+      .select('id, email, name, account_setup')
+      .eq('id', clientId)
+      .limit(1)
 
-    if (contacts.length === 0) {
+    if (fetchError) throw fetchError
+
+    if (!contacts || contacts.length === 0) {
       return { statusCode: 404, body: JSON.stringify({ error: 'Client not found' }) }
     }
 
-    const contact = contacts[0]
+    const clientContact = contacts[0]
 
     // Generate setup token (valid for 24 hours)
     const setupToken = jwt.sign(
       { 
-        email: contact.email,
-        name: contact.name,
+        email: clientContact.email,
+        name: clientContact.name,
         type: 'account_setup'
       },
       process.env.AUTH_JWT_SECRET,
@@ -61,20 +63,20 @@ exports.handler = async (event) => {
     const setupUrl = `${PORTAL_URL}/setup?token=${setupToken}`
 
     // Check if account is already set up
-    const isSetup = contact.accountSetup === 'true' || contact.accountSetup === true
+    const isSetup = clientContact.account_setup === 'true' || clientContact.account_setup === true
     const emailSubject = isSetup 
       ? 'Your Uptrade Media Portal Access Link' 
       : 'Complete Your Uptrade Media Portal Setup'
 
     // Send email via Resend
     if (process.env.RESEND_API_KEY) {
-      console.log('[admin-resend-setup-email] Sending email to:', contact.email)
+      console.log('[admin-resend-setup-email] Sending email to:', clientContact.email)
       console.log('[admin-resend-setup-email] Setup status:', isSetup ? 'complete' : 'pending')
 
       try {
         const emailResult = await resend.emails.send({
           from: process.env.RESEND_FROM_EMAIL || 'portal@uptrademedia.com',
-          to: contact.email,
+          to: clientContact.email,
           subject: emailSubject,
           html: `
             <!DOCTYPE html>
@@ -93,7 +95,7 @@ exports.handler = async (event) => {
                   <h2 style="color: #1f2937; margin-top: 0;">${isSetup ? 'Portal Access Link' : 'Complete Your Account Setup'}</h2>
                   
                   <p style="color: #4b5563; margin-bottom: 24px;">
-                    Hi ${contact.name},
+                    Hi ${clientContact.name},
                   </p>
                   
                   <p style="color: #4b5563; margin-bottom: 24px;">

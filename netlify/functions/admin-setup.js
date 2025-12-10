@@ -1,7 +1,7 @@
 // Admin setup function - call via browser or curl
-const { neon } = require('@neondatabase/serverless')
+import { createSupabaseAdmin } from './utils/supabase.js'
 
-exports.handler = async (event, context) => {
+export async function handler(event, context) {
   const adminEmail = 'ramsey@uptrademedia.com'
   
   // Security: Only allow in development or with secret key
@@ -18,16 +18,18 @@ exports.handler = async (event, context) => {
   }
 
   try {
-    const sql = neon(process.env.DATABASE_URL)
+    const supabase = createSupabaseAdmin()
     
     // Check if user exists
-    const users = await sql`
-      SELECT id, email, name, role 
-      FROM contacts 
-      WHERE email = ${adminEmail}
-    `
+    const { data: users, error: fetchError } = await supabase
+      .from('contacts')
+      .select('id, email, name, role')
+      .eq('email', adminEmail)
+      .limit(1)
     
-    if (users.length === 0) {
+    if (fetchError) throw fetchError
+    
+    if (!users || users.length === 0) {
       return {
         statusCode: 404,
         headers: { 'Content-Type': 'application/json' },
@@ -42,12 +44,14 @@ exports.handler = async (event, context) => {
     const user = users[0]
     
     // Set admin role
-    const result = await sql`
-      UPDATE contacts 
-      SET role = 'admin' 
-      WHERE email = ${adminEmail}
-      RETURNING id, email, name, role
-    `
+    const { data: result, error: updateError } = await supabase
+      .from('contacts')
+      .update({ role: 'admin' })
+      .eq('email', adminEmail)
+      .select('id, email, name, role')
+      .single()
+    
+    if (updateError) throw updateError
     
     return {
       statusCode: 200,
@@ -56,9 +60,9 @@ exports.handler = async (event, context) => {
         success: true,
         message: '✅ Admin role set successfully!',
         user: {
-          name: result[0].name,
-          email: result[0].email,
-          role: result[0].role,
+          name: result.name,
+          email: result.email,
+          role: result.role,
           previousRole: user.role
         },
         nextSteps: [
