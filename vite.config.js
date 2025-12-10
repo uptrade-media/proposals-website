@@ -18,6 +18,16 @@ export default defineConfig(({ mode }) => {
       svgr(), // import icons as React: import Logo from './logo.svg?react'
     ],
 
+    // Suppress "use client" directive warnings from Tremor/React Server Components
+    build: {
+      rollupOptions: {
+        onwarn(warning, warn) {
+          if (warning.code === 'MODULE_LEVEL_DIRECTIVE' && warning.message.includes('"use client"')) {
+            return
+          }
+          warn(warning)
+        },
+
     resolve: {
       alias: {
         '@': path.resolve(process.cwd(), './src'),
@@ -79,7 +89,7 @@ export default defineConfig(({ mode }) => {
               return 'date-vendor'
             }
             // Charts and visualization
-            if (id.includes('recharts') || id.includes('d3-')) {
+            if (id.includes('@tremor') || id.includes('d3-')) {
               return 'chart-vendor'
             }
             // Editor/markdown

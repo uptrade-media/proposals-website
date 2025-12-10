@@ -8,22 +8,11 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { 
+  AreaChart, 
   BarChart, 
-  Bar, 
-  LineChart, 
-  Line, 
-  PieChart, 
-  Pie, 
-  Cell, 
-  XAxis, 
-  YAxis, 
-  CartesianGrid, 
-  Tooltip, 
-  Legend, 
-  ResponsiveContainer,
-  AreaChart,
-  Area
-} from 'recharts'
+  DonutChart,
+  LineChart
+} from '@tremor/react'
 import { 
   TrendingUp, 
   TrendingDown, 
@@ -118,24 +107,8 @@ const Reports = () => {
 
   const chartColors = getChartColors()
 
-  // Custom tooltip for charts
-  const CustomTooltip = ({ active, payload, label }) => {
-    if (active && payload && payload.length) {
-      return (
-        <div className="bg-white p-3 border rounded-lg shadow-lg">
-          <p className="font-medium">{label}</p>
-          {payload.map((entry, index) => (
-            <p key={index} style={{ color: entry.color }}>
-              {entry.name}: {entry.name.includes('Revenue') || entry.name.includes('Amount') 
-                ? formatCurrency(entry.value) 
-                : entry.value}
-            </p>
-          ))}
-        </div>
-      )
-    }
-    return null
-  }
+  // Value formatter for currency
+  const currencyFormatter = (value) => formatCurrency(value)
 
   return (
     <div className="space-y-6">
@@ -276,25 +249,14 @@ const Reports = () => {
                     <CardDescription>Current project status breakdown</CardDescription>
                   </CardHeader>
                   <CardContent>
-                    <ResponsiveContainer width="100%" height={300}>
-                      <PieChart>
-                        <Pie
-                          data={overviewReport.charts.project_status_distribution}
-                          cx="50%"
-                          cy="50%"
-                          labelLine={false}
-                          label={({ name, percentage }) => `${name} (${percentage}%)`}
-                          outerRadius={80}
-                          fill="#8884d8"
-                          dataKey="count"
-                        >
-                          {overviewReport.charts.project_status_distribution.map((entry, index) => (
-                            <Cell key={`cell-${index}`} fill={getStatusColor(entry.status)} />
-                          ))}
-                        </Pie>
-                        <Tooltip />
-                      </PieChart>
-                    </ResponsiveContainer>
+                    <DonutChart
+                      data={overviewReport.charts.project_status_distribution}
+                      index="name"
+                      category="count"
+                      colors={['emerald', 'blue', 'amber', 'rose', 'cyan']}
+                      className="h-72"
+                      showLabel={true}
+                    />
                   </CardContent>
                 </Card>
 
@@ -305,22 +267,15 @@ const Reports = () => {
                     <CardDescription>Monthly revenue over the last 6 months</CardDescription>
                   </CardHeader>
                   <CardContent>
-                    <ResponsiveContainer width="100%" height={300}>
-                      <AreaChart data={overviewReport.charts.revenue_trend}>
-                        <CartesianGrid strokeDasharray="3 3" />
-                        <XAxis dataKey="month_name" />
-                        <YAxis tickFormatter={formatCurrency} />
-                        <Tooltip content={<CustomTooltip />} />
-                        <Area 
-                          type="monotone" 
-                          dataKey="revenue" 
-                          stroke="#4bbf39" 
-                          fill="#4bbf39" 
-                          fillOpacity={0.3}
-                          name="Revenue"
-                        />
-                      </AreaChart>
-                    </ResponsiveContainer>
+                    <AreaChart
+                      data={overviewReport.charts.revenue_trend}
+                      index="month_name"
+                      categories={['revenue']}
+                      colors={['emerald']}
+                      valueFormatter={currencyFormatter}
+                      className="h-72"
+                      showLegend={false}
+                    />
                   </CardContent>
                 </Card>
               </div>
@@ -332,15 +287,14 @@ const Reports = () => {
                   <CardDescription>New projects created over the last 6 months</CardDescription>
                 </CardHeader>
                 <CardContent>
-                  <ResponsiveContainer width="100%" height={300}>
-                    <BarChart data={overviewReport.charts.project_trend}>
-                      <CartesianGrid strokeDasharray="3 3" />
-                      <XAxis dataKey="month_name" />
-                      <YAxis />
-                      <Tooltip content={<CustomTooltip />} />
-                      <Bar dataKey="count" fill="#39bfb0" name="New Projects" />
-                    </BarChart>
-                  </ResponsiveContainer>
+                  <BarChart
+                    data={overviewReport.charts.project_trend}
+                    index="month_name"
+                    categories={['count']}
+                    colors={['cyan']}
+                    className="h-72"
+                    showLegend={false}
+                  />
                 </CardContent>
               </Card>
             </>
@@ -460,15 +414,14 @@ const Reports = () => {
                   <CardDescription>Distribution of projects by status</CardDescription>
                 </CardHeader>
                 <CardContent>
-                  <ResponsiveContainer width="100%" height={300}>
-                    <BarChart data={Object.entries(projectReport.summary.status_summary).map(([status, count]) => ({ status, count }))}>
-                      <CartesianGrid strokeDasharray="3 3" />
-                      <XAxis dataKey="status" />
-                      <YAxis />
-                      <Tooltip />
-                      <Bar dataKey="count" fill="#4bbf39" />
-                    </BarChart>
-                  </ResponsiveContainer>
+                  <BarChart
+                    data={Object.entries(projectReport.summary.status_summary).map(([status, count]) => ({ status, count }))}
+                    index="status"
+                    categories={['count']}
+                    colors={['emerald']}
+                    className="h-72"
+                    showLegend={false}
+                  />
                 </CardContent>
               </Card>
             </>
@@ -586,21 +539,15 @@ const Reports = () => {
                   <CardDescription>Revenue breakdown by month</CardDescription>
                 </CardHeader>
                 <CardContent>
-                  <ResponsiveContainer width="100%" height={300}>
-                    <LineChart data={financialReport.breakdown.monthly_revenue}>
-                      <CartesianGrid strokeDasharray="3 3" />
-                      <XAxis dataKey="month_name" />
-                      <YAxis tickFormatter={formatCurrency} />
-                      <Tooltip content={<CustomTooltip />} />
-                      <Line 
-                        type="monotone" 
-                        dataKey="revenue" 
-                        stroke="#4bbf39" 
-                        strokeWidth={2}
-                        name="Revenue"
-                      />
-                    </LineChart>
-                  </ResponsiveContainer>
+                  <LineChart
+                    data={financialReport.breakdown.monthly_revenue}
+                    index="month_name"
+                    categories={['revenue']}
+                    colors={['emerald']}
+                    valueFormatter={currencyFormatter}
+                    className="h-72"
+                    showLegend={false}
+                  />
                 </CardContent>
               </Card>
             </>
@@ -698,17 +645,14 @@ const Reports = () => {
                   <CardDescription>Activity breakdown over the selected period</CardDescription>
                 </CardHeader>
                 <CardContent>
-                  <ResponsiveContainer width="100%" height={300}>
-                    <AreaChart data={activityReport.daily_activity}>
-                      <CartesianGrid strokeDasharray="3 3" />
-                      <XAxis dataKey="date_name" />
-                      <YAxis />
-                      <Tooltip content={<CustomTooltip />} />
-                      <Area type="monotone" dataKey="projects" stackId="1" stroke="#3b82f6" fill="#3b82f6" name="Projects" />
-                      <Area type="monotone" dataKey="messages" stackId="1" stroke="#8b5cf6" fill="#8b5cf6" name="Messages" />
-                      <Area type="monotone" dataKey="files" stackId="1" stroke="#f59e0b" fill="#f59e0b" name="Files" />
-                    </AreaChart>
-                  </ResponsiveContainer>
+                  <AreaChart
+                    data={activityReport.daily_activity}
+                    index="date_name"
+                    categories={['projects', 'messages', 'files']}
+                    colors={['blue', 'violet', 'amber']}
+                    className="h-72"
+                    stack={true}
+                  />
                 </CardContent>
               </Card>
 

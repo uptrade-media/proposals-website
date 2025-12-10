@@ -1,46 +1,21 @@
 import { useState, useEffect, useRef } from 'react'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
-import { Badge } from '@/components/ui/badge'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Alert, AlertDescription } from '@/components/ui/alert'
+import { AreaChart, BarChart, DonutChart } from '@tremor/react'
 import { 
-  BarChart, 
-  Bar, 
-  LineChart, 
-  Line, 
-  PieChart, 
-  Pie, 
-  Cell, 
-  XAxis, 
-  YAxis, 
-  CartesianGrid, 
-  Tooltip, 
-  Legend, 
-  ResponsiveContainer,
-  AreaChart,
-  Area
-} from 'recharts'
-import { 
-  TrendingUp, 
-  TrendingDown,
-  Minus,
   Eye,
   Users,
   Clock,
-  MousePointer,
   Globe,
   Smartphone,
   Monitor,
   Tablet,
-  BarChart3,
-  Activity,
   Target,
   ExternalLink,
   Loader2,
-  RefreshCw,
-  ArrowUpRight,
-  ArrowDownRight
+  RefreshCw
 } from 'lucide-react'
 import useSiteAnalyticsStore from '@/lib/site-analytics-store'
 
@@ -66,14 +41,12 @@ const SiteAnalytics = () => {
   const hasFetchedRef = useRef(false)
   const [isRefreshing, setIsRefreshing] = useState(false)
 
-  // Fetch data on mount
   useEffect(() => {
     if (hasFetchedRef.current) return
     hasFetchedRef.current = true
     fetchAllAnalytics()
   }, [])
 
-  // Refetch when date range changes
   useEffect(() => {
     if (hasFetchedRef.current) {
       fetchAllAnalytics()
@@ -90,7 +63,6 @@ const SiteAnalytics = () => {
     setDateRange(parseInt(value))
   }
 
-  // Get device icon
   const getDeviceIcon = (device) => {
     switch (device?.toLowerCase()) {
       case 'mobile': return <Smartphone className="h-4 w-4" />
@@ -99,24 +71,6 @@ const SiteAnalytics = () => {
     }
   }
 
-  // Custom tooltip for charts
-  const CustomTooltip = ({ active, payload, label }) => {
-    if (active && payload && payload.length) {
-      return (
-        <div className="bg-[var(--bg-primary)] border border-[var(--border-primary)] rounded-lg p-3 shadow-lg">
-          <p className="text-sm font-medium text-[var(--text-primary)]">{label}</p>
-          {payload.map((entry, index) => (
-            <p key={index} className="text-sm" style={{ color: entry.color }}>
-              {entry.name}: {formatNumber(entry.value)}
-            </p>
-          ))}
-        </div>
-      )
-    }
-    return null
-  }
-
-  // Loading state
   if (isLoading && !overview) {
     return (
       <div className="flex items-center justify-center py-12">
@@ -126,7 +80,6 @@ const SiteAnalytics = () => {
     )
   }
 
-  // Error state
   if (error && !overview) {
     return (
       <Alert variant="destructive">
@@ -146,13 +99,23 @@ const SiteAnalytics = () => {
   const topEvents = overview?.topEvents || []
   const dailyTrend = overview?.dailyTrend || pageViewsByDay || []
 
-  // Calculate device totals
+  // Format data for Tremor charts
+  const trendData = dailyTrend.map(d => ({
+    date: new Date(d.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
+    'Page Views': d.views || 0
+  }))
+
   const totalDevices = (deviceBreakdown.desktop || 0) + (deviceBreakdown.mobile || 0) + (deviceBreakdown.tablet || 0)
   const deviceData = [
-    { name: 'Desktop', value: deviceBreakdown.desktop || 0, color: '#4bbf39' },
-    { name: 'Mobile', value: deviceBreakdown.mobile || 0, color: '#3b82f6' },
-    { name: 'Tablet', value: deviceBreakdown.tablet || 0, color: '#f59e0b' }
+    { name: 'Desktop', value: deviceBreakdown.desktop || 0 },
+    { name: 'Mobile', value: deviceBreakdown.mobile || 0 },
+    { name: 'Tablet', value: deviceBreakdown.tablet || 0 }
   ].filter(d => d.value > 0)
+
+  const hourlyData = (pageViewsByHour || []).map(h => ({
+    hour: h.label,
+    'Page Views': h.views || 0
+  }))
 
   return (
     <div className="space-y-6">
@@ -277,35 +240,19 @@ const SiteAnalytics = () => {
             <CardDescription>Daily page views over the selected period</CardDescription>
           </CardHeader>
           <CardContent>
-            {dailyTrend.length > 0 ? (
-              <ResponsiveContainer width="100%" height={300}>
-                <AreaChart data={dailyTrend}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="var(--border-primary)" />
-                  <XAxis 
-                    dataKey="date" 
-                    tick={{ fill: 'var(--text-secondary)', fontSize: 12 }}
-                    tickFormatter={(value) => {
-                      const date = new Date(value)
-                      return `${date.getMonth() + 1}/${date.getDate()}`
-                    }}
-                  />
-                  <YAxis 
-                    tick={{ fill: 'var(--text-secondary)', fontSize: 12 }}
-                    tickFormatter={formatNumber}
-                  />
-                  <Tooltip content={<CustomTooltip />} />
-                  <Area 
-                    type="monotone" 
-                    dataKey="views" 
-                    stroke="#4bbf39" 
-                    fill="#4bbf39" 
-                    fillOpacity={0.2}
-                    name="Page Views"
-                  />
-                </AreaChart>
-              </ResponsiveContainer>
+            {trendData.length > 0 ? (
+              <AreaChart
+                className="h-72"
+                data={trendData}
+                index="date"
+                categories={['Page Views']}
+                colors={['emerald']}
+                showLegend={false}
+                showGridLines={true}
+                curveType="monotone"
+              />
             ) : (
-              <div className="h-[300px] flex items-center justify-center text-[var(--text-tertiary)]">
+              <div className="h-72 flex items-center justify-center text-[var(--text-tertiary)]">
                 No trend data available
               </div>
             )}
@@ -321,33 +268,19 @@ const SiteAnalytics = () => {
           <CardContent>
             {deviceData.length > 0 ? (
               <div className="flex items-center gap-6">
-                <ResponsiveContainer width="50%" height={250}>
-                  <PieChart>
-                    <Pie
-                      data={deviceData}
-                      cx="50%"
-                      cy="50%"
-                      innerRadius={60}
-                      outerRadius={100}
-                      fill="#8884d8"
-                      paddingAngle={2}
-                      dataKey="value"
-                    >
-                      {deviceData.map((entry, index) => (
-                        <Cell key={`cell-${index}`} fill={entry.color} />
-                      ))}
-                    </Pie>
-                    <Tooltip content={<CustomTooltip />} />
-                  </PieChart>
-                </ResponsiveContainer>
+                <DonutChart
+                  className="h-52 w-52"
+                  data={deviceData}
+                  category="value"
+                  index="name"
+                  colors={['emerald', 'blue', 'amber']}
+                  showLabel={false}
+                />
                 <div className="flex-1 space-y-3">
                   {deviceData.map((device, index) => (
                     <div key={index} className="flex items-center justify-between">
                       <div className="flex items-center gap-2">
-                        <div 
-                          className="w-3 h-3 rounded-full" 
-                          style={{ backgroundColor: device.color }}
-                        />
+                        {getDeviceIcon(device.name)}
                         <span className="text-sm text-[var(--text-primary)]">{device.name}</span>
                       </div>
                       <div className="text-right">
@@ -363,7 +296,7 @@ const SiteAnalytics = () => {
                 </div>
               </div>
             ) : (
-              <div className="h-[250px] flex items-center justify-center text-[var(--text-tertiary)]">
+              <div className="h-52 flex items-center justify-center text-[var(--text-tertiary)]">
                 No device data available
               </div>
             )}
@@ -477,34 +410,21 @@ const SiteAnalytics = () => {
       )}
 
       {/* Hourly Distribution */}
-      {pageViewsByHour && pageViewsByHour.length > 0 && (
+      {hourlyData.length > 0 && (
         <Card>
           <CardHeader>
             <CardTitle className="text-base">Traffic by Hour</CardTitle>
             <CardDescription>When visitors are most active</CardDescription>
           </CardHeader>
           <CardContent>
-            <ResponsiveContainer width="100%" height={200}>
-              <BarChart data={pageViewsByHour}>
-                <CartesianGrid strokeDasharray="3 3" stroke="var(--border-primary)" />
-                <XAxis 
-                  dataKey="label" 
-                  tick={{ fill: 'var(--text-secondary)', fontSize: 10 }}
-                  interval={2}
-                />
-                <YAxis 
-                  tick={{ fill: 'var(--text-secondary)', fontSize: 12 }}
-                  tickFormatter={formatNumber}
-                />
-                <Tooltip content={<CustomTooltip />} />
-                <Bar 
-                  dataKey="views" 
-                  fill="#4bbf39" 
-                  radius={[2, 2, 0, 0]}
-                  name="Page Views"
-                />
-              </BarChart>
-            </ResponsiveContainer>
+            <BarChart
+              className="h-48"
+              data={hourlyData}
+              index="hour"
+              categories={['Page Views']}
+              colors={['emerald']}
+              showLegend={false}
+            />
           </CardContent>
         </Card>
       )}
