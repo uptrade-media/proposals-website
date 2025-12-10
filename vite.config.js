@@ -61,47 +61,6 @@ export default defineConfig(({ mode }) => {
           warn(warning)
         },
         output: {
-          // Better code splitting with manual chunks
-          manualChunks: (id) => {
-            // React core
-            if (id.includes('node_modules/react/') || 
-                id.includes('node_modules/react-dom/') ||
-                id.includes('node_modules/react-router')) {
-              return 'react-vendor'
-            }
-            // Icons
-            if (id.includes('lucide-react')) {
-              return 'icons-vendor'
-            }
-            // UI components (Radix)
-            if (id.includes('@radix-ui')) {
-              return 'ui-vendor'
-            }
-            // Form libraries
-            if (id.includes('react-hook-form') || id.includes('zod') || id.includes('@hookform')) {
-              return 'form-vendor'
-            }
-            // Date utilities
-            if (id.includes('date-fns') || id.includes('react-day-picker')) {
-              return 'date-vendor'
-            }
-            // Charts and visualization
-            if (id.includes('@tremor') || id.includes('d3-')) {
-              return 'chart-vendor'
-            }
-            // Editor/markdown
-            if (id.includes('mdx') || id.includes('marked') || id.includes('dompurify')) {
-              return 'editor-vendor'
-            }
-            // Animation
-            if (id.includes('framer-motion')) {
-              return 'animation-vendor'
-            }
-            // Google APIs
-            if (id.includes('googleapis') || id.includes('google-auth-library')) {
-              return 'google-vendor'
-            }
-          },
           // Better file naming for caching
           chunkFileNames: 'assets/js/[name]-[hash].js',
           entryFileNames: 'assets/js/[name]-[hash].js',
