@@ -245,7 +245,7 @@ Return ONLY valid JSON. Do not include markdown code fences or explanations. Ens
     ],
     temperature: 0.7,
     response_format: { type: 'json_object' },
-    max_tokens: 4000
+    max_completion_tokens: 4000
   })
 
   const content = JSON.parse(response.choices[0].message.content)
@@ -288,7 +288,7 @@ async function regenerateSpecificBlock(blockId, formData) {
     ],
     temperature: 0.8,
     response_format: { type: 'json_object' },
-    max_tokens: 2000
+    max_completion_tokens: 2000
   })
 
   const result = JSON.parse(response.choices[0].message.content)
@@ -329,7 +329,7 @@ Return ONLY valid JSON. Include only the fields that need to change, plus "messa
     ],
     temperature: 0.7,
     response_format: { type: 'json_object' },
-    max_tokens: 2000
+    max_completion_tokens: 2000
   })
 
   const result = JSON.parse(response.choices[0].message.content)

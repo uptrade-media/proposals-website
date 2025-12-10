@@ -651,9 +651,9 @@ export default function PortfolioAIDialog({ open, onOpenChange, onSuccess }) {
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className={cn(
-        "w-[95vw] max-h-[90vh] p-0 overflow-hidden bg-[var(--surface-primary)] border-[var(--glass-border)] flex flex-col",
-        // Wider modal for Generate and Review steps
-        currentStep >= 3 ? "max-w-7xl" : "max-w-4xl"
+        "max-h-[90vh] p-0 overflow-hidden bg-[var(--surface-primary)] border-[var(--glass-border)] flex flex-col",
+        // Much wider modal for Generate and Review steps
+        currentStep >= 3 ? "w-[95vw] max-w-[1600px]" : "w-[95vw] max-w-4xl"
       )}>
         {/* Header */}
         <DialogHeader className="px-6 py-4 border-b border-[var(--glass-border)] bg-[var(--glass-bg)] shrink-0">

@@ -119,7 +119,7 @@ Return ONLY valid JSON. Do not include markdown code fences or explanations.
         { role: 'user', content: prompt }
       ],
       temperature: 0.7,
-      max_tokens: 5000,
+      max_completion_tokens: 5000,
       response_format: { type: 'json_object' }
     })
 
