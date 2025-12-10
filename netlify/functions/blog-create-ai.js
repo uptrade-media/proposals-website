@@ -17,6 +17,50 @@ const openai = new OpenAI({
  * Complete services from sitemap.xml for internal linking and service callouts
  */
 const UPTRADE_SERVICES = {
+  // Marketing Services
+  'seo': {
+    url: '/marketing/seo/',
+    title: 'SEO & Local SEO',
+    description: 'Dominate search results and drive organic traffic',
+    cta: 'Boost Your Rankings',
+    keywords: ['SEO', 'search engine optimization', 'rankings', 'organic traffic', 'Google', 'local SEO']
+  },
+  'ad-management': {
+    url: '/marketing/ad-management/',
+    title: 'Paid Ads Management',
+    description: 'Targeted ads that deliver measurable ROI',
+    cta: 'Start Your Campaign',
+    keywords: ['PPC', 'Google Ads', 'paid advertising', 'SEM', 'ad campaigns', 'paid ads']
+  },
+  'content-marketing': {
+    url: '/marketing/content-marketing/',
+    title: 'Content Marketing',
+    description: 'Strategic content that attracts and engages your audience',
+    cta: 'Create Better Content',
+    keywords: ['content marketing', 'blog', 'content strategy', 'copywriting']
+  },
+  'email-social-marketing': {
+    url: '/marketing/email-social-marketing/',
+    title: 'Email & Social Marketing',
+    description: 'Build your audience and nurture leads across platforms',
+    cta: 'Grow Your Audience',
+    keywords: ['social media', 'email marketing', 'Instagram', 'Facebook', 'LinkedIn', 'newsletters']
+  },
+  'reputation-management': {
+    url: '/marketing/reputation-management/',
+    title: 'Reputation Management',
+    description: 'Protect and enhance your online reputation',
+    cta: 'Manage Your Reputation',
+    keywords: ['reputation', 'reviews', 'online reputation', 'brand protection']
+  },
+  'sales-funnels': {
+    url: '/marketing/sales-funnels/',
+    title: 'Sales Funnels',
+    description: 'Convert visitors into customers with strategic funnels',
+    cta: 'Build Your Funnel',
+    keywords: ['sales funnel', 'conversion', 'lead generation', 'landing pages']
+  },
+  
   // Design Services
   'web-design': {
     url: '/design/web-design/',
@@ -25,13 +69,6 @@ const UPTRADE_SERVICES = {
     cta: 'Get a Custom Website',
     keywords: ['web design', 'website', 'custom design', 'responsive design', 'UI/UX']
   },
-  'seo': {
-    url: '/design/seo/',
-    title: 'SEO Services',
-    description: 'Dominate search results and drive organic traffic',
-    cta: 'Boost Your Rankings',
-    keywords: ['SEO', 'search engine optimization', 'rankings', 'organic traffic', 'Google']
-  },
   'branding': {
     url: '/design/branding/',
     title: 'Brand Identity Design',
@@ -39,47 +76,47 @@ const UPTRADE_SERVICES = {
     cta: 'Build Your Brand',
     keywords: ['branding', 'brand identity', 'logo', 'brand strategy', 'visual identity']
   },
-  'ux-design': {
-    url: '/design/ux-design/',
+  'ux': {
+    url: '/design/ux/',
     title: 'UX Design',
     description: 'User experiences that convert visitors into customers',
     cta: 'Improve Your UX',
     keywords: ['UX', 'user experience', 'usability', 'conversion optimization', 'interface']
   },
+  'graphic-design': {
+    url: '/design/graphic-design/',
+    title: 'Graphic Design',
+    description: 'Eye-catching visuals for print and digital',
+    cta: 'Get Stunning Graphics',
+    keywords: ['graphic design', 'graphics', 'print design', 'visual design']
+  },
   
-  // Marketing Services
-  'social-media': {
-    url: '/marketing/social-media/',
-    title: 'Social Media Marketing',
-    description: 'Build your audience and engagement across platforms',
-    cta: 'Grow Your Social Presence',
-    keywords: ['social media', 'Instagram', 'Facebook', 'LinkedIn', 'social marketing']
+  // Web Development (under Design)
+  'web-development': {
+    url: '/design/web-design/web-development/',
+    title: 'Web Development',
+    description: 'Custom-coded websites with cutting-edge technology',
+    cta: 'Build Your Site',
+    keywords: ['web development', 'coding', 'custom development', 'Next.js', 'React']
   },
-  'ppc': {
-    url: '/marketing/ppc/',
-    title: 'PPC Advertising',
-    description: 'Targeted ads that deliver measurable ROI',
-    cta: 'Start Your Campaign',
-    keywords: ['PPC', 'Google Ads', 'paid advertising', 'SEM', 'ad campaigns']
+  'ecommerce-development': {
+    url: '/design/web-design/ecommerce-development/',
+    title: 'E-commerce Development',
+    description: 'Online stores that sell 24/7',
+    cta: 'Launch Your Store',
+    keywords: ['ecommerce', 'online store', 'Shopify', 'WooCommerce', 'e-commerce']
   },
-  'email-marketing': {
-    url: '/marketing/email/',
-    title: 'Email Marketing',
-    description: 'Nurture leads and drive conversions with strategic email',
-    cta: 'Launch Email Campaigns',
-    keywords: ['email marketing', 'newsletters', 'email automation', 'drip campaigns']
-  },
-  'content-marketing': {
-    url: '/marketing/content/',
-    title: 'Content Marketing',
-    description: 'Strategic content that attracts and engages your audience',
-    cta: 'Create Better Content',
-    keywords: ['content marketing', 'blog', 'content strategy', 'copywriting']
+  'landing-pages': {
+    url: '/design/web-design/landing-pages/',
+    title: 'Landing Pages',
+    description: 'High-converting pages that capture leads',
+    cta: 'Get a Landing Page',
+    keywords: ['landing page', 'conversion', 'lead capture', 'squeeze page']
   },
   
   // Media Services
   'video-production': {
-    url: '/media/video/',
+    url: '/media/video-production/',
     title: 'Video Production',
     description: 'Professional video content that tells your story',
     cta: 'Create Video Content',
@@ -92,35 +129,28 @@ const UPTRADE_SERVICES = {
     cta: 'Book a Photoshoot',
     keywords: ['photography', 'product photos', 'brand photography', 'visual content']
   },
-  'drone': {
-    url: '/media/drone/',
-    title: 'Drone Services',
+  'video-testimonials': {
+    url: '/media/video-testimonials/',
+    title: 'Video Testimonials',
+    description: 'Authentic customer stories that build trust',
+    cta: 'Capture Testimonials',
+    keywords: ['testimonials', 'customer reviews', 'social proof', 'video reviews']
+  },
+  'aerial-drone': {
+    url: '/media/aerial-drone/',
+    title: 'Aerial & Drone',
     description: 'Aerial photography and videography for unique perspectives',
     cta: 'Get Aerial Content',
     keywords: ['drone', 'aerial photography', 'drone video', 'aerial footage']
   },
   
-  // Main Category Pages
-  'design': {
-    url: '/design/',
-    title: 'Design Services',
-    description: 'Full-service design solutions for digital and print',
-    cta: 'Explore Design Services',
-    keywords: ['design', 'creative services', 'digital design']
-  },
-  'marketing': {
-    url: '/marketing/',
-    title: 'Marketing Services',
-    description: 'Data-driven marketing strategies that grow your business',
-    cta: 'Explore Marketing Services',
-    keywords: ['marketing', 'digital marketing', 'marketing strategy']
-  },
-  'media': {
-    url: '/media/',
-    title: 'Media Production',
-    description: 'Professional content creation for all platforms',
-    cta: 'Explore Media Services',
-    keywords: ['media', 'content creation', 'production']
+  // AI & Automation
+  'ai-automation': {
+    url: '/ai-automation/',
+    title: 'AI & Automation',
+    description: 'Custom AI solutions to streamline your business',
+    cta: 'Automate Your Business',
+    keywords: ['AI', 'automation', 'artificial intelligence', 'chatbot', 'machine learning']
   }
 }
 
@@ -222,58 +252,112 @@ Include 2-3 natural callout sections in the content that reference these service
 Place these strategically after relevant sections to provide value, not just promote.`
       : ''
 
-    // Generate AI content
-    const response = await openai.chat.completions.create({
+    // Build content options context
+    const contentOptions = []
+    if (formData.includeStats) contentOptions.push('Include industry statistics, data points, and research citations')
+    if (formData.includeExamples) contentOptions.push('Include real-world examples and mini case studies')
+    const contentOptionsText = contentOptions.length > 0 
+      ? `\n\nCONTENT ENHANCEMENTS:\n${contentOptions.map(o => `- ${o}`).join('\n')}`
+      : ''
+
+    console.log('[Blog AI] Step 1: Generating body content...')
+
+    // STEP 1: Generate the full body content
+    const contentResponse = await openai.chat.completions.create({
       model: 'gpt-5.1',
       messages: [
         { role: 'system', content: UPTRADE_WRITING_STYLE },
         { 
           role: 'user', 
-          content: `Create a comprehensive, world-class blog post:
+          content: `Write a comprehensive, world-class blog post:
 
 Topic: ${formData.topic}
 Category: ${formData.category}
-Keywords: ${formData.keywords || 'Not specified'}
-Key Points: ${formData.keyPoints || 'Comprehensive coverage'}
+Target Audience: ${formData.targetAudience || 'Small business owners and marketing professionals'}
+Keywords to naturally include: ${formData.keywords || 'Generate based on topic'}
+Key Points to Cover: ${formData.keyPoints || 'Cover comprehensively based on topic'}
+Tone: ${formData.tone || 'professional'}
+Target Word Count: ${formData.wordCount || '1200-1500'}
 ${servicesContext}
+${contentOptionsText}
 
-CONTENT REQUIREMENTS:
-1. Minimum 1500 words for depth and SEO value
-2. Include statistics, data points, or industry insights where relevant
-3. Add practical examples or case studies
-4. Structure with clear H2 and H3 headings
-5. Include a FAQ section with 3-5 common questions (for FAQ schema)
-6. End with actionable takeaways and a compelling CTA
+STRUCTURE REQUIREMENTS:
+1. Start with a compelling hook that addresses a pain point or opportunity
+2. Use H2 (##) for main sections, H3 (###) for subsections
+3. Short, scannable paragraphs (2-4 sentences max)
+4. Include bullet points and numbered lists where appropriate
+5. Add transition sentences between sections
+6. End with actionable takeaways and a compelling call-to-action
+${formData.includeFAQ ? '7. Include a ## Frequently Asked Questions section at the end with 4-6 Q&As' : ''}
 
-Return JSON with:
-- title: SEO-optimized title (60-70 chars, includes primary keyword)
-- excerpt: Engaging preview (150-160 chars)
-- content: Full markdown blog post with <!-- SERVICE_CALLOUT: key --> markers
-- keywords: Array of 8-12 SEO keywords (mix of short and long-tail)
-- readingTime: Minutes (integer)
-- metaTitle: Meta title for SEO (different from title, 55-60 chars)
-- metaDescription: Meta description with CTA (150-160 chars)
-- ogTitle: Social media title (60 chars max, engaging)
-- ogDescription: Social description (120 chars, with emoji if appropriate)
-- focusKeyphrase: Primary SEO keyphrase (2-4 words)
-- tableOfContents: Array of {heading: string, slug: string, level: 2|3}
-- faqItems: Array of {question: string, answer: string} for FAQ schema
-- internalLinks: Array of {text: string, url: string, context: string}
-- serviceCallouts: Array of service keys to feature (e.g., ["seo", "web-design"])
-- schema: Schema.org Article JSON-LD object (include FAQ if faqItems exist)
-- featuredImageAlt: Descriptive alt text with keyword
-- estimatedValue: SEO content value estimate ("$500-1000 equivalent")
-- targetAudience: Who this article is for
+Write the full blog post content in Markdown format. Focus on being genuinely helpful and educational.
+Include <!-- SERVICE_CALLOUT: service-key --> markers after sections where an Uptrade service naturally relates.
+
+Return the blog post content ONLY - no JSON, no metadata, just the markdown content.`
+        }
+      ],
+      temperature: 0.7,
+      max_completion_tokens: 6000
+    })
+
+    const blogContent = contentResponse.choices[0].message.content
+
+    console.log('[Blog AI] Step 2: Generating SEO metadata...')
+
+    // STEP 2: Generate SEO metadata based on the written content
+    const metadataResponse = await openai.chat.completions.create({
+      model: 'gpt-5.1',
+      messages: [
+        { role: 'system', content: 'You are an SEO specialist analyzing blog content to generate optimal metadata for search engines and rich snippets.' },
+        { 
+          role: 'user', 
+          content: `Analyze this blog post and generate SEO metadata:
+
+---BEGIN CONTENT---
+${blogContent}
+---END CONTENT---
+
+Original Topic: ${formData.topic}
+Category: ${formData.category}
+Target Audience: ${formData.targetAudience || 'Small business owners'}
+
+Generate JSON with these fields:
+{
+  "title": "SEO-optimized title (50-60 chars, primary keyword near start)",
+  "excerpt": "Compelling preview that makes people want to read (150-160 chars)",
+  "keywords": ["array", "of", "8-12", "SEO", "keywords", "mix", "short", "and", "long-tail"],
+  "readingTime": 5,
+  "metaTitle": "Meta title for search results (different angle, 55-60 chars)",
+  "metaDescription": "Meta description with value prop (150-160 chars)",
+  "focusKeyphrase": "primary keyphrase 2-4 words",
+  "tableOfContents": [{"heading": "Section Name", "slug": "section-name", "level": 2}],
+  "faqItems": [{"question": "Common question?", "answer": "Comprehensive answer"}],
+  "serviceCallouts": ["seo", "web-design"],
+  "featuredImageAlt": "Descriptive alt text with primary keyword",
+  "targetAudience": "One sentence describing ideal reader"
+}
+
+INSTRUCTIONS:
+- Extract FAQ items from the content if a FAQ section exists, otherwise create 4-6 based on the content
+- For serviceCallouts, list the service keys that appear in <!-- SERVICE_CALLOUT --> markers
+- tableOfContents should list all H2 headers with URL-safe slugs
+- All text should be compelling and click-worthy while being accurate
 
 Return ONLY valid JSON.`
         }
       ],
-      temperature: 0.7,
-      max_completion_tokens: 8000,
+      temperature: 0.5,
+      max_completion_tokens: 2000,
       response_format: { type: 'json_object' }
     })
 
-    const aiContent = JSON.parse(response.choices[0].message.content)
+    const aiMetadata = JSON.parse(metadataResponse.choices[0].message.content)
+    
+    // Combine content with metadata
+    const aiContent = {
+      ...aiMetadata,
+      content: blogContent
+    }
     
     // Generate slug
     const slug = aiContent.title
@@ -371,21 +455,19 @@ Return ONLY valid JSON.`
         content_html: contentHtml,
         featured_image: formData.featuredImage || null,
         featured_image_alt: aiContent.featuredImageAlt || aiContent.title,
+        featured_image_width: 1200,
+        featured_image_height: 630,
         author: formData.author || 'Uptrade Media',
         keywords: Array.isArray(aiContent.keywords) ? aiContent.keywords : [],
         reading_time: aiContent.readingTime || 5,
         meta_title: aiContent.metaTitle || aiContent.title,
         meta_description: aiContent.metaDescription || aiContent.excerpt,
-        og_title: aiContent.ogTitle || aiContent.title,
-        og_description: aiContent.ogDescription || aiContent.excerpt,
         focus_keyphrase: aiContent.focusKeyphrase || null,
-        internal_links: aiContent.internalLinks ? JSON.stringify(aiContent.internalLinks) : null,
         schema_markup: JSON.stringify(schemaMarkup),
-        table_of_contents: aiContent.tableOfContents ? JSON.stringify(aiContent.tableOfContents) : null,
-        faq_items: aiContent.faqItems ? JSON.stringify(aiContent.faqItems) : null,
-        service_callouts: serviceCalloutsData.length > 0 ? JSON.stringify(serviceCalloutsData) : null,
-        target_audience: aiContent.targetAudience || null,
-        estimated_value: aiContent.estimatedValue || null,
+        table_of_contents: aiContent.tableOfContents || null,
+        faq_items: aiContent.faqItems && aiContent.faqItems.length > 0 ? aiContent.faqItems : null,
+        service_callouts: serviceCalloutsData.length > 0 ? serviceCalloutsData : null,
+        target_audience: aiContent.targetAudience || formData.targetAudience || null,
         status: formData.publishImmediately ? 'published' : 'draft',
         published_at: formData.publishImmediately ? new Date() : null
       })

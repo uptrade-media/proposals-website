@@ -14,7 +14,7 @@ import {
   AlertCircle, Loader2, Plus, Trash2, Edit2, Eye, Search, 
   FileText, Calendar, Clock, Tag, Image as ImageIcon, 
   MoreVertical, ExternalLink, Copy, CheckCircle2,
-  Upload, X, Filter, ArrowUpDown
+  Upload, X, Filter, ArrowUpDown, Star
 } from 'lucide-react'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from './ui/dropdown-menu'
 import useAuthStore from '../lib/auth-store'
@@ -42,7 +42,7 @@ const categoryColors = {
 }
 
 // Blog Card Component
-function BlogCard({ blog, onEdit, onDelete, onPreview, isLoading }) {
+function BlogCard({ blog, onEdit, onDelete, onPreview, onToggleFeatured, isLoading }) {
   const [copied, setCopied] = useState(false)
   
   const copySlug = () => {
@@ -76,10 +76,16 @@ function BlogCard({ blog, onEdit, onDelete, onPreview, isLoading }) {
               <ImageIcon className="w-10 h-10 text-[var(--text-tertiary)]" />
             </div>
           )}
-          <div className="absolute top-2 left-2">
+          <div className="absolute top-2 left-2 flex items-center gap-1.5">
             <Badge className={`${statusColors[blog.status]} border text-xs font-medium`}>
               {blog.status}
             </Badge>
+            {blog.featured && (
+              <Badge className="bg-amber-100 text-amber-700 border-amber-200 border text-xs font-medium">
+                <Star className="w-3 h-3 mr-1 fill-amber-500" />
+                Featured
+              </Badge>
+            )}
           </div>
         </div>
 
@@ -115,6 +121,11 @@ function BlogCard({ blog, onEdit, onDelete, onPreview, isLoading }) {
                   </DropdownMenuItem>
                   <DropdownMenuItem onClick={() => window.open(`/blog/${blog.slug}`, '_blank')}>
                     <ExternalLink className="w-4 h-4 mr-2" /> View Live
+                  </DropdownMenuItem>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem onClick={() => onToggleFeatured(blog.id, !blog.featured)}>
+                    <Star className={`w-4 h-4 mr-2 ${blog.featured ? 'fill-amber-500 text-amber-500' : ''}`} />
+                    {blog.featured ? 'Unfeature' : 'Feature'}
                   </DropdownMenuItem>
                   <DropdownMenuSeparator />
                   <DropdownMenuItem 
@@ -266,6 +277,7 @@ export default function BlogManagement() {
   const [searchQuery, setSearchQuery] = useState('')
   const [filterStatus, setFilterStatus] = useState('all')
   const [filterCategory, setFilterCategory] = useState('all')
+  const [filterFeatured, setFilterFeatured] = useState('all')
   const [sortBy, setSortBy] = useState('newest')
   const [isEditorOpen, setIsEditorOpen] = useState(false)
   const [editingBlog, setEditingBlog] = useState(null)
@@ -319,6 +331,8 @@ export default function BlogManagement() {
     .filter(blog => {
       if (filterStatus !== 'all' && blog.status !== filterStatus) return false
       if (filterCategory !== 'all' && blog.category !== filterCategory) return false
+      if (filterFeatured === 'featured' && !blog.featured) return false
+      if (filterFeatured === 'not-featured' && blog.featured) return false
       if (searchQuery) {
         const query = searchQuery.toLowerCase()
         return blog.title.toLowerCase().includes(query) || 
@@ -337,6 +351,7 @@ export default function BlogManagement() {
     total: blogs.length,
     published: blogs.filter(b => b.status === 'published').length,
     draft: blogs.filter(b => b.status === 'draft').length,
+    featured: blogs.filter(b => b.featured).length,
     thisMonth: blogs.filter(b => {
       const date = new Date(b.created_at)
       const now = new Date()
@@ -370,8 +385,14 @@ export default function BlogManagement() {
       content: '',
       featuredImage: '',
       featuredImageAlt: '',
+      featuredImageWidth: 1200,
+      featuredImageHeight: 630,
       author: 'Uptrade Media',
       keywords: '',
+      metaTitle: '',
+      metaDescription: '',
+      faqItems: [],
+      serviceCallouts: [],
       readingTime: 5,
       status: 'draft'
     })
@@ -387,8 +408,14 @@ export default function BlogManagement() {
       content: blog.content,
       featuredImage: blog.featured_image,
       featuredImageAlt: blog.featured_image_alt,
+      featuredImageWidth: blog.featured_image_width || 1200,
+      featuredImageHeight: blog.featured_image_height || 630,
       author: blog.author,
       keywords: Array.isArray(blog.keywords) ? blog.keywords.join(', ') : blog.keywords || '',
+      metaTitle: blog.meta_title || '',
+      metaDescription: blog.meta_description || '',
+      faqItems: blog.faq_items || [],
+      serviceCallouts: blog.service_callouts || [],
       readingTime: blog.reading_time,
       status: blog.status
     })
@@ -410,9 +437,18 @@ export default function BlogManagement() {
         ? formData.keywords.split(',').map(k => k.trim()).filter(Boolean)
         : formData.keywords
 
+      // Filter out empty FAQ items
+      const faqItems = (formData.faqItems || []).filter(faq => 
+        faq.question?.trim() && faq.answer?.trim()
+      )
+
       const blogPost = {
         ...formData,
         keywords,
+        faqItems: faqItems.length > 0 ? faqItems : null,
+        serviceCallouts: formData.serviceCallouts?.length > 0 ? formData.serviceCallouts : null,
+        metaTitle: formData.metaTitle?.trim() || null,
+        metaDescription: formData.metaDescription?.trim() || null,
         publishedAt: formData.status === 'published' ? new Date().toISOString() : null
       }
 
@@ -460,6 +496,20 @@ export default function BlogManagement() {
     }
   }
 
+  const handleToggleFeatured = async (id, featured) => {
+    try {
+      await api.put('/.netlify/functions/blog-update', { id, featured })
+      setSuccess(featured ? 'Post featured!' : 'Post unfeatured!')
+      // Update local state immediately for better UX
+      setBlogs(prev => prev.map(blog => 
+        blog.id === id ? { ...blog, featured } : blog
+      ))
+      setTimeout(() => setSuccess(''), 3000)
+    } catch (err) {
+      setError(err.message || 'Failed to update featured status')
+    }
+  }
+
   const categories = ['news', 'design', 'marketing', 'media', 'insights', 'guides', 'seo', 'web-design', 'case-studies']
 
   return (
@@ -498,10 +548,11 @@ export default function BlogManagement() {
 
         <div className="px-6 py-6 space-y-6">
           {/* Stats */}
-          <div className="grid grid-cols-4 gap-4">
+          <div className="grid grid-cols-5 gap-4">
             <StatsCard icon={FileText} label="Total Posts" value={stats.total} color="emerald" />
             <StatsCard icon={CheckCircle2} label="Published" value={stats.published} color="blue" />
             <StatsCard icon={Edit2} label="Drafts" value={stats.draft} color="amber" />
+            <StatsCard icon={Star} label="Featured" value={stats.featured} color="amber" />
             <StatsCard icon={Calendar} label="This Month" value={stats.thisMonth} color="purple" />
           </div>
 
@@ -561,6 +612,18 @@ export default function BlogManagement() {
                 </SelectContent>
               </Select>
 
+              <Select value={filterFeatured} onValueChange={setFilterFeatured}>
+                <SelectTrigger className="w-36">
+                  <Star className="w-4 h-4 mr-2 text-[var(--text-tertiary)]" />
+                  <SelectValue placeholder="Featured" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Posts</SelectItem>
+                  <SelectItem value="featured">Featured</SelectItem>
+                  <SelectItem value="not-featured">Not Featured</SelectItem>
+                </SelectContent>
+              </Select>
+
               <Select value={sortBy} onValueChange={setSortBy}>
                 <SelectTrigger className="w-36 bg-[var(--surface-secondary)]">
                   <ArrowUpDown className="w-4 h-4 mr-2 text-[var(--text-tertiary)]" />
@@ -614,6 +677,7 @@ export default function BlogManagement() {
                   onEdit={handleEdit}
                   onDelete={handleDelete}
                   onPreview={setPreviewBlog}
+                  onToggleFeatured={handleToggleFeatured}
                   isLoading={isLoading}
                 />
               ))}
@@ -754,6 +818,138 @@ export default function BlogManagement() {
                   placeholder="keyword1, keyword2, keyword3"
                   className="h-11"
                 />
+              </div>
+
+              {/* SEO Override Section */}
+              <Separator />
+              <div className="space-y-4">
+                <h3 className="font-semibold text-sm text-[var(--text-primary)] flex items-center gap-2">
+                  <Search className="w-4 h-4" />
+                  SEO Overrides (Optional)
+                </h3>
+                <p className="text-xs text-[var(--text-tertiary)]">
+                  Leave blank to auto-generate from title and excerpt
+                </p>
+                
+                <div className="grid grid-cols-1 gap-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="metaTitle">Meta Title (50-60 chars)</Label>
+                    <Input
+                      id="metaTitle"
+                      value={formData.metaTitle}
+                      onChange={(e) => setFormData(prev => ({ ...prev, metaTitle: e.target.value }))}
+                      placeholder="Custom SEO title for search results"
+                      className="h-11"
+                      maxLength={70}
+                    />
+                    <p className="text-xs text-[var(--text-tertiary)]">{formData.metaTitle?.length || 0}/60 characters</p>
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="metaDescription">Meta Description (150-160 chars)</Label>
+                    <Textarea
+                      id="metaDescription"
+                      value={formData.metaDescription}
+                      onChange={(e) => setFormData(prev => ({ ...prev, metaDescription: e.target.value }))}
+                      placeholder="Custom SEO description for search results"
+                      className="h-20 resize-none"
+                      maxLength={170}
+                    />
+                    <p className="text-xs text-[var(--text-tertiary)]">{formData.metaDescription?.length || 0}/160 characters</p>
+                  </div>
+                </div>
+
+                {/* Image Dimensions for CLS */}
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="featuredImageWidth">Image Width (px)</Label>
+                    <Input
+                      id="featuredImageWidth"
+                      type="number"
+                      value={formData.featuredImageWidth}
+                      onChange={(e) => setFormData(prev => ({ ...prev, featuredImageWidth: parseInt(e.target.value) || 1200 }))}
+                      placeholder="1200"
+                      className="h-11"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="featuredImageHeight">Image Height (px)</Label>
+                    <Input
+                      id="featuredImageHeight"
+                      type="number"
+                      value={formData.featuredImageHeight}
+                      onChange={(e) => setFormData(prev => ({ ...prev, featuredImageHeight: parseInt(e.target.value) || 630 }))}
+                      placeholder="630"
+                      className="h-11"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* FAQ Section */}
+              <Separator />
+              <div className="space-y-4">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <h3 className="font-semibold text-sm text-[var(--text-primary)] flex items-center gap-2">
+                      <FileText className="w-4 h-4" />
+                      FAQ Items (Rich Snippets)
+                    </h3>
+                    <p className="text-xs text-[var(--text-tertiary)] mt-1">
+                      Add Q&A pairs for Google's FAQ rich snippets
+                    </p>
+                  </div>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setFormData(prev => ({
+                      ...prev,
+                      faqItems: [...(prev.faqItems || []), { question: '', answer: '' }]
+                    }))}
+                  >
+                    <Plus className="w-4 h-4 mr-1" /> Add FAQ
+                  </Button>
+                </div>
+                
+                {formData.faqItems?.map((faq, index) => (
+                  <div key={index} className="p-4 border rounded-lg space-y-3 bg-[var(--surface-secondary)]">
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs font-medium text-[var(--text-tertiary)]">FAQ #{index + 1}</span>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        className="h-6 w-6 p-0 text-red-500 hover:text-red-700"
+                        onClick={() => setFormData(prev => ({
+                          ...prev,
+                          faqItems: prev.faqItems.filter((_, i) => i !== index)
+                        }))}
+                      >
+                        <X className="w-4 h-4" />
+                      </Button>
+                    </div>
+                    <Input
+                      value={faq.question}
+                      onChange={(e) => {
+                        const updated = [...formData.faqItems]
+                        updated[index].question = e.target.value
+                        setFormData(prev => ({ ...prev, faqItems: updated }))
+                      }}
+                      placeholder="Question"
+                      className="h-10"
+                    />
+                    <Textarea
+                      value={faq.answer}
+                      onChange={(e) => {
+                        const updated = [...formData.faqItems]
+                        updated[index].answer = e.target.value
+                        setFormData(prev => ({ ...prev, faqItems: updated }))
+                      }}
+                      placeholder="Answer"
+                      className="h-20 resize-none"
+                    />
+                  </div>
+                ))}
               </div>
 
               {/* Actions */}

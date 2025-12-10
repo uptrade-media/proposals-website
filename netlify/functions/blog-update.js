@@ -46,7 +46,7 @@ export async function handler(event) {
       }
     }
 
-    const { id, ...updates } = JSON.parse(event.body || '{}')
+    const { id, ...rawUpdates } = JSON.parse(event.body || '{}')
 
     if (!id) {
       return {
@@ -55,6 +55,29 @@ export async function handler(event) {
         body: JSON.stringify({ error: 'Missing blog post ID' })
       }
     }
+
+    // Convert camelCase to snake_case for database
+    const updates = {}
+    if (rawUpdates.title !== undefined) updates.title = rawUpdates.title
+    if (rawUpdates.slug !== undefined) updates.slug = rawUpdates.slug
+    if (rawUpdates.subtitle !== undefined) updates.subtitle = rawUpdates.subtitle
+    if (rawUpdates.category !== undefined) updates.category = rawUpdates.category
+    if (rawUpdates.excerpt !== undefined) updates.excerpt = rawUpdates.excerpt
+    if (rawUpdates.content !== undefined) updates.content = rawUpdates.content
+    if (rawUpdates.featuredImage !== undefined) updates.featured_image = rawUpdates.featuredImage
+    if (rawUpdates.featuredImageAlt !== undefined) updates.featured_image_alt = rawUpdates.featuredImageAlt
+    if (rawUpdates.featuredImageWidth !== undefined) updates.featured_image_width = rawUpdates.featuredImageWidth
+    if (rawUpdates.featuredImageHeight !== undefined) updates.featured_image_height = rawUpdates.featuredImageHeight
+    if (rawUpdates.author !== undefined) updates.author = rawUpdates.author
+    if (rawUpdates.keywords !== undefined) updates.keywords = rawUpdates.keywords
+    if (rawUpdates.readingTime !== undefined) updates.reading_time = rawUpdates.readingTime
+    if (rawUpdates.metaTitle !== undefined) updates.meta_title = rawUpdates.metaTitle || null
+    if (rawUpdates.metaDescription !== undefined) updates.meta_description = rawUpdates.metaDescription || null
+    if (rawUpdates.faqItems !== undefined) updates.faq_items = rawUpdates.faqItems
+    if (rawUpdates.serviceCallouts !== undefined) updates.service_callouts = rawUpdates.serviceCallouts
+    if (rawUpdates.status !== undefined) updates.status = rawUpdates.status
+    if (rawUpdates.featured !== undefined) updates.featured = rawUpdates.featured
+    if (rawUpdates.publishedAt !== undefined) updates.published_at = rawUpdates.publishedAt
 
     // Convert markdown to HTML if content is updated
     if (updates.content) {

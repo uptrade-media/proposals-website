@@ -1,17 +1,11 @@
 /**
  * Portfolio Publish Function
  * 
- * Publishes a draft portfolio item and captures trifolio screenshot
+ * Publishes a draft portfolio item and triggers trifolio screenshot capture
  */
 
-import { publishPortfolioItem, uploadPortfolioImage } from '../../src/lib/portfolio-admin.js'
-import { createClient } from '@supabase/supabase-js'
+import { publishPortfolioItem } from '../../src/lib/portfolio-admin.js'
 import { getAuthenticatedUser } from './utils/supabase.js'
-
-const supabase = createClient(
-  process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL,
-  process.env.SUPABASE_SERVICE_ROLE_KEY
-)
 
 // Hardcoded screenshot API URL (internal API, no auth needed)
 const SCREENSHOT_API_URL = 'https://uptrademedia.com/api/screenshot/trifolio'
@@ -108,28 +102,17 @@ async function captureAndUpdateScreenshot(portfolioId, slug) {
 
     const screenshotData = await response.json()
     
-    if (!screenshotData.success || !screenshotData.image) {
+    if (!screenshotData.success || !screenshotData.imageUrl) {
       throw new Error('Invalid response from screenshot API')
     }
 
-    console.log(`[Portfolio API] Screenshot received: ${screenshotData.width}x${screenshotData.height}`)
+    // The main site API already:
+    // 1. Uploads screenshot to Supabase Storage
+    // 2. Updates hero_image in the database
+    // No additional action needed here
 
-    // Convert base64 to buffer and upload
-    const buffer = Buffer.from(screenshotData.image, 'base64')
-    const filename = `${slug}.jpg`
-    const imageData = await uploadPortfolioImage(buffer, filename, 'design')
-
-    // Update portfolio item with hero image
-    await supabase
-      .from('portfolio_items')
-      .update({
-        hero_image: imageData.publicUrl,
-        hero_image_width: screenshotData.width,
-        hero_image_height: screenshotData.height
-      })
-      .eq('id', portfolioId)
-
-    console.log('[Portfolio API] Screenshot saved:', imageData.publicUrl)
+    console.log(`[Portfolio API] Screenshot captured: ${screenshotData.width}x${screenshotData.height}`)
+    console.log('[Portfolio API] Hero image updated:', screenshotData.imageUrl)
   } catch (error) {
     console.error('[Portfolio API] Screenshot failed:', error.message)
   }

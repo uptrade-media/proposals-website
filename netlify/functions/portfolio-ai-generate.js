@@ -30,7 +30,20 @@ Icon Names Available (use exactly these names):
 - General: CheckCircle, Sparkles, Zap, Target, Award, TrendingUp, Star
 - Services: Palette, Code, Code2, Search, Rocket, Globe, Megaphone
 - Technical: Gauge, Shield, Smartphone, BarChart3, Database, Server
-- Project: Calendar, Clock, Users, Building, MapPin`
+- Project: Calendar, Clock, Users, Building, MapPin
+
+TECHNOLOGY REGISTRY - Use EXACT names for tech_stack (main site has icons for these):
+Frontend: React, Next.js, Vite, TypeScript, JavaScript, Tailwind CSS, MDX, Framer Motion, Design System, Routing
+Backend: Node.js, Express, Python
+Database: PostgreSQL, Supabase, MongoDB, Redis
+Infrastructure: Vercel, Netlify, AWS, Docker, Cloudflare, Image CDN
+Platforms: Wix, WordPress, Shopify, Webflow, Squarespace
+Analytics: GA4, Internal Analytics, Hotjar, Mixpanel
+SEO: SEO, Local SEO, Schema Markup, Structured Data
+Tools: Git, GitHub, VS Code, Postman
+Design: Figma, Adobe XD, Photoshop, Illustrator
+Security: SSL/HTTPS, OAuth
+Other: Stripe, Square, OpenAI, Resend, SendGrid`
 
 export async function handler(event) {
   // Only POST
@@ -211,9 +224,9 @@ Generate ALL of the following sections in a single JSON response:
   
   "challenges": [
     {
-      "challenge": "The problem they faced",
-      "solution": "How we solved it",
-      "result": "+150% improvement",
+      "title": "Challenge Title (e.g., 'Slow Page Load Times')",
+      "description": "The problem they faced - 1-2 sentences",
+      "solution": "How we solved it - 1-2 sentences",
       "icon": "performance" // or "design", "seo", "conversion"
     }
     // 3-4 challenges
@@ -271,9 +284,22 @@ async function regenerateSpecificBlock(blockId, formData) {
     
     technical_innovations: `Generate a technical_innovations array for ${formData.companyName}'s ${formData.servicesProvided?.join(', ') || 'web'} project. Each innovation should have: icon, title, description, metrics array (3 items). Return 3-5 innovations as JSON array.`,
     
-    challenges: `Generate a challenges array for ${formData.companyName}. Original challenges: ${formData.challengesSolved || 'Not specified'}. Each item should have: challenge (problem), solution (how we fixed it), result (metric improvement), icon ("performance", "design", "seo", or "conversion"). Return 3-4 challenges as JSON array.`,
+    challenges: `Generate a challenges array for ${formData.companyName}. Original challenges: ${formData.challengesSolved || 'Not specified'}. Each item should have: title (short name like "Slow Page Load Times"), description (the problem 1-2 sentences), solution (how we fixed it 1-2 sentences), icon ("performance", "design", "seo", or "conversion"). Return 3-4 challenges as JSON array.`,
     
-    tech_stack: `Generate a tech_stack array for ${formData.companyName}'s ${formData.servicesProvided?.join(', ') || 'web design'} project. Each item: name (technology), category ("frontend", "backend", "database", "hosting", "cms", or "tools"). Return 6-10 relevant technologies as JSON array.`,
+    tech_stack: `Generate a tech_stack array for ${formData.companyName}'s ${formData.servicesProvided?.join(', ') || 'web design'} project. 
+
+IMPORTANT: Use EXACT technology names from this registry (main site has icons for these):
+- Frontend: React, Next.js, Vite, TypeScript, JavaScript, Tailwind CSS, MDX, Framer Motion
+- Backend: Node.js, Express, Python
+- Database: PostgreSQL, Supabase, MongoDB, Redis
+- Infrastructure: Vercel, Netlify, AWS, Docker, Cloudflare
+- Platforms: Wix, WordPress, Shopify, Webflow, Squarespace
+- Analytics: GA4, Internal Analytics, Hotjar, Mixpanel
+- SEO: SEO, Local SEO, Schema Markup
+- Other: Stripe, Square, OpenAI, SSL/HTTPS
+
+Each item: { name: "Exact Name", category: "frontend|backend|database|infrastructure|platform|analytics|seo|other" }
+Return 6-10 relevant technologies as JSON array.`,
     
     content: `Generate markdown case study content for ${formData.companyName}. Include sections: ## Project Overview (2-3 paragraphs), ## The Challenge (describe problems), ## Our Approach (strategic solution), ## Key Features (bullet points), ## Results (measurable outcomes). Goals: ${formData.projectGoals || 'Not specified'}. Challenges: ${formData.challengesSolved || 'Not specified'}. Return as a markdown string.`
   }

@@ -83,11 +83,15 @@ export async function handler(event) {
         content_html: contentHtml,
         featured_image: blogPost.featuredImage,
         featured_image_alt: blogPost.featuredImageAlt || blogPost.title,
+        featured_image_width: blogPost.featuredImageWidth || 1200,
+        featured_image_height: blogPost.featuredImageHeight || 630,
         author: blogPost.author || 'Uptrade Media',
         keywords: blogPost.keywords || [],
         reading_time: blogPost.readingTime || 5,
         meta_title: blogPost.metaTitle || blogPost.title,
         meta_description: blogPost.metaDescription || blogPost.excerpt,
+        faq_items: blogPost.faqItems || null,
+        service_callouts: blogPost.serviceCallouts || null,
         status: blogPost.status || 'draft',
         published_at: blogPost.publishedAt ? new Date(blogPost.publishedAt) : new Date()
       })
