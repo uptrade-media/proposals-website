@@ -169,3 +169,60 @@ export async function getUserFromCookie(event) {
     return { user: null, contact: null, error }
   }
 }
+
+/**
+ * Get a secret value from the app_secrets table
+ * Use this for large secrets that exceed AWS Lambda's 4KB env var limit
+ * @param {string} key - The secret key to fetch
+ * @returns {Promise<string | null>}
+ */
+export async function getSecret(key) {
+  try {
+    const supabase = createSupabaseAdmin()
+    
+    const { data, error } = await supabase
+      .from('app_secrets')
+      .select('value')
+      .eq('key', key)
+      .single()
+    
+    if (error || !data) {
+      console.error(`[Secrets] Failed to fetch secret '${key}':`, error?.message)
+      return null
+    }
+    
+    return data.value
+  } catch (error) {
+    console.error(`[Secrets] Exception fetching secret '${key}':`, error.message)
+    return null
+  }
+}
+
+/**
+ * Get Google Service Account credentials from Supabase
+ * Falls back to environment variable if not found in database
+ * @returns {Promise<object | null>}
+ */
+export async function getGoogleServiceAccountCredentials() {
+  // First try to get from Supabase (preferred - avoids Lambda env var limits)
+  const secretValue = await getSecret('GOOGLE_SERVICE_ACCOUNT_KEY')
+  
+  if (secretValue) {
+    try {
+      return JSON.parse(secretValue)
+    } catch (e) {
+      console.error('[Secrets] Failed to parse Google credentials from Supabase:', e.message)
+    }
+  }
+  
+  // Fall back to environment variable
+  if (process.env.GOOGLE_SERVICE_ACCOUNT_KEY) {
+    try {
+      return JSON.parse(process.env.GOOGLE_SERVICE_ACCOUNT_KEY)
+    } catch (e) {
+      console.error('[Secrets] Failed to parse Google credentials from env:', e.message)
+    }
+  }
+  
+  return null
+}

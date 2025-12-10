@@ -1,13 +1,13 @@
 import { google } from 'googleapis'
 import { Readable } from 'stream'
-import { getAuthenticatedUser } from './utils/supabase.js'
+import { getAuthenticatedUser, getGoogleServiceAccountCredentials } from './utils/supabase.js'
 
 // Get Google Drive client using Service Account
-function getDriveClient() {
-  const credentials = JSON.parse(process.env.GOOGLE_SERVICE_ACCOUNT_KEY || '{}')
+async function getDriveClient() {
+  const credentials = await getGoogleServiceAccountCredentials()
   
-  if (!credentials.client_email || !credentials.private_key) {
-    throw new Error('Google Service Account not configured. Please add GOOGLE_SERVICE_ACCOUNT_KEY.')
+  if (!credentials?.client_email || !credentials?.private_key) {
+    throw new Error('Google Service Account not configured. Add credentials to Supabase app_secrets table.')
   }
   
   const auth = new google.auth.GoogleAuth({
@@ -47,7 +47,7 @@ export async function handler(event) {
       return { statusCode: 400, headers, body: JSON.stringify({ error: 'Missing filename or file data' }) }
     }
     
-    const drive = getDriveClient()
+    const drive = await getDriveClient()
     const rootFolderId = process.env.GOOGLE_DRIVE_FOLDER_ID || 'root'
     const targetFolderId = folderId || rootFolderId
     
