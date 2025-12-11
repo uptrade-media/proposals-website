@@ -44,6 +44,9 @@ import api from '../lib/api'
 import { toast } from '../lib/toast'
 import AuditPublicView from '../components/AuditPublicView'
 
+// Helper: Check if audit is completed (handles both 'complete' and 'completed' statuses)
+const isAuditCompleted = (status) => status === 'completed' || status === 'complete'
+
 // Admin-only audit row component with magic link and analytics
 function AdminAuditRow({ audit, navigate, getStatusIcon, getScoreColor, getAuditStatusBadge, onDelete }) {
   const [isOpen, setIsOpen] = useState(false)
@@ -129,7 +132,7 @@ function AdminAuditRow({ audit, navigate, getStatusIcon, getScoreColor, getAudit
     const newState = !isOpen
     setIsOpen(newState)
     
-    if (newState && audit.status === 'completed') {
+    if (newState && isAuditCompleted(audit.status)) {
       // Load analytics
       if (!analytics) {
         setLoadingAnalytics(true)
@@ -227,7 +230,7 @@ function AdminAuditRow({ audit, navigate, getStatusIcon, getScoreColor, getAudit
               </div>
 
               {/* Scores (only show if completed) */}
-              {audit.status === 'completed' && audit.scores && (
+              {isAuditCompleted(audit.status) && audit.scores && (
                 <div className="flex gap-3 mt-4">
                   {audit.scores.performance !== undefined && (
                     <div className={`px-3 py-2 rounded-xl ${getScoreColor(audit.scores.performance)}`}>
@@ -274,7 +277,7 @@ function AdminAuditRow({ audit, navigate, getStatusIcon, getScoreColor, getAudit
             {/* Action Buttons */}
             <div className="flex items-center gap-2 ml-4">
               {/* Magic Link Button */}
-              {audit.status === 'completed' && (
+              {isAuditCompleted(audit.status) && (
                 <Button
                   variant="glass"
                   size="sm"
@@ -297,7 +300,7 @@ function AdminAuditRow({ audit, navigate, getStatusIcon, getScoreColor, getAudit
               )}
 
               {/* View Report Button */}
-              {audit.status === 'completed' && (
+              {isAuditCompleted(audit.status) && (
                 <Button
                   variant="glass"
                   size="sm"
@@ -374,7 +377,7 @@ function AdminAuditRow({ audit, navigate, getStatusIcon, getScoreColor, getAudit
               ) : (
                 <div className="space-y-6">
                   {/* Audit Results Preview */}
-                  {audit.status === 'completed' && fullAuditData && (
+                  {isAuditCompleted(audit.status) && fullAuditData && (
                     <div className="space-y-4">
                       <div className="flex items-center justify-between">
                         <h4 className="text-sm font-semibold text-[var(--text-primary)] flex items-center gap-2">
@@ -638,12 +641,12 @@ function AdminAuditRow({ audit, navigate, getStatusIcon, getScoreColor, getAudit
                     </div>
                   )}
                     </div>
-                  ) : !fullAuditData && audit.status === 'completed' ? (
+                  ) : !fullAuditData && isAuditCompleted(audit.status) ? (
                     <div className="text-center py-8 text-[var(--text-tertiary)]">
                       <BarChart3 className="w-8 h-8 mx-auto mb-2 opacity-50" />
                       <p>Loading audit data...</p>
                     </div>
-                  ) : audit.status !== 'completed' ? (
+                  ) : !isAuditCompleted(audit.status) ? (
                     <div className="text-center py-8 text-[var(--text-tertiary)]">
                       <BarChart3 className="w-8 h-8 mx-auto mb-2 opacity-50" />
                       <p>Audit results will appear here when complete</p>
@@ -732,7 +735,7 @@ function ClientAuditRow({ audit, navigate, getStatusIcon, getScoreColor, getAudi
               </div>
 
               {/* Scores (only show if completed) */}
-              {audit.status === 'completed' && (
+              {isAuditCompleted(audit.status) && (
                 <div className="flex gap-3 mt-4">
                   {audit.scorePerformance !== null && (
                     <div className={`px-3 py-2 rounded-xl ${getScoreColor(audit.scorePerformance)}`}>
@@ -771,7 +774,7 @@ function ClientAuditRow({ audit, navigate, getStatusIcon, getScoreColor, getAudi
           </div>
 
           {/* View Button */}
-          {audit.status === 'completed' && (
+          {isAuditCompleted(audit.status) && (
             <Button
               variant="glass"
               onClick={handleViewFullAudit}

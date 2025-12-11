@@ -19,6 +19,9 @@ import {
 import useReportsStore from '@/lib/reports-store'
 import useAuthStore from '@/lib/auth-store'
 
+// Helper: Check if audit is completed (handles both 'complete' and 'completed' statuses)
+const isAuditCompleted = (status) => status === 'completed' || status === 'complete'
+
 const LighthouseReport = ({ projectId }) => {
   const { user } = useAuthStore()
   const {
@@ -265,7 +268,7 @@ const LighthouseReport = ({ projectId }) => {
                       </p>
                     </div>
                     <div className="flex gap-2">
-                      {audit.status === 'completed' ? (
+                      {isAuditCompleted(audit.status) ? (
                         <CheckCircle className="w-5 h-5 text-green-600" />
                       ) : audit.status === 'failed' ? (
                         <AlertCircle className="w-5 h-5 text-red-600" />
@@ -276,7 +279,7 @@ const LighthouseReport = ({ projectId }) => {
                   </div>
 
                   {/* Expanded audit details */}
-                  {selectedAudit?.id === audit.id && audit.status === 'completed' && (
+                  {selectedAudit?.id === audit.id && isAuditCompleted(audit.status) && (
                     <div className="mt-3 pt-3 border-t space-y-2">
                       <div className="grid grid-cols-2 md:grid-cols-5 gap-2">
                         {Object.entries(audit.scores).map(([key, score]) => (

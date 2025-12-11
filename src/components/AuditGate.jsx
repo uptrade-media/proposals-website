@@ -10,8 +10,8 @@ import AuditPublicView from './AuditPublicView'
 import { AlertTriangle, RefreshCw } from 'lucide-react'
 
 // Main site API for fallback token validation
-// Use www subdomain to avoid CORS redirect issues
-const MAIN_SITE_API = 'https://www.uptrademedia.com/api/audit-validate-token'
+// Use portal proxy to avoid CORS issues with cross-origin preflight redirects
+const TOKEN_VALIDATE_API = '/.netlify/functions/audits-validate-token'
 
 // Error messages for better UX
 const errorMessages = {
@@ -201,10 +201,10 @@ export default function AuditGate() {
     }
   }
 
-  // Fallback: Validate with legacy token via main site API
+  // Fallback: Validate with legacy token via portal proxy
   const validateWithToken = async (token) => {
     try {
-      const response = await fetch(MAIN_SITE_API, {
+      const response = await fetch(TOKEN_VALIDATE_API, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ auditId: id, token })
