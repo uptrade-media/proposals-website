@@ -229,36 +229,6 @@ function AdminAuditRow({ audit, navigate, getStatusIcon, getScoreColor, getAudit
                 </div>
               </div>
 
-              {/* Scores (only show if completed) */}
-              {isAuditCompleted(audit.status) && audit.scores && (
-                <div className="flex gap-3 mt-4">
-                  {audit.scores.performance !== undefined && (
-                    <div className={`px-3 py-2 rounded-xl ${getScoreColor(audit.scores.performance)}`}>
-                      <div className="text-xs font-medium">Performance</div>
-                      <div className="text-2xl font-bold">{audit.scores.performance}</div>
-                    </div>
-                  )}
-                  {audit.scores.seo !== undefined && (
-                    <div className={`px-3 py-2 rounded-xl ${getScoreColor(audit.scores.seo)}`}>
-                      <div className="text-xs font-medium">SEO</div>
-                      <div className="text-2xl font-bold">{audit.scores.seo}</div>
-                    </div>
-                  )}
-                  {audit.scores.accessibility !== undefined && (
-                    <div className={`px-3 py-2 rounded-xl ${getScoreColor(audit.scores.accessibility)}`}>
-                      <div className="text-xs font-medium">Accessibility</div>
-                      <div className="text-2xl font-bold">{audit.scores.accessibility}</div>
-                    </div>
-                  )}
-                  {audit.scores.bestPractices !== undefined && (
-                    <div className={`px-3 py-2 rounded-xl ${getScoreColor(audit.scores.bestPractices)}`}>
-                      <div className="text-xs font-medium">Best Practices</div>
-                      <div className="text-2xl font-bold">{audit.scores.bestPractices}</div>
-                    </div>
-                  )}
-                </div>
-              )}
-
               {/* Processing message */}
               {(audit.status === 'pending' || audit.status === 'running') && (
                 <p className="text-sm text-[var(--text-secondary)] mt-2">
@@ -276,29 +246,6 @@ function AdminAuditRow({ audit, navigate, getStatusIcon, getScoreColor, getAudit
 
             {/* Action Buttons */}
             <div className="flex items-center gap-2 ml-4">
-              {/* Magic Link Button */}
-              {isAuditCompleted(audit.status) && (
-                <Button
-                  variant="glass"
-                  size="sm"
-                  onClick={handleGetMagicLink}
-                  disabled={isGenerating}
-                  className={`${isExpired ? 'border-[var(--accent-warning)]' : ''}`}
-                  title={isExpired ? 'Link expired - click to generate new' : (magicLink ? 'Copy magic link' : 'Generate magic link')}
-                >
-                  {isGenerating ? (
-                    <Loader2 className="w-4 h-4 animate-spin" />
-                  ) : copied ? (
-                    <Check className="w-4 h-4 text-[var(--accent-success)]" />
-                  ) : (
-                    <Link2 className="w-4 h-4" />
-                  )}
-                  <span className="ml-1.5 hidden sm:inline">
-                    {isExpired ? 'Regenerate' : (magicLink ? 'Copy Link' : 'Get Link')}
-                  </span>
-                </Button>
-              )}
-
               {/* View Report Button */}
               {isAuditCompleted(audit.status) && (
                 <Button
@@ -384,14 +331,37 @@ function AdminAuditRow({ audit, navigate, getStatusIcon, getScoreColor, getAudit
                           <BarChart3 className="w-4 h-4" />
                           Audit Results
                         </h4>
-                        <Button
-                          variant="glass"
-                          size="sm"
-                          onClick={handleViewFullAudit}
-                        >
-                          <Maximize2 className="w-4 h-4 mr-1.5" />
-                          View Full Report
-                        </Button>
+                        <div className="flex items-center gap-2">
+                          {/* Copy Link Button */}
+                          <Button
+                            variant="glass"
+                            size="sm"
+                            onClick={handleGetMagicLink}
+                            disabled={isGenerating}
+                            className={`${isExpired ? 'border-[var(--accent-warning)]' : ''}`}
+                            title={isExpired ? 'Link expired - click to generate new' : (magicLink ? 'Copy magic link' : 'Generate magic link')}
+                          >
+                            {isGenerating ? (
+                              <Loader2 className="w-4 h-4 animate-spin" />
+                            ) : copied ? (
+                              <Check className="w-4 h-4 text-[var(--accent-success)]" />
+                            ) : (
+                              <Link2 className="w-4 h-4" />
+                            )}
+                            <span className="ml-1.5">
+                              {isExpired ? 'Regenerate' : (magicLink ? 'Copy Link' : 'Get Link')}
+                            </span>
+                          </Button>
+                          {/* View Full Report Button */}
+                          <Button
+                            variant="glass"
+                            size="sm"
+                            onClick={handleViewFullAudit}
+                          >
+                            <Maximize2 className="w-4 h-4 mr-1.5" />
+                            View Full Report
+                          </Button>
+                        </div>
                       </div>
                       
                       {/* Score Cards Grid */}

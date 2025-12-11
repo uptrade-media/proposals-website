@@ -17,7 +17,10 @@ import {
   Clock,
   TrendingUp,
   Sparkles,
-  Target
+  Target,
+  Code,
+  CheckCircle,
+  AlertTriangle
 } from 'lucide-react'
 import SchedulerModal from './SchedulerModal'
 
@@ -118,6 +121,7 @@ export default function AuditPublicView({ audit, contact }) {
   const industryComparison = summary.industryComparison || fullAuditData.industryComparison || {}
   const codeSnippets = summary.codeSnippets || fullAuditData.codeSnippets || []
   const aiInsights = summary.aiInsights || fullAuditData.aiInsights || null
+  const schemaMarkup = summary.schemaMarkup || fullAuditData.schemaMarkup || null
   
   // Scroll to section helper
   const scrollToSection = (sectionId) => {
@@ -194,6 +198,123 @@ export default function AuditPublicView({ audit, contact }) {
                 <IssueItem key={i} {...issue} />
               ))}
             </IssueList>
+          </IssueSection>
+        )}
+
+        {/* Schema Markup Analysis */}
+        {schemaMarkup && (
+          <IssueSection
+            id="schema-markup"
+            title="Structured Data (Schema Markup)"
+            description="Rich snippets and search appearance optimization"
+            icon={Code}
+            iconColor="text-[var(--brand-primary)]"
+            iconBg="bg-[var(--brand-primary)]/10"
+            shadowColor="hover:shadow-[var(--brand-primary)]/5"
+          >
+            <motion.div 
+              variants={staggerContainer} 
+              initial="hidden" 
+              whileInView="visible" 
+              viewport={{ once: true }} 
+              className="space-y-4"
+            >
+              {/* Schema Score */}
+              <div className="flex items-center gap-4 p-4 rounded-lg bg-[var(--surface-secondary)]">
+                <div className={`text-3xl font-bold ${schemaMarkup.score >= 70 ? 'text-[var(--accent-green)]' : schemaMarkup.score >= 40 ? 'text-[var(--accent-orange)]' : 'text-[var(--accent-red)]'}`}>
+                  {schemaMarkup.score || 0}/100
+                </div>
+                <div>
+                  <div className="font-medium text-[var(--text-primary)]">Schema Score</div>
+                  <div className="text-sm text-[var(--text-muted)]">
+                    {schemaMarkup.found 
+                      ? `${schemaMarkup.count || 0} schema block${schemaMarkup.count !== 1 ? 's' : ''} detected`
+                      : 'No structured data found'}
+                  </div>
+                </div>
+              </div>
+
+              {/* Detected Schema Types */}
+              {schemaMarkup.types && schemaMarkup.types.length > 0 && (
+                <div className="p-4 rounded-lg bg-[var(--surface-secondary)]">
+                  <h4 className="font-medium text-[var(--text-primary)] mb-2 flex items-center gap-2">
+                    <CheckCircle className="w-4 h-4 text-[var(--accent-green)]" />
+                    Detected Schema Types
+                  </h4>
+                  <div className="flex flex-wrap gap-2">
+                    {schemaMarkup.types.map((type, i) => (
+                      <span 
+                        key={i}
+                        className="px-3 py-1 rounded-full text-sm bg-[var(--brand-primary)]/10 text-[var(--brand-primary)] font-medium"
+                      >
+                        {type}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Recommended Schemas */}
+              {schemaMarkup.recommended && schemaMarkup.recommended.length > 0 && (
+                <div className="p-4 rounded-lg bg-[var(--accent-orange)]/5 border border-[var(--accent-orange)]/20">
+                  <h4 className="font-medium text-[var(--text-primary)] mb-3 flex items-center gap-2">
+                    <AlertTriangle className="w-4 h-4 text-[var(--accent-orange)]" />
+                    Recommended Schema Types
+                  </h4>
+                  <div className="space-y-2">
+                    {schemaMarkup.recommended.map((rec, i) => (
+                      <div key={i} className="flex items-start gap-3">
+                        <div className="px-2 py-1 rounded text-xs font-medium bg-[var(--accent-orange)]/10 text-[var(--accent-orange)]">
+                          {rec.type}
+                        </div>
+                        <span className="text-sm text-[var(--text-muted)]">{rec.reason}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Schema Details */}
+              {schemaMarkup.details && schemaMarkup.details.length > 0 && (
+                <div className="p-4 rounded-lg bg-[var(--surface-secondary)]">
+                  <h4 className="font-medium text-[var(--text-primary)] mb-3">Schema Details</h4>
+                  <div className="space-y-3">
+                    {schemaMarkup.details.slice(0, 5).map((detail, i) => (
+                      <div key={i} className="p-3 rounded border border-[var(--border-subtle)] bg-[var(--surface-page)]">
+                        <div className="font-medium text-[var(--text-primary)] text-sm mb-1">{detail.type}</div>
+                        <div className="flex flex-wrap gap-2 text-xs text-[var(--text-muted)]">
+                          {detail.name && <span className="px-2 py-0.5 rounded bg-[var(--surface-secondary)]">Name: {detail.name}</span>}
+                          {detail.hasDescription && <span className="px-2 py-0.5 rounded bg-[var(--accent-green)]/10 text-[var(--accent-green)]">✓ Description</span>}
+                          {detail.hasImage && <span className="px-2 py-0.5 rounded bg-[var(--accent-green)]/10 text-[var(--accent-green)]">✓ Image</span>}
+                          {detail.hasAddress && <span className="px-2 py-0.5 rounded bg-[var(--accent-green)]/10 text-[var(--accent-green)]">✓ Address</span>}
+                          {detail.hasRating && <span className="px-2 py-0.5 rounded bg-[var(--accent-green)]/10 text-[var(--accent-green)]">✓ Rating</span>}
+                          {detail.hasReviews && <span className="px-2 py-0.5 rounded bg-[var(--accent-green)]/10 text-[var(--accent-green)]">✓ Reviews</span>}
+                          {detail.hasHours && <span className="px-2 py-0.5 rounded bg-[var(--accent-green)]/10 text-[var(--accent-green)]">✓ Hours</span>}
+                          {detail.hasSocialLinks && <span className="px-2 py-0.5 rounded bg-[var(--accent-green)]/10 text-[var(--accent-green)]">✓ Social Links</span>}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* No Schema Warning */}
+              {!schemaMarkup.found && (
+                <div className="p-4 rounded-lg bg-[var(--accent-red)]/5 border border-[var(--accent-red)]/20">
+                  <div className="flex items-start gap-3">
+                    <AlertTriangle className="w-5 h-5 text-[var(--accent-red)] flex-shrink-0 mt-0.5" />
+                    <div>
+                      <div className="font-medium text-[var(--text-primary)]">No Structured Data Found</div>
+                      <p className="text-sm text-[var(--text-muted)] mt-1">
+                        Your website is missing JSON-LD structured data. Adding schema markup helps search engines 
+                        understand your content and can enable rich snippets in search results (star ratings, 
+                        FAQs, breadcrumbs, etc.).
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </motion.div>
           </IssueSection>
         )}
 

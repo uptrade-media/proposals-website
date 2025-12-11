@@ -1,4 +1,4 @@
-import { pgTable, uuid, text, timestamp, boolean, decimal, integer } from 'drizzle-orm/pg-core'
+import { pgTable, uuid, text, timestamp, boolean, decimal, integer, jsonb } from 'drizzle-orm/pg-core'
 import { relations } from 'drizzle-orm'
 
 // ========================================
@@ -20,7 +20,23 @@ export const contacts = pgTable('contacts', {
   tags: text('tags'), // JSON array of tags
   source: text('source'), // How they found us
   createdAt: timestamp('created_at').defaultNow(),
-  updatedAt: timestamp('updated_at').defaultNow()
+  updatedAt: timestamp('updated_at').defaultNow(),
+  // OpenPhone CRM fields
+  openphoneContactId: text('openphone_contact_id'),
+  firstCallDate: timestamp('first_call_date'),
+  lastCallDate: timestamp('last_call_date'),
+  totalCalls: integer('total_calls').default(0),
+  totalCallDuration: integer('total_call_duration').default(0),
+  averageCallDuration: integer('average_call_duration'),
+  lastCallSentiment: text('last_call_sentiment'),
+  // Pipeline/CRM
+  pipelineStage: text('pipeline_stage'), // new_lead, contacted, qualified, proposal, negotiation, won, lost
+  // Auth fields
+  magicLinkToken: text('magic_link_token'),
+  magicLinkExpires: timestamp('magic_link_expires'),
+  accountSetup: text('account_setup').default('false'), // 'true' or 'false'
+  avatar: text('avatar'),
+  googleId: text('google_id')
 })
 
 // ========================================
@@ -48,15 +64,15 @@ export const proposals = pgTable('proposals', {
   projectId: uuid('project_id').references(() => projects.id, { onDelete: 'set null' }),
   slug: text('slug').notNull().unique(),
   title: text('title').notNull(),
-  description: text('description'), // NEW: Short description
+  description: text('description'),
   mdxContent: text('mdx_content').notNull(),
   status: text('status').default('draft'), // draft, sent, viewed, signed, accepted, declined
   totalAmount: decimal('total_amount', { precision: 10, scale: 2 }),
-  version: integer('version').default(1), // NEW: Track versions
+  version: integer('version').default(1),
   validUntil: timestamp('valid_until'),
-  sentAt: timestamp('sent_at'), // NEW: When sent to client
-  viewedAt: timestamp('viewed_at'), // NEW: When client first viewed
-  clientEmail: text('client_email'), // NEW: Recipient email
+  sentAt: timestamp('sent_at'),
+  viewedAt: timestamp('viewed_at'),
+  clientEmail: text('client_email'),
   signedAt: timestamp('signed_at'),
   adminSignedAt: timestamp('admin_signed_at'),
   fullyExecutedAt: timestamp('fully_executed_at'),
@@ -72,10 +88,10 @@ export const files = pgTable('files', {
   contactId: uuid('contact_id').notNull().references(() => contacts.id, { onDelete: 'cascade' }),
   projectId: uuid('project_id').references(() => projects.id, { onDelete: 'cascade' }),
   filename: text('filename').notNull(),
-  blobPath: text('blob_path').notNull(), // Netlify Blobs storage path
+  blobPath: text('blob_path').notNull(),
   mimeType: text('mime_type'),
-  fileSize: integer('file_size'), // bytes
-  category: text('category'), // document, image, contract, invoice, etc.
+  fileSize: integer('file_size'),
+  category: text('category'),
   isPublic: boolean('is_public').default(false),
   uploadedBy: uuid('uploaded_by').references(() => contacts.id),
   uploadedAt: timestamp('uploaded_at').defaultNow()
@@ -91,7 +107,7 @@ export const messages = pgTable('messages', {
   projectId: uuid('project_id').references(() => projects.id, { onDelete: 'set null' }),
   subject: text('subject'),
   content: text('content').notNull(),
-  parentId: uuid('parent_id'), // For reply threads
+  parentId: uuid('parent_id'),
   readAt: timestamp('read_at'),
   createdAt: timestamp('created_at').defaultNow()
 })
@@ -104,71 +120,77 @@ export const invoices = pgTable('invoices', {
   contactId: uuid('contact_id').notNull().references(() => contacts.id, { onDelete: 'cascade' }),
   projectId: uuid('project_id').references(() => projects.id, { onDelete: 'set null' }),
   invoiceNumber: text('invoice_number').notNull().unique(),
-  squareInvoiceId: text('square_invoice_id'), // Square API reference
+  status: text('status').default('draft'), // draft, sent, paid, overdue, cancelled
   amount: decimal('amount', { precision: 10, scale: 2 }).notNull(),
-  taxRate: decimal('tax_rate', { precision: 5, scale: 2 }).default('0'),
-  taxAmount: decimal('tax_amount', { precision: 10, scale: 2 }).default('0'),
-  totalAmount: decimal('total_amount', { precision: 10, scale: 2 }).notNull(),
-  status: text('status').default('pending'), // pending, sent, paid, overdue, cancelled
-  description: text('description'),
+  tax: decimal('tax', { precision: 10, scale: 2 }),
+  total: decimal('total', { precision: 10, scale: 2 }).notNull(),
   dueDate: timestamp('due_date'),
   paidAt: timestamp('paid_at'),
+  squareInvoiceId: text('square_invoice_id'),
+  squarePaymentId: text('square_payment_id'),
+  lineItems: text('line_items'), // JSON
+  notes: text('notes'),
   createdAt: timestamp('created_at').defaultNow(),
   updatedAt: timestamp('updated_at').defaultNow()
 })
 
 // ========================================
-// PROJECT MILESTONES
+// AUDITS (Website Performance Audits)
 // ========================================
-export const projectMilestones = pgTable('project_milestones', {
+export const audits = pgTable('audits', {
   id: uuid('id').defaultRandom().primaryKey(),
-  projectId: uuid('project_id').notNull().references(() => projects.id, { onDelete: 'cascade' }),
-  title: text('title').notNull(),
-  description: text('description'),
-  status: text('status').default('pending'), // pending, in-progress, completed, blocked
-  dueDate: timestamp('due_date'),
+  projectId: uuid('project_id').references(() => projects.id, { onDelete: 'set null' }),
+  contactId: uuid('contact_id').references(() => contacts.id, { onDelete: 'set null' }),
+  targetUrl: text('target_url').notNull(),
+  status: text('status').default('pending'), // pending, running, completed, failed
+  errorMessage: text('error_message'),
+  // Lighthouse scores (0-100)
+  performanceScore: integer('performance_score'),
+  accessibilityScore: integer('accessibility_score'),
+  bestPracticesScore: integer('best_practices_score'),
+  seoScore: integer('seo_score'),
+  pwaScore: integer('pwa_score'),
+  // Core Web Vitals
+  lcpMs: integer('lcp_ms'), // Largest Contentful Paint
+  fidMs: integer('fid_ms'), // First Input Delay
+  clsScore: decimal('cls_score', { precision: 6, scale: 4 }), // Cumulative Layout Shift
+  fcpMs: integer('fcp_ms'), // First Contentful Paint
+  ttiMs: integer('tti_ms'), // Time to Interactive
+  tbtMs: integer('tbt_ms'), // Total Blocking Time
+  speedIndexMs: integer('speed_index_ms'),
+  // Full audit data
+  fullAuditJson: text('full_audit_json'), // Complete PageSpeed JSON
+  reportStoragePath: text('report_storage_path'), // Netlify Blobs path
+  // Configuration
+  deviceType: text('device_type').default('mobile'), // mobile, desktop
+  throttlingProfile: text('throttling_profile').default('mobile4G'),
+  // Timestamps
+  createdAt: timestamp('created_at').defaultNow(),
   completedAt: timestamp('completed_at'),
-  order: integer('order').default(0),
-  createdAt: timestamp('created_at').defaultNow(),
-  updatedAt: timestamp('updated_at').defaultNow()
+  updatedAt: timestamp('updated_at').defaultNow(),
+  // Magic link for public access
+  magicToken: text('magic_token'),
+  magicTokenExpires: timestamp('magic_token_expires'),
+  // Additional scores
+  scoreSecurity: integer('score_security'),
+  scoreOverall: integer('score_overall'),
+  htmlReport: text('html_report'),
+  summary: text('summary') // JSON summary object
 })
 
 // ========================================
-// PROJECT TEAM MEMBERS
+// CAMPAIGNS (Email/Marketing)
 // ========================================
-export const projectMembers = pgTable('project_members', {
+export const campaigns = pgTable('campaigns', {
   id: uuid('id').defaultRandom().primaryKey(),
-  projectId: uuid('project_id').notNull().references(() => projects.id, { onDelete: 'cascade' }),
-  memberId: uuid('member_id').notNull().references(() => contacts.id, { onDelete: 'cascade' }),
-  role: text('role').default('member'), // lead, member, viewer
-  joinedAt: timestamp('joined_at').defaultNow()
-})
-
-// ========================================
-// PROPOSAL TEMPLATES
-// ========================================
-export const proposalTemplates = pgTable('proposal_templates', {
-  id: uuid('id').defaultRandom().primaryKey(),
-  createdBy: uuid('created_by').references(() => contacts.id, { onDelete: 'set null' }),
   name: text('name').notNull(),
-  description: text('description'),
-  mdxContent: text('mdx_content').notNull(),
-  category: text('category'), // web-design, seo, branding, consulting, development
-  isActive: boolean('is_active').default(true),
+  type: text('type'), // email, sms, etc.
+  status: text('status').default('draft'),
+  subject: text('subject'),
+  content: text('content'),
+  sentAt: timestamp('sent_at'),
   createdAt: timestamp('created_at').defaultNow(),
   updatedAt: timestamp('updated_at').defaultNow()
-})
-
-// ========================================
-// PROPOSAL ACTIVITY LOG
-// ========================================
-export const proposalActivity = pgTable('proposal_activity', {
-  id: uuid('id').defaultRandom().primaryKey(),
-  proposalId: uuid('proposal_id').notNull().references(() => proposals.id, { onDelete: 'cascade' }),
-  action: text('action').notNull(), // created, sent, viewed, signed, accepted, declined, reopened, updated
-  performedBy: uuid('performed_by').references(() => contacts.id, { onDelete: 'set null' }),
-  metadata: text('metadata'), // JSON: {ipAddress, userAgent, viewDuration, etc}
-  createdAt: timestamp('created_at').defaultNow()
 })
 
 // ========================================
@@ -179,24 +201,33 @@ export const blogPosts = pgTable('blog_posts', {
   slug: text('slug').notNull().unique(),
   title: text('title').notNull(),
   subtitle: text('subtitle'),
-  category: text('category').notNull(), // 'design', 'marketing', 'media', 'news'
-  excerpt: text('excerpt').notNull(),
-  content: text('content').notNull(), // Markdown
-  contentHtml: text('content_html'), // Pre-rendered HTML
-  featuredImage: text('featured_image').notNull(),
+  category: text('category'),
+  excerpt: text('excerpt'),
+  content: text('content'), // Markdown/MDX content
+  contentHtml: text('content_html'), // Rendered HTML
+  featuredImage: text('featured_image'),
   featuredImageAlt: text('featured_image_alt'),
-  author: text('author').default('Uptrade Media'),
+  author: text('author'),
   authorAvatar: text('author_avatar'),
-  keywords: text('keywords'), // JSON array as string
-  readingTime: integer('reading_time').default(5),
+  keywords: text('keywords'), // JSON array
+  readingTime: integer('reading_time'),
+  // SEO fields
   metaTitle: text('meta_title'),
   metaDescription: text('meta_description'),
-  ogTitle: text('og_title'), // Open Graph title for social media
-  ogDescription: text('og_description'), // Open Graph description
-  focusKeyphrase: text('focus_keyphrase'), // Primary SEO keyphrase
-  internalLinks: text('internal_links'), // JSON array of suggested internal links
-  schemaMarkup: text('schema_markup'), // JSON-LD schema.org markup
-  status: text('status').default('draft'), // 'draft', 'published', 'archived'
+  ogTitle: text('og_title'),
+  ogDescription: text('og_description'),
+  focusKeyphrase: text('focus_keyphrase'),
+  internalLinks: text('internal_links'), // JSON array
+  schemaMarkup: text('schema_markup'), // JSON-LD
+  canonicalUrl: text('canonical_url'),
+  // Content enhancements
+  tableOfContents: text('table_of_contents'), // JSON
+  faqItems: text('faq_items'), // JSON array
+  serviceCallouts: text('service_callouts'), // JSON array
+  targetAudience: text('target_audience'),
+  estimatedValue: decimal('estimated_value', { precision: 10, scale: 2 }),
+  // Status
+  status: text('status').default('draft'), // draft, published, archived
   featured: boolean('featured').default(false),
   publishedAt: timestamp('published_at'),
   createdAt: timestamp('created_at').defaultNow(),
@@ -204,110 +235,65 @@ export const blogPosts = pgTable('blog_posts', {
 })
 
 // ========================================
-// AUDITS (Lighthouse Performance Audits)
+// PORTFOLIO ITEMS
 // ========================================
-export const audits = pgTable('audits', {
+export const portfolioItems = pgTable('portfolio_items', {
   id: uuid('id').defaultRandom().primaryKey(),
-  projectId: uuid('project_id').notNull().references(() => projects.id, { onDelete: 'cascade' }),
-  contactId: uuid('contact_id').notNull().references(() => contacts.id, { onDelete: 'cascade' }),
-  targetUrl: text('target_url').notNull(),
-  status: text('status').default('pending'), // pending, running, completed, failed
-  errorMessage: text('error_message'),
-  
-  // Lighthouse scores (0-100)
-  performanceScore: integer('performance_score'),
-  accessibilityScore: integer('accessibility_score'),
-  bestPracticesScore: integer('best_practices_score'),
-  seoScore: integer('seo_score'),
-  pwascore: integer('pwa_score'),
-  
-  // Core Web Vitals
-  lcpMs: decimal('lcp_ms', { precision: 8, scale: 2 }), // Largest Contentful Paint (milliseconds)
-  fidMs: decimal('fid_ms', { precision: 8, scale: 2 }), // First Input Delay (milliseconds)
-  clsScore: decimal('cls_score', { precision: 5, scale: 3 }), // Cumulative Layout Shift
-  
-  // First Contentful Paint
-  fcpMs: decimal('fcp_ms', { precision: 8, scale: 2 }), // First Contentful Paint (milliseconds)
-  
-  // Time to Interactive
-  ttiMs: decimal('tti_ms', { precision: 8, scale: 2 }), // Time to Interactive (milliseconds)
-  
-  // Total Blocking Time
-  tbtMs: decimal('tbt_ms', { precision: 8, scale: 2 }), // Total Blocking Time (milliseconds)
-  
-  // Speed Index
-  speedIndexMs: decimal('speed_index_ms', { precision: 8, scale: 2 }), // Speed Index (milliseconds)
-  
-  // Full audit data
-  fullAuditJson: text('full_audit_json'), // Complete Lighthouse JSON
-  reportUrl: text('report_url'), // URL to detailed HTML report in Netlify Blobs
-  
-  // Metadata
-  deviceType: text('device_type').default('mobile'), // mobile or desktop
-  throttlingProfile: text('throttling_profile').default('4g'), // Simulated network throttling
-  
+  projectId: uuid('project_id').references(() => projects.id, { onDelete: 'set null' }),
+  slug: text('slug').notNull().unique(),
+  title: text('title').notNull(),
+  subtitle: text('subtitle'),
+  category: text('category'),
+  services: jsonb('services'), // JSON array of services
+  description: text('description'),
+  // Media
+  heroImage: text('hero_image'),
+  heroImageAlt: text('hero_image_alt'),
+  heroImageWidth: integer('hero_image_width'),
+  heroImageHeight: integer('hero_image_height'),
+  gallery: jsonb('gallery'), // JSON array of images
+  video: text('video'),
+  // Links
+  liveUrl: text('live_url'),
+  // Content sections (all JSON)
+  kpis: jsonb('kpis'),
+  strategicApproach: jsonb('strategic_approach'),
+  servicesShowcase: jsonb('services_showcase'),
+  comprehensiveResults: jsonb('comprehensive_results'),
+  technicalInnovations: jsonb('technical_innovations'),
+  challenges: jsonb('challenges'),
+  testimonial: jsonb('testimonial'),
+  team: jsonb('team'),
+  technologies: jsonb('technologies'),
+  details: jsonb('details'),
+  seo: jsonb('seo'),
+  // Content
+  content: text('content'), // Markdown
+  contentHtml: text('content_html'), // Rendered HTML
+  // SEO
+  metaTitle: text('meta_title'),
+  metaDescription: text('meta_description'),
+  // Status
+  status: text('status').default('draft'),
+  featured: boolean('featured').default(false),
+  order: integer('order').default(0),
+  publishedAt: timestamp('published_at'),
   createdAt: timestamp('created_at').defaultNow(),
-  completedAt: timestamp('completed_at'),
   updatedAt: timestamp('updated_at').defaultNow()
-})
-
-// ========================================
-// LIGHTHOUSE METRICS (Historical tracking for trends)
-// ========================================
-export const lighthouseMetrics = pgTable('lighthouse_metrics', {
-  id: uuid('id').defaultRandom().primaryKey(),
-  auditId: uuid('audit_id').notNull().references(() => audits.id, { onDelete: 'cascade' }),
-  projectId: uuid('project_id').notNull().references(() => projects.id, { onDelete: 'cascade' }),
-  
-  metricName: text('metric_name').notNull(), // performance, accessibility, best_practices, seo, pwa, lcp, fid, cls, etc.
-  score: integer('score'), // For scores out of 100
-  value: decimal('value', { precision: 10, scale: 2 }), // For metrics like ms or unitless values
-  unit: text('unit'), // ms, %, score, etc.
-  threshold: text('threshold'), // good, needs_improvement, poor
-  
-  createdAt: timestamp('created_at').defaultNow()
-})
-
-// ========================================
-// WEB VITALS (Continuous monitoring data)
-// ========================================
-export const webVitals = pgTable('web_vitals', {
-  id: uuid('id').defaultRandom().primaryKey(),
-  projectId: uuid('project_id').notNull().references(() => projects.id, { onDelete: 'cascade' }),
-  targetUrl: text('target_url').notNull(),
-  
-  // Core Web Vitals
-  lcp: decimal('lcp', { precision: 8, scale: 2 }), // Largest Contentful Paint (ms)
-  fid: decimal('fid', { precision: 8, scale: 2 }), // First Input Delay (ms)
-  cls: decimal('cls', { precision: 5, scale: 3 }), // Cumulative Layout Shift
-  
-  // Additional metrics
-  ttfb: decimal('ttfb', { precision: 8, scale: 2 }), // Time to First Byte (ms)
-  fcp: decimal('fcp', { precision: 8, scale: 2 }), // First Contentful Paint (ms)
-  tti: decimal('tti', { precision: 8, scale: 2 }), // Time to Interactive (ms)
-  
-  // User segment
-  deviceType: text('device_type'), // mobile, desktop
-  connectionType: text('connection_type'), // 4g, 3g, etc.
-  
-  recordedAt: timestamp('recorded_at').defaultNow(),
-  createdAt: timestamp('created_at').defaultNow()
 })
 
 // ========================================
 // RELATIONS
 // ========================================
+
 export const contactsRelations = relations(contacts, ({ many }) => ({
   projects: many(projects),
   proposals: many(proposals),
   files: many(files),
-  messagesSent: many(messages, { relationName: 'sender' }),
-  messagesReceived: many(messages, { relationName: 'recipient' }),
+  sentMessages: many(messages, { relationName: 'sender' }),
+  receivedMessages: many(messages, { relationName: 'recipient' }),
   invoices: many(invoices),
-  projectMembers: many(projectMembers), // NEW
-  createdTemplates: many(proposalTemplates), // NEW
-  proposalActivity: many(proposalActivity), // NEW
-  audits: many(audits) // NEW
+  audits: many(audits)
 }))
 
 export const projectsRelations = relations(projects, ({ one, many }) => ({
@@ -319,14 +305,11 @@ export const projectsRelations = relations(projects, ({ one, many }) => ({
   files: many(files),
   messages: many(messages),
   invoices: many(invoices),
-  milestones: many(projectMilestones), // NEW
-  members: many(projectMembers), // NEW
-  audits: many(audits), // NEW
-  lighthouseMetrics: many(lighthouseMetrics), // NEW
-  webVitals: many(webVitals) // NEW
+  audits: many(audits),
+  portfolioItems: many(portfolioItems)
 }))
 
-export const proposalsRelations = relations(proposals, ({ one, many }) => ({
+export const proposalsRelations = relations(proposals, ({ one }) => ({
   contact: one(contacts, {
     fields: [proposals.contactId],
     references: [contacts.id]
@@ -334,8 +317,7 @@ export const proposalsRelations = relations(proposals, ({ one, many }) => ({
   project: one(projects, {
     fields: [proposals.projectId],
     references: [projects.id]
-  }),
-  activity: many(proposalActivity) // NEW
+  })
 }))
 
 export const filesRelations = relations(files, ({ one }) => ({
@@ -367,10 +349,6 @@ export const messagesRelations = relations(messages, ({ one }) => ({
   project: one(projects, {
     fields: [messages.projectId],
     references: [projects.id]
-  }),
-  parent: one(messages, {
-    fields: [messages.parentId],
-    references: [messages.id]
   })
 }))
 
@@ -385,156 +363,21 @@ export const invoicesRelations = relations(invoices, ({ one }) => ({
   })
 }))
 
-// NEW RELATIONS
-export const projectMilestonesRelations = relations(projectMilestones, ({ one }) => ({
-  project: one(projects, {
-    fields: [projectMilestones.projectId],
-    references: [projects.id]
-  })
-}))
-
-export const projectMembersRelations = relations(projectMembers, ({ one }) => ({
-  project: one(projects, {
-    fields: [projectMembers.projectId],
-    references: [projects.id]
-  }),
-  member: one(contacts, {
-    fields: [projectMembers.memberId],
-    references: [contacts.id]
-  })
-}))
-
-export const proposalTemplatesRelations = relations(proposalTemplates, ({ one }) => ({
-  creator: one(contacts, {
-    fields: [proposalTemplates.createdBy],
-    references: [contacts.id]
-  })
-}))
-
-export const proposalActivityRelations = relations(proposalActivity, ({ one }) => ({
-  proposal: one(proposals, {
-    fields: [proposalActivity.proposalId],
-    references: [proposals.id]
-  }),
-  performer: one(contacts, {
-    fields: [proposalActivity.performedBy],
-    references: [contacts.id]
-  })
-}))
-
-// LIGHTHOUSE RELATIONS
-export const auditsRelations = relations(audits, ({ one, many }) => ({
-  project: one(projects, {
-    fields: [audits.projectId],
-    references: [projects.id]
-  }),
+export const auditsRelations = relations(audits, ({ one }) => ({
   contact: one(contacts, {
     fields: [audits.contactId],
     references: [contacts.id]
   }),
-  metrics: many(lighthouseMetrics)
-}))
-
-export const lighthouseMetricsRelations = relations(lighthouseMetrics, ({ one }) => ({
-  audit: one(audits, {
-    fields: [lighthouseMetrics.auditId],
-    references: [audits.id]
-  }),
   project: one(projects, {
-    fields: [lighthouseMetrics.projectId],
+    fields: [audits.projectId],
     references: [projects.id]
   })
 }))
 
-export const webVitalsRelations = relations(webVitals, ({ one }) => ({
+export const portfolioItemsRelations = relations(portfolioItems, ({ one }) => ({
   project: one(projects, {
-    fields: [webVitals.projectId],
+    fields: [portfolioItems.projectId],
     references: [projects.id]
-  })
-}))
-
-// ========================================
-// EMAIL CAMPAIGNS
-// ========================================
-export const campaigns = pgTable('campaigns', {
-  id: uuid('id').defaultRandom().primaryKey(),
-  type: text('type').notNull(), // 'one_off', 'newsletter', 'drip'
-  name: text('name').notNull(),
-  mailboxId: uuid('mailbox_id'), // For future mailbox rotation feature
-  status: text('status').default('draft'), // draft, scheduled, active, paused, completed, cancelled
-  scheduledStart: timestamp('scheduled_start'),
-  windowStartLocal: integer('window_start_local').default(9), // 9 AM local time
-  windowEndLocal: integer('window_end_local').default(17), // 5 PM local time
-  dailyCap: integer('daily_cap').default(100),
-  warmupPercent: integer('warmup_percent').default(0), // 0-100
-  goalUrl: text('goal_url'), // Track conversions
-  daypartEnabled: boolean('daypart_enabled').default(false),
-  createdAt: timestamp('created_at').defaultNow(),
-  updatedAt: timestamp('updated_at').defaultNow()
-})
-
-export const campaignSteps = pgTable('campaign_steps', {
-  id: uuid('id').defaultRandom().primaryKey(),
-  campaignId: uuid('campaign_id').notNull().references(() => campaigns.id, { onDelete: 'cascade' }),
-  stepIndex: integer('step_index').notNull().default(0), // 0 for initial, 1+ for follow-ups
-  delayDays: integer('delay_days').default(0), // Days after previous step
-  subjectOverride: text('subject_override'), // Override campaign subject
-  htmlOverride: text('html_override'), // Override campaign HTML
-  createdAt: timestamp('created_at').defaultNow()
-})
-
-export const recipients = pgTable('recipients', {
-  id: uuid('id').defaultRandom().primaryKey(),
-  campaignId: uuid('campaign_id').notNull().references(() => campaigns.id, { onDelete: 'cascade' }),
-  contactId: uuid('contact_id').notNull().references(() => contacts.id, { onDelete: 'cascade' }),
-  stepIndex: integer('step_index').default(0), // Current step in sequence
-  status: text('status').default('queued'), // queued, sent, opened, clicked, bounced, unsubscribed, failed
-  unsubscribeToken: text('unsubscribe_token').notNull().unique(),
-  sentAt: timestamp('sent_at'),
-  openedAt: timestamp('opened_at'),
-  clickedAt: timestamp('clicked_at'),
-  bouncedAt: timestamp('bounced_at'),
-  unsubscribedAt: timestamp('unsubscribed_at'),
-  createdAt: timestamp('created_at').defaultNow()
-})
-
-export const clientActivity = pgTable('client_activity', {
-  id: uuid('id').defaultRandom().primaryKey(),
-  contactId: uuid('contact_id').notNull().references(() => contacts.id, { onDelete: 'cascade' }),
-  activityType: text('activity_type').notNull(), // email_campaign_created, email_sent, email_opened, etc.
-  description: text('description'),
-  metadata: text('metadata'), // JSON for additional data
-  createdAt: timestamp('created_at').defaultNow()
-})
-
-// Campaign Relations
-export const campaignsRelations = relations(campaigns, ({ many }) => ({
-  steps: many(campaignSteps),
-  recipients: many(recipients)
-}))
-
-export const campaignStepsRelations = relations(campaignSteps, ({ one }) => ({
-  campaign: one(campaigns, {
-    fields: [campaignSteps.campaignId],
-    references: [campaigns.id]
-  })
-}))
-
-export const recipientsRelations = relations(recipients, ({ one }) => ({
-  campaign: one(campaigns, {
-    fields: [recipients.campaignId],
-    references: [campaigns.id]
-  }),
-  contact: one(contacts, {
-    fields: [recipients.contactId],
-    references: [contacts.id]
-  })
-}))
-
-export const clientActivityRelations = relations(clientActivity, ({ one }) => ({
-  contact: one(contacts, {
-    fields: [clientActivity.contactId],
-    references: [contacts.id]
   })
 }))
 

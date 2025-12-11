@@ -50,41 +50,45 @@ export async function handler(event) {
 
     // Parse request body
     const body = JSON.parse(event.body || '{}')
-    const { name, email, company, phone, website, source } = body
+    const { name, email, company, phone, website, source, pipeline_stage, notes } = body
 
-    // Validate required fields
-    if (!name || !email) {
+    // Validate required fields (name is required, email is optional for prospects)
+    if (!name) {
       return {
         statusCode: 400,
         headers,
-        body: JSON.stringify({ error: 'name and email are required' })
+        body: JSON.stringify({ error: 'name is required' })
       }
     }
 
-    // Validate email format
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
-    if (!emailRegex.test(email)) {
-      return {
-        statusCode: 400,
-        headers,
-        body: JSON.stringify({ error: 'Invalid email format' })
+    // Validate email format if provided
+    if (email) {
+      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+      if (!emailRegex.test(email)) {
+        return {
+          statusCode: 400,
+          headers,
+          body: JSON.stringify({ error: 'Invalid email format' })
+        }
       }
     }
 
     const supabase = createSupabaseAdmin()
 
-    // Check if contact already exists
-    const { data: existingContact, error: checkError } = await supabase
-      .from('contacts')
-      .select('id')
-      .eq('email', email.toLowerCase())
-      .single()
+    // Check if contact already exists (only if email provided)
+    if (email) {
+      const { data: existingContact, error: checkError } = await supabase
+        .from('contacts')
+        .select('id')
+        .eq('email', email.toLowerCase())
+        .single()
 
-    if (existingContact) {
-      return {
-        statusCode: 409,
-        headers,
-        body: JSON.stringify({ error: 'Contact with this email already exists' })
+      if (existingContact) {
+        return {
+          statusCode: 409,
+          headers,
+          body: JSON.stringify({ error: 'Contact with this email already exists' })
+        }
       }
     }
 
@@ -92,12 +96,14 @@ export async function handler(event) {
     const { data: newContact, error: insertError } = await supabase
       .from('contacts')
       .insert({
-        email: email.toLowerCase(),
+        email: email ? email.toLowerCase() : null,
         name,
         company: company || null,
         phone: phone || null,
         website: website || null,
         source: source || null,
+        notes: notes || null,
+        pipeline_stage: pipeline_stage || null,
         role: 'client',
         account_setup: 'false',
         password: null,
@@ -115,41 +121,44 @@ export async function handler(event) {
       }
     }
 
-    // Generate Supabase magic link for account setup
-    const { data: linkData, error: linkError } = await supabase.auth.admin.generateLink({
-      type: 'magiclink',
-      email: newContact.email,
-      options: {
-        redirectTo: `${PORTAL_URL}/account-setup`
+    // Only send email and generate magic link if email is provided and type is not 'prospect'
+    // Prospects typically don't need account setup emails immediately
+    if (newContact.email && type !== 'prospect') {
+      // Generate Supabase magic link for account setup
+      const { data: linkData, error: linkError } = await supabase.auth.admin.generateLink({
+        type: 'magiclink',
+        email: newContact.email,
+        options: {
+          redirectTo: `${PORTAL_URL}/account-setup`
+        }
+      })
+
+      if (linkError) {
+        console.error('Error generating magic link:', linkError)
       }
-    })
 
-    if (linkError) {
-      console.error('Error generating magic link:', linkError)
-    }
+      const setupUrl = linkData?.properties?.action_link || `${PORTAL_URL}/login`
 
-    const setupUrl = linkData?.properties?.action_link || `${PORTAL_URL}/login`
-
-    // Send account setup email
-    if (RESEND_API_KEY) {
-      try {
-        const resend = new Resend(RESEND_API_KEY)
-        
-        await resend.emails.send({
-          from: RESEND_FROM_EMAIL,
-          to: newContact.email,
-          subject: 'Welcome to Uptrade Media Portal - Set Up Your Account',
-          html: `
-            <!DOCTYPE html>
-            <html>
-            <head>
-              <meta charset="utf-8">
-              <meta name="viewport" content="width=device-width, initial-scale=1.0">
-              <style>
-                body {
-                  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
-                  line-height: 1.6;
-                  color: #333;
+      // Send account setup email
+      if (RESEND_API_KEY) {
+        try {
+          const resend = new Resend(RESEND_API_KEY)
+          
+          await resend.emails.send({
+            from: RESEND_FROM_EMAIL,
+            to: newContact.email,
+            subject: 'Welcome to Uptrade Media Portal - Set Up Your Account',
+            html: `
+              <!DOCTYPE html>
+              <html>
+              <head>
+                <meta charset="utf-8">
+                <meta name="viewport" content="width=device-width, initial-scale=1.0">
+                <style>
+                  body {
+                    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+                    line-height: 1.6;
+                    color: #333;
                   margin: 0;
                   padding: 0;
                   background-color: #f4f4f4;
@@ -308,6 +317,7 @@ export async function handler(event) {
     } else {
       console.warn('[admin-clients-create] RESEND_API_KEY not configured, skipping email')
     }
+    } // End of email sending conditional for non-prospect contacts
 
     return {
       statusCode: 201,
@@ -319,10 +329,12 @@ export async function handler(event) {
           name: newContact.name,
           company: newContact.company,
           role: newContact.role,
+          type: newContact.type,
+          pipelineStage: newContact.pipeline_stage,
           accountSetup: newContact.account_setup,
           createdAt: newContact.created_at
         },
-        message: 'Client created and account setup email sent'
+        message: type === 'prospect' ? 'Prospect created successfully' : 'Client created and account setup email sent'
       })
     }
 

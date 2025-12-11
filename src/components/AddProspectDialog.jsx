@@ -39,20 +39,6 @@ const LEAD_SOURCES = [
   { value: 'other', label: 'Other' },
 ]
 
-const INDUSTRIES = [
-  'Legal / Law Firm',
-  'Medical / Healthcare',
-  'Home Services',
-  'Professional Services',
-  'E-commerce / Retail',
-  'Real Estate',
-  'Financial Services',
-  'Technology / SaaS',
-  'Restaurant / Hospitality',
-  'Construction / Trades',
-  'Other'
-]
-
 export default function AddProspectDialog({
   isOpen,
   onClose,
@@ -66,7 +52,6 @@ export default function AddProspectDialog({
     company: initialData.company || '',
     phone: initialData.phone || '',
     website: initialData.website || '',
-    industry: initialData.industry || '',
     source: initialData.source || 'outreach',
     notes: initialData.notes || '',
   })
@@ -83,7 +68,6 @@ export default function AddProspectDialog({
     try {
       const response = await api.post('/.netlify/functions/admin-clients-create', {
         ...formData,
-        type: 'prospect',
         pipeline_stage: 'new_lead'
       })
       
@@ -93,13 +77,11 @@ export default function AddProspectDialog({
       if (onSuccess) {
         onSuccess({
           id: response.data.contact?.id || response.data.id,
-          type: 'prospect',
           name: formData.name,
           email: formData.email,
           company: formData.company,
           phone: formData.phone,
           website: formData.website,
-          industry: formData.industry,
           pipelineStage: 'new_lead'
         })
       }
@@ -111,7 +93,6 @@ export default function AddProspectDialog({
         company: '',
         phone: '',
         website: '',
-        industry: '',
         source: 'outreach',
         notes: '',
       })
@@ -134,7 +115,7 @@ export default function AddProspectDialog({
       <DialogContent className="max-w-lg glass-bg border-[var(--glass-border)]">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
-            <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-purple-500 to-pink-600 flex items-center justify-center">
+            <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-[var(--brand-primary)] to-[var(--brand-secondary)] flex items-center justify-center">
               <UserPlus className="w-4 h-4 text-white" />
             </div>
             Add New Prospect
@@ -202,33 +183,18 @@ export default function AddProspectDialog({
             </div>
           </div>
 
-          {/* Website & Industry Row */}
-          <div className="grid grid-cols-2 gap-4">
-            <div className="space-y-2">
-              <Label className="flex items-center gap-1.5 text-[var(--text-secondary)]">
-                <Globe className="w-3.5 h-3.5" />
-                Website
-              </Label>
-              <Input
-                value={formData.website}
-                onChange={(e) => handleChange('website', e.target.value)}
-                placeholder="https://acme.com"
-                className="glass-bg border-[var(--glass-border)]"
-              />
-            </div>
-            <div className="space-y-2">
-              <Label className="text-[var(--text-secondary)]">Industry</Label>
-              <Select value={formData.industry} onValueChange={(v) => handleChange('industry', v)}>
-                <SelectTrigger className="glass-bg border-[var(--glass-border)]">
-                  <SelectValue placeholder="Select industry..." />
-                </SelectTrigger>
-                <SelectContent>
-                  {INDUSTRIES.map(i => (
-                    <SelectItem key={i} value={i}>{i}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
+          {/* Website */}
+          <div className="space-y-2">
+            <Label className="flex items-center gap-1.5 text-[var(--text-secondary)]">
+              <Globe className="w-3.5 h-3.5" />
+              Website
+            </Label>
+            <Input
+              value={formData.website}
+              onChange={(e) => handleChange('website', e.target.value)}
+              placeholder="https://acme.com"
+              className="glass-bg border-[var(--glass-border)]"
+            />
           </div>
 
           {/* Source */}
@@ -273,7 +239,7 @@ export default function AddProspectDialog({
             <Button 
               type="submit" 
               disabled={isSubmitting}
-              className="gap-2 bg-gradient-to-r from-purple-500 to-pink-600 hover:opacity-90"
+              className="gap-2 bg-gradient-to-r from-[var(--brand-primary)] to-[var(--brand-secondary)] hover:opacity-90"
             >
               {isSubmitting ? (
                 <><Loader2 className="h-4 w-4 animate-spin" />Adding...</>
