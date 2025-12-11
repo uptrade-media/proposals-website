@@ -5,7 +5,7 @@ import { cva } from "class-variance-authority";
 import { cn } from "@/lib/utils"
 
 const buttonVariants = cva(
-  "inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-[var(--radius-sm)] text-sm font-medium transition-all duration-200 disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg:not([class*='size-'])]:size-4 shrink-0 [&_svg]:shrink-0 outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent-blue)] focus-visible:ring-offset-2 active:scale-[0.97]",
+  "inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-[var(--radius-sm)] text-sm font-medium transition-all duration-200 disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg:not([class*='size-'])]:size-4 shrink-0 [&_svg]:shrink-0 outline-none focus-visible:ring-2 focus-visible:ring-[var(--brand-primary)] focus-visible:ring-offset-2 active:scale-[0.97]",
   {
     variants: {
       variant: {
@@ -20,12 +20,12 @@ const buttonVariants = cva(
         ghost:
           "text-[var(--text-primary)] hover:bg-[var(--glass-bg)] hover:text-[var(--text-primary)]",
         link: 
-          "text-[var(--accent-blue)] underline-offset-4 hover:underline",
+          "text-[var(--brand-primary)] underline-offset-4 hover:underline",
         // Liquid Glass variants
         glass:
           "bg-[var(--glass-bg)] backdrop-blur-[var(--blur-md)] border border-[var(--glass-border)] text-[var(--text-primary)] shadow-[var(--shadow-glass)] hover:bg-[var(--glass-bg-hover)] hover:shadow-[var(--shadow-lg)]",
         "glass-primary":
-          "bg-[var(--accent-blue)]/80 backdrop-blur-[var(--blur-md)] border border-[var(--accent-blue)]/30 text-white shadow-[var(--shadow-glass)] hover:bg-[var(--accent-blue)] hover:shadow-[var(--shadow-lg)]",
+          "bg-[var(--brand-primary)]/80 backdrop-blur-[var(--blur-md)] border border-[var(--brand-primary)]/30 text-white shadow-[var(--shadow-glass)] hover:bg-[var(--brand-primary)] hover:shadow-[var(--shadow-lg)]",
         "glass-destructive":
           "bg-[var(--accent-red)]/80 backdrop-blur-[var(--blur-md)] border border-[var(--accent-red)]/30 text-white shadow-[var(--shadow-glass)] hover:bg-[var(--accent-red)] hover:shadow-[var(--shadow-lg)]",
       },

@@ -64,7 +64,7 @@ export function TrendIndicators({ period = 'month', showComparison = true }) {
             <p className="text-[var(--text-secondary)]">{error}</p>
             <button
               onClick={fetchTrends}
-              className="mt-3 text-sm text-blue-600 hover:underline"
+              className="mt-3 text-sm text-[var(--brand-primary)] hover:underline"
             >
               Try again
             </button>
@@ -149,7 +149,7 @@ export function TrendIndicators({ period = 'month', showComparison = true }) {
                 onClick={() => period !== p && fetchTrends()}
                 className={`text-xs px-3 py-1 rounded capitalize transition-colors ${
                   period === p
-                    ? 'bg-blue-100 text-blue-700'
+                    ? 'bg-[var(--brand-primary)]/20 text-[var(--brand-primary)]'
                     : 'text-[var(--text-secondary)] hover:bg-[var(--surface-secondary)]'
                 }`}
               >

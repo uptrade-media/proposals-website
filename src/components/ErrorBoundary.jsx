@@ -112,9 +112,9 @@ export class ErrorBoundary extends React.Component {
               </div>
 
               {/* Help text */}
-              <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 text-sm">
-                <p className="text-blue-900 font-medium mb-1">💡 What can you do?</p>
-                <ul className="text-blue-700 space-y-1 list-disc list-inside">
+              <div className="bg-[var(--brand-primary)]/10 border border-[var(--brand-primary)]/20 rounded-lg p-4 text-sm">
+                <p className="text-[var(--text-primary)] font-medium mb-1">💡 What can you do?</p>
+                <ul className="text-[var(--text-secondary)] space-y-1 list-disc list-inside">
                   <li>Try reloading the page</li>
                   <li>Clear your browser cache and cookies</li>
                   <li>Check your internet connection</li>

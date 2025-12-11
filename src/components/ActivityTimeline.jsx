@@ -6,7 +6,7 @@ import { Loader2 } from 'lucide-react'
 import axios from 'axios'
 
 const activityTypeConfig = {
-  project: { icon: '📁', color: 'bg-blue-100', textColor: 'text-blue-700' },
+  project: { icon: '📁', color: 'bg-[var(--brand-secondary)]/20', textColor: 'text-[var(--brand-secondary)]' },
   invoice: { icon: '📄', color: 'bg-green-100', textColor: 'text-green-700' },
   message: { icon: '💬', color: 'bg-purple-100', textColor: 'text-purple-700' },
   proposal: { icon: '✅', color: 'bg-orange-100', textColor: 'text-orange-700' },
@@ -61,7 +61,7 @@ export function ActivityTimeline({ limit = 10 }) {
             <p className="text-[var(--text-secondary)]">{error}</p>
             <button
               onClick={fetchActivities}
-              className="mt-3 text-sm text-blue-600 hover:underline"
+              className="mt-3 text-sm text-[var(--brand-primary)] hover:underline"
             >
               Try again
             </button>

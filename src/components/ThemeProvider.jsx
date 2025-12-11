@@ -22,7 +22,7 @@ export function ThemeToggle({ className = '' }) {
       className={`
         p-2 rounded-full transition-all duration-200
         hover:bg-[var(--glass-bg-hover)]
-        focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent-blue)]
+        focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--brand-primary)]
         ${className}
       `}
       title={`Switch to ${resolvedTheme === 'dark' ? 'light' : 'dark'} mode`}

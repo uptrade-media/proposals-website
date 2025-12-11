@@ -19,10 +19,10 @@ function Input({
         // Transitions
         "transition-all duration-200",
         // Focus state - glass glow
-        "focus:outline-none focus:bg-[var(--glass-bg)] focus:border-[var(--accent-blue)]",
-        "focus:ring-2 focus:ring-[var(--accent-blue)]/20",
+        "focus:outline-none focus:bg-[var(--glass-bg)] focus:border-[var(--brand-primary)]",
+        "focus:ring-2 focus:ring-[var(--brand-primary)]/20",
         // Selection
-        "selection:bg-[var(--accent-blue)] selection:text-white",
+        "selection:bg-[var(--brand-primary)] selection:text-white",
         // File input
         "file:border-0 file:bg-[var(--glass-bg)] file:text-[var(--text-primary)]",
         "file:text-sm file:font-medium file:mr-3 file:px-3 file:py-1 file:rounded-[var(--radius-xs)]",
