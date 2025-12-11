@@ -93,7 +93,8 @@ export async function handler(event) {
       performanceScore: audit.performance_score || audit.score_performance || audit.summary?.metrics?.performance,
       seoScore: audit.seo_score || audit.score_seo || audit.summary?.metrics?.seo,
       accessibilityScore: audit.accessibility_score || audit.score_accessibility || audit.summary?.metrics?.accessibility,
-      bestPracticesScore: audit.best_practices_score || audit.score_best_practices,
+      bestPracticesScore: audit.best_practices_score || audit.score_best_practices || audit.summary?.metrics?.bestPractices,
+      pwaScore: audit.pwa_score || audit.summary?.metrics?.pwa,
       securityScore: audit.score_security || audit.summary?.metrics?.security,
       overallScore: audit.score_overall || audit.summary?.metrics?.overall,
       

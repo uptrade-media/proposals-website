@@ -244,6 +244,7 @@ export default function AuditPublicView({ audit, contact }) {
     seo: audit.scores?.seo ?? audit.seoScore ?? null,
     accessibility: audit.scores?.accessibility ?? audit.accessibilityScore ?? null,
     bestPractices: audit.scores?.bestPractices ?? audit.bestPracticesScore ?? null,
+    pwa: audit.scores?.pwa ?? audit.pwaScore ?? null,
     security: audit.scores?.security ?? audit.securityScore ?? null,
     overall: audit.scores?.overall ?? audit.overallScore ?? null
   }
@@ -356,7 +357,7 @@ export default function AuditPublicView({ audit, contact }) {
             variants={staggerContainer}
             initial="hidden"
             animate="visible"
-            className="grid grid-cols-2 lg:grid-cols-4 gap-4"
+            className="grid grid-cols-2 lg:grid-cols-5 gap-4"
           >
             <ScoreCard 
               label="Performance" 
@@ -382,6 +383,14 @@ export default function AuditPublicView({ audit, contact }) {
               icon={Shield}
               description="Security & modern standards"
             />
+            {scores.pwa != null && scores.pwa > 0 && (
+              <ScoreCard 
+                label="PWA" 
+                value={scores.pwa} 
+                icon={Smartphone}
+                description="Progressive Web App"
+              />
+            )}
           </motion.div>
         </div>
       </div>

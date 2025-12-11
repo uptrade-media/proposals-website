@@ -15,6 +15,7 @@ import {
   RefreshCw
 } from 'lucide-react'
 import useReportsStore from '../lib/reports-store'
+import AuditPublicView from '../components/AuditPublicView'
 
 export default function AuditDetail() {
   const { id } = useParams()
@@ -63,7 +64,7 @@ export default function AuditDetail() {
         </Alert>
         <Button
           variant="glass"
-          onClick={() => navigate('/audits')}
+          onClick={() => navigate('/dashboard?tab=audits')}
         >
           <ArrowLeft className="w-4 h-4 mr-2" />
           Back to Audits
@@ -78,7 +79,7 @@ export default function AuditDetail() {
       <div className="p-6 max-w-4xl mx-auto">
         <Button
           variant="glass"
-          onClick={() => navigate('/audits')}
+          onClick={() => navigate('/dashboard?tab=audits')}
           className="mb-6"
         >
           <ArrowLeft className="w-4 h-4 mr-2" />
@@ -116,7 +117,7 @@ export default function AuditDetail() {
       <div className="p-6 max-w-4xl mx-auto">
         <Button
           variant="glass"
-          onClick={() => navigate('/audits')}
+          onClick={() => navigate('/dashboard?tab=audits')}
           className="mb-6"
         >
           <ArrowLeft className="w-4 h-4 mr-2" />
@@ -137,7 +138,7 @@ export default function AuditDetail() {
             </p>
             <div className="flex gap-2 justify-center">
               <Button
-                onClick={() => navigate('/audits')}
+                onClick={() => navigate('/dashboard?tab=audits')}
                 variant="glass-primary"
               >
                 Request New Audit
@@ -155,7 +156,7 @@ export default function AuditDetail() {
     )
   }
 
-  // Audit completed - render the report
+  // Audit completed - render the full report using AuditPublicView
   return (
     <div className="min-h-screen bg-[var(--surface-primary)]">
       {/* Header - Don't print this */}
@@ -164,7 +165,7 @@ export default function AuditDetail() {
           <div className="flex items-center justify-between">
             <Button
               variant="ghost"
-              onClick={() => navigate('/audits')}
+              onClick={() => navigate('/dashboard?tab=audits')}
             >
               <ArrowLeft className="w-4 h-4 mr-2" />
               Back to Audits
@@ -199,96 +200,8 @@ export default function AuditDetail() {
         </div>
       </div>
 
-      {/* Report Content */}
-      <div className="max-w-7xl mx-auto px-6 py-8">
-        <div className="bg-[var(--glass-bg)] backdrop-blur-xl border border-[var(--glass-border)] rounded-xl shadow-[var(--shadow-md)] p-6 mb-6 no-print">
-          <h1 className="text-3xl font-bold text-[var(--text-primary)] mb-2">
-            Audit Report
-          </h1>
-          <p className="text-[var(--text-secondary)]">
-            {currentAudit.targetUrl}
-          </p>
-          <p className="text-sm text-[var(--text-tertiary)] mt-1">
-            Generated on {new Date(currentAudit.createdAt).toLocaleDateString()} at{' '}
-            {new Date(currentAudit.createdAt).toLocaleTimeString()}
-          </p>
-        </div>
-
-        {/* Render report based on what's available */}
-        {currentAudit.reportUrl ? (
-          // If we have a report URL, render it in an iframe
-          <div className="bg-[var(--glass-bg)] backdrop-blur-xl border border-[var(--glass-border)] rounded-xl shadow-[var(--shadow-md)] overflow-hidden">
-            <iframe
-              src={currentAudit.reportUrl}
-              title="Audit Report"
-              className="w-full min-h-screen border-0"
-              style={{ height: 'calc(100vh - 200px)' }}
-            />
-          </div>
-        ) : currentAudit.fullAuditJson ? (
-          // If we have JSON data, render a simple scores view
-          <Card className="bg-[var(--glass-bg)] backdrop-blur-xl border-[var(--glass-border)]">
-            <CardContent className="p-6">
-              <h2 className="text-xl font-bold text-[var(--text-primary)] mb-4">Audit Scores</h2>
-              <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
-                {currentAudit.performanceScore !== null && (
-                  <div className="text-center p-4 bg-[var(--brand-primary)]/10 rounded-xl">
-                    <div className="text-3xl font-bold text-[var(--brand-primary)]">
-                      {currentAudit.performanceScore}
-                    </div>
-                    <div className="text-sm text-[var(--text-secondary)] mt-1">Performance</div>
-                  </div>
-                )}
-                {currentAudit.seoScore !== null && (
-                  <div className="text-center p-4 bg-[var(--accent-success)]/10 rounded-xl">
-                    <div className="text-3xl font-bold text-[var(--accent-success)]">
-                      {currentAudit.seoScore}
-                    </div>
-                    <div className="text-sm text-[var(--text-secondary)] mt-1">SEO</div>
-                  </div>
-                )}
-                {currentAudit.accessibilityScore !== null && (
-                  <div className="text-center p-4 bg-purple-500/10 rounded-xl">
-                    <div className="text-3xl font-bold text-purple-500">
-                      {currentAudit.accessibilityScore}
-                    </div>
-                    <div className="text-sm text-[var(--text-secondary)] mt-1">Accessibility</div>
-                  </div>
-                )}
-                {currentAudit.bestPracticesScore !== null && (
-                  <div className="text-center p-4 bg-[var(--accent-warning)]/10 rounded-xl">
-                    <div className="text-3xl font-bold text-[var(--accent-warning)]">
-                      {currentAudit.bestPracticesScore}
-                    </div>
-                    <div className="text-sm text-[var(--text-secondary)] mt-1">Best Practices</div>
-                  </div>
-                )}
-                {currentAudit.pwaScore !== null && (
-                  <div className="text-center p-4 bg-pink-500/10 rounded-xl">
-                    <div className="text-3xl font-bold text-pink-500">
-                      {currentAudit.pwaScore}
-                    </div>
-                    <div className="text-sm text-[var(--text-secondary)] mt-1">PWA</div>
-                  </div>
-                )}
-              </div>
-              
-              <Alert className="mt-6">
-                <AlertDescription>
-                  Full report visualization coming soon. For now, you can view the raw scores above.
-                </AlertDescription>
-              </Alert>
-            </CardContent>
-          </Card>
-        ) : (
-          // No report data available
-          <Alert>
-            <AlertDescription>
-              Report data is not yet available. Please check back in a few moments.
-            </AlertDescription>
-          </Alert>
-        )}
-      </div>
+      {/* Full Audit Report - Same view as magic link */}
+      <AuditPublicView audit={currentAudit} />
     </div>
   )
 }
