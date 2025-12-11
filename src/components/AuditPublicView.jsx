@@ -75,15 +75,16 @@ export default function AuditPublicView({ audit, contact }) {
     return () => window.removeEventListener('scroll', handleScroll)
   }, [])
   
-  // Normalize scores - handle both flat properties and nested scores object
+  // Normalize scores - handle both flat properties and nested scores/summary object
+  const summaryMetrics = audit.summary?.metrics || {}
   const scores = {
-    performance: audit.scores?.performance ?? audit.performanceScore ?? null,
-    seo: audit.scores?.seo ?? audit.seoScore ?? null,
-    accessibility: audit.scores?.accessibility ?? audit.accessibilityScore ?? null,
-    bestPractices: audit.scores?.bestPractices ?? audit.bestPracticesScore ?? null,
-    pwa: audit.scores?.pwa ?? audit.pwaScore ?? null,
-    security: audit.scores?.security ?? audit.securityScore ?? null,
-    overall: audit.scores?.overall ?? audit.overallScore ?? null
+    performance: audit.performanceScore ?? summaryMetrics.performance ?? null,
+    seo: audit.seoScore ?? summaryMetrics.seo ?? null,
+    accessibility: audit.accessibilityScore ?? summaryMetrics.accessibility ?? null,
+    bestPractices: audit.bestPracticesScore ?? summaryMetrics.bestPractices ?? null,
+    pwa: audit.pwaScore ?? summaryMetrics.pwa ?? null,
+    security: audit.securityScore ?? summaryMetrics.security ?? null,
+    overall: audit.overallScore ?? summaryMetrics.overall ?? null
   }
   
   // Calculate grade
@@ -331,6 +332,17 @@ export default function AuditPublicView({ audit, contact }) {
  * CoreWebVitalsSection - Extracted Core Web Vitals display
  */
 function CoreWebVitalsSection({ audit }) {
+  // Get metrics from multiple sources with fallbacks
+  const metrics = audit.summary?.metrics || {}
+  
+  const lcpMs = audit.lcpMs ?? metrics.lcpMs ?? null
+  const fidMs = audit.fidMs ?? metrics.fidMs ?? null
+  const clsScore = audit.clsScore ?? metrics.clsScore ?? null
+  const fcpMs = audit.fcpMs ?? metrics.fcpMs ?? null
+  const ttiMs = audit.ttiMs ?? metrics.ttiMs ?? null
+  const tbtMs = audit.tbtMs ?? metrics.tbtMs ?? null
+  const speedIndexMs = audit.speedIndexMs ?? metrics.speedIndexMs ?? null
+  
   return (
     <motion.div variants={fadeInUp} initial="hidden" whileInView="visible" viewport={{ once: true }}>
       <Card className="bg-[var(--glass-bg)] backdrop-blur-xl border-[var(--glass-border)] overflow-hidden hover:shadow-xl hover:shadow-[var(--brand-primary)]/5 transition-shadow duration-500">
@@ -356,27 +368,27 @@ function CoreWebVitalsSection({ audit }) {
           >
             <MetricCard 
               name="Largest Contentful Paint (LCP)"
-              value={formatMs(audit.lcpMs)}
+              value={formatMs(lcpMs)}
               target="< 2.5s"
-              score={audit.lcpMs ? Math.max(0, 100 - (parseFloat(audit.lcpMs) / 25)) : 0}
+              score={lcpMs ? Math.max(0, 100 - (parseFloat(lcpMs) / 25)) : null}
             />
             <MetricCard 
-              name="First Input Delay (FID)"
-              value={formatMs(audit.fidMs)}
-              target="< 100ms"
-              score={audit.fidMs ? Math.max(0, 100 - parseFloat(audit.fidMs)) : 0}
+              name="First Contentful Paint (FCP)"
+              value={formatMs(fcpMs)}
+              target="< 1.8s"
+              score={fcpMs ? Math.max(0, 100 - (parseFloat(fcpMs) / 18)) : null}
             />
             <MetricCard 
               name="Cumulative Layout Shift (CLS)"
-              value={audit.clsScore ?? 'N/A'}
+              value={clsScore != null ? clsScore.toFixed(3) : 'N/A'}
               target="< 0.1"
-              score={audit.clsScore ? Math.max(0, 100 - (parseFloat(audit.clsScore) * 100)) : 0}
+              score={clsScore != null ? Math.max(0, 100 - (parseFloat(clsScore) * 1000)) : null}
             />
             <MetricCard 
-              name="Time to First Byte (TTFB)"
-              value={formatMs(audit.fcpMs)}
-              target="< 800ms"
-              score={audit.fcpMs ? Math.max(0, 100 - (parseFloat(audit.fcpMs) / 8)) : 0}
+              name="Total Blocking Time (TBT)"
+              value={formatMs(tbtMs)}
+              target="< 200ms"
+              score={tbtMs != null ? Math.max(0, 100 - (parseFloat(tbtMs) / 2)) : null}
             />
           </motion.div>
           
@@ -390,18 +402,18 @@ function CoreWebVitalsSection({ audit }) {
           >
             <MiniMetricCard 
               icon={Timer}
-              value={formatMs(audit.ttiMs)}
+              value={formatMs(ttiMs)}
               label="Time to Interactive"
             />
             <MiniMetricCard 
               icon={Clock}
-              value={formatMs(audit.tbtMs)}
-              label="Total Blocking Time"
+              value={formatMs(speedIndexMs)}
+              label="Speed Index"
             />
             <MiniMetricCard 
               icon={TrendingUp}
-              value={formatMs(audit.speedIndexMs)}
-              label="Speed Index"
+              value={lcpMs && fcpMs ? `${((lcpMs - fcpMs) / 1000).toFixed(1)}s` : 'N/A'}
+              label="LCP - FCP Delta"
             />
           </motion.div>
         </CardContent>
