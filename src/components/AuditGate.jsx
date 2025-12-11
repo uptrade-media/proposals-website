@@ -10,7 +10,8 @@ import AuditPublicView from './AuditPublicView'
 import { AlertTriangle, RefreshCw } from 'lucide-react'
 
 // Main site API for fallback token validation
-const MAIN_SITE_API = 'https://uptrademedia.com/api/audit-validate-token'
+// Use www subdomain to avoid CORS redirect issues
+const MAIN_SITE_API = 'https://www.uptrademedia.com/api/audit-validate-token'
 
 // Error messages for better UX
 const errorMessages = {

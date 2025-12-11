@@ -21,8 +21,8 @@ import {
   CalendarDays
 } from 'lucide-react'
 
-// Main site API base URL
-const API_BASE = 'https://uptrademedia.com'
+// Main site API base URL (use www to avoid CORS redirect issues)
+const API_BASE = 'https://www.uptrademedia.com'
 
 // Time slots available for booking (Eastern Time)
 const TIME_SLOTS = [

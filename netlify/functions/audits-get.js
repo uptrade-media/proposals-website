@@ -56,14 +56,20 @@ export async function handler(event) {
     }
 
     const supabase = createSupabaseAdmin()
+    const isAdmin = contact.role === 'admin'
 
-    // Fetch audit with security check (only user's own audits)
-    const { data: audit, error } = await supabase
+    // Build query - admins can see any audit, users only their own
+    let query = supabase
       .from('audits')
       .select('*')
       .eq('id', auditId)
-      .eq('contact_id', userId)
-      .single()
+    
+    // Non-admins can only view their own audits
+    if (!isAdmin) {
+      query = query.eq('contact_id', userId)
+    }
+    
+    const { data: audit, error } = await query.single()
 
     if (error || !audit) {
       return {

@@ -2,7 +2,8 @@
 import crypto from 'crypto'
 import { createSupabaseAdmin, getAuthenticatedUser } from './utils/supabase.js'
 
-const MAIN_SITE_AUDIT_ENDPOINT = process.env.MAIN_SITE_AUDIT_ENDPOINT || 'https://uptrademedia.com/api/audit-request'
+// Use www subdomain to avoid CORS redirect issues
+const MAIN_SITE_AUDIT_ENDPOINT = process.env.MAIN_SITE_AUDIT_ENDPOINT || 'https://www.uptrademedia.com/api/audit-request'
 
 export async function handler(event) {
   // CORS headers
