@@ -111,6 +111,7 @@ export async function handler(event) {
       summary: audit.summary || null,
       seoIssues: audit.summary?.seoIssues || [],
       performanceIssues: audit.summary?.performanceIssues || [],
+      accessibilityIssues: audit.summary?.accessibilityIssues || [],
       securityIssues: audit.summary?.securityIssues || {},
       priorityActions: audit.summary?.priorityActions || [],
       insightsSummary: audit.summary?.insightsSummary || null,
