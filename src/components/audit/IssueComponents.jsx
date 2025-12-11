@@ -115,9 +115,9 @@ export function IssueSection({
   title, 
   description, 
   icon: Icon, 
-  iconColor = 'text-[var(--accent-blue)]',
-  iconBg = 'bg-[var(--accent-blue)]/10',
-  shadowColor = 'hover:shadow-[var(--accent-blue)]/5',
+  iconColor = 'text-[var(--brand-secondary)]',
+  iconBg = 'bg-[var(--brand-secondary)]/10',
+  shadowColor = 'hover:shadow-[var(--brand-secondary)]/5',
   children 
 }) {
   return (

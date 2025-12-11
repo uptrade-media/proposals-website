@@ -223,7 +223,7 @@ function GeneratedPriorityActions({ scores, securityIssues, onScrollToSection })
   if (scores?.accessibility < 90) {
     actions.push({
       id: 'accessibility-issues',
-      color: 'var(--accent-blue)',
+      color: 'var(--brand-secondary)',
       title: 'Improve Accessibility',
       description: 'Make your site more accessible by adding alt text to images, ensuring sufficient color contrast, and using proper heading hierarchy.'
     })

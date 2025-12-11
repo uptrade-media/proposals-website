@@ -126,7 +126,7 @@ export const getScoreColor = (score) => {
 
 export const gradeColors = {
   'A': 'from-[var(--accent-green)] to-emerald-600',
-  'B': 'from-[var(--accent-blue)] to-blue-600',
+  'B': 'from-[var(--brand-secondary)] to-teal-600',
   'C': 'from-[var(--accent-orange)] to-amber-600',
   'D': 'from-orange-500 to-orange-600',
   'F': 'from-[var(--accent-red)] to-red-600',
@@ -202,10 +202,10 @@ export const severityConfig = {
     badge: 'bg-[var(--accent-orange)]/10 text-[var(--accent-orange)]'
   },
   info: { 
-    bg: 'border-l-[var(--accent-blue)] bg-[var(--accent-blue)]/5', 
-    iconColor: 'text-[var(--accent-blue)]', 
-    glow: 'hover:shadow-[var(--accent-blue)]/10',
-    badge: 'bg-[var(--accent-blue)]/10 text-[var(--accent-blue)]'
+    bg: 'border-l-[var(--brand-secondary)] bg-[var(--brand-secondary)]/5', 
+    iconColor: 'text-[var(--brand-secondary)]', 
+    glow: 'hover:shadow-[var(--brand-secondary)]/10',
+    badge: 'bg-[var(--brand-secondary)]/10 text-[var(--brand-secondary)]'
   }
 }
 

@@ -43,9 +43,7 @@ export function AuditHeader({
               animate="visible"
               className="flex items-center gap-2 mb-6"
             >
-              <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-[var(--brand-primary)] to-[var(--brand-secondary)] flex items-center justify-center shadow-lg shadow-[var(--brand-primary)]/30">
-                <span className="text-white font-bold">U</span>
-              </div>
+              <img src="/favicon.svg" alt="Uptrade Media" className="w-10 h-10" />
               <span className="font-semibold text-white/90 text-lg">Uptrade Media</span>
             </motion.div>
             
@@ -141,9 +139,7 @@ export function AuditFooter() {
       className="text-center py-8 border-t border-[var(--glass-border)]"
     >
       <div className="flex items-center justify-center gap-2 mb-4">
-        <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-[var(--brand-primary)] to-[var(--brand-secondary)] flex items-center justify-center shadow-lg shadow-[var(--brand-primary)]/20">
-          <span className="text-white font-bold">U</span>
-        </div>
+        <img src="/favicon.svg" alt="Uptrade Media" className="w-10 h-10" />
         <span className="font-semibold text-[var(--text-primary)] text-lg">Uptrade Media</span>
       </div>
       <p className="text-[var(--text-tertiary)] text-sm">
