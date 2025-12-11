@@ -83,10 +83,11 @@ export async function getAuthenticatedUser(event) {
     }
 
     // Get the contact record with role
+    // Use case-insensitive email matching via ilike
     const { data: contact, error: contactError } = await supabase
       .from('contacts')
       .select('id, email, name, role, company')
-      .or(`auth_user_id.eq.${user.id},email.eq.${user.email}`)
+      .or(`auth_user_id.eq.${user.id},email.ilike.${user.email}`)
       .single()
     
     if (contactError || !contact) {

@@ -98,15 +98,22 @@ export default function AuditGate() {
         }
       }
 
-      // Check if URL hash contains magic link tokens
-      // Supabase will process these automatically via detectSessionInUrl
+      // PRIORITY 1: Check for token in query params (most reliable, 7-day expiration)
+      const token = searchParams.get('token')
+      if (token) {
+        console.log('[AuditGate] Found token in query params, using token validation')
+        await validateWithToken(token)
+        return
+      }
+
+      // PRIORITY 2: Check if URL hash contains Supabase magic link tokens
+      // These have only 1-hour expiration and require redirect URL whitelisting
       const hashHasTokens = window.location.hash.includes('access_token') || 
                             window.location.hash.includes('error_description')
       
       if (hashHasTokens) {
         console.log('[AuditGate] Magic link tokens in URL hash, letting Supabase process...')
         // Give Supabase a moment to process the hash tokens
-        // The onAuthStateChange listener will handle SIGNED_IN event
         await new Promise(resolve => setTimeout(resolve, 500))
         
         // Check if auth succeeded after processing
@@ -124,14 +131,10 @@ export default function AuditGate() {
           const errorMatch = window.location.hash.match(/error_description=([^&]+)/)
           const errorMsg = errorMatch ? decodeURIComponent(errorMatch[1]) : 'Authentication failed'
           console.error('[AuditGate] Magic link error:', errorMsg)
-          setError(errorMsg.includes('expired') ? 'Token expired' : 'Invalid token')
-          setIsLoading(false)
-          return
+          // Don't show error - Supabase magic links are not our primary method
+          // Just log it and fall through to check for token or session
+          console.log('[AuditGate] Supabase magic link failed, checking other auth methods...')
         }
-        
-        // Wait a bit more for onAuthStateChange to fire
-        console.log('[AuditGate] Waiting for auth state change...')
-        return
       }
 
       // Check for existing Supabase session (user already authenticated)
@@ -140,14 +143,6 @@ export default function AuditGate() {
       if (session) {
         console.log('[AuditGate] Found existing session')
         await fetchAuditWithSession(session)
-        return
-      }
-
-      // Fallback: Check for legacy token in query params
-      const token = searchParams.get('token')
-      if (token) {
-        console.log('[AuditGate] Using fallback token validation')
-        await validateWithToken(token)
         return
       }
 

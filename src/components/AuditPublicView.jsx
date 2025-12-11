@@ -8,6 +8,7 @@ import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Progress } from '@/components/ui/progress'
 import { Separator } from '@/components/ui/separator'
+import SchedulerModal from './SchedulerModal'
 import { 
   Zap, 
   Search, 
@@ -223,6 +224,7 @@ function SecurityCheckRow({ name, status }) {
 
 export default function AuditPublicView({ audit, contact }) {
   const [showBackToTop, setShowBackToTop] = useState(false)
+  const [showScheduler, setShowScheduler] = useState(false)
   
   // Handle scroll for back to top button with proper cleanup
   useEffect(() => {
@@ -720,16 +722,14 @@ export default function AuditPublicView({ audit, contact }) {
                 transition={{ delay: 0.2 }}
                 className="flex flex-col sm:flex-row gap-4 justify-center"
               >
-                <a 
-                  href="https://uptrademedia.com/contact/"
-                  target="_blank"
-                  rel="noopener noreferrer"
+                <button 
+                  onClick={() => setShowScheduler(true)}
                   className="group inline-flex items-center justify-center px-8 py-4 bg-gradient-to-r from-[var(--brand-primary)] to-[var(--brand-secondary)] text-white font-bold rounded-xl 
                     hover:shadow-xl hover:shadow-[var(--brand-primary)]/30 hover:scale-[1.02] transition-all duration-300"
                 >
-                  <Mail className="w-5 h-5 mr-2" />
+                  <Calendar className="w-5 h-5 mr-2" />
                   Schedule Free Consultation
-                </a>
+                </button>
                 <a 
                   href="tel:+15139511110"
                   className="group inline-flex items-center justify-center px-8 py-4 bg-[var(--glass-bg-elevated)] text-[var(--text-primary)] font-bold rounded-xl border border-[var(--glass-border)] 
@@ -764,7 +764,7 @@ export default function AuditPublicView({ audit, contact }) {
         </motion.footer>
       </motion.div>
 
-      {/* Back to Top Button with animation */}
+      {/* Floating Action Buttons */}
       <AnimatePresence>
         {showBackToTop && (
           <motion.div
@@ -772,11 +772,23 @@ export default function AuditPublicView({ audit, contact }) {
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: 20 }}
             transition={{ duration: 0.2 }}
-            className="fixed bottom-6 right-6 z-50"
+            className="fixed bottom-6 right-6 z-50 flex flex-col gap-3"
           >
+            {/* Schedule Consultation FAB */}
+            <motion.button
+              onClick={() => setShowScheduler(true)}
+              whileHover={{ scale: 1.05 }}
+              whileTap={{ scale: 0.95 }}
+              className="flex items-center gap-2 px-4 py-3 bg-gradient-to-r from-[var(--brand-primary)] to-[var(--brand-secondary)] text-white font-semibold rounded-full shadow-lg shadow-[var(--brand-primary)]/30 hover:shadow-xl transition-shadow"
+            >
+              <Calendar className="w-5 h-5" />
+              <span className="hidden sm:inline">Schedule Consultation</span>
+            </motion.button>
+            
+            {/* Back to Top Button */}
             <Button
               onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
-              className="rounded-full w-12 h-12 bg-gradient-to-r from-[var(--brand-primary)] to-[var(--brand-secondary)] hover:shadow-xl shadow-lg shadow-[var(--brand-primary)]/30 hover:scale-110 transition-transform"
+              className="rounded-full w-12 h-12 bg-[var(--glass-bg-elevated)] border border-[var(--glass-border)] text-[var(--text-primary)] hover:bg-[var(--glass-bg-hover)] shadow-lg hover:scale-110 transition-all self-end"
               size="sm"
             >
               <ArrowUp className="w-5 h-5" />
@@ -784,6 +796,24 @@ export default function AuditPublicView({ audit, contact }) {
           </motion.div>
         )}
       </AnimatePresence>
+
+      {/* Scheduler Modal */}
+      <SchedulerModal
+        isOpen={showScheduler}
+        onClose={() => setShowScheduler(false)}
+        title="Review Your Audit Results"
+        defaultMeetingType="audit"
+        auditContext={{
+          auditId: audit.id,
+          targetUrl: audit.targetUrl,
+          grade: grade
+        }}
+        prefillData={contact ? {
+          name: contact.name || '',
+          email: contact.email || '',
+          company: contact.company || ''
+        } : null}
+      />
     </div>
   )
 }

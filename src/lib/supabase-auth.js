@@ -109,19 +109,48 @@ export async function getSession() {
 
 /**
  * Get current user with contact info
+ * Links auth_user_id to contact record if found by email
  */
 export async function getCurrentUser() {
   const { data: { session } } = await getSession()
   if (!session?.user) return null
   
-  // Fetch contact info from your contacts table
-  const { data: contact, error } = await supabase
+  // First try to fetch contact by auth_user_id
+  let { data: contact, error } = await supabase
     .from('contacts')
     .select('*')
     .eq('auth_user_id', session.user.id)
     .single()
   
-  if (error) {
+  // If not found by auth_user_id, try by email (case-insensitive)
+  if (error || !contact) {
+    const { data: contactByEmail, error: emailError } = await supabase
+      .from('contacts')
+      .select('*')
+      .ilike('email', session.user.email)
+      .single()
+    
+    if (contactByEmail) {
+      contact = contactByEmail
+      
+      // Link auth_user_id to this contact for future lookups
+      // This happens when a user was created via free audit form and then logs in
+      if (!contactByEmail.auth_user_id) {
+        const { error: updateError } = await supabase
+          .from('contacts')
+          .update({ auth_user_id: session.user.id })
+          .eq('id', contactByEmail.id)
+        
+        if (updateError) {
+          console.warn('Failed to link auth_user_id to contact:', updateError)
+        } else {
+          console.log('Linked auth_user_id to existing contact:', contactByEmail.email)
+        }
+      }
+    }
+  }
+  
+  if (!contact) {
     console.error('Error fetching contact:', error)
     // If contact doesn't exist yet, return basic user info
     return {
