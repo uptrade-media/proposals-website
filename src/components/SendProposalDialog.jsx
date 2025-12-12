@@ -156,101 +156,161 @@ export default function SendProposalDialog({
 
   // Email preview HTML
   const emailPreviewHtml = useMemo(() => {
-    const magicLink = `https://portal.uptrademedia.com/p/${proposal?.slug}?token=MAGIC_TOKEN`
+    const proposalUrl = `https://portal.uptrademedia.com/p/${proposal?.slug}`
+    const validUntilFormatted = proposal?.validUntil 
+      ? new Date(proposal.validUntil).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })
+      : null
+    const daysLeft = proposal?.validUntil 
+      ? Math.ceil((new Date(proposal.validUntil) - new Date()) / (1000 * 60 * 60 * 24))
+      : null
+    const recipientName = client?.name?.split(' ')[0] || ''
+    const recipientEmail = recipients[0] || 'recipient@email.com'
     
     return `
-      <!DOCTYPE html>
-      <html>
-      <head>
-        <style>
-          body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; line-height: 1.6; color: #333; margin: 0; padding: 0; background: #f5f5f5; }
-          .container { max-width: 600px; margin: 0 auto; background: white; }
-          .header { background: linear-gradient(135deg, #0a0a0a 0%, #1a1a2e 50%, #16213e 100%); padding: 40px 30px; text-align: center; }
-          .logo { height: 40px; margin-bottom: 20px; }
-          .header h1 { color: white; margin: 0; font-size: 24px; font-weight: 600; }
-          .header p { color: rgba(255,255,255,0.9); margin: 10px 0 0; }
-          .content { padding: 40px 30px; }
-          .proposal-card { background: #f8f9fc; border-radius: 12px; padding: 24px; margin: 24px 0; border: 1px solid #e5e7eb; }
-          .proposal-title { font-size: 18px; font-weight: 600; color: #1f2937; margin: 0 0 16px; }
-          .proposal-meta { display: flex; gap: 32px; flex-wrap: wrap; }
-          .meta-item { display: flex; flex-direction: column; gap: 4px; }
-          .meta-label { font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; color: #6b7280; font-weight: 500; }
-          .meta-value { font-size: 18px; font-weight: 600; color: #111827; }
-          .price { color: #059669 !important; font-size: 22px !important; }
-          .cta-button { display: inline-block; background: linear-gradient(135deg, #4ade80 0%, #2dd4bf 100%); color: #0a0a0a; padding: 14px 32px; border-radius: 8px; text-decoration: none; font-weight: 600; margin: 24px 0; }
-          .message { background: #f0fdf4; border-left: 4px solid #4ade80; padding: 16px; margin: 24px 0; border-radius: 0 8px 8px 0; }
-          .footer { background: #f8f9fc; padding: 24px 30px; text-align: center; color: #6b7280; font-size: 14px; }
-          .valid-until { background: #fef3c7; border: 1px solid #f59e0b; border-radius: 8px; padding: 12px 16px; margin-top: 16px; color: #92400e; font-size: 14px; }
-          @media (prefers-color-scheme: dark) {
-            body { background: #0a0a0a !important; }
-            .container { background: #1a1a2e !important; }
-            .proposal-card { background: #16213e !important; border-color: #2d3748 !important; }
-            .proposal-title { color: #f3f4f6 !important; }
-            .meta-value { color: #f3f4f6 !important; }
-            .footer { background: #16213e !important; border-color: #2d3748 !important; }
-            .footer p { color: #9ca3af !important; }
-            .message { background: rgba(74, 222, 128, 0.1) !important; }
-          }
-        </style>
-      </head>
-      <body>
-        <div class="container">
-          <div class="header">
-            <img src="https://portal.uptrademedia.com/logo.png" alt="Uptrade Media" class="logo" />
-            <h1>Your Proposal is Ready</h1>
-            <p>A custom proposal prepared just for you</p>
-          </div>
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Your Proposal is Ready</title>
+  <style type="text/css">
+    /* Mobile Styles */
+    @media only screen and (max-width: 600px) {
+      .email-container { width: 100% !important; }
+      .stack-column { display: block !important; width: 100% !important; }
+      .stack-column-center { display: block !important; width: 100% !important; text-align: center !important; }
+      .mobile-padding { padding: 24px 20px !important; }
+      .mobile-padding-header { padding: 32px 20px 24px !important; }
+      .mobile-hide { display: none !important; }
+      .mobile-center { text-align: center !important; }
+      .mobile-full-width { width: 100% !important; padding-right: 0 !important; padding-bottom: 16px !important; }
+      .mobile-font-lg { font-size: 22px !important; }
+      .mobile-font-xl { font-size: 24px !important; }
+      .cta-button { padding: 14px 32px !important; font-size: 15px !important; }
+    }
+  </style>
+</head>
+<body style="margin: 0; padding: 0; background-color: #f4f4f5; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;">
+  
+  <!-- Wrapper -->
+  <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="background-color: #f4f4f5;">
+    <tr>
+      <td align="center" style="padding: 40px 16px;">
+        
+        <!-- Email Container -->
+        <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="600" class="email-container" style="max-width: 600px; width: 100%; background-color: #ffffff; border-radius: 12px; overflow: hidden; box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);">
           
-          <div class="content">
-            ${emailData.personalMessage ? `
-              <div class="message">
-                ${emailData.personalMessage.replace(/\n/g, '<br>')}
-              </div>
-            ` : ''}
-            
-            <div class="proposal-card">
-              <h2 class="proposal-title">${proposal?.title || 'Your Custom Proposal'}</h2>
-              <table cellpadding="0" cellspacing="0" border="0" style="width: 100%;">
+          <!-- Header -->
+          <tr>
+            <td align="center" class="mobile-padding-header" style="background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%); padding: 40px 40px 32px;">
+              <img src="https://portal.uptrademedia.com/logo.png" alt="Uptrade Media" width="140" style="display: block; margin-bottom: 20px; max-width: 140px; height: auto;" />
+              <h1 class="mobile-font-lg" style="margin: 0; color: #94a3b8; font-size: 26px; font-weight: 700; line-height: 1.3;">Your Proposal is Ready</h1>
+              <p style="margin: 10px 0 0; color: #94a3b8; font-size: 15px; line-height: 1.5;">A custom proposal prepared just for you</p>
+            </td>
+          </tr>
+          
+          <!-- Content -->
+          <tr>
+            <td class="mobile-padding" style="padding: 40px;">
+              
+              ${emailData.personalMessage ? `
+              <!-- Personal Message -->
+              <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="margin-bottom: 28px;">
                 <tr>
-                  <td style="padding-right: 32px; vertical-align: top;">
-                    <div style="font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; color: #6b7280; font-weight: 500; margin-bottom: 4px;">Investment</div>
-                    <div style="font-size: 22px; font-weight: 700; color: #059669;">$${parseFloat(proposal?.totalAmount || 0).toLocaleString()}</div>
+                  <td style="background-color: #f0fdf4; border-left: 4px solid #22c55e; border-radius: 8px; padding: 20px;">
+                    <p style="margin: 0; color: #166534; font-size: 15px; line-height: 1.6;">${emailData.personalMessage.replace(/\n/g, '<br>')}</p>
                   </td>
-                  <td style="vertical-align: top;">
-                    <div style="font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; color: #6b7280; font-weight: 500; margin-bottom: 4px;">Valid Until</div>
-                    <div style="font-size: 18px; font-weight: 600; color: #111827;">${new Date(proposal?.validUntil || Date.now() + 14*24*60*60*1000).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}</div>
+                </tr>
+              </table>
+              ` : recipientName ? `
+              <!-- Greeting -->
+              <p style="margin: 0 0 16px; color: #1f2937; font-size: 16px; line-height: 1.6;">Hi ${recipientName},</p>
+              <p style="margin: 0 0 28px; color: #4b5563; font-size: 15px; line-height: 1.6;">We've put together a custom proposal based on our conversation. Click below to review the details and take the next step.</p>
+              ` : `
+              <p style="margin: 0 0 28px; color: #4b5563; font-size: 15px; line-height: 1.6;">We've prepared a custom proposal for you. Click below to review the details.</p>
+              `}
+              
+              <!-- Proposal Card -->
+              <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="background-color: #f8fafc; border: 1px solid #e2e8f0; border-radius: 12px; margin-bottom: 28px;">
+                <tr>
+                  <td style="padding: 24px;">
+                    <h2 class="mobile-font-lg" style="margin: 0 0 20px; color: #0f172a; font-size: 20px; font-weight: 700; line-height: 1.3;">${proposal?.title || 'Your Custom Proposal'}</h2>
+                    
+                    <!-- Meta Info Row -->
+                    <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%">
+                      <tr>
+                        <td class="mobile-full-width" width="50%" valign="top" style="padding-right: 16px;">
+                          <p style="margin: 0 0 4px; color: #64748b; font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; font-weight: 600;">Investment</p>
+                          <p class="mobile-font-xl" style="margin: 0; color: #059669; font-size: 28px; font-weight: 700;">$${parseFloat(proposal?.totalAmount || 0).toLocaleString()}</p>
+                        </td>
+                        ${validUntilFormatted ? `
+                        <td class="mobile-full-width" width="50%" valign="top">
+                          <p style="margin: 0 0 4px; color: #64748b; font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; font-weight: 600;">Valid Until</p>
+                          <p style="margin: 0; color: #0f172a; font-size: 18px; font-weight: 600;">${validUntilFormatted}</p>
+                        </td>
+                        ` : ''}
+                      </tr>
+                    </table>
+                    
+                    ${daysLeft && daysLeft <= 7 && daysLeft > 0 ? `
+                    <!-- Urgency Banner -->
+                    <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="margin-top: 20px;">
+                      <tr>
+                        <td align="center" style="background-color: #fef3c7; border: 1px solid #fcd34d; border-radius: 8px; padding: 14px 20px;">
+                          <p style="margin: 0; color: #92400e; font-size: 14px; font-weight: 600;">⏰ Only ${daysLeft} day${daysLeft > 1 ? 's' : ''} left to accept this offer</p>
+                        </td>
+                      </tr>
+                    </table>
+                    ` : ''}
                   </td>
                 </tr>
               </table>
               
-              ${proposal?.validUntil && new Date(proposal.validUntil) < new Date(Date.now() + 7*24*60*60*1000) ? `
-                <div class="valid-until">
-                  ⏰ This proposal expires soon! Review it today to lock in this pricing.
-                </div>
-              ` : ''}
-            </div>
-            
-            <div style="text-align: center;">
-              <a href="${magicLink}" class="cta-button">View Your Proposal →</a>
-              <p style="color: #6b7280; font-size: 13px; margin-top: 8px;">
-                Click the button above to view and accept your proposal
-              </p>
-            </div>
-          </div>
+              <!-- CTA Button -->
+              <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%">
+                <tr>
+                  <td align="center" style="padding: 8px 0 24px;">
+                    <a href="${proposalUrl}" target="_blank" class="cta-button" style="display: inline-block; background: linear-gradient(135deg, #22c55e 0%, #16a34a 100%); color: #ffffff; text-decoration: none; padding: 16px 40px; border-radius: 8px; font-size: 16px; font-weight: 700; box-shadow: 0 4px 14px rgba(34, 197, 94, 0.35);">View Your Proposal →</a>
+                  </td>
+                </tr>
+                <tr>
+                  <td align="center">
+                    <p style="margin: 0; color: #64748b; font-size: 13px;">Click the button above to view the full proposal</p>
+                  </td>
+                </tr>
+              </table>
+              
+              <!-- Divider -->
+              <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="margin: 28px 0;">
+                <tr>
+                  <td style="border-top: 1px solid #e2e8f0;"></td>
+                </tr>
+              </table>
+              
+              <!-- Help Text -->
+              <p style="margin: 0; color: #64748b; font-size: 14px; line-height: 1.6; text-align: center;">Questions? Simply reply to this email or give us a call.</p>
+              
+            </td>
+          </tr>
           
-          <div class="footer">
-            <p><strong>Uptrade Media</strong></p>
-            <p>Premium Digital Marketing & Web Design</p>
-            <p style="margin-top: 16px; font-size: 12px; color: #9ca3af;">
-              This email was sent to ${recipients[0] || 'recipient'}.<br>
-              If you have questions, reply to this email or call us.
-            </p>
-          </div>
-        </div>
-      </body>
-      </html>
-    `
-  }, [proposal, emailData, client])
+          <!-- Footer -->
+          <tr>
+            <td class="mobile-padding" style="background-color: #f8fafc; border-top: 1px solid #e2e8f0; padding: 28px 40px; text-align: center;">
+              <p style="margin: 0 0 4px; color: #0f172a; font-size: 15px; font-weight: 700;">Uptrade Media</p>
+              <p style="margin: 0 0 16px; color: #64748b; font-size: 13px;">Premium Digital Marketing & Web Design</p>
+              <p style="margin: 0; color: #94a3b8; font-size: 12px;">This email was sent to ${recipientEmail}</p>
+            </td>
+          </tr>
+          
+        </table>
+        
+      </td>
+    </tr>
+  </table>
+  
+</body>
+</html>`
+  }, [proposal, emailData, client, recipients])
 
   if (!proposal) return null
 
