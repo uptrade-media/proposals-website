@@ -221,6 +221,7 @@ export default function ProposalGate() {
     )
   }
 
-  // Pass isMagicLink to ProposalTemplate so it can hide portal UI
-  return <ProposalTemplate proposal={proposal} proposalSlug={slug} isPublicView={isMagicLink} />
+  // Pass isPublicView=true since this is the client-facing route
+  // Clients should always see the signature section
+  return <ProposalTemplate proposal={proposal} proposalSlug={slug} isPublicView={true} />
 }

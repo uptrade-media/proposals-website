@@ -25,8 +25,16 @@ export async function handler(event) {
   try {
     const supabase = createSupabaseAdmin()
 
+    console.log('Fetching proposals...')
+
     // Verify authentication
     const { contact, error: authError } = await getAuthenticatedUser(event)
+    
+    console.log('Auth result:', { 
+      hasContact: !!contact, 
+      role: contact?.role, 
+      authError: authError 
+    })
     
     if (authError || !contact) {
       return {
@@ -40,7 +48,7 @@ export async function handler(event) {
     const queryParams = event.queryStringParameters || {}
     const { projectId, status, contactId } = queryParams
 
-    // Build query
+    // Build query (note: proposal_line_items table doesn't exist in schema)
     let query = supabase
       .from('proposals')
       .select(`
@@ -56,15 +64,6 @@ export async function handler(event) {
           id,
           title,
           status
-        ),
-        line_items:proposal_line_items (
-          id,
-          service_type,
-          description,
-          quantity,
-          unit_price,
-          total,
-          sort_order
         )
       `)
       .order('created_at', { ascending: false })
@@ -86,6 +85,12 @@ export async function handler(event) {
     }
 
     const { data: proposals, error } = await query
+
+    console.log('Query result:', { 
+      proposalCount: proposals?.length || 0, 
+      hasError: !!error,
+      errorMessage: error?.message 
+    })
 
     if (error) {
       console.error('Supabase error:', error)
@@ -126,16 +131,8 @@ export async function handler(event) {
           title: p.project.title,
           status: p.project.status
         }
-      } : {}),
-      // Include line items
-      lineItems: (p.line_items || []).sort((a, b) => a.sort_order - b.sort_order).map(li => ({
-        id: li.id,
-        serviceType: li.service_type,
-        description: li.description,
-        quantity: li.quantity,
-        unitPrice: parseFloat(li.unit_price),
-        total: parseFloat(li.total)
-      }))
+      } : {})
+      // Note: lineItems removed - proposal_line_items table doesn't exist in schema
     }))
 
     return {
@@ -149,6 +146,8 @@ export async function handler(event) {
 
   } catch (error) {
     console.error('Error fetching proposals:', error)
+    console.error('Error stack:', error.stack)
+    console.error('Error details:', JSON.stringify(error, null, 2))
     
     if (error.name === 'JsonWebTokenError' || error.name === 'TokenExpiredError') {
       return {
@@ -163,7 +162,8 @@ export async function handler(event) {
       headers,
       body: JSON.stringify({ 
         error: 'Failed to fetch proposals',
-        message: error.message 
+        message: error.message,
+        details: error.toString()
       })
     }
   }

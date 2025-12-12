@@ -121,12 +121,21 @@ const PAYMENT_TERMS = [
 ]
 
 export default function ProposalAIDialog({ 
-  onSuccess, 
+  onSuccess,
+  onNavigate,
   clients = [], 
   preselectedClientId = null,
-  preselectedType = null
+  preselectedType = null,
+  open: externalOpen,
+  onOpenChange: externalOnOpenChange,
+  triggerButton = true
 }) {
-  const [isOpen, setIsOpen] = useState(false)
+  const [internalOpen, setInternalOpen] = useState(false)
+  
+  // Use external control if provided, otherwise use internal state
+  const isOpen = externalOpen !== undefined ? externalOpen : internalOpen
+  const setIsOpen = externalOnOpenChange || setInternalOpen
+  
   const [step, setStep] = useState(1) // 1: Type, 2: Client+Pricing, 3: Details+Media, 4: AI Chat, 5: Review
   const [isGenerating, setIsGenerating] = useState(false)
   const [isRunningAudit, setIsRunningAudit] = useState(false)
@@ -294,22 +303,72 @@ export default function ProposalAIDialog({
     }))
   }
 
-  // Run audit for website URL
+  // Run audit for website URL (internal admin-only audit with polling)
   const runAudit = async () => {
     if (!formData.websiteUrl) return
     
     setIsRunningAudit(true)
     try {
-      const response = await api.post('/.netlify/functions/audits-request', {
-        targetUrl: formData.websiteUrl
+      // Start the audit - this returns immediately with an auditId
+      const response = await api.post('/.netlify/functions/audits-internal', {
+        url: formData.websiteUrl
       })
       
-      if (response.data.audit) {
-        setAuditResults(response.data.audit)
+      const { auditId } = response.data
+      if (!auditId) {
+        console.error('No auditId returned')
+        setIsRunningAudit(false)
+        return
       }
+      
+      // Poll for results every 10 seconds (max 1 minute)
+      const maxAttempts = 6
+      let attempts = 0
+      
+      const pollForResults = async () => {
+        attempts++
+        console.log(`[ProposalAI] Polling attempt ${attempts}/${maxAttempts} for audit ${auditId}`)
+        try {
+          const statusResponse = await api.get(`/.netlify/functions/audits-internal?auditId=${auditId}`)
+          console.log('[ProposalAI] Poll response:', statusResponse.data)
+          const { status, audit } = statusResponse.data
+          
+          if ((status === 'complete' || status === 'completed') && audit) {
+            console.log('[ProposalAI] Audit complete, setting results:', audit)
+            setAuditResults(audit)
+            setIsRunningAudit(false)
+            return
+          }
+          
+          if (status === 'failed') {
+            console.error('[ProposalAI] Audit failed with status:', status)
+            setIsRunningAudit(false)
+            return
+          }
+          
+          // Still running, poll again
+          console.log(`[ProposalAI] Status is ${status}, continuing to poll...`)
+          if (attempts < maxAttempts) {
+            setTimeout(pollForResults, 10000)
+          } else {
+            console.error('Audit timed out after 1 minute')
+            setIsRunningAudit(false)
+          }
+        } catch (err) {
+          console.error('Poll error:', err)
+          if (attempts < maxAttempts) {
+            setTimeout(pollForResults, 10000)
+          } else {
+            setIsRunningAudit(false)
+          }
+        }
+      }
+      
+      // Start polling after a short delay
+      setTimeout(pollForResults, 2000)
+      
     } catch (error) {
       console.error('Audit failed:', error)
-    } finally {
       setIsRunningAudit(false)
     }
   }
@@ -467,17 +526,27 @@ export default function ProposalAIDialog({
 
   // Handle form submission
   const handleSubmit = async () => {
+    console.log('[ProposalAI] Submitting with auditResults:', auditResults)
     setIsGenerating(true)
 
     try {
       let heroImageUrl = null
       if (formData.heroImage) {
-        const imageFormData = new FormData()
-        imageFormData.append('file', formData.heroImage)
-        imageFormData.append('category', 'proposal-hero')
+        // Convert file to base64
+        const reader = new FileReader()
+        const base64Data = await new Promise((resolve, reject) => {
+          reader.onload = () => resolve(reader.result.split(',')[1])
+          reader.onerror = reject
+          reader.readAsDataURL(formData.heroImage)
+        })
         
-        const uploadResponse = await api.post('/.netlify/functions/files-upload', imageFormData, {
-          headers: { 'Content-Type': 'multipart/form-data' }
+        const uploadResponse = await api.post('/.netlify/functions/files-upload', {
+          filename: formData.heroImage.name,
+          mimeType: formData.heroImage.type,
+          fileSize: formData.heroImage.size,
+          base64Data,
+          category: 'proposal-hero',
+          isPublic: true
         })
         heroImageUrl = uploadResponse.data.url
       }
@@ -517,15 +586,70 @@ export default function ProposalAIDialog({
         })()
       })
 
-      if (response.data.proposal) {
-        // Store the generated proposal and show preview
-        setGeneratedProposal(response.data.proposal)
-        setShowPreview(true)
+      const { proposalId } = response.data
+      if (!proposalId) {
+        throw new Error('No proposalId returned')
       }
+
+      console.log('[ProposalAI] Generation started, polling for proposal:', proposalId)
+
+      // Poll for results every 5 seconds (max 3 minutes for AI generation)
+      const maxAttempts = 36
+      let attempts = 0
+      
+      const pollForResults = async () => {
+        attempts++
+        console.log(`[ProposalAI] Polling attempt ${attempts}/${maxAttempts} for proposal ${proposalId}`)
+        try {
+          const statusResponse = await api.get(`/.netlify/functions/proposals-create-ai?proposalId=${proposalId}`)
+          const { status, proposal } = statusResponse.data
+          
+          if (status === 'complete' && proposal) {
+            console.log('[ProposalAI] Proposal generated:', proposal)
+            setGeneratedProposal(proposal)
+            setIsGenerating(false)
+            
+            // Close dialog and navigate to editor
+            setIsOpen(false)
+            if (onSuccess) {
+              onSuccess(proposal)
+            }
+            if (onNavigate) {
+              onNavigate('proposal-editor', { proposalId: proposal.id })
+            }
+            return
+          }
+          
+          if (status === 'failed') {
+            console.error('[ProposalAI] Generation failed')
+            alert('Proposal generation failed. Please try again.')
+            setIsGenerating(false)
+            return
+          }
+          
+          // Still generating, poll again
+          if (attempts < maxAttempts) {
+            setTimeout(pollForResults, 5000)
+          } else {
+            console.error('[ProposalAI] Generation timed out')
+            alert('Proposal generation timed out. Please check the Proposals page.')
+            setIsGenerating(false)
+          }
+        } catch (err) {
+          console.error('[ProposalAI] Poll error:', err)
+          if (attempts < maxAttempts) {
+            setTimeout(pollForResults, 5000)
+          } else {
+            setIsGenerating(false)
+          }
+        }
+      }
+
+      // Start polling after 3 seconds (give AI time to start)
+      setTimeout(pollForResults, 3000)
     } catch (error) {
       console.error('[ProposalAI] Error:', error)
       alert('Failed to generate proposal: ' + (error.response?.data?.error || error.message))
-    } finally {
       setIsGenerating(false)
     }
   }
@@ -550,14 +674,19 @@ export default function ProposalAIDialog({
   }
 
   // Handle send email
-  const handleSendProposal = async ({ subjectLine, message }) => {
+  const handleSendProposal = async ({ subjectLine, message, recipients }) => {
     setIsSending(true)
     try {
+      // Support both single email and array of recipients
+      const recipientList = recipients && recipients.length > 0 
+        ? recipients 
+        : [formData.clientEmail]
+        
       const response = await api.post('/.netlify/functions/proposals-send', {
         proposalId: generatedProposal.id,
-        recipientEmail: formData.clientEmail,
-        subjectLine,
-        message
+        recipients: recipientList,
+        subject: subjectLine,
+        personalMessage: message
       })
       
       if (response.data.success) {
@@ -624,12 +753,14 @@ export default function ProposalAIDialog({
   return (
     <>
     <Dialog open={isOpen} onOpenChange={setIsOpen}>
-      <DialogTrigger asChild>
-        <Button className="gap-2 bg-gradient-to-r from-[var(--brand-primary)] to-[var(--brand-secondary)] hover:opacity-90">
-          <Sparkles className="w-4 h-4" />
-          New Proposal
-        </Button>
-      </DialogTrigger>
+      {triggerButton && (
+        <DialogTrigger asChild>
+          <Button className="gap-2 bg-gradient-to-r from-[var(--brand-primary)] to-[var(--brand-secondary)] hover:opacity-90">
+            <Sparkles className="w-4 h-4" />
+            New Proposal
+          </Button>
+        </DialogTrigger>
+      )}
       
       <DialogContent className="max-w-[99vw] w-[2200px] max-h-[85vh] overflow-hidden flex flex-col glass-bg border-[var(--glass-border)]">
         <DialogHeader className="pb-2 border-b border-[var(--glass-border)]">

@@ -59,10 +59,13 @@ export async function handler(event) {
   }
 
   try {
-    const { proposalId, message, currentContent, conversationHistory = [] } = JSON.parse(event.body || '{}')
+    const body = JSON.parse(event.body || '{}')
+    const { proposalId, currentContent, conversationHistory = [] } = body
+    // Accept either 'message' or 'instruction' field
+    const message = body.message || body.instruction
 
     if (!message) {
-      return { statusCode: 400, headers, body: JSON.stringify({ error: 'Message required' }) }
+      return { statusCode: 400, headers, body: JSON.stringify({ error: 'Message or instruction required' }) }
     }
 
     // Build the prompt

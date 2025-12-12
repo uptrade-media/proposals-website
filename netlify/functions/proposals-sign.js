@@ -251,21 +251,44 @@ export async function handler(event) {
     } = JSON.parse(event.body || '{}')
 
     if (!proposalId || !signature || !signedAt) {
-      console.error('Validation failed: Missing required fields')
+      console.error('Validation failed: Missing required fields', { proposalId: !!proposalId, signature: !!signature, signedAt: !!signedAt })
       return json(400, { error: 'Missing required fields' }, event)
     }
+
+    console.log('[proposals-sign] Processing signature for:', { proposalId, isAdminSignature })
 
     // Get client IP for audit
     const clientIp = event.headers['x-forwarded-for']?.split(',')[0]?.trim() || 
                      event.headers['client-ip'] || 
                      'unknown'
 
-    // Get existing proposal
-    const { data: proposal, error: fetchError } = await supabase
-      .from('proposals')
-      .select('id, title, status, signed_at, admin_signed_at, client_signature, contact_id')
-      .eq('id', proposalId)
-      .single()
+    // Get existing proposal - try by id first, then by slug
+    let proposal = null
+    let fetchError = null
+    
+    // Check if proposalId looks like a UUID
+    const isUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(proposalId)
+    
+    if (isUUID) {
+      const result = await supabase
+        .from('proposals')
+        .select('id, title, status, signed_at, admin_signed_at, client_signature, client_signature_url, client_signed_by, admin_signature_url, admin_signed_by, contact_id')
+        .eq('id', proposalId)
+        .single()
+      proposal = result.data
+      fetchError = result.error
+    }
+    
+    // If not found by ID, try by slug
+    if (!proposal) {
+      const result = await supabase
+        .from('proposals')
+        .select('id, title, status, signed_at, admin_signed_at, client_signature, client_signature_url, client_signed_by, admin_signature_url, admin_signed_by, contact_id')
+        .eq('slug', proposalId)
+        .single()
+      proposal = result.data
+      fetchError = result.error
+    }
     
     if (fetchError || !proposal) {
       console.error('Proposal not found:', proposalId)
@@ -291,12 +314,14 @@ export async function handler(event) {
         .update({
           admin_signed_at: signedAt,
           admin_signature: signatureUrl || signature,
+          admin_signature_url: signatureUrl || signature,
+          admin_signed_by: signedBy || 'Uptrade Media',
           admin_signature_ip: clientIp,
           fully_executed_at: new Date().toISOString(),
-          status: 'signed',
+          status: 'accepted',
           updated_at: new Date().toISOString()
         })
-        .eq('id', proposalId)
+        .eq('id', proposal.id)
 
       if (updateError) {
         console.error('Update error:', updateError)
@@ -336,11 +361,14 @@ export async function handler(event) {
         .update({
           signed_at: signedAt,
           client_signature: signatureUrl || signature,
+          client_signature_url: signatureUrl || signature,
+          client_signed_by: signedBy || null,
+          client_signed_at: signedAt,
           client_signature_ip: clientIp,
           status: 'signed',
           updated_at: new Date().toISOString()
         })
-        .eq('id', proposalId)
+        .eq('id', proposal.id)
 
       if (updateError) {
         console.error('Update error:', updateError)

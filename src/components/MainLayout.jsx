@@ -17,11 +17,19 @@ const EmailManager = lazy(() => import('@/pages/EmailManager'))
 const BlogManagement = lazy(() => import('./BlogManagement'))
 const PortfolioManagement = lazy(() => import('./PortfolioManagement'))
 const Audits = lazy(() => import('@/pages/Audits'))
+const ProposalEditor = lazy(() => import('./ProposalEditor'))
 
 const MainLayout = () => {
   const [activeSection, setActiveSection] = useState('dashboard')
+  const [activeSectionData, setActiveSectionData] = useState(null) // For passing data like proposalId
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false)
   const { user, isLoading } = useAuthStore()
+
+  // Navigation function that can pass data
+  const navigateTo = (section, data = null) => {
+    setActiveSection(section)
+    setActiveSectionData(data)
+  }
 
   // Debug logging
   console.log('[MainLayout] Render', { activeSection, isLoading, hasUser: !!user, userEmail: user?.email })
@@ -31,13 +39,13 @@ const MainLayout = () => {
   const renderContent = () => {
     switch (activeSection) {
       case 'dashboard':
-        return <Dashboard onNavigate={setActiveSection} />
+        return <Dashboard onNavigate={navigateTo} />
       case 'audits':
         return <Audits />
       case 'reports':
         return <Reports />
       case 'projects':
-        return <Projects />
+        return <Projects onNavigate={navigateTo} />
       case 'files':
         return <FilesDrive />
       case 'messages':
@@ -52,8 +60,15 @@ const MainLayout = () => {
         return <PortfolioManagement />
       case 'email':
         return <EmailManager />
+      case 'proposal-editor':
+        return (
+          <ProposalEditor 
+            proposalId={activeSectionData?.proposalId} 
+            onBack={() => navigateTo('projects')} 
+          />
+        )
       default:
-        return <Dashboard onNavigate={setActiveSection} />
+        return <Dashboard onNavigate={navigateTo} />
     }
   }
 

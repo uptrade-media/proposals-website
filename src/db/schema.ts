@@ -68,13 +68,27 @@ export const proposals = pgTable('proposals', {
   mdxContent: text('mdx_content').notNull(),
   status: text('status').default('draft'), // draft, sent, viewed, signed, accepted, declined
   totalAmount: decimal('total_amount', { precision: 10, scale: 2 }),
+  timeline: text('timeline'), // Project timeline (e.g., "6 weeks")
+  paymentTerms: text('payment_terms'), // Payment terms (e.g., "100% upfront", "50/50")
   version: integer('version').default(1),
   validUntil: timestamp('valid_until'),
   sentAt: timestamp('sent_at'),
   viewedAt: timestamp('viewed_at'),
   clientEmail: text('client_email'),
-  signedAt: timestamp('signed_at'),
+  heroImageUrl: text('hero_image_url'), // Hero image URL for proposal display
+  // Client signature fields
+  clientSignatureUrl: text('client_signature_url'), // URL to signature image in Netlify Blobs
+  clientSignedBy: text('client_signed_by'), // Printed name entered when signing
+  clientSignedAt: timestamp('client_signed_at'),
+  // Admin counter-signature fields
+  adminSignatureUrl: text('admin_signature_url'),
+  adminSignedBy: text('admin_signed_by'),
   adminSignedAt: timestamp('admin_signed_at'),
+  // Counter-sign magic link
+  counterSignToken: text('counter_sign_token'),
+  counterSignTokenExpires: timestamp('counter_sign_token_expires'),
+  // Legacy fields (keeping for compatibility)
+  signedAt: timestamp('signed_at'),
   fullyExecutedAt: timestamp('fully_executed_at'),
   createdAt: timestamp('created_at').defaultNow(),
   updatedAt: timestamp('updated_at').defaultNow()
@@ -88,13 +102,14 @@ export const files = pgTable('files', {
   contactId: uuid('contact_id').notNull().references(() => contacts.id, { onDelete: 'cascade' }),
   projectId: uuid('project_id').references(() => projects.id, { onDelete: 'cascade' }),
   filename: text('filename').notNull(),
-  blobPath: text('blob_path').notNull(),
+  storagePath: text('storage_path').notNull(),
   mimeType: text('mime_type'),
   fileSize: integer('file_size'),
   category: text('category'),
   isPublic: boolean('is_public').default(false),
   uploadedBy: uuid('uploaded_by').references(() => contacts.id),
-  uploadedAt: timestamp('uploaded_at').defaultNow()
+  uploadedAt: timestamp('uploaded_at').defaultNow(),
+  storageType: text('storage_type').default('supabase') // 'supabase' or 'netlify-blobs'
 })
 
 // ========================================

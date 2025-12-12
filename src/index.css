@@ -316,3 +316,84 @@ body {
   background: var(--accent-blue);
   color: white;
 }
+
+/* ------------------------------------------------
+   MDX CONTENT STYLING
+   For proposal content rendered from MDX
+   ------------------------------------------------ */
+.mdx-content {
+  /* Typography */
+  font-size: 1rem;
+  line-height: 1.75;
+  color: var(--text-primary);
+}
+
+.mdx-content h1 {
+  font-size: 2.25rem;
+  font-weight: 700;
+  margin-top: 2rem;
+  margin-bottom: 1rem;
+  color: var(--text-primary);
+}
+
+.mdx-content h2 {
+  font-size: 1.75rem;
+  font-weight: 700;
+  margin-top: 2rem;
+  margin-bottom: 1rem;
+  color: var(--text-primary);
+}
+
+.mdx-content h3 {
+  font-size: 1.375rem;
+  font-weight: 600;
+  margin-top: 1.5rem;
+  margin-bottom: 0.75rem;
+  color: var(--text-primary);
+}
+
+.mdx-content p {
+  margin-bottom: 1rem;
+  color: var(--text-secondary);
+}
+
+.mdx-content ul,
+.mdx-content ol {
+  margin-bottom: 1rem;
+  padding-left: 1.5rem;
+}
+
+.mdx-content li {
+  margin-bottom: 0.5rem;
+  color: var(--text-secondary);
+}
+
+.mdx-content ul li {
+  list-style-type: disc;
+}
+
+.mdx-content ol li {
+  list-style-type: decimal;
+}
+
+.mdx-content strong {
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.mdx-content a {
+  color: var(--brand-primary);
+  text-decoration: underline;
+}
+
+.mdx-content a:hover {
+  opacity: 0.8;
+}
+
+.mdx-content blockquote {
+  border-left: 4px solid var(--brand-primary);
+  padding-left: 1rem;
+  margin: 1.5rem 0;
+  font-style: italic;
+  color: var(--text-secondary);
+}

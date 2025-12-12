@@ -1,24 +1,61 @@
 import { useState, useRef, useEffect } from 'react'
 import SignatureCanvas from 'react-signature-canvas'
 import { Button } from '@/components/ui/button'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Alert, AlertDescription } from '@/components/ui/alert'
-import { CheckCircle, X, Pen, Loader2, Mail } from 'lucide-react'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
+import { CheckCircle, X, Pen, Loader2, Mail, Calendar, User } from 'lucide-react'
 
-export default function ProposalSignature({ proposalId, proposalTitle, clientName, clientEmail, onSignatureStarted }) {
+export default function ProposalSignature({ 
+  proposalId, 
+  proposalSlug,
+  proposalTitle, 
+  clientName: initialClientName, 
+  clientEmail, 
+  onSignatureStarted,
+  // For displaying already-signed proposals (from ProposalView)
+  clientSignature,
+  clientSignedBy,
+  clientSignedAt,
+  adminSignature,
+  adminSignedBy,
+  adminSignedAt,
+  status
+}) {
   const sigPad = useRef(null)
   const [signed, setSigned] = useState(false)
   const [signing, setSigning] = useState(false)
   const [error, setError] = useState('')
   const [isEmpty, setIsEmpty] = useState(true)
   const [hasTriggeredStart, setHasTriggeredStart] = useState(false)
+  const [printedName, setPrintedName] = useState(initialClientName || '')
+  const [signatureData, setSignatureData] = useState(null)
+  const [signedDate, setSignedDate] = useState(null)
+  const [adminSig, setAdminSig] = useState(null)
+  const [adminSigDate, setAdminSigDate] = useState(null)
+  const [adminSigner, setAdminSigner] = useState(null)
+
+  // Debug log
+  console.log('[ProposalSignature] Mounted with proposalId:', proposalId, 'status:', status)
 
   // Check if proposal is already signed on mount
   useEffect(() => {
-    checkSignatureStatus()
-  }, [proposalId])
+    if (clientSignature || clientSignedAt) {
+      setSigned(true)
+      setSignatureData(clientSignature)
+      setPrintedName(clientSignedBy || '')
+      setSignedDate(clientSignedAt)
+      setAdminSig(adminSignature)
+      setAdminSigDate(adminSignedAt)
+      setAdminSigner(adminSignedBy)
+    } else {
+      checkSignatureStatus()
+    }
+  }, [proposalId, clientSignature, clientSignedAt])
 
   const checkSignatureStatus = async () => {
+    if (!proposalId) return
+    
     try {
       const response = await fetch(`/.netlify/functions/proposals-get?id=${proposalId}`, {
         credentials: 'include'
@@ -26,9 +63,17 @@ export default function ProposalSignature({ proposalId, proposalTitle, clientNam
       
       if (response.ok) {
         const data = await response.json()
+        const proposal = data.proposal
+        
         // Check if proposal has signature data
-        if (data.proposal?.signedAt || data.proposal?.status === 'accepted') {
+        if (proposal?.signed_at || proposal?.client_signed_at || proposal?.client_signature || proposal?.client_signature_url) {
           setSigned(true)
+          setSignatureData(proposal.client_signature_url || proposal.client_signature)
+          setPrintedName(proposal.client_signed_by || initialClientName || '')
+          setSignedDate(proposal.client_signed_at || proposal.signed_at)
+          setAdminSig(proposal.admin_signature_url || proposal.admin_signature)
+          setAdminSigDate(proposal.admin_signed_at)
+          setAdminSigner(proposal.admin_signed_by)
         }
       }
     } catch (err) {
@@ -59,11 +104,17 @@ export default function ProposalSignature({ proposalId, proposalTitle, clientNam
       return
     }
 
+    if (!printedName.trim()) {
+      setError('Please type your full legal name.')
+      return
+    }
+
     setSigning(true)
     setError('')
 
     try {
-      const signatureData = sigPad.current.toDataURL('image/png')
+      const sigData = sigPad.current.toDataURL('image/png')
+      const signedAt = new Date().toISOString()
       
       const response = await fetch('/.netlify/functions/proposals-sign', {
         method: 'POST',
@@ -72,9 +123,9 @@ export default function ProposalSignature({ proposalId, proposalTitle, clientNam
         body: JSON.stringify({
           proposalId,
           proposalTitle,
-          signature: signatureData,
-          signedAt: new Date().toISOString(),
-          signedBy: clientName,
+          signature: sigData,
+          signedAt,
+          signedBy: printedName.trim(),
           clientEmail
         })
       })
@@ -84,12 +135,10 @@ export default function ProposalSignature({ proposalId, proposalTitle, clientNam
         throw new Error(data.error || 'Failed to process signature')
       }
 
+      // Store signature data for inline display
+      setSignatureData(sigData)
+      setSignedDate(signedAt)
       setSigned(true)
-      
-      // Show success for a moment, then reload to show accepted state
-      setTimeout(() => {
-        window.location.reload()
-      }, 2000)
       
     } catch (err) {
       console.error('Signature error:', err)
@@ -98,61 +147,184 @@ export default function ProposalSignature({ proposalId, proposalTitle, clientNam
     }
   }
 
+  const formatDate = (dateString) => {
+    if (!dateString) return ''
+    return new Date(dateString).toLocaleDateString('en-US', { 
+      year: 'numeric', 
+      month: 'long', 
+      day: 'numeric',
+      hour: 'numeric',
+      minute: '2-digit'
+    })
+  }
+
+  // Show inline signature block if already signed
   if (signed) {
     return (
-      <Card className="border-green-500 bg-green-50">
-        <CardHeader>
-          <CardTitle className="flex items-center text-green-700">
-            <CheckCircle className="h-6 w-6 mr-2" />
-            Proposal Accepted!
-          </CardTitle>
-          <CardDescription>
-            Thank you for signing. You will receive a confirmation email with the signed contract shortly.
-          </CardDescription>
-        </CardHeader>
-      </Card>
+      <div id="signature" className="space-y-6 scroll-mt-24">
+        {/* Client Signature Block */}
+        <div className="bg-[var(--glass-bg)] border border-[var(--glass-border)] rounded-xl p-6">
+          <div className="flex items-center gap-2 mb-4">
+            <CheckCircle className="h-5 w-5 text-[var(--brand-primary)]" />
+            <h3 className="font-semibold text-[var(--text-primary)]">Client Signature</h3>
+          </div>
+          
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            {/* Signature Image */}
+            <div className="bg-white rounded-lg border border-gray-200 p-4">
+              {signatureData ? (
+                <img 
+                  src={signatureData} 
+                  alt="Client Signature" 
+                  className="max-h-24 mx-auto"
+                />
+              ) : (
+                <div className="h-24 flex items-center justify-center text-gray-400">
+                  Signature on file
+                </div>
+              )}
+            </div>
+            
+            {/* Signature Details */}
+            <div className="space-y-3">
+              <div className="flex items-center gap-2 text-sm">
+                <User className="h-4 w-4 text-[var(--text-tertiary)]" />
+                <span className="text-[var(--text-secondary)]">Signed by:</span>
+                <span className="font-medium text-[var(--text-primary)]">{printedName}</span>
+              </div>
+              <div className="flex items-center gap-2 text-sm">
+                <Calendar className="h-4 w-4 text-[var(--text-tertiary)]" />
+                <span className="text-[var(--text-secondary)]">Date:</span>
+                <span className="font-medium text-[var(--text-primary)]">{formatDate(signedDate)}</span>
+              </div>
+              {clientEmail && (
+                <div className="flex items-center gap-2 text-sm">
+                  <Mail className="h-4 w-4 text-[var(--text-tertiary)]" />
+                  <span className="text-[var(--text-secondary)]">Email:</span>
+                  <span className="font-medium text-[var(--text-primary)]">{clientEmail}</span>
+                </div>
+              )}
+            </div>
+          </div>
+          
+          <p className="text-xs text-[var(--text-tertiary)] mt-4">
+            Electronically signed and legally binding under the ESIGN Act and UETA.
+          </p>
+        </div>
+
+        {/* Admin Counter-Signature Block */}
+        {adminSig ? (
+          <div className="bg-[var(--glass-bg)] border border-[var(--glass-border)] rounded-xl p-6">
+            <div className="flex items-center gap-2 mb-4">
+              <CheckCircle className="h-5 w-5 text-[var(--brand-primary)]" />
+              <h3 className="font-semibold text-[var(--text-primary)]">Uptrade Media Signature</h3>
+            </div>
+            
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div className="bg-white rounded-lg border border-gray-200 p-4">
+                <img 
+                  src={adminSig} 
+                  alt="Admin Signature" 
+                  className="max-h-24 mx-auto"
+                />
+              </div>
+              
+              <div className="space-y-3">
+                <div className="flex items-center gap-2 text-sm">
+                  <User className="h-4 w-4 text-[var(--text-tertiary)]" />
+                  <span className="text-[var(--text-secondary)]">Signed by:</span>
+                  <span className="font-medium text-[var(--text-primary)]">{adminSigner || 'Uptrade Media'}</span>
+                </div>
+                <div className="flex items-center gap-2 text-sm">
+                  <Calendar className="h-4 w-4 text-[var(--text-tertiary)]" />
+                  <span className="text-[var(--text-secondary)]">Date:</span>
+                  <span className="font-medium text-[var(--text-primary)]">{formatDate(adminSigDate)}</span>
+                </div>
+              </div>
+            </div>
+            
+            <div className="mt-4 p-3 bg-[var(--brand-primary)]/10 rounded-lg">
+              <p className="text-sm text-[var(--brand-primary)] font-medium">
+                ✓ This contract is fully executed
+              </p>
+            </div>
+          </div>
+        ) : (
+          <div className="bg-[var(--accent-orange)]/10 border border-[var(--accent-orange)]/30 rounded-xl p-6">
+            <div className="flex items-center gap-2 mb-2">
+              <Loader2 className="h-5 w-5 text-[var(--accent-orange)] animate-spin" />
+              <h3 className="font-semibold text-[var(--accent-orange)]">Awaiting Counter-Signature</h3>
+            </div>
+            <p className="text-sm text-[var(--text-secondary)]">
+              Thank you for signing! Uptrade Media has been notified and will counter-sign shortly. 
+              You'll receive the fully executed contract via email once complete.
+            </p>
+          </div>
+        )}
+      </div>
     )
   }
 
+  // Show signature form
   return (
-    <Card className="border-2 border-[#4bbf39]">
-      <CardHeader>
-        <CardTitle className="flex items-center">
-          <Pen className="h-5 w-5 mr-2 text-[#4bbf39]" />
-          Sign to Accept Proposal
-        </CardTitle>
-        <CardDescription>
+    <div id="signature" className="scroll-mt-24 bg-[var(--glass-bg)] border-2 border-[var(--brand-primary)] rounded-xl overflow-hidden">
+      <div className="bg-[var(--brand-primary)]/10 p-4 border-b border-[var(--brand-primary)]/20">
+        <div className="flex items-center gap-2">
+          <Pen className="h-5 w-5 text-[var(--brand-primary)]" />
+          <h3 className="font-semibold text-[var(--text-primary)]">Sign to Accept Proposal</h3>
+        </div>
+        <p className="text-sm text-[var(--text-secondary)] mt-1">
           By signing below, you agree to the terms and pricing outlined in this proposal.
-          A signed copy will be emailed to you at {clientEmail || 'your email address'}.
-        </CardDescription>
-      </CardHeader>
-      <CardContent className="space-y-4">
+        </p>
+      </div>
+      
+      <div className="p-6 space-y-6">
         {error && (
           <Alert variant="destructive">
             <AlertDescription>{error}</AlertDescription>
           </Alert>
         )}
 
-        <div className="bg-gray-50 rounded-lg p-4 space-y-2">
+        {/* Legal Notice */}
+        <div className="bg-[var(--glass-bg-inset)] rounded-lg p-4 space-y-3">
           <div className="flex items-start space-x-3">
-            <CheckCircle className="h-5 w-5 text-green-600 mt-0.5 flex-shrink-0" />
+            <CheckCircle className="h-5 w-5 text-[var(--brand-primary)] mt-0.5 flex-shrink-0" />
             <div>
-              <p className="font-medium text-sm">Legally Binding</p>
-              <p className="text-xs text-gray-600">Electronic signatures are legally enforceable under the ESIGN Act.</p>
+              <p className="font-medium text-sm text-[var(--text-primary)]">Legally Binding</p>
+              <p className="text-xs text-[var(--text-secondary)]">Electronic signatures are legally enforceable under the ESIGN Act.</p>
             </div>
           </div>
           <div className="flex items-start space-x-3">
-            <Mail className="h-5 w-5 text-green-600 mt-0.5 flex-shrink-0" />
+            <Mail className="h-5 w-5 text-[var(--brand-primary)] mt-0.5 flex-shrink-0" />
             <div>
-              <p className="font-medium text-sm">Email Confirmation</p>
-              <p className="text-xs text-gray-600">You'll receive a signed PDF copy via email immediately.</p>
+              <p className="font-medium text-sm text-[var(--text-primary)]">Email Confirmation</p>
+              <p className="text-xs text-[var(--text-secondary)]">You'll receive a signed PDF copy via email once fully executed.</p>
             </div>
           </div>
         </div>
 
+        {/* Printed Name Field */}
         <div className="space-y-2">
-          <label className="text-sm font-medium">Your Signature</label>
-          <div className="border-2 border-gray-300 rounded-lg bg-white overflow-hidden">
+          <Label htmlFor="printedName" className="text-[var(--text-primary)]">
+            Your Full Legal Name <span className="text-[var(--accent-red)]">*</span>
+          </Label>
+          <Input
+            id="printedName"
+            type="text"
+            value={printedName}
+            onChange={(e) => setPrintedName(e.target.value)}
+            placeholder="Type your full legal name"
+            className="bg-[var(--surface-page-secondary)] border-[var(--glass-border)] text-[var(--text-primary)]"
+            disabled={signing}
+          />
+        </div>
+
+        {/* Signature Canvas */}
+        <div className="space-y-2">
+          <Label className="text-[var(--text-primary)]">
+            Your Signature <span className="text-[var(--accent-red)]">*</span>
+          </Label>
+          <div className="border-2 border-[var(--glass-border-strong)] rounded-lg bg-white overflow-hidden">
             <SignatureCanvas
               ref={sigPad}
               onBegin={handleBegin}
@@ -163,25 +335,26 @@ export default function ProposalSignature({ proposalId, proposalTitle, clientNam
               backgroundColor="rgb(255, 255, 255)"
             />
           </div>
-          <p className="text-xs text-gray-500">
+          <p className="text-xs text-[var(--text-tertiary)]">
             Sign above using your mouse, trackpad, or touch screen
           </p>
         </div>
 
+        {/* Action Buttons */}
         <div className="flex flex-col sm:flex-row gap-3">
           <Button
             variant="outline"
             onClick={handleClear}
             disabled={signing}
-            className="flex-1"
+            className="flex-1 border-[var(--glass-border-strong)]"
           >
             <X className="h-4 w-4 mr-2" />
             Clear Signature
           </Button>
           <Button
             onClick={handleSign}
-            disabled={signing || isEmpty}
-            className="flex-1 bg-[#4bbf39] hover:bg-[#3da030] text-white"
+            disabled={signing || isEmpty || !printedName.trim()}
+            className="flex-1 bg-[var(--brand-primary)] hover:bg-[var(--brand-primary)]/90 text-white"
           >
             {signing ? (
               <>
@@ -197,27 +370,17 @@ export default function ProposalSignature({ proposalId, proposalTitle, clientNam
           </Button>
         </div>
 
-        <div className="pt-4 border-t">
-          <p className="text-xs text-gray-600">
-            <strong>Signed by:</strong> {clientName}
-          </p>
-          <p className="text-xs text-gray-600">
-            <strong>Proposal:</strong> {proposalTitle}
-          </p>
-          {clientEmail && (
-            <p className="text-xs text-gray-600">
-              <strong>Email:</strong> {clientEmail}
-            </p>
-          )}
-          <p className="text-xs text-gray-600">
-            <strong>Date:</strong> {new Date().toLocaleDateString('en-US', { 
-              year: 'numeric', 
-              month: 'long', 
-              day: 'numeric' 
-            })}
-          </p>
+        {/* Signature Details Preview */}
+        <div className="pt-4 border-t border-[var(--glass-border)] text-xs text-[var(--text-tertiary)] space-y-1">
+          <p><strong>Proposal:</strong> {proposalTitle}</p>
+          {clientEmail && <p><strong>Email:</strong> {clientEmail}</p>}
+          <p><strong>Date:</strong> {new Date().toLocaleDateString('en-US', { 
+            year: 'numeric', 
+            month: 'long', 
+            day: 'numeric' 
+          })}</p>
         </div>
-      </CardContent>
-    </Card>
+      </div>
+    </div>
   )
 }

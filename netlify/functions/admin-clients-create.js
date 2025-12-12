@@ -52,6 +52,19 @@ export async function handler(event) {
     const body = JSON.parse(event.body || '{}')
     const { name, email, company, phone, website, source, pipeline_stage, notes, type, contactType } = body
 
+    console.log('Creating client with data:', {
+      name,
+      email,
+      company,
+      phone,
+      website,
+      source,
+      pipeline_stage,
+      notes,
+      type,
+      contactType
+    })
+
     // Determine whether this is a prospect vs full client.
     // Historically some callers used `pipeline_stage: 'new_lead'` for prospects.
     const resolvedContactType = (contactType || type || (pipeline_stage === 'new_lead' ? 'prospect' : 'client'))
@@ -110,7 +123,6 @@ export async function handler(event) {
         pipeline_stage: pipeline_stage || null,
         role: 'client',
         account_setup: 'false',
-        password: null,
         google_id: null
       })
       .select()
@@ -344,13 +356,16 @@ export async function handler(event) {
 
   } catch (error) {
     console.error('Error creating client:', error)
+    console.error('Error stack:', error.stack)
+    console.error('Error details:', JSON.stringify(error, null, 2))
 
     return {
       statusCode: 500,
       headers,
       body: JSON.stringify({ 
         error: 'Failed to create client',
-        message: error.message 
+        message: error.message,
+        details: error.toString()
       })
     }
   }

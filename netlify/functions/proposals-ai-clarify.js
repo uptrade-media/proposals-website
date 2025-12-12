@@ -59,6 +59,49 @@ export async function handler(event) {
     }
 
     // Build context for AI
+    let auditContext = ''
+    if (auditResults) {
+      const { performance, seo, accessibility, bestPractices, grade, coreWebVitals, opportunities, seoDetails } = auditResults
+      
+      auditContext = `
+Website Audit Results (Grade: ${grade || 'N/A'}):
+- Performance: ${performance || 'N/A'}/100 (Mobile: ${auditResults.performanceMobile || 'N/A'}, Desktop: ${auditResults.performanceDesktop || 'N/A'})
+- SEO: ${seo || 'N/A'}/100
+- Accessibility: ${accessibility || 'N/A'}/100
+- Best Practices: ${bestPractices || 'N/A'}/100`
+
+      if (coreWebVitals) {
+        auditContext += `
+
+Core Web Vitals:
+- LCP (Largest Contentful Paint): Mobile ${coreWebVitals.lcp?.mobile || 'N/A'}, Desktop ${coreWebVitals.lcp?.desktop || 'N/A'}
+- CLS (Cumulative Layout Shift): Mobile ${coreWebVitals.cls?.mobile || 'N/A'}, Desktop ${coreWebVitals.cls?.desktop || 'N/A'}
+- Speed Index: Mobile ${coreWebVitals.speedIndex?.mobile || 'N/A'}, Desktop ${coreWebVitals.speedIndex?.desktop || 'N/A'}
+- Time to Interactive: Mobile ${coreWebVitals.tti?.mobile || 'N/A'}, Desktop ${coreWebVitals.tti?.desktop || 'N/A'}`
+      }
+
+      if (opportunities?.length > 0) {
+        auditContext += `
+
+Top Improvement Opportunities:`
+        opportunities.slice(0, 3).forEach(opp => {
+          auditContext += `\n- ${opp.title}${opp.savings ? ` (potential savings: ${opp.savings})` : ''}`
+        })
+      }
+
+      if (seoDetails) {
+        auditContext += `
+
+SEO Details:
+- Title: "${seoDetails.title || 'Missing'}" (${seoDetails.titleLength || 0} chars)
+- Meta Description: ${seoDetails.metaDescriptionLength || 0} chars
+- Has H1: ${seoDetails.hasH1 ? 'Yes' : 'No'} (${seoDetails.h1Count || 0} total)
+- Has robots.txt: ${seoDetails.hasRobotsTxt ? 'Yes' : 'No'}
+- Has sitemap: ${seoDetails.hasSitemap ? 'Yes' : 'No'}
+- HTTPS: ${seoDetails.isHttps ? 'Yes' : 'No'}`
+      }
+    }
+
     const projectDetails = [
       projectInfo?.brandName && `Brand: ${projectInfo.brandName}`,
       projectInfo?.websiteUrl && `Website: ${projectInfo.websiteUrl}`,
@@ -67,7 +110,7 @@ export async function handler(event) {
       projectInfo?.goals && `Goals: ${projectInfo.goals}`,
       projectInfo?.challenges && `Challenges: ${projectInfo.challenges}`,
       projectInfo?.context && `Additional context: ${projectInfo.context}`,
-      auditResults && `Audit findings available: ${JSON.stringify(auditResults).slice(0, 500)}`
+      auditContext && auditContext
     ].filter(Boolean).join('\n')
 
     const systemPrompt = CLARIFICATION_PROMPT

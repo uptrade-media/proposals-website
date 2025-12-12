@@ -78,11 +78,14 @@ export async function handler(event) {
         ),
         line_items:proposal_line_items (
           id,
-          service_type,
+          title,
+          item_type,
           description,
           quantity,
           unit_price,
-          total,
+          total_price,
+          is_optional,
+          selected,
           sort_order
         )
       `)
@@ -158,9 +161,13 @@ export async function handler(event) {
       title: proposal.title,
       description: proposal.description,
       mdxContent: proposal.mdx_content,
+      heroImageUrl: proposal.hero_image_url,
+      brandName: proposal.brand_name,
       status: proposal.status,
       version: proposal.version,
       totalAmount: proposal.total_amount ? parseFloat(proposal.total_amount) : null,
+      timeline: proposal.timeline,
+      paymentTerms: proposal.payment_terms,
       validUntil: proposal.valid_until,
       sentAt: proposal.sent_at,
       viewedAt: proposal.viewed_at,
@@ -168,8 +175,15 @@ export async function handler(event) {
       signedAt: proposal.signed_at,
       adminSignedAt: proposal.admin_signed_at,
       fullyExecutedAt: proposal.fully_executed_at,
+      // Client signature fields
       clientSignature: proposal.client_signature,
+      clientSignatureUrl: proposal.client_signature_url,
+      clientSignedBy: proposal.client_signed_by,
+      clientSignedAt: proposal.client_signed_at,
+      // Admin signature fields
       adminSignature: proposal.admin_signature,
+      adminSignatureUrl: proposal.admin_signature_url,
+      adminSignedBy: proposal.admin_signed_by,
       createdAt: proposal.created_at,
       updatedAt: proposal.updated_at,
       contact: proposal.contact ? {
@@ -189,11 +203,14 @@ export async function handler(event) {
       } : null,
       lineItems: (proposal.line_items || []).sort((a, b) => a.sort_order - b.sort_order).map(li => ({
         id: li.id,
-        serviceType: li.service_type,
+        title: li.title,
+        itemType: li.item_type,
         description: li.description,
         quantity: li.quantity,
         unitPrice: parseFloat(li.unit_price),
-        total: parseFloat(li.total)
+        total: parseFloat(li.total_price),
+        isOptional: li.is_optional,
+        selected: li.selected
       }))
     }
 

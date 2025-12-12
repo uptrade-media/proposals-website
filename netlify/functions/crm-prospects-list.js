@@ -72,6 +72,7 @@ export async function handler(event) {
       `, { count: 'exact' })
       .is('auth_user_id', null) // Not a portal user yet
       .eq('role', 'client')
+      .neq('pipeline_stage', 'closed_won') // Exclude won deals (they're now clients)
 
     // Apply filters
     if (stage) {

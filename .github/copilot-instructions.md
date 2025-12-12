@@ -82,7 +82,7 @@ Files: `auth-verify.js`, `auth-forgot.js`, `contact-support.js`
 - **Current**: Single table `contacts` in `src/db/schema.ts`
 - **Needed**: See `IMPLEMENTATION-PLAN.md` for full schema
 - **Migrations**: Run via `drizzle-kit` when implementing features
-- **Connection**: Neon Postgres via `DATABASE_URL` env variable
+- **Connection**: Supabase PostgreSQL via Supabase client
 
 ---
 
@@ -228,20 +228,28 @@ The following components have complete UI but call non-existent APIs:
 // netlify/functions/new-feature.js
 const jwt = require('jsonwebtoken')
 
-exports.handler = async (event) => {
+import { createSupabaseAdmin, getAuthenticatedUser } from './utils/supabase.js'
+
+export async function handler(event) {
   // 1. Verify auth
-  const token = event.headers.cookie?.match(/um_session=([^;]+)/)?.[1]
-  if (!token) return { statusCode: 401, body: JSON.stringify({ error: 'Unauthorized' }) }
-  
-  const user = jwt.verify(token, process.env.AUTH_JWT_SECRET)
+  const { contact, error: authError } = await getAuthenticatedUser(event)
+  if (authError || !contact) {
+    return { statusCode: 401, body: JSON.stringify({ error: 'Unauthorized' }) }
+  }
   
   // 2. Parse request
   const { param } = JSON.parse(event.body || '{}')
   
-  // 3. Database operation
-  const { neon } = require('@neondatabase/serverless')
-  const sql = neon(process.env.DATABASE_URL)
-  const result = await sql`SELECT * FROM table WHERE id = ${param}`
+  // 3. Database operation using Supabase client
+  const supabase = createSupabaseAdmin()
+  const { data: result, error } = await supabase
+    .from('table_name')
+    .select('*')
+    .eq('id', param)
+  
+  if (error) {
+    return { statusCode: 500, body: JSON.stringify({ error: error.message }) }
+  }
   
   // 4. Return response
   return { statusCode: 200, body: JSON.stringify({ result }) }
@@ -292,18 +300,20 @@ const squareAmount = { amount: amountInCents, currency: 'USD' }
 
 ---
 
-## 4. Neon Database Integration
+## 4. Supabase Database Integration
 
 ### Purpose
-Serverless Postgres database for all application data
+Supabase Postgres database for all application data
 
 ### Environment Variables
 ```bash
-DATABASE_URL
+SUPABASE_URL
+SUPABASE_SERVICE_ROLE_KEY
+VITE_SUPABASE_ANON_KEY
 ```
-*Note: Netlify will populate this automatically during `netlify dev`*
+*Note: Netlify will populate these automatically during `netlify dev`*
 
-### ORM: Drizzle
+### Client: Supabase JS
 Schema defined in `src/db/schema.ts`
 
 ### Core Tables
@@ -426,24 +436,30 @@ notifications:
 
 ### Database Access Pattern
 ```typescript
-// All database operations in Netlify functions
-import { drizzle } from 'drizzle-orm/neon-http'
-import { neon } from '@neondatabase/serverless'
-import * as schema from './schema'
+// All database operations in Netlify functions use Supabase client
+import { createSupabaseAdmin } from './utils/supabase.js'
 
-const sql = neon(process.env.DATABASE_URL)
-const db = drizzle(sql, { schema })
+const supabase = createSupabaseAdmin()
 
-// Example: Fetch user with audits
-const userWithAudits = await db.query.contacts.findFirst({
-  where: eq(schema.contacts.email, email),
-  with: {
-    audits: {
-      orderBy: desc(schema.audits.createdAt),
-      limit: 10
-    }
-  }
-})
+// Example: Fetch user with related data
+const { data: contact, error } = await supabase
+  .from('contacts')
+  .select('*, audits(*)')
+  .eq('email', email)
+  .single()
+
+// Example: Insert record
+const { data, error } = await supabase
+  .from('proposals')
+  .insert({ title: 'New Proposal', contact_id: contactId })
+  .select()
+  .single()
+
+// Example: Update record
+const { error } = await supabase
+  .from('proposals')
+  .update({ status: 'sent' })
+  .eq('id', proposalId)
 ```
 
 ### Copilot Guidelines for Database
@@ -868,7 +884,7 @@ Before deploying any changes:
 
 - **Resend Dashboard**: https://resend.com/emails
 - **Square Dashboard**: https://developer.squareup.com/
-- **Neon Dashboard**: https://neon.tech/
+- **Supabase Dashboard**: https://supabase.com/dashboard
 - **Netlify Dashboard**: https://app.netlify.com/
 - **Drizzle ORM Docs**: https://orm.drizzle.team/
 

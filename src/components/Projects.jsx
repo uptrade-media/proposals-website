@@ -380,7 +380,7 @@ function ClientProposalRow({ proposal, onView, showSignedDate = false }) {
   )
 }
 
-const Projects = () => {
+const Projects = ({ onNavigate }) => {
   const { user } = useAuthStore()
   const isAdmin = user?.role === 'admin'
   const { 
@@ -414,6 +414,7 @@ const Projects = () => {
   const [editingProposal, setEditingProposal] = useState(null)
   const [deleteDialog, setDeleteDialog] = useState({ open: false, id: null, title: '' })
   const [deleteProposalDialog, setDeleteProposalDialog] = useState({ open: false, id: null, title: '' })
+  const [showAIProposalDialog, setShowAIProposalDialog] = useState(false)
 
   // Fetch data only once on mount
   useEffect(() => {
@@ -583,7 +584,17 @@ const Projects = () => {
 
   const canCreateProject = user?.role === 'admin' || user?.role === 'client_admin'
 
-  // If viewing a proposal, show the proposal template
+  // Navigate to proposal editor using MainLayout navigation
+  const handleViewProposal = (proposalId) => {
+    if (onNavigate) {
+      onNavigate('proposal-editor', { proposalId })
+    } else {
+      // Fallback to inline view if onNavigate not available
+      setViewingProposal(proposalId)
+    }
+  }
+
+  // If viewing a proposal inline (fallback), show the proposal template
   if (viewingProposal) {
     const proposal = proposals.find(p => p.id === viewingProposal)
     return (
@@ -835,7 +846,10 @@ const Projects = () => {
                     <CardDescription>Create and send proposals to clients</CardDescription>
                   </div>
                   <ProposalAIDialog 
-                    clients={clients} 
+                    clients={clients}
+                    onNavigate={onNavigate}
+                    open={showAIProposalDialog}
+                    onOpenChange={setShowAIProposalDialog}
                     onSuccess={(proposal) => {
                       setProposals([proposal, ...proposals])
                       toast.success(`Proposal "${proposal.title}" generated!`)
@@ -878,14 +892,14 @@ const Projects = () => {
                         title="No active proposals"
                         description="Create your first proposal to send to clients."
                         actionLabel="Create Proposal"
-                        onAction={() => {}}
+                        onAction={() => setShowAIProposalDialog(true)}
                       />
                     ) : (
                       proposals.filter(p => !['signed', 'accepted', 'declined'].includes(p.status)).map((proposal) => (
                         <ProposalRow 
                           key={proposal.id} 
                           proposal={proposal}
-                          onView={() => setViewingProposal(proposal.id)}
+                          onView={() => handleViewProposal(proposal.id)}
                           onEdit={() => setEditingProposal(proposal)}
                           onDelete={() => setDeleteProposalDialog({ open: true, id: proposal.id, title: proposal.title })}
                         />
@@ -906,7 +920,7 @@ const Projects = () => {
                         <ProposalRow 
                           key={proposal.id} 
                           proposal={proposal}
-                          onView={() => setViewingProposal(proposal.id)}
+                          onView={() => handleViewProposal(proposal.id)}
                           onEdit={() => setEditingProposal(proposal)}
                           onDelete={() => setDeleteProposalDialog({ open: true, id: proposal.id, title: proposal.title })}
                           showSignedDate
@@ -928,7 +942,7 @@ const Projects = () => {
                         <ProposalRow 
                           key={proposal.id} 
                           proposal={proposal}
-                          onView={() => setViewingProposal(proposal.id)}
+                          onView={() => handleViewProposal(proposal.id)}
                           onEdit={() => setEditingProposal(proposal)}
                           onDelete={() => setDeleteProposalDialog({ open: true, id: proposal.id, title: proposal.title })}
                         />
@@ -1046,7 +1060,7 @@ const Projects = () => {
                           <Button 
                             variant="outline" 
                             size="sm"
-                            onClick={() => setViewingProposal(project.id)}
+                            onClick={() => handleViewProposal(project.proposal_id || project.id)}
                             className="border-[var(--brand-primary)] text-[var(--brand-primary)] hover:bg-[var(--brand-primary)] hover:text-white"
                           >
                             <FileText className="w-4 h-4 mr-2" />
@@ -1120,7 +1134,7 @@ const Projects = () => {
                         <ClientProposalRow 
                           key={proposal.id} 
                           proposal={proposal}
-                          onView={() => setViewingProposal(proposal.id)}
+                          onView={() => handleViewProposal(proposal.id)}
                         />
                       ))
                     )}
@@ -1139,7 +1153,7 @@ const Projects = () => {
                         <ClientProposalRow 
                           key={proposal.id} 
                           proposal={proposal}
-                          onView={() => setViewingProposal(proposal.id)}
+                          onView={() => handleViewProposal(proposal.id)}
                           showSignedDate
                         />
                       ))

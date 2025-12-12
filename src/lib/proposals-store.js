@@ -111,16 +111,40 @@ export const useProposalsStore = create((set, get) => ({
   },
 
   // ========== Lifecycle Operations ==========
+  /**
+   * Send proposal to one or more recipients
+   * @param {string} id - Proposal ID
+   * @param {Object} data - Send options
+   * @param {string[]} data.recipients - Array of email addresses
+   * @param {string} data.subject - Email subject line
+   * @param {string} data.personalMessage - Personal message to include
+   */
   sendProposal: async (id, data) => {
     set({ error: null })
     try {
-      const response = await api.post(`/.netlify/functions/proposals-send?id=${id}`, data)
+      // Normalize recipients to always be an array
+      const sendData = {
+        ...data,
+        recipients: Array.isArray(data.recipients) 
+          ? data.recipients 
+          : data.email 
+            ? [data.email] 
+            : data.recipients
+      }
+      const response = await api.post(`/.netlify/functions/proposals-send?id=${id}`, sendData)
       const updated = response.data.proposal
       set(state => ({
         proposals: state.proposals.map(p => p.id === id ? updated : p),
         currentProposal: state.currentProposal?.id === id ? updated : state.currentProposal,
       }))
-      return { success: true, proposal: updated }
+      return { 
+        success: true, 
+        proposal: updated,
+        recipients: response.data.recipients,
+        successCount: response.data.successCount,
+        failedCount: response.data.failedCount,
+        message: response.data.message
+      }
     } catch (err) {
       const error = err.response?.data?.error || 'Failed to send proposal'
       set({ error })
