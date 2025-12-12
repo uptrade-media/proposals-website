@@ -8,6 +8,7 @@ const SQUARE_LOCATION_ID = process.env.SQUARE_LOCATION_ID
 const SQUARE_ENVIRONMENT = process.env.SQUARE_ENVIRONMENT || 'sandbox'
 const RESEND_API_KEY = process.env.RESEND_API_KEY
 const RESEND_FROM_EMAIL = process.env.RESEND_FROM_EMAIL || 'portal@send.uptrademedia.com'
+const RESEND_FROM = `Uptrade Media <${RESEND_FROM_EMAIL}>`
 const ADMIN_EMAIL = process.env.ADMIN_EMAIL
 
 // Simple in-memory rate limiting (resets on function cold start)
@@ -213,7 +214,7 @@ export async function handler(event) {
       if (invoice.contact?.email) {
         try {
           await resend.emails.send({
-            from: RESEND_FROM_EMAIL,
+            from: RESEND_FROM,
             to: invoice.contact.email,
             subject: `Payment Successful - Invoice ${invoice.invoice_number}`,
             html: `
@@ -248,7 +249,7 @@ export async function handler(event) {
       if (ADMIN_EMAIL) {
         try {
           await resend.emails.send({
-            from: RESEND_FROM_EMAIL,
+            from: RESEND_FROM,
             to: ADMIN_EMAIL,
             subject: `Payment Received - ${invoice.invoice_number} ($${invoice.total_amount.toFixed(2)})`,
             html: `

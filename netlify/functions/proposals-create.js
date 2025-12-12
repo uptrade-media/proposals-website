@@ -6,6 +6,7 @@ import { getAuthenticatedUser } from './utils/supabase.js'
 
 const RESEND_API_KEY = process.env.RESEND_API_KEY
 const RESEND_FROM_EMAIL = process.env.RESEND_FROM_EMAIL || 'portal@send.uptrademedia.com'
+const RESEND_FROM = `Uptrade Media <${RESEND_FROM_EMAIL}>`
 const PORTAL_URL = process.env.URL || 'https://portal.uptrademedia.com'
 
 const supabase = createClient(
@@ -272,7 +273,7 @@ export async function handler(event) {
         `
         
         await resend.emails.send({
-          from: RESEND_FROM_EMAIL,
+          from: RESEND_FROM,
           to: targetContact.email,
           subject: emailSubject,
           html: emailBody

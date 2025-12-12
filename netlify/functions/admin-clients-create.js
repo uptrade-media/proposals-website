@@ -4,6 +4,7 @@ import { Resend } from 'resend'
 
 const RESEND_API_KEY = process.env.RESEND_API_KEY
 const RESEND_FROM_EMAIL = process.env.RESEND_FROM_EMAIL || 'portal@send.uptrademedia.com'
+const RESEND_FROM = `Uptrade Media <${RESEND_FROM_EMAIL}>`
 const PORTAL_URL = process.env.URL || 'http://localhost:8888'
 
 export async function handler(event) {
@@ -161,7 +162,7 @@ export async function handler(event) {
           const resend = new Resend(RESEND_API_KEY)
           
           await resend.emails.send({
-            from: RESEND_FROM_EMAIL,
+            from: RESEND_FROM,
             to: newContact.email,
             subject: 'Welcome to Uptrade Media Portal - Set Up Your Account',
             html: `

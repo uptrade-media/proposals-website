@@ -7,6 +7,7 @@ const SQUARE_ACCESS_TOKEN = process.env.SQUARE_ACCESS_TOKEN
 const SQUARE_ENVIRONMENT = process.env.SQUARE_ENVIRONMENT || 'sandbox'
 const RESEND_API_KEY = process.env.RESEND_API_KEY
 const RESEND_FROM_EMAIL = process.env.RESEND_FROM_EMAIL || 'portal@send.uptrademedia.com'
+const RESEND_FROM = `Uptrade Media <${RESEND_FROM_EMAIL}>`
 
 export async function handler(event) {
   // CORS headers
@@ -198,7 +199,7 @@ export async function handler(event) {
       try {
         const resend = new Resend(RESEND_API_KEY)
         await resend.emails.send({
-          from: RESEND_FROM_EMAIL,
+          from: RESEND_FROM,
           to: targetContact.email,
           subject: `New Invoice ${invoiceNumber} - $${totalAmountValue.toFixed(2)}`,
           html: `

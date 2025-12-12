@@ -9,6 +9,7 @@ const supabase = createClient(
 )
 const RESEND_API_KEY = process.env.RESEND_API_KEY
 const RESEND_FROM_EMAIL = process.env.RESEND_FROM_EMAIL || 'portal@send.uptrademedia.com'
+const RESEND_FROM = `Uptrade Media <${RESEND_FROM_EMAIL}>`
 const ADMIN_EMAIL = process.env.ADMIN_EMAIL
 
 export async function handler(event) {
@@ -151,7 +152,7 @@ export async function handler(event) {
       try {
         const resend = new Resend(RESEND_API_KEY)
         await resend.emails.send({
-          from: RESEND_FROM_EMAIL,
+          from: RESEND_FROM,
           to: ADMIN_EMAIL,
           subject: `Proposal Accepted: ${proposal.title}`,
           html: `

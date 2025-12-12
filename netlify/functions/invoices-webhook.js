@@ -10,6 +10,7 @@ const supabase = createClient(
 const SQUARE_WEBHOOK_SIGNATURE_KEY = process.env.SQUARE_WEBHOOK_SIGNATURE_KEY
 const RESEND_API_KEY = process.env.RESEND_API_KEY
 const RESEND_FROM_EMAIL = process.env.RESEND_FROM_EMAIL || 'portal@send.uptrademedia.com'
+const RESEND_FROM = `Uptrade Media <${RESEND_FROM_EMAIL}>`
 const ADMIN_EMAIL = process.env.ADMIN_EMAIL
 
 export async function handler(event) {
@@ -135,7 +136,7 @@ export async function handler(event) {
             try {
               const resend = new Resend(RESEND_API_KEY)
               await resend.emails.send({
-                from: RESEND_FROM_EMAIL,
+                from: RESEND_FROM,
                 to: invoice.contact.email,
                 subject: `Payment Failed - Invoice ${invoice.invoice_number}`,
                 html: `
@@ -212,7 +213,7 @@ export async function handler(event) {
             try {
               const resend = new Resend(RESEND_API_KEY)
               await resend.emails.send({
-                from: RESEND_FROM_EMAIL,
+                from: RESEND_FROM,
                 to: invoice.contact.email,
                 subject: `Receipt for Invoice ${invoice.invoice_number}`,
                 html: `
@@ -232,7 +233,7 @@ export async function handler(event) {
               // Notify admin
               if (ADMIN_EMAIL) {
                 await resend.emails.send({
-                  from: RESEND_FROM_EMAIL,
+                  from: RESEND_FROM,
                   to: ADMIN_EMAIL,
                   subject: `Payment Received - Invoice ${invoice.invoice_number}`,
                   html: `
@@ -254,7 +255,7 @@ export async function handler(event) {
             try {
               const resend = new Resend(RESEND_API_KEY)
               await resend.emails.send({
-                from: RESEND_FROM_EMAIL,
+                from: RESEND_FROM,
                 to: ADMIN_EMAIL,
                 subject: `Invoice Cancelled - ${invoice.invoice_number}`,
                 html: `
@@ -313,7 +314,7 @@ export async function handler(event) {
           try {
             const resend = new Resend(RESEND_API_KEY)
             await resend.emails.send({
-              from: RESEND_FROM_EMAIL,
+              from: RESEND_FROM,
               to: invoice.contact.email,
               subject: `Refund Processed - Invoice ${invoice.invoice_number}`,
               html: `
@@ -333,7 +334,7 @@ export async function handler(event) {
             // Notify admin
             if (ADMIN_EMAIL) {
               await resend.emails.send({
-                from: RESEND_FROM_EMAIL,
+                from: RESEND_FROM,
                 to: ADMIN_EMAIL,
                 subject: `Refund Processed - Invoice ${invoice.invoice_number}`,
                 html: `
@@ -383,7 +384,7 @@ export async function handler(event) {
           try {
             const resend = new Resend(RESEND_API_KEY)
             await resend.emails.send({
-              from: RESEND_FROM_EMAIL,
+              from: RESEND_FROM,
               to: ADMIN_EMAIL,
               subject: `⚠️ Payment Failed - Invoice ${invoice.invoice_number}`,
               html: `
@@ -405,7 +406,7 @@ export async function handler(event) {
           try {
             const resend = new Resend(RESEND_API_KEY)
             await resend.emails.send({
-              from: RESEND_FROM_EMAIL,
+              from: RESEND_FROM,
               to: invoice.contact.email,
               subject: `Payment Issue - Invoice ${invoice.invoice_number}`,
               html: `
@@ -474,7 +475,7 @@ export async function handler(event) {
               // Notify client
               if (invoice.contact?.email) {
                 await resend.emails.send({
-                  from: RESEND_FROM_EMAIL,
+                  from: RESEND_FROM,
                   to: invoice.contact.email,
                   subject: `Refund Processed - Invoice ${invoice.invoice_number}`,
                   html: `
@@ -489,7 +490,7 @@ export async function handler(event) {
               // Notify admin
               if (ADMIN_EMAIL) {
                 await resend.emails.send({
-                  from: RESEND_FROM_EMAIL,
+                  from: RESEND_FROM,
                   to: ADMIN_EMAIL,
                   subject: `Refund Completed - Invoice ${invoice.invoice_number}`,
                   html: `
