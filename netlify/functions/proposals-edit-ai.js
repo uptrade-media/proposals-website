@@ -1,40 +1,7 @@
-// netlify/functions/proposals-ai-edit.js
-// Chat-based AI editing of proposal content
-import OpenAI from 'openai'
+// netlify/functions/proposals-edit-ai.js
+// Triggers background AI editing and returns immediately
 import { createSupabaseAdmin, getAuthenticatedUser } from './utils/supabase.js'
-
-const openai = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY
-})
-
-const EDIT_PROMPT = `You are a proposal editor for Uptrade Media. The user wants to make changes to their proposal.
-
-Current proposal content (MDX format):
-{{currentContent}}
-
-User's edit request: {{userMessage}}
-
-INSTRUCTIONS:
-1. If the user is asking a question about the proposal, answer it helpfully
-2. If the user wants changes, make them and return the updated MDX content
-3. Keep the same MDX structure and formatting
-4. Maintain the professional, conversion-focused tone
-5. If changing pricing, update the total appropriately
-
-RESPONSE FORMAT:
-If you made changes, respond with JSON:
-{
-  "message": "Brief description of what you changed",
-  "updatedContent": "Full updated MDX content here",
-  "updatedPrice": 5000 // optional, only if price changed
-}
-
-If just answering a question (no changes needed):
-{
-  "message": "Your helpful response here"
-}
-
-Respond with valid JSON only.`
+import { v4 as uuidv4 } from 'uuid'
 
 export async function handler(event) {
   const headers = {
@@ -60,81 +27,75 @@ export async function handler(event) {
 
   try {
     const body = JSON.parse(event.body || '{}')
-    const { proposalId, currentContent, conversationHistory = [] } = body
+    const { proposalId, currentContent } = body
     // Accept either 'message' or 'instruction' field
-    const message = body.message || body.instruction
+    const instruction = body.message || body.instruction
 
-    if (!message) {
+    if (!instruction) {
       return { statusCode: 400, headers, body: JSON.stringify({ error: 'Message or instruction required' }) }
     }
 
-    // Build the prompt
-    const systemPrompt = EDIT_PROMPT
-      .replace('{{currentContent}}', currentContent || 'No content provided')
-      .replace('{{userMessage}}', message)
-
-    // Include conversation history for context
-    const messages = [
-      { role: 'system', content: systemPrompt },
-      ...conversationHistory.slice(-6).map(msg => ({
-        role: msg.role,
-        content: msg.content
-      })),
-      { role: 'user', content: message }
-    ]
-
-    const completion = await openai.chat.completions.create({
-      model: 'gpt-4o',
-      messages,
-      temperature: 0.7,
-      max_tokens: 4000,
-      response_format: { type: 'json_object' }
-    })
-
-    const aiResponseText = completion.choices[0]?.message?.content || '{}'
-    let aiResponse
-    
-    try {
-      aiResponse = JSON.parse(aiResponseText)
-    } catch (e) {
-      aiResponse = { message: aiResponseText }
+    if (!proposalId) {
+      return { statusCode: 400, headers, body: JSON.stringify({ error: 'Proposal ID required' }) }
     }
 
-    // If content was updated and we have a proposalId, save to database
-    if (aiResponse.updatedContent && proposalId) {
-      const supabase = createSupabaseAdmin()
-      
-      const updateData = {
-        mdx_content: aiResponse.updatedContent,
-        updated_at: new Date().toISOString()
-      }
-      
-      if (aiResponse.updatedPrice) {
-        updateData.total_amount = aiResponse.updatedPrice
-      }
+    // Generate a unique edit ID for polling
+    const editId = uuidv4()
 
-      await supabase
-        .from('proposals')
-        .update(updateData)
-        .eq('id', proposalId)
+    // Clear any previous edit status
+    const supabase = createSupabaseAdmin()
+    const { data: proposal } = await supabase
+      .from('proposals')
+      .select('metadata')
+      .eq('id', proposalId)
+      .single()
+
+    const metadata = proposal?.metadata || {}
+    metadata.lastAiEdit = {
+      editId,
+      status: 'processing',
+      startedAt: new Date().toISOString()
     }
 
+    await supabase
+      .from('proposals')
+      .update({ metadata })
+      .eq('id', proposalId)
+
+    // Trigger background function
+    const backgroundUrl = process.env.URL 
+      ? `${process.env.URL}/.netlify/functions/proposals-edit-ai-background`
+      : 'http://localhost:8888/.netlify/functions/proposals-edit-ai-background'
+
+    // Fire and forget - don't await
+    fetch(backgroundUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        proposalId,
+        instruction,
+        currentContent,
+        editId
+      })
+    }).catch(err => console.error('Background trigger error:', err))
+
+    // Return immediately with edit ID for polling
     return {
-      statusCode: 200,
+      statusCode: 202,
       headers,
       body: JSON.stringify({
-        message: aiResponse.message,
-        updatedContent: aiResponse.updatedContent || null,
-        updatedPrice: aiResponse.updatedPrice || null
+        success: true,
+        editId,
+        message: 'Edit started, poll for status'
       })
     }
 
   } catch (error) {
-    console.error('AI edit error:', error)
+    console.error('AI edit trigger error:', error)
     return {
       statusCode: 500,
       headers,
-      body: JSON.stringify({ error: 'Failed to process edit', details: error.message })
+      body: JSON.stringify({ error: 'Failed to start edit', details: error.message })
     }
   }
 }

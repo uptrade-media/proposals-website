@@ -37,6 +37,7 @@ import api from '@/lib/api'
 import SendProposalDialog from './SendProposalDialog'
 import ProposalView from './ProposalView'
 import jsPDF from 'jspdf'
+import html2canvas from 'html2canvas'
 
 // AI Chat Bubble Component
 function AIChatBubble({ proposal, onProposalUpdate }) {
@@ -54,6 +55,78 @@ function AIChatBubble({ proposal, onProposalUpdate }) {
     scrollToBottom()
   }, [messages])
 
+  // Poll for edit completion
+  const pollForCompletion = async (editId) => {
+    const maxAttempts = 60 // 2 minutes max
+    let attempts = 0
+
+    const poll = async () => {
+      attempts++
+      try {
+        const response = await api.get('/.netlify/functions/proposals-edit-ai-status', {
+          params: { proposalId: proposal.id, editId }
+        })
+
+        const { status, message, hasChanges, proposal: updatedProposal } = response.data
+
+        if (status === 'complete') {
+          setMessages(prev => [...prev, { 
+            role: 'assistant', 
+            content: message || 'Done! I\'ve updated the proposal.' 
+          }])
+          if (hasChanges && updatedProposal) {
+            onProposalUpdate({
+              ...proposal,
+              mdxContent: updatedProposal.mdxContent,
+              totalAmount: updatedProposal.totalAmount
+            })
+          }
+          setIsLoading(false)
+          return
+        }
+
+        if (status === 'error') {
+          setMessages(prev => [...prev, { 
+            role: 'assistant', 
+            content: message || 'Sorry, something went wrong. Please try again.' 
+          }])
+          setIsLoading(false)
+          return
+        }
+
+        // Still processing, poll again
+        if (attempts < maxAttempts) {
+          setTimeout(poll, 5000)
+        } else {
+          setMessages(prev => [...prev, { 
+            role: 'assistant', 
+            content: 'The edit is taking longer than expected. Please refresh and try again.' 
+          }])
+          setIsLoading(false)
+        }
+      } catch (error) {
+        console.error('Poll error:', error)
+        if (attempts < maxAttempts) {
+          setTimeout(poll, 5000)
+        } else {
+          setMessages(prev => [...prev, { 
+            role: 'assistant', 
+            content: 'Failed to check edit status. Please refresh the page.' 
+          }])
+          setIsLoading(false)
+        }
+      }
+    }
+
+    // Show initial polling message
+    setMessages(prev => [...prev, { 
+      role: 'assistant', 
+      content: 'Working on it... This may take 30-60 seconds.' 
+    }])
+
+    poll()
+  }
+
   const handleSend = async () => {
     if (!input.trim() || isLoading) return
 
@@ -69,19 +142,15 @@ function AIChatBubble({ proposal, onProposalUpdate }) {
         currentContent: proposal.mdxContent
       })
 
-      if (response.data.success) {
-        setMessages(prev => [...prev, { 
-          role: 'assistant', 
-          content: response.data.message || 'Done! I\'ve updated the proposal.' 
-        }])
-        if (response.data.proposal) {
-          onProposalUpdate(response.data.proposal)
-        }
+      if (response.data.success && response.data.editId) {
+        // Start polling for completion
+        pollForCompletion(response.data.editId)
       } else {
         setMessages(prev => [...prev, { 
           role: 'assistant', 
-          content: 'Sorry, I couldn\'t make that change. Please try again.' 
+          content: 'Sorry, I couldn\'t start the edit. Please try again.' 
         }])
+        setIsLoading(false)
       }
     } catch (error) {
       console.error('AI edit error:', error)
@@ -89,7 +158,6 @@ function AIChatBubble({ proposal, onProposalUpdate }) {
         role: 'assistant', 
         content: 'Something went wrong. Please try again.' 
       }])
-    } finally {
       setIsLoading(false)
     }
   }
@@ -268,41 +336,30 @@ export default function ProposalEditor({ proposalId, onBack }) {
     if (!proposal) return
     setIsExporting(true)
     try {
-      const pdf = new jsPDF('p', 'mm', 'a4')
-      const pageWidth = pdf.internal.pageSize.getWidth()
-      const margin = 20
-      const contentWidth = pageWidth - (margin * 2)
-      
-      pdf.setFontSize(24)
-      pdf.setTextColor(17, 24, 39)
-      pdf.text(proposal.title || 'Proposal', margin, 30)
-      
-      const mdxContent = proposal.mdxContent || proposal.mdx_content
-      if (mdxContent) {
-        pdf.setFontSize(11)
-        pdf.setTextColor(51, 51, 51)
-        
-        const plainText = mdxContent
-          .replace(/<[^>]+>/g, '')
-          .replace(/\{[^}]+\}/g, '')
-          .replace(/^#{1,6}\s+/gm, '')
-          .replace(/\*\*(.*?)\*\*/g, '$1')
-          .replace(/\*(.*?)\*/g, '$1')
-          .replace(/^\-\s+/gm, '• ')
-          .trim()
-        
-        const lines = pdf.splitTextToSize(plainText, contentWidth)
-        let y = 45
-        
-        lines.forEach(line => {
-          if (y > 280) {
-            pdf.addPage()
-            y = 20
-          }
-          pdf.text(line, margin, y)
-          y += 6
-        })
+      // Find the proposal content element
+      const proposalElement = document.querySelector('.proposal-content-wrapper')
+      if (!proposalElement) {
+        throw new Error('Proposal content not found')
       }
+
+      // Capture the HTML content with styles
+      const canvas = await html2canvas(proposalElement, {
+        scale: 2, // Higher quality
+        useCORS: true,
+        logging: false,
+        backgroundColor: '#ffffff',
+        windowWidth: 1200, // Fixed width for consistent rendering
+      })
+
+      // Calculate PDF dimensions
+      const imgWidth = 210 // A4 width in mm
+      const imgHeight = (canvas.height * imgWidth) / canvas.width
+      
+      const pdf = new jsPDF('p', 'mm', 'a4')
+      const imgData = canvas.toDataURL('image/png')
+      
+      // Add image to PDF (full page)
+      pdf.addImage(imgData, 'PNG', 0, 0, imgWidth, imgHeight)
       
       pdf.save(`${proposal.slug || 'proposal'}.pdf`)
     } catch (err) {
@@ -442,7 +499,7 @@ export default function ProposalEditor({ proposalId, onBack }) {
       </div>
 
       {/* Main Content - Renders the same ProposalView as clients see */}
-      <div className="py-8 px-6">
+      <div className="py-8 px-6 proposal-content-wrapper">
         <ProposalView 
           proposal={proposal} 
           isPublicView={true}

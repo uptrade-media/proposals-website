@@ -184,7 +184,7 @@ export async function handler(event) {
 
     // Trigger background function
     const baseUrl = process.env.URL || 'https://portal.uptrademedia.com'
-    const backgroundUrl = `${baseUrl}/.netlify/functions/audits-internal-background`
+    const backgroundUrl = `${baseUrl}/.netlify/functions/audits-internal-background-cjs`
     
     console.log(`[audits-internal] Triggering background function: ${backgroundUrl}`)
 

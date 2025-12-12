@@ -124,8 +124,37 @@ export default function ProposalView({
   const mdxContent = proposal.mdxContent || proposal.mdx_content
   const heroImageUrl = proposal.heroImageUrl || proposal.hero_image_url
   const brandName = proposal.brandName || proposal.brand_name || proposal.contact?.company
-  const timeline = proposal.timeline || '6 weeks'
-  const paymentTerms = proposal.paymentTerms || proposal.payment_terms || '50/50'
+  const rawTimeline = proposal.timeline || '6-weeks'
+  const rawPaymentTerms = proposal.paymentTerms || proposal.payment_terms || '50-50'
+
+  // Parse timeline into readable format
+  const formatTimeline = (value) => {
+    if (!value) return '6 weeks'
+    // Handle formats like "6-weeks", "12-weeks", etc.
+    const match = value.match(/^(\d+)-?weeks?$/i)
+    if (match) return `${match[1]} weeks`
+    // Handle formats like "3-months", etc.
+    const monthMatch = value.match(/^(\d+)-?months?$/i)
+    if (monthMatch) return `${monthMatch[1]} months`
+    // Already formatted or custom
+    return value.replace(/-/g, ' ')
+  }
+
+  // Parse payment terms into readable format
+  const formatPaymentTerms = (value) => {
+    if (!value) return '50/50'
+    const terms = {
+      '50-50': '50/50',
+      '100-upfront': '100% Upfront',
+      '25-25-25-25': '25% Quarterly',
+      'monthly': 'Monthly',
+      'custom': 'Custom'
+    }
+    return terms[value] || value.replace(/-/g, ' ')
+  }
+
+  const timeline = formatTimeline(rawTimeline)
+  const paymentTerms = formatPaymentTerms(rawPaymentTerms)
 
   const hasContent = mdxContent && 
     !mdxContent.startsWith('# Generating') && 

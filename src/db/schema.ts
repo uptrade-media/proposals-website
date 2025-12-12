@@ -90,6 +90,7 @@ export const proposals = pgTable('proposals', {
   // Legacy fields (keeping for compatibility)
   signedAt: timestamp('signed_at'),
   fullyExecutedAt: timestamp('fully_executed_at'),
+  metadata: jsonb('metadata').default({}), // For AI edit tracking and other dynamic data
   createdAt: timestamp('created_at').defaultNow(),
   updatedAt: timestamp('updated_at').defaultNow()
 })

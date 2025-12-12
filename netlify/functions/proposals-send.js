@@ -189,8 +189,8 @@ export async function handler(event) {
     .container { max-width: 600px; margin: 0 auto; background: white; border-radius: 16px; overflow: hidden; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1); }
     .header { background: linear-gradient(135deg, #0a0a0a 0%, #1a1a2e 50%, #16213e 100%); padding: 48px 40px; text-align: center; }
     .logo { height: 44px; margin-bottom: 24px; }
-    .header h1 { color: white; margin: 0; font-size: 28px; font-weight: 700; letter-spacing: -0.5px; }
-    .header p { color: rgba(255,255,255,0.9); margin: 12px 0 0; font-size: 16px; }
+    .header h1 { color: #ffffff !important; margin: 0; font-size: 28px; font-weight: 700; letter-spacing: -0.5px; }
+    .header p { color: rgba(255,255,255,0.9) !important; margin: 12px 0 0; font-size: 16px; }
     .content { padding: 48px 40px; }
     .message-box { background: linear-gradient(135deg, #eff6ff 0%, #f0fdf4 100%); border-radius: 12px; padding: 24px; margin-bottom: 32px; border-left: 4px solid #4ade80; }
     .message-box p { margin: 0; color: #374151; white-space: pre-line; }

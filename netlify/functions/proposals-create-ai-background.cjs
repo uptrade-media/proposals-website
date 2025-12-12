@@ -277,13 +277,11 @@ ADVANCED CONVERSION COMPONENTS (use these for world-class proposals):
 
 12. <CTASection title="Ready to Transform?" subtitle="Let's build something great" urgencyText="Pricing valid 14 days" /> - Strong CTA
 
-13. <Testimonial quote="Amazing results!" author="John Smith" company="Acme Corp" result="+47% leads" /> - Social proof
+13. <IconFeatureGrid features={[{icon: "globe", title: "Global Reach", description: "..."}]} /> - Feature grid
 
-14. <IconFeatureGrid features={[{icon: "globe", title: "Global Reach", description: "..."}]} /> - Feature grid
+14. <MetricHighlight value="47%" label="Increase in Leads" trend="+12% MoM" /> - Big metric display
 
-15. <MetricHighlight value="47%" label="Increase in Leads" trend="+12% MoM" /> - Big metric display
-
-16. <WebsitePortfolio> - FOR MULTI-SITE PROPOSALS ONLY. Use when client has 2+ websites.
+15. <WebsitePortfolio> - FOR MULTI-SITE PROPOSALS ONLY. Use when client has 2+ websites.
     <WebsitePortfolio 
       title="Websites Included"
       subtitle="Complete overhaul of your digital portfolio"
@@ -335,6 +333,15 @@ Compelling hook about transformation. Specific outcomes: "Increase leads by 40%,
 ## The Transformation
 
 Our proven approach using bullet points.
+</Section>
+
+<Section>
+## Key Metrics We'll Track
+
+So results are measurable - include 3-4 MetricHighlight components showing specific KPIs you'll improve:
+<MetricHighlight value="2.5s" label="Target Load Time" trend="From 8+ seconds" />
+<MetricHighlight value="40%" label="Lead Increase" trend="Within 90 days" />
+<MetricHighlight value="50%" label="Bounce Rate Reduction" trend="Mobile & Desktop" />
 </Section>
 
 <ComparisonTable 
