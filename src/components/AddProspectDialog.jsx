@@ -68,6 +68,7 @@ export default function AddProspectDialog({
     try {
       const response = await api.post('/.netlify/functions/admin-clients-create', {
         ...formData,
+        contactType: 'prospect',
         pipeline_stage: 'new_lead'
       })
       

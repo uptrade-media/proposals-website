@@ -1,17 +1,11 @@
 // netlify/functions/proposals-list.js
 // Migrated to Supabase
-import { createClient } from '@supabase/supabase-js'
-import { getAuthenticatedUser } from './utils/supabase.js'
-
-const supabase = createClient(
-  process.env.SUPABASE_URL,
-  process.env.SUPABASE_SERVICE_ROLE_KEY
-)
+import { createSupabaseAdmin, getAuthenticatedUser } from './utils/supabase.js'
 
 export async function handler(event) {
   const headers = {
     'Access-Control-Allow-Origin': '*',
-    'Access-Control-Allow-Headers': 'Content-Type',
+    'Access-Control-Allow-Headers': 'Content-Type, Authorization',
     'Access-Control-Allow-Methods': 'GET, OPTIONS',
     'Content-Type': 'application/json'
   }
@@ -29,6 +23,8 @@ export async function handler(event) {
   }
 
   try {
+    const supabase = createSupabaseAdmin()
+
     // Verify authentication
     const { contact, error: authError } = await getAuthenticatedUser(event)
     

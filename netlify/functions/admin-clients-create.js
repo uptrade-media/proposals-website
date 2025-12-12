@@ -50,7 +50,11 @@ export async function handler(event) {
 
     // Parse request body
     const body = JSON.parse(event.body || '{}')
-    const { name, email, company, phone, website, source, pipeline_stage, notes } = body
+    const { name, email, company, phone, website, source, pipeline_stage, notes, type, contactType } = body
+
+    // Determine whether this is a prospect vs full client.
+    // Historically some callers used `pipeline_stage: 'new_lead'` for prospects.
+    const resolvedContactType = (contactType || type || (pipeline_stage === 'new_lead' ? 'prospect' : 'client'))
 
     // Validate required fields (name is required, email is optional for prospects)
     if (!name) {
@@ -121,9 +125,9 @@ export async function handler(event) {
       }
     }
 
-    // Only send email and generate magic link if email is provided and type is not 'prospect'
+    // Only send email and generate magic link if email is provided and contact is not a prospect
     // Prospects typically don't need account setup emails immediately
-    if (newContact.email && type !== 'prospect') {
+    if (newContact.email && resolvedContactType !== 'prospect') {
       // Generate Supabase magic link for account setup
       const { data: linkData, error: linkError } = await supabase.auth.admin.generateLink({
         type: 'magiclink',
@@ -329,12 +333,12 @@ export async function handler(event) {
           name: newContact.name,
           company: newContact.company,
           role: newContact.role,
-          type: newContact.type,
+          contactType: resolvedContactType,
           pipelineStage: newContact.pipeline_stage,
           accountSetup: newContact.account_setup,
           createdAt: newContact.created_at
         },
-        message: type === 'prospect' ? 'Prospect created successfully' : 'Client created and account setup email sent'
+        message: resolvedContactType === 'prospect' ? 'Prospect created successfully' : 'Client created and account setup email sent'
       })
     }
 

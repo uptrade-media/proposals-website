@@ -507,7 +507,7 @@ function CoreWebVitalsSection({ audit }) {
               name="Total Blocking Time (TBT)"
               value={formatMs(tbtMs)}
               target="< 200ms"
-              score={tbtMs != null ? Math.max(0, 100 - (parseFloat(tbtMs) / 2)) : null}
+              score={tbtMs != null ? (Number(tbtMs) < 200 ? 95 : Number(tbtMs) < 600 ? 75 : 55) : null}
             />
           </motion.div>
           

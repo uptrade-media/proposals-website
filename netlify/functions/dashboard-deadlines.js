@@ -246,7 +246,7 @@ export async function handler(event) {
 
     return {
       statusCode: 200,
-      headers: { 'Content-Type': 'application/json' },
+      headers,
       body: JSON.stringify({
         deadlines: deadlines.map(deadline => ({
           ...deadline,
@@ -259,7 +259,8 @@ export async function handler(event) {
     console.error('Dashboard deadlines error:', error)
     return {
       statusCode: 500,
-      body: JSON.stringify({ error: 'Failed to fetch deadlines' })
+      headers,
+      body: JSON.stringify({ error: 'Failed to fetch deadlines', message: error.message })
     }
   }
 }

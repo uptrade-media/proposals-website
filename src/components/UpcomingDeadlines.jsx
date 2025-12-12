@@ -3,7 +3,7 @@ import { format, formatDistance } from 'date-fns'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Loader2, Calendar, Clock, AlertCircle } from 'lucide-react'
-import axios from 'axios'
+import api from '@/lib/api'
 
 const priorityConfig = {
   high: { color: 'bg-red-100', textColor: 'text-red-700', label: 'High' },
@@ -47,9 +47,7 @@ export function UpcomingDeadlines({ limit = 10 }) {
   const fetchDeadlines = async () => {
     try {
       setLoading(true)
-      const response = await axios.get(
-        `/.netlify/functions/dashboard-deadlines?daysAhead=30`
-      )
+      const response = await api.get('/.netlify/functions/dashboard-deadlines?daysAhead=30')
       setDeadlines(response.data.deadlines || [])
       setError(null)
     } catch (err) {
