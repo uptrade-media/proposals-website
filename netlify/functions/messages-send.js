@@ -9,6 +9,7 @@ const supabase = createClient(
 )
 const RESEND_API_KEY = process.env.RESEND_API_KEY
 const RESEND_FROM_EMAIL = process.env.RESEND_FROM_EMAIL || 'portal@send.uptrademedia.com'
+const RESEND_FROM = `Uptrade Media <${RESEND_FROM_EMAIL}>`
 
 export async function handler(event) {
   // CORS headers
@@ -156,7 +157,7 @@ export async function handler(event) {
         const isReply = !!parentId
         
         await resend.emails.send({
-          from: RESEND_FROM_EMAIL,
+          from: RESEND_FROM,
           to: recipient.email,
           subject: isReply ? `Re: ${message.subject}` : `New Message: ${message.subject}`,
           html: `
