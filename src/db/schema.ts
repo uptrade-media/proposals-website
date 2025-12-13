@@ -87,6 +87,12 @@ export const proposals = pgTable('proposals', {
   // Counter-sign magic link
   counterSignToken: text('counter_sign_token'),
   counterSignTokenExpires: timestamp('counter_sign_token_expires'),
+  // Deposit/Payment fields
+  depositPercentage: integer('deposit_percentage').default(50), // 50 = 50%, 100 = full upfront
+  depositAmount: decimal('deposit_amount', { precision: 10, scale: 2 }),
+  depositPaidAt: timestamp('deposit_paid_at'),
+  depositPaymentId: text('deposit_payment_id'), // Square payment ID
+  sentToRecipients: jsonb('sent_to_recipients').default([]), // All email recipients for signed emails
   // Legacy fields (keeping for compatibility)
   signedAt: timestamp('signed_at'),
   fullyExecutedAt: timestamp('fully_executed_at'),

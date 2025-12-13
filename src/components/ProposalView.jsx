@@ -13,6 +13,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Badge } from '@/components/ui/badge'
 import { Loader2, Clock } from 'lucide-react'
 import ProposalSignature from './ProposalSignature'
+import ProposalTerms from './ProposalTerms'
 
 // Sanitize MDX content to escape problematic characters
 function sanitizeMDXContent(mdxSource) {
@@ -126,6 +127,11 @@ export default function ProposalView({
   const brandName = proposal.brandName || proposal.brand_name || proposal.contact?.company
   const rawTimeline = proposal.timeline || '6-weeks'
   const rawPaymentTerms = proposal.paymentTerms || proposal.payment_terms || '50-50'
+  
+  // Deposit info
+  const depositPercentage = proposal.depositPercentage || proposal.deposit_percentage || 50
+  const depositAmount = proposal.depositAmount || proposal.deposit_amount || (totalAmount * depositPercentage / 100)
+  const depositPaidAt = proposal.depositPaidAt || proposal.deposit_paid_at
 
   // Parse timeline into readable format
   const formatTimeline = (value) => {
@@ -222,31 +228,46 @@ export default function ProposalView({
 
       {/* Signature Section - for public client view */}
       {isPublicView && showSignature && (
-        <Card className="mb-8 bg-[var(--glass-bg)] border-[var(--glass-border)]">
-          <CardHeader>
-            <CardTitle className="text-[var(--text-primary)]">
-              {['signed', 'accepted'].includes(proposal.status) ? 'Proposal Signed' : 'Accept This Proposal'}
-            </CardTitle>
-            <CardDescription className="text-[var(--text-secondary)]">
-              {['signed', 'accepted'].includes(proposal.status) 
-                ? 'This proposal has been signed and accepted'
-                : 'Sign below to accept this proposal and get started'}
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <ProposalSignature 
-              proposalId={proposal.id} 
-              proposalSlug={proposal.slug}
-              clientSignature={proposal.clientSignatureUrl || proposal.clientSignature}
-              clientSignedBy={proposal.clientSignedBy}
-              clientSignedAt={proposal.clientSignedAt || proposal.signedAt}
-              adminSignature={proposal.adminSignatureUrl || proposal.adminSignature}
-              adminSignedBy={proposal.adminSignedBy}
-              adminSignedAt={proposal.adminSignedAt}
-              status={proposal.status}
+        <>
+          {/* Terms & Conditions - Only show if not yet signed */}
+          {!['signed', 'accepted'].includes(proposal.status) && (
+            <ProposalTerms 
+              proposalTitle={proposal.title}
+              depositPercentage={depositPercentage}
+              timeline={timeline}
             />
-          </CardContent>
-        </Card>
+          )}
+          
+          <Card className="mb-8 bg-[var(--glass-bg)] border-[var(--glass-border)]">
+            <CardHeader>
+              <CardTitle className="text-[var(--text-primary)]">
+                {['signed', 'accepted'].includes(proposal.status) ? 'Proposal Signed' : 'Accept This Proposal'}
+              </CardTitle>
+              <CardDescription className="text-[var(--text-secondary)]">
+                {['signed', 'accepted'].includes(proposal.status) 
+                  ? 'This proposal has been signed and accepted'
+                  : 'Sign below to accept this proposal and get started'}
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <ProposalSignature 
+                proposalId={proposal.id} 
+                proposalSlug={proposal.slug}
+                proposalTitle={proposal.title}
+                clientName={proposal.contact?.name}
+                clientEmail={proposal.contact?.email}
+                clientSignature={proposal.clientSignatureUrl || proposal.clientSignature}
+                clientSignedBy={proposal.clientSignedBy}
+                clientSignedAt={proposal.clientSignedAt || proposal.signedAt}
+                status={proposal.status}
+                depositPercentage={depositPercentage}
+                depositAmount={depositAmount}
+                totalAmount={totalAmount}
+                depositPaidAt={depositPaidAt}
+              />
+            </CardContent>
+          </Card>
+        </>
       )}
     </div>
   )

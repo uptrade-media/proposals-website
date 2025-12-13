@@ -1,5 +1,7 @@
 // netlify/functions/proposals-get.js
 // Migrated to Supabase
+// PUBLIC ACCESS: Proposals are publicly viewable by slug (for client email links)
+// AUTHENTICATED ACCESS: By ID requires authentication (for admin panel)
 import { createClient } from '@supabase/supabase-js'
 import { getAuthenticatedUser } from './utils/supabase.js'
 
@@ -39,12 +41,14 @@ export async function handler(event) {
     }
   }
 
-  // Authenticate with Supabase session (magic links create sessions automatically)
-  // Note: Magic link recipients might not have a contact record yet
+  // Check if identifier is UUID or slug
+  const isUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(identifier)
+  
+  // Try to authenticate (optional for slug access, required for ID access)
   const { user, contact, error: authError } = await getAuthenticatedUser(event)
   
-  // We need at least a verified Supabase user
-  if (!user) {
+  // For UUID access, require authentication
+  if (isUUID && !user) {
     return {
       statusCode: 401,
       headers,
@@ -53,9 +57,6 @@ export async function handler(event) {
   }
 
   try {
-    // Check if identifier is UUID or slug
-    const isUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(identifier)
-
     // Fetch proposal by slug or ID
     let query = supabase
       .from('proposals')
@@ -109,18 +110,23 @@ export async function handler(event) {
       }
     }
 
-    // Check authorization
-    // - Admins can see all proposals
-    // - Clients with a contact record can see their own proposals
-    // - Magic link recipients can see proposals sent to their email (client_email match)
+    // Authorization check
+    // - Slug access is PUBLIC (for client email links) - no auth required
+    // - UUID access requires authentication:
+    //   - Admins can see all proposals
+    //   - Clients can see their own proposals
+    //   - Magic link recipients can see proposals sent to their email
+    
+    const isPublicSlugAccess = !isUUID
     const isAdmin = contact?.role === 'admin'
     const isOwner = contact && proposal.contact_id === contact.id
-    const isRecipient = proposal.client_email && user.email && 
+    const isRecipient = proposal.client_email && user?.email && 
                         proposal.client_email.toLowerCase() === user.email.toLowerCase()
     
-    if (!isAdmin && !isOwner && !isRecipient) {
+    // For UUID access, verify authorization
+    if (isUUID && !isAdmin && !isOwner && !isRecipient) {
       console.log('[proposals-get] Access denied:', {
-        userEmail: user.email,
+        userEmail: user?.email,
         contactId: contact?.id,
         proposalContactId: proposal.contact_id,
         clientEmail: proposal.client_email

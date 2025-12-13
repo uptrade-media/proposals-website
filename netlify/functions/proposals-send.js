@@ -112,6 +112,7 @@ export async function handler(event) {
         status: 'sent',
         sent_at: new Date().toISOString(),
         client_email: primaryEmail,
+        sent_to_recipients: recipients, // Store all recipients for contract signed emails
         version: (proposal.version || 0) + 1,
         updated_at: new Date().toISOString()
       })

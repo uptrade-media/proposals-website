@@ -1,11 +1,14 @@
 // netlify/functions/proposals-sign.js
-// Migrated to Supabase - Stores signatures in Supabase Storage
+// Simplified flow: Client signs → Contract executed → Payment screen
+// No admin counter-signature required
 import { createClient } from '@supabase/supabase-js'
 import { Resend } from 'resend'
 import { getAuthenticatedUser } from './utils/supabase.js'
 
 const ADMIN_EMAIL = process.env.ADMIN_EMAIL || 'admin@uptrademedia.com'
 const PORTAL_URL = process.env.PORTAL_BASE_URL || process.env.URL || 'https://portal.uptrademedia.com'
+const RESEND_FROM_EMAIL = process.env.RESEND_FROM_EMAIL || 'portal@send.uptrademedia.com'
+const RESEND_FROM = `Uptrade Media <${RESEND_FROM_EMAIL}>`
 
 const supabase = createClient(
   process.env.SUPABASE_URL,
@@ -65,166 +68,256 @@ async function uploadSignature(proposalId, signatureData, type) {
   }
 }
 
-// Send email to admin for counter-signature
-async function sendAdminCounterSignatureEmail(proposalData) {
-  const { proposalId, proposalTitle, clientName, clientEmail, clientSignatureUrl } = proposalData
+// Send "Contract Signed" email to all parties (client + admin + any other recipients)
+async function sendContractSignedEmails(proposalData) {
+  const { 
+    proposalId, 
+    proposalTitle, 
+    clientName, 
+    clientEmail, 
+    signatureUrl,
+    totalAmount,
+    depositAmount,
+    depositPercentage,
+    allRecipients = []
+  } = proposalData
   
-  const signatureSection = clientSignatureUrl ? `
-    <div style="margin-top: 30px; padding-top: 20px; border-top: 1px solid #ddd;">
-      <p style="font-size: 12px; color: #666;">
-        <strong>Client's Signature:</strong><br>
-        <img src="${clientSignatureUrl}" alt="Client Signature" style="max-width: 300px; border: 1px solid #ddd; padding: 10px; margin-top: 10px; background: white;">
-      </p>
-    </div>
-  ` : ''
-  
-  try {
-    await resend.emails.send({
-      from: process.env.RESEND_FROM_EMAIL || 'proposals@send.uptrademedia.com',
-      to: ADMIN_EMAIL,
-      subject: `⏳ Counter-Signature Required: ${proposalTitle}`,
-      html: `
-        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-          <div style="background: linear-gradient(135deg, #4bbf39 0%, #39bfb0 100%); padding: 30px; text-align: center;">
-            <h1 style="color: white; margin: 0;">Counter-Signature Needed</h1>
-          </div>
-          
-          <div style="padding: 30px; background: #f9f9f9;">
-            <p style="font-size: 16px; color: #333;">Hi Admin,</p>
-            
-            <p style="font-size: 16px; color: #333;">
-              <strong>${clientName}</strong> has signed the proposal <strong>"${proposalTitle}"</strong>.
-            </p>
-            
-            <p style="font-size: 16px; color: #333;">
-              Please review and add your counter-signature to complete the contract.
-            </p>
-            
-            <div style="background: white; border-left: 4px solid #4bbf39; padding: 20px; margin: 20px 0;">
-              <h3 style="margin-top: 0; color: #333;">Proposal Details</h3>
-              <p style="margin: 5px 0;"><strong>Title:</strong> ${proposalTitle}</p>
-              <p style="margin: 5px 0;"><strong>Client:</strong> ${clientName}</p>
-              <p style="margin: 5px 0;"><strong>Email:</strong> ${clientEmail}</p>
-              <p style="margin: 5px 0;"><strong>Signed:</strong> ${new Date().toLocaleString()}</p>
-            </div>
-            
-            <div style="text-align: center; margin: 30px 0;">
-              <a href="${PORTAL_URL}/admin/proposals/${proposalId}/counter-sign" 
-                 style="background: linear-gradient(135deg, #4bbf39 0%, #39bfb0 100%); 
-                        color: white; 
-                        padding: 15px 40px; 
-                        text-decoration: none; 
-                        border-radius: 5px; 
-                        font-size: 16px; 
-                        font-weight: bold;
-                        display: inline-block;">
-                Review & Counter-Sign
-              </a>
-            </div>
-            
-            ${signatureSection}
-          </div>
-          
-          <div style="background: #333; color: white; padding: 20px; text-align: center; font-size: 12px;">
-            <p style="margin: 0;">© ${new Date().getFullYear()} Uptrade Media. All rights reserved.</p>
-          </div>
-        </div>
-      `
-    })
-  } catch (emailError) {
-    console.error('Failed to send counter-signature email:', emailError)
-  }
-}
-
-// Send fully executed contract to both parties
-async function sendFullyExecutedContract(proposalData) {
-  const { proposalId, proposalTitle, clientName, clientEmail, clientSignatureUrl, adminSignatureUrl } = proposalData
-  
-  const clientSignatureSection = clientSignatureUrl ? `
-    <div style="margin-bottom: 20px;">
-      <p style="margin: 5px 0; font-weight: bold;">Client Signature:</p>
-      <img src="${clientSignatureUrl}" alt="Client Signature" style="max-width: 250px; border: 1px solid #ddd; padding: 10px; background: white;">
-      <p style="margin: 5px 0; font-size: 12px; color: #666;">Signed by: ${clientName}</p>
-    </div>
-  ` : ''
-  
-  const adminSignatureSection = adminSignatureUrl ? `
-    <div>
-      <p style="margin: 5px 0; font-weight: bold;">Uptrade Media Signature:</p>
-      <img src="${adminSignatureUrl}" alt="Admin Signature" style="max-width: 250px; border: 1px solid #ddd; padding: 10px; background: white;">
-      <p style="margin: 5px 0; font-size: 12px; color: #666;">Signed by: Uptrade Media</p>
-    </div>
-  ` : ''
+  const formattedTotal = totalAmount ? `$${parseFloat(totalAmount).toLocaleString()}` : 'TBD'
+  const formattedDeposit = depositAmount ? `$${parseFloat(depositAmount).toLocaleString()}` : formattedTotal
   
   const emailContent = `
-    <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-      <div style="background: linear-gradient(135deg, #4bbf39 0%, #39bfb0 100%); padding: 30px; text-align: center;">
-        <h1 style="color: white; margin: 0;">✓ Contract Fully Executed</h1>
+    <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Arial, sans-serif; max-width: 600px; margin: 0 auto; background: #ffffff;">
+      <div style="background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%); padding: 40px; text-align: center;">
+        <img src="${PORTAL_URL}/logo.png" alt="Uptrade Media" style="height: 40px; margin-bottom: 20px;" />
+        <h1 style="color: #22c55e; margin: 0; font-size: 28px;">✓ Contract Signed</h1>
+        <p style="color: #94a3b8; margin: 10px 0 0; font-size: 16px;">Agreement is now active</p>
       </div>
       
-      <div style="padding: 30px; background: #f9f9f9;">
-        <p style="font-size: 16px; color: #333;">
-          Great news! The proposal <strong>"${proposalTitle}"</strong> has been fully executed by both parties.
+      <div style="padding: 40px;">
+        <p style="font-size: 16px; color: #333; margin-bottom: 24px;">
+          Great news! The proposal <strong>"${proposalTitle}"</strong> has been signed and is now a binding agreement.
         </p>
         
-        <div style="background: white; border-left: 4px solid #4bbf39; padding: 20px; margin: 20px 0;">
-          <h3 style="margin-top: 0; color: #333;">Contract Details</h3>
-          <p style="margin: 5px 0;"><strong>Title:</strong> ${proposalTitle}</p>
-          <p style="margin: 5px 0;"><strong>Client:</strong> ${clientName}</p>
-          <p style="margin: 5px 0;"><strong>Status:</strong> Fully Executed</p>
-          <p style="margin: 5px 0;"><strong>Date:</strong> ${new Date().toLocaleString()}</p>
+        <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 12px; padding: 24px; margin-bottom: 24px;">
+          <h3 style="margin: 0 0 16px; color: #0f172a; font-size: 18px;">Contract Details</h3>
+          <table style="width: 100%; border-collapse: collapse;">
+            <tr>
+              <td style="padding: 8px 0; color: #64748b; font-size: 14px;">Project</td>
+              <td style="padding: 8px 0; color: #0f172a; font-size: 14px; font-weight: 600; text-align: right;">${proposalTitle}</td>
+            </tr>
+            <tr>
+              <td style="padding: 8px 0; color: #64748b; font-size: 14px;">Client</td>
+              <td style="padding: 8px 0; color: #0f172a; font-size: 14px; font-weight: 600; text-align: right;">${clientName}</td>
+            </tr>
+            <tr>
+              <td style="padding: 8px 0; color: #64748b; font-size: 14px;">Total Investment</td>
+              <td style="padding: 8px 0; color: #059669; font-size: 14px; font-weight: 600; text-align: right;">${formattedTotal}</td>
+            </tr>
+            <tr>
+              <td style="padding: 8px 0; color: #64748b; font-size: 14px;">Deposit Due (${depositPercentage}%)</td>
+              <td style="padding: 8px 0; color: #0f172a; font-size: 14px; font-weight: 600; text-align: right;">${formattedDeposit}</td>
+            </tr>
+            <tr>
+              <td style="padding: 8px 0; color: #64748b; font-size: 14px;">Signed</td>
+              <td style="padding: 8px 0; color: #0f172a; font-size: 14px; font-weight: 600; text-align: right;">${new Date().toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}</td>
+            </tr>
+          </table>
         </div>
         
-        <div style="text-align: center; margin: 30px 0;">
-          <a href="${PORTAL_URL}/proposals/${proposalId}" 
-             style="background: linear-gradient(135deg, #4bbf39 0%, #39bfb0 100%); 
+        ${signatureUrl ? `
+        <div style="background: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 8px; padding: 16px; margin-bottom: 24px;">
+          <p style="margin: 0 0 12px; font-size: 12px; color: #166534; font-weight: 600; text-transform: uppercase;">Signature</p>
+          <img src="${signatureUrl}" alt="Signature" style="max-width: 200px; max-height: 60px; border: 1px solid #dcfce7; background: white; padding: 8px; border-radius: 4px;" />
+          <p style="margin: 8px 0 0; font-size: 12px; color: #166534;">${clientName}</p>
+        </div>
+        ` : ''}
+        
+        <div style="text-align: center; margin: 32px 0;">
+          <a href="${PORTAL_URL}/p/${proposalId}" 
+             style="background: linear-gradient(135deg, #22c55e 0%, #16a34a 100%); 
                     color: white; 
-                    padding: 15px 40px; 
+                    padding: 16px 40px; 
                     text-decoration: none; 
-                    border-radius: 5px; 
+                    border-radius: 8px; 
                     font-size: 16px; 
-                    font-weight: bold;
-                    display: inline-block;">
+                    font-weight: 700;
+                    display: inline-block;
+                    box-shadow: 0 4px 14px rgba(34, 197, 94, 0.35);">
             View Contract
           </a>
         </div>
         
-        <div style="background: #e8f5e9; padding: 20px; border-radius: 5px; margin: 20px 0;">
-          <h4 style="margin-top: 0; color: #2e7d32;">Signatures</h4>
-          ${clientSignatureSection}
-          ${adminSignatureSection}
-        </div>
-        
-        <p style="font-size: 14px; color: #666;">
-          This email serves as confirmation that both parties have signed the agreement. 
-          The fully executed contract is now legally binding.
+        <p style="font-size: 14px; color: #64748b; text-align: center;">
+          This email serves as confirmation that the agreement is now legally binding.
         </p>
       </div>
       
-      <div style="background: #333; color: white; padding: 20px; text-align: center; font-size: 12px;">
-        <p style="margin: 0;">© ${new Date().getFullYear()} Uptrade Media. All rights reserved.</p>
+      <div style="background: #f8fafc; border-top: 1px solid #e2e8f0; padding: 24px; text-align: center;">
+        <p style="margin: 0 0 4px; color: #0f172a; font-size: 14px; font-weight: 600;">Uptrade Media</p>
+        <p style="margin: 0; color: #64748b; font-size: 12px;">Premium Digital Marketing & Web Design</p>
+      </div>
+    </div>
+  `
+  
+  // Collect all unique recipients
+  const recipients = new Set([clientEmail, ADMIN_EMAIL, ...allRecipients])
+  
+  for (const email of recipients) {
+    if (!email) continue
+    
+    try {
+      await resend.emails.send({
+        from: RESEND_FROM,
+        to: email,
+        subject: `✅ Contract Signed: ${proposalTitle}`,
+        html: emailContent
+      })
+      console.log(`Contract signed email sent to: ${email}`)
+    } catch (emailError) {
+      console.error(`Failed to send contract email to ${email}:`, emailError)
+    }
+  }
+}
+
+// Generate invoice number
+function generateInvoiceNumber() {
+  const now = new Date()
+  const year = now.getFullYear().toString().slice(-2)
+  const month = (now.getMonth() + 1).toString().padStart(2, '0')
+  const random = Math.floor(Math.random() * 10000).toString().padStart(4, '0')
+  return `INV-${year}${month}-${random}`
+}
+
+// Create deposit invoice for the client
+async function createDepositInvoice({ contactId, projectId, proposalId, proposalTitle, depositAmount, depositPercentage, totalAmount }) {
+  try {
+    const invoiceNumber = generateInvoiceNumber()
+    const dueDate = new Date()
+    dueDate.setDate(dueDate.getDate() + 7) // Due in 7 days
+
+    const lineItems = JSON.stringify([{
+      description: `Deposit (${depositPercentage}%) for ${proposalTitle}`,
+      quantity: 1,
+      unitPrice: parseFloat(depositAmount),
+      total: parseFloat(depositAmount)
+    }])
+
+    const { data: invoice, error } = await supabase
+      .from('invoices')
+      .insert({
+        contact_id: contactId,
+        project_id: projectId || null,
+        invoice_number: invoiceNumber,
+        status: 'sent',
+        amount: depositAmount,
+        tax: '0.00',
+        total: depositAmount,
+        due_date: dueDate.toISOString(),
+        line_items: lineItems,
+        notes: `Deposit invoice for proposal: ${proposalTitle}. Proposal ID: ${proposalId}`,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString()
+      })
+      .select()
+      .single()
+
+    if (error) {
+      console.error('Error creating invoice:', error)
+      return null
+    }
+
+    console.log('Created deposit invoice:', invoice.id, invoiceNumber)
+    return invoice
+  } catch (err) {
+    console.error('Error in createDepositInvoice:', err)
+    return null
+  }
+}
+
+// Send account setup email with magic link
+async function sendAccountSetupEmail({ contact, proposalTitle, proposalSlug, depositAmount, magicToken }) {
+  const clientName = contact.name?.split(' ')[0] || 'there'
+  const formattedDeposit = depositAmount ? `$${parseFloat(depositAmount).toLocaleString()}` : ''
+  
+  const magicLink = `${PORTAL_URL}/setup?token=${magicToken}`
+  
+  const emailContent = `
+    <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Arial, sans-serif; max-width: 600px; margin: 0 auto; background: #ffffff;">
+      <div style="background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%); padding: 40px; text-align: center;">
+        <img src="${PORTAL_URL}/logo.png" alt="Uptrade Media" style="height: 40px; margin-bottom: 20px;" />
+        <h1 style="color: #22c55e; margin: 0; font-size: 28px;">Welcome to Your Portal</h1>
+        <p style="color: #94a3b8; margin: 10px 0 0; font-size: 16px;">Your account is ready</p>
+      </div>
+      
+      <div style="padding: 40px;">
+        <p style="font-size: 18px; color: #333; margin-bottom: 24px;">
+          Hi ${clientName},
+        </p>
+        
+        <p style="font-size: 16px; color: #555; line-height: 1.6; margin-bottom: 24px;">
+          Thank you for signing <strong>"${proposalTitle}"</strong>! Your client portal is now ready. 
+          From here you can track your project, access files, pay invoices, and communicate with our team.
+        </p>
+        
+        ${depositAmount ? `
+        <div style="background: #fef3c7; border: 1px solid #fcd34d; border-radius: 12px; padding: 20px; margin-bottom: 24px;">
+          <h3 style="margin: 0 0 8px; color: #92400e; font-size: 16px;">⏳ Deposit Payment Pending</h3>
+          <p style="margin: 0; color: #92400e; font-size: 14px;">
+            Your deposit of <strong>${formattedDeposit}</strong> is ready for payment. 
+            You can pay securely through your portal.
+          </p>
+        </div>
+        ` : ''}
+        
+        <div style="background: #f0f9ff; border: 1px solid #bae6fd; border-radius: 12px; padding: 24px; margin-bottom: 24px;">
+          <h3 style="margin: 0 0 16px; color: #0369a1; font-size: 16px;">Your Portal Includes:</h3>
+          <ul style="margin: 0; padding-left: 20px; color: #0369a1;">
+            <li style="margin-bottom: 8px;">Project dashboard & progress tracking</li>
+            <li style="margin-bottom: 8px;">Secure file sharing</li>
+            <li style="margin-bottom: 8px;">Invoice history & payments</li>
+            <li style="margin-bottom: 8px;">Direct messaging with our team</li>
+          </ul>
+        </div>
+        
+        <div style="text-align: center; margin: 32px 0;">
+          <a href="${magicLink}" 
+             style="background: linear-gradient(135deg, #22c55e 0%, #16a34a 100%); 
+                    color: white; 
+                    padding: 16px 40px; 
+                    text-decoration: none; 
+                    border-radius: 8px; 
+                    font-size: 16px; 
+                    font-weight: 700;
+                    display: inline-block;
+                    box-shadow: 0 4px 14px rgba(34, 197, 94, 0.35);">
+            Access Your Portal
+          </a>
+        </div>
+        
+        <p style="font-size: 12px; color: #94a3b8; text-align: center;">
+          This link expires in 7 days. If you need a new link, just reply to this email.
+        </p>
+      </div>
+      
+      <div style="background: #f8fafc; border-top: 1px solid #e2e8f0; padding: 24px; text-align: center;">
+        <p style="margin: 0 0 4px; color: #0f172a; font-size: 14px; font-weight: 600;">Uptrade Media</p>
+        <p style="margin: 0; color: #64748b; font-size: 12px;">Premium Digital Marketing & Web Design</p>
       </div>
     </div>
   `
   
   try {
-    // Send to client
     await resend.emails.send({
-      from: process.env.RESEND_FROM_EMAIL || 'proposals@send.uptrademedia.com',
-      to: clientEmail,
-      subject: `✅ Contract Fully Executed: ${proposalTitle}`,
+      from: RESEND_FROM,
+      to: contact.email,
+      subject: `🎉 Your Client Portal is Ready - ${proposalTitle}`,
       html: emailContent
     })
-    
-    // Send to admin
-    await resend.emails.send({
-      from: process.env.RESEND_FROM_EMAIL || 'proposals@send.uptrademedia.com',
-      to: ADMIN_EMAIL,
-      subject: `✅ Contract Executed: ${proposalTitle} - ${clientName}`,
-      html: emailContent
-    })
-  } catch (emailError) {
-    console.error('Failed to send executed contract email:', emailError)
+    console.log('Account setup email sent to:', contact.email)
+    return true
+  } catch (err) {
+    console.error('Failed to send account setup email:', err)
+    return false
   }
 }
 
@@ -246,8 +339,7 @@ export async function handler(event) {
       signature, 
       signedAt, 
       signedBy, 
-      clientEmail,
-      isAdminSignature = false 
+      clientEmail
     } = JSON.parse(event.body || '{}')
 
     if (!proposalId || !signature || !signedAt) {
@@ -255,7 +347,7 @@ export async function handler(event) {
       return json(400, { error: 'Missing required fields' }, event)
     }
 
-    console.log('[proposals-sign] Processing signature for:', { proposalId, isAdminSignature })
+    console.log('[proposals-sign] Processing signature for:', { proposalId })
 
     // Get client IP for audit
     const clientIp = event.headers['x-forwarded-for']?.split(',')[0]?.trim() || 
@@ -272,7 +364,7 @@ export async function handler(event) {
     if (isUUID) {
       const result = await supabase
         .from('proposals')
-        .select('id, title, status, signed_at, admin_signed_at, client_signature, client_signature_url, client_signed_by, admin_signature_url, admin_signed_by, contact_id')
+        .select('*, contact:contacts!proposals_contact_id_fkey(*)')
         .eq('id', proposalId)
         .single()
       proposal = result.data
@@ -283,7 +375,7 @@ export async function handler(event) {
     if (!proposal) {
       const result = await supabase
         .from('proposals')
-        .select('id, title, status, signed_at, admin_signed_at, client_signature, client_signature_url, client_signed_by, admin_signature_url, admin_signed_by, contact_id')
+        .select('*, contact:contacts!proposals_contact_id_fkey(*)')
         .eq('slug', proposalId)
         .single()
       proposal = result.data
@@ -295,228 +387,183 @@ export async function handler(event) {
       return json(404, { error: 'Proposal not found' }, event)
     }
 
-    // Upload signature to storage
-    const signatureType = isAdminSignature ? 'admin' : 'client'
-    const signatureUrl = await uploadSignature(proposalId, signature, signatureType)
-
-    if (isAdminSignature) {
-      // Admin is counter-signing
-      if (!proposal.signed_at) {
-        console.error('Client signature required first')
-        return json(400, { 
-          error: 'Client must sign first before admin counter-signature' 
-        }, event)
-      }
-
-      // Update proposal with admin signature
-      const { error: updateError } = await supabase
-        .from('proposals')
-        .update({
-          admin_signed_at: signedAt,
-          admin_signature: signatureUrl || signature,
-          admin_signature_url: signatureUrl || signature,
-          admin_signed_by: signedBy || 'Uptrade Media',
-          admin_signature_ip: clientIp,
-          fully_executed_at: new Date().toISOString(),
-          status: 'accepted',
-          updated_at: new Date().toISOString()
-        })
-        .eq('id', proposal.id)
-
-      if (updateError) {
-        console.error('Update error:', updateError)
-        throw updateError
-      }
-
-      // Send fully executed contract to both parties
-      await sendFullyExecutedContract({
-        proposalId,
-        proposalTitle: proposalTitle || proposal.title,
-        clientName: signedBy,
-        clientEmail: clientEmail,
-        clientSignatureUrl: proposal.client_signature,
-        adminSignatureUrl: signatureUrl
-      })
-
-      return json(200, {
-        success: true,
-        message: 'Proposal fully executed',
-        status: 'fully_executed',
-        proposalId
-      }, event)
-
-    } else {
-      // Client is signing (first signature)
-      
-      // Get contact info to check if they're a prospect
-      const { data: contact, error: contactError } = await supabase
-        .from('contacts')
-        .select('id, type, email, name, company, account_setup')
-        .eq('id', proposal.contact_id)
-        .single()
-      
-      // Update proposal with client signature
-      const { error: updateError } = await supabase
-        .from('proposals')
-        .update({
-          signed_at: signedAt,
-          client_signature: signatureUrl || signature,
-          client_signature_url: signatureUrl || signature,
-          client_signed_by: signedBy || null,
-          client_signed_at: signedAt,
-          client_signature_ip: clientIp,
-          status: 'signed',
-          updated_at: new Date().toISOString()
-        })
-        .eq('id', proposal.id)
-
-      if (updateError) {
-        console.error('Update error:', updateError)
-        throw updateError
-      }
-
-      // If contact is a prospect, convert to client
-      let projectCreated = false
-      let newProjectId = null
-      
-      if (contact && contact.type === 'prospect') {
-        console.log('Converting prospect to client:', contact.id)
-        
-        // Update contact type to client
-        await supabase
-          .from('contacts')
-          .update({
-            type: 'client',
-            updated_at: new Date().toISOString()
-          })
-          .eq('id', contact.id)
-        
-        // Create a project from the proposal
-        const projectTitle = proposal.title.replace(/^Proposal:\s*/i, '').replace(/\s*Proposal$/i, '')
-        
-        const { data: newProject, error: projectError } = await supabase
-          .from('projects')
-          .insert({
-            contact_id: contact.id,
-            title: projectTitle,
-            description: `Project created from proposal: ${proposal.title}`,
-            status: 'pending',
-            budget: proposal.total_amount || null,
-            created_at: new Date().toISOString(),
-            updated_at: new Date().toISOString()
-          })
-          .select('id')
-          .single()
-        
-        if (!projectError && newProject) {
-          projectCreated = true
-          newProjectId = newProject.id
-          
-          // Link proposal to the new project
-          await supabase
-            .from('proposals')
-            .update({ project_id: newProject.id })
-            .eq('id', proposalId)
-          
-          console.log('Created project:', newProject.id)
-        }
-        
-        // Send account setup email if not already set up
-        if (!contact.account_setup || contact.account_setup === 'false') {
-          // Generate Supabase magic link for account setup
-          const { data: linkData, error: linkError } = await supabase.auth.admin.generateLink({
-            type: 'magiclink',
-            email: contact.email,
-            options: {
-              redirectTo: `${PORTAL_URL}/account-setup`
-            }
-          })
-          
-          if (linkError) {
-            console.error('Error generating magic link:', linkError)
-          }
-          
-          const setupUrl = linkData?.properties?.action_link || `${PORTAL_URL}/login`
-          
-          await resend.emails.send({
-            from: process.env.RESEND_FROM_EMAIL || 'portal@send.uptrademedia.com',
-            to: contact.email,
-            subject: `🎉 Welcome to Uptrade Media – Set Up Your Account`,
-            html: `
-              <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-                <div style="background: linear-gradient(135deg, #0f9b8e 0%, #0ea5e9 100%); padding: 40px; text-align: center;">
-                  <img src="${PORTAL_URL}/uptrade_media_logo_white.png" alt="Uptrade Media" style="height: 40px; margin-bottom: 20px;" />
-                  <h1 style="color: white; margin: 0; font-size: 28px;">Welcome to the Team!</h1>
-                </div>
-                
-                <div style="padding: 40px; background: #ffffff;">
-                  <p style="font-size: 18px; color: #333; margin-bottom: 20px;">
-                    Hi ${contact.name || 'there'},
-                  </p>
-                  
-                  <p style="font-size: 16px; color: #555; line-height: 1.6;">
-                    Thanks for signing the proposal! Your project is being set up and we're excited to get started.
-                  </p>
-                  
-                  <p style="font-size: 16px; color: #555; line-height: 1.6;">
-                    Click below to set up your client portal account where you can:
-                  </p>
-                  
-                  <ul style="font-size: 16px; color: #555; line-height: 1.8;">
-                    <li>View project progress and milestones</li>
-                    <li>Access your files and deliverables</li>
-                    <li>Message our team directly</li>
-                    <li>View and pay invoices</li>
-                  </ul>
-                  
-                  <div style="text-align: center; margin: 35px 0;">
-                    <a href="${setupUrl}" 
-                       style="background: linear-gradient(135deg, #0f9b8e 0%, #0ea5e9 100%); 
-                              color: white; 
-                              padding: 16px 48px; 
-                              text-decoration: none; 
-                              border-radius: 8px; 
-                              font-size: 16px; 
-                              font-weight: 600;
-                              display: inline-block;
-                              box-shadow: 0 4px 14px rgba(15, 155, 142, 0.4);">
-                      Set Up My Account
-                    </a>
-                  </div>
-                  
-                  <p style="font-size: 14px; color: #888; margin-top: 30px;">
-                    This link expires in 7 days. If you have any questions, just reply to this email!
-                  </p>
-                </div>
-                
-                <div style="background: #1a1a2e; color: white; padding: 30px; text-align: center; font-size: 13px;">
-                  <p style="margin: 0;">© ${new Date().getFullYear()} Uptrade Media. All rights reserved.</p>
-                </div>
-              </div>
-            `
-          }).catch(err => console.error('Failed to send setup email:', err))
-        }
-      }
-
-      // Send email to admin for counter-signature
-      await sendAdminCounterSignatureEmail({
-        proposalId,
-        proposalTitle: proposalTitle || proposal.title,
-        clientName: signedBy || 'Client',
-        clientEmail: clientEmail || 'unknown@example.com',
-        clientSignatureUrl: signatureUrl
-      })
-
-      return json(200, { 
-        success: true,
-        message: 'Client signature recorded. Admin will counter-sign and you will receive the fully executed contract via email.',
-        status: 'pending_counter_signature',
-        proposalId,
-        signedAt,
-        projectCreated,
-        projectId: newProjectId
+    // Check if already signed
+    if (proposal.signed_at || proposal.status === 'accepted') {
+      return json(400, { 
+        error: 'Proposal already signed',
+        alreadySigned: true,
+        depositAmount: proposal.deposit_amount,
+        depositPaidAt: proposal.deposit_paid_at
       }, event)
     }
+
+    // Upload signature to storage
+    const signatureUrl = await uploadSignature(proposal.id, signature, 'client')
+
+    // Calculate deposit amount
+    const totalAmount = parseFloat(proposal.total_amount) || 0
+    const depositPercentage = proposal.deposit_percentage || 50
+    const depositAmount = (totalAmount * depositPercentage / 100).toFixed(2)
+
+    // Update proposal - mark as ACCEPTED immediately (no counter-signature needed)
+    const { error: updateError } = await supabase
+      .from('proposals')
+      .update({
+        signed_at: signedAt,
+        client_signature: signatureUrl || signature,
+        client_signature_url: signatureUrl || signature,
+        client_signed_by: signedBy || null,
+        client_signed_at: signedAt,
+        client_signature_ip: clientIp,
+        fully_executed_at: new Date().toISOString(), // Contract is fully executed on client signature
+        deposit_amount: depositAmount,
+        status: 'accepted', // Immediately accepted
+        updated_at: new Date().toISOString()
+      })
+      .eq('id', proposal.id)
+
+    if (updateError) {
+      console.error('Update error:', updateError)
+      throw updateError
+    }
+
+    // Get all recipients from when proposal was sent
+    const allRecipients = proposal.sent_to_recipients || []
+    
+    // Send "Contract Signed" emails to all parties
+    await sendContractSignedEmails({
+      proposalId: proposal.slug || proposal.id,
+      proposalTitle: proposalTitle || proposal.title,
+      clientName: signedBy || proposal.contact?.name || 'Client',
+      clientEmail: clientEmail || proposal.contact?.email || proposal.client_email,
+      signatureUrl,
+      totalAmount,
+      depositAmount,
+      depositPercentage,
+      allRecipients
+    })
+
+    // Convert prospect to client if needed
+    let projectCreated = false
+    let newProjectId = null
+    const contact = proposal.contact
+    
+    if (contact && contact.type === 'prospect') {
+      console.log('Converting prospect to client:', contact.id)
+      
+      // Update contact type to client
+      await supabase
+        .from('contacts')
+        .update({
+          type: 'client',
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', contact.id)
+      
+      // Create a project from the proposal
+      const projectTitle = proposal.title.replace(/^Proposal:\s*/i, '').replace(/\s*Proposal$/i, '')
+      
+      const { data: newProject, error: projectError } = await supabase
+        .from('projects')
+        .insert({
+          contact_id: contact.id,
+          title: projectTitle,
+          description: `Project created from signed proposal: ${proposal.title}`,
+          status: 'pending',
+          budget: totalAmount || null,
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString()
+        })
+        .select('id')
+        .single()
+      
+      if (!projectError && newProject) {
+        projectCreated = true
+        newProjectId = newProject.id
+        
+        // Link proposal to the new project
+        await supabase
+          .from('proposals')
+          .update({ project_id: newProject.id })
+          .eq('id', proposal.id)
+        
+        console.log('Created project:', newProject.id)
+      }
+    }
+
+    // Check if contact needs account setup (not already a portal user)
+    let magicLinkSent = false
+    let invoiceCreated = false
+    const contactNeedsAccount = contact && contact.account_setup !== 'true'
+    
+    if (contact && contactNeedsAccount) {
+      console.log('Contact needs account setup:', contact.id)
+      
+      // Generate magic link token
+      const crypto = await import('crypto')
+      const magicToken = crypto.randomBytes(32).toString('hex')
+      const magicTokenExpiry = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000) // 7 days
+      
+      // Update contact with magic link token
+      await supabase
+        .from('contacts')
+        .update({
+          magic_link_token: magicToken,
+          magic_link_expires: magicTokenExpiry.toISOString(),
+          account_setup: 'false', // Mark as needing setup
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', contact.id)
+      
+      // Send account setup email
+      await sendAccountSetupEmail({
+        contact,
+        proposalTitle: proposal.title,
+        proposalSlug: proposal.slug,
+        depositAmount,
+        magicToken
+      })
+      magicLinkSent = true
+    }
+
+    // Create deposit invoice (always, so client has it in billing)
+    if (contact && parseFloat(depositAmount) > 0) {
+      const invoice = await createDepositInvoice({
+        contactId: contact.id,
+        projectId: newProjectId,
+        proposalId: proposal.id,
+        proposalTitle: proposal.title,
+        depositAmount,
+        depositPercentage,
+        totalAmount
+      })
+      if (invoice) {
+        invoiceCreated = true
+        console.log('Deposit invoice created:', invoice.invoice_number)
+      }
+    }
+
+    // Return success with payment info
+    return json(200, { 
+      success: true,
+      message: 'Contract signed successfully! Please complete your deposit payment.',
+      status: 'accepted',
+      proposalId: proposal.id,
+      proposalSlug: proposal.slug,
+      signedAt,
+      projectCreated,
+      projectId: newProjectId,
+      magicLinkSent,
+      invoiceCreated,
+      // Payment info for the frontend
+      payment: {
+        required: true,
+        depositPercentage,
+        depositAmount: parseFloat(depositAmount),
+        totalAmount,
+        proposalTitle: proposal.title
+      }
+    }, event)
 
   } catch (error) {
     console.error('=== ERROR IN PROPOSALS-SIGN ===')

@@ -5,6 +5,7 @@ import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { CheckCircle, X, Pen, Loader2, Mail, Calendar, User } from 'lucide-react'
+import ProposalDepositPayment from './ProposalDepositPayment'
 
 export default function ProposalSignature({ 
   proposalId, 
@@ -20,7 +21,12 @@ export default function ProposalSignature({
   adminSignature,
   adminSignedBy,
   adminSignedAt,
-  status
+  status,
+  // Payment info
+  depositPercentage,
+  depositAmount,
+  totalAmount,
+  depositPaidAt
 }) {
   const sigPad = useRef(null)
   const [signed, setSigned] = useState(false)
@@ -31,9 +37,10 @@ export default function ProposalSignature({
   const [printedName, setPrintedName] = useState(initialClientName || '')
   const [signatureData, setSignatureData] = useState(null)
   const [signedDate, setSignedDate] = useState(null)
-  const [adminSig, setAdminSig] = useState(null)
-  const [adminSigDate, setAdminSigDate] = useState(null)
-  const [adminSigner, setAdminSigner] = useState(null)
+  // Payment state
+  const [showPayment, setShowPayment] = useState(false)
+  const [paymentInfo, setPaymentInfo] = useState(null)
+  const [paymentComplete, setPaymentComplete] = useState(false)
 
   // Debug log
   console.log('[ProposalSignature] Mounted with proposalId:', proposalId, 'status:', status)
@@ -45,13 +52,14 @@ export default function ProposalSignature({
       setSignatureData(clientSignature)
       setPrintedName(clientSignedBy || '')
       setSignedDate(clientSignedAt)
-      setAdminSig(adminSignature)
-      setAdminSigDate(adminSignedAt)
-      setAdminSigner(adminSignedBy)
+      // Check if deposit is already paid
+      if (depositPaidAt) {
+        setPaymentComplete(true)
+      }
     } else {
       checkSignatureStatus()
     }
-  }, [proposalId, clientSignature, clientSignedAt])
+  }, [proposalId, clientSignature, clientSignedAt, depositPaidAt])
 
   const checkSignatureStatus = async () => {
     if (!proposalId) return
@@ -71,9 +79,18 @@ export default function ProposalSignature({
           setSignatureData(proposal.client_signature_url || proposal.client_signature)
           setPrintedName(proposal.client_signed_by || initialClientName || '')
           setSignedDate(proposal.client_signed_at || proposal.signed_at)
-          setAdminSig(proposal.admin_signature_url || proposal.admin_signature)
-          setAdminSigDate(proposal.admin_signed_at)
-          setAdminSigner(proposal.admin_signed_by)
+          
+          // Check deposit status
+          if (proposal?.deposit_paid_at) {
+            setPaymentComplete(true)
+          } else if (proposal?.deposit_amount) {
+            // Proposal is signed but deposit not paid - show payment
+            setPaymentInfo({
+              depositAmount: proposal.deposit_amount,
+              totalAmount: proposal.total_amount
+            })
+            setShowPayment(true)
+          }
         }
       }
     } catch (err) {
@@ -135,10 +152,26 @@ export default function ProposalSignature({
         throw new Error(data.error || 'Failed to process signature')
       }
 
+      const data = await response.json()
+
       // Store signature data for inline display
       setSignatureData(sigData)
       setSignedDate(signedAt)
       setSigned(true)
+      setSigning(false)
+      
+      // Check if there's a deposit to pay (payment info is in data.payment)
+      const payment = data.payment
+      if (payment?.depositAmount && payment.depositAmount > 0) {
+        setPaymentInfo({
+          depositAmount: payment.depositAmount,
+          totalAmount: payment.totalAmount
+        })
+        setShowPayment(true)
+      } else {
+        // No deposit required - just show confirmation
+        setPaymentComplete(true)
+      }
       
     } catch (err) {
       console.error('Signature error:', err)
@@ -158,6 +191,12 @@ export default function ProposalSignature({
     })
   }
 
+  // Handle payment completion
+  const handlePaymentComplete = () => {
+    setPaymentComplete(true)
+    setShowPayment(false)
+  }
+
   // Show inline signature block if already signed
   if (signed) {
     return (
@@ -166,7 +205,7 @@ export default function ProposalSignature({
         <div className="bg-[var(--glass-bg)] border border-[var(--glass-border)] rounded-xl p-6">
           <div className="flex items-center gap-2 mb-4">
             <CheckCircle className="h-5 w-5 text-[var(--brand-primary)]" />
-            <h3 className="font-semibold text-[var(--text-primary)]">Client Signature</h3>
+            <h3 className="font-semibold text-[var(--text-primary)]">Contract Signed</h3>
           </div>
           
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -207,57 +246,40 @@ export default function ProposalSignature({
             </div>
           </div>
           
+          <div className="mt-4 p-3 bg-[var(--brand-primary)]/10 rounded-lg">
+            <p className="text-sm text-[var(--brand-primary)] font-medium">
+              ✓ This contract is fully executed and legally binding
+            </p>
+          </div>
+          
           <p className="text-xs text-[var(--text-tertiary)] mt-4">
             Electronically signed and legally binding under the ESIGN Act and UETA.
           </p>
         </div>
 
-        {/* Admin Counter-Signature Block */}
-        {adminSig ? (
-          <div className="bg-[var(--glass-bg)] border border-[var(--glass-border)] rounded-xl p-6">
-            <div className="flex items-center gap-2 mb-4">
-              <CheckCircle className="h-5 w-5 text-[var(--brand-primary)]" />
-              <h3 className="font-semibold text-[var(--text-primary)]">Uptrade Media Signature</h3>
-            </div>
-            
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <div className="bg-white rounded-lg border border-gray-200 p-4">
-                <img 
-                  src={adminSig} 
-                  alt="Admin Signature" 
-                  className="max-h-24 mx-auto"
-                />
-              </div>
-              
-              <div className="space-y-3">
-                <div className="flex items-center gap-2 text-sm">
-                  <User className="h-4 w-4 text-[var(--text-tertiary)]" />
-                  <span className="text-[var(--text-secondary)]">Signed by:</span>
-                  <span className="font-medium text-[var(--text-primary)]">{adminSigner || 'Uptrade Media'}</span>
-                </div>
-                <div className="flex items-center gap-2 text-sm">
-                  <Calendar className="h-4 w-4 text-[var(--text-tertiary)]" />
-                  <span className="text-[var(--text-secondary)]">Date:</span>
-                  <span className="font-medium text-[var(--text-primary)]">{formatDate(adminSigDate)}</span>
-                </div>
-              </div>
-            </div>
-            
-            <div className="mt-4 p-3 bg-[var(--brand-primary)]/10 rounded-lg">
-              <p className="text-sm text-[var(--brand-primary)] font-medium">
-                ✓ This contract is fully executed
-              </p>
-            </div>
-          </div>
-        ) : (
-          <div className="bg-[var(--accent-orange)]/10 border border-[var(--accent-orange)]/30 rounded-xl p-6">
+        {/* Payment Section */}
+        {showPayment && paymentInfo && !paymentComplete && (
+          <ProposalDepositPayment
+            proposalId={proposalId}
+            proposalTitle={proposalTitle}
+            depositAmount={paymentInfo.depositAmount}
+            depositPercentage={depositPercentage || 50}
+            totalAmount={paymentInfo.totalAmount}
+            onPaymentSuccess={handlePaymentComplete}
+          />
+        )}
+
+        {/* Payment Complete Confirmation */}
+        {paymentComplete && (
+          <div className="bg-[var(--brand-primary)]/10 border border-[var(--brand-primary)]/30 rounded-xl p-6">
             <div className="flex items-center gap-2 mb-2">
-              <Loader2 className="h-5 w-5 text-[var(--accent-orange)] animate-spin" />
-              <h3 className="font-semibold text-[var(--accent-orange)]">Awaiting Counter-Signature</h3>
+              <CheckCircle className="h-5 w-5 text-[var(--brand-primary)]" />
+              <h3 className="font-semibold text-[var(--brand-primary)]">Thank You!</h3>
             </div>
             <p className="text-sm text-[var(--text-secondary)]">
-              Thank you for signing! Uptrade Media has been notified and will counter-sign shortly. 
-              You'll receive the fully executed contract via email once complete.
+              Your contract has been signed and your deposit payment has been received. 
+              We're excited to get started on your project! Check your email for next steps 
+              and project timeline details.
             </p>
           </div>
         )}
