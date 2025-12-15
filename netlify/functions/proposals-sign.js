@@ -3,7 +3,7 @@
 // No admin counter-signature required
 import { createClient } from '@supabase/supabase-js'
 import { Resend } from 'resend'
-import { getAuthenticatedUser } from './utils/supabase.js'
+import { randomBytes } from 'crypto'
 
 const ADMIN_EMAIL = process.env.ADMIN_EMAIL || 'admin@uptrademedia.com'
 const PORTAL_URL = process.env.PORTAL_BASE_URL || process.env.URL || 'https://portal.uptrademedia.com'
@@ -500,8 +500,7 @@ export async function handler(event) {
       console.log('Contact needs account setup:', contact.id)
       
       // Generate magic link token
-      const crypto = await import('crypto')
-      const magicToken = crypto.randomBytes(32).toString('hex')
+      const magicToken = randomBytes(32).toString('hex')
       const magicTokenExpiry = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000) // 7 days
       
       // Update contact with magic link token
