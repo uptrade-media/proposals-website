@@ -551,6 +551,25 @@ export default function LoginPage() {
 
       {/* Footer */}
       <div className="absolute bottom-6 left-0 right-0 text-center z-20">
+        <div className="flex items-center justify-center gap-3 mb-2">
+          <a 
+            href="https://uptrademedia.com/terms" 
+            target="_blank" 
+            rel="noopener noreferrer"
+            className="text-[var(--text-tertiary)] hover:text-[var(--text-secondary)] text-xs transition-colors"
+          >
+            Terms of Service
+          </a>
+          <span className="text-[var(--text-tertiary)] text-xs">•</span>
+          <a 
+            href="https://uptrademedia.com/privacy" 
+            target="_blank" 
+            rel="noopener noreferrer"
+            className="text-[var(--text-tertiary)] hover:text-[var(--text-secondary)] text-xs transition-colors"
+          >
+            Privacy Policy
+          </a>
+        </div>
         <p className="text-[var(--text-tertiary)] text-xs">© {new Date().getFullYear()} Uptrade Media</p>
       </div>
     </div>

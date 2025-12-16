@@ -359,6 +359,31 @@ const useBillingStore = create((set, get) => ({
     }
   },
 
+  // Delete invoice (admin only)
+  deleteInvoice: async (invoiceId) => {
+    set({ isLoading: true, error: null })
+    
+    try {
+      const response = await api.delete(`/.netlify/functions/invoices-delete/${invoiceId}`)
+      
+      // Remove invoice from the list
+      set(state => ({
+        invoices: state.invoices.filter(i => i.id !== invoiceId),
+        currentInvoice: state.currentInvoice?.id === invoiceId ? null : state.currentInvoice,
+        isLoading: false
+      }))
+      
+      return { success: true, data: response.data }
+    } catch (error) {
+      const errorMessage = error.response?.data?.error || 'Failed to delete invoice'
+      set({ 
+        isLoading: false, 
+        error: errorMessage 
+      })
+      return { success: false, error: errorMessage }
+    }
+  },
+
   // Toggle recurring invoice pause/resume
   toggleRecurringPause: async (invoiceId, paused) => {
     set({ isLoading: true, error: null })

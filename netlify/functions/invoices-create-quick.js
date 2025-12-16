@@ -87,11 +87,11 @@ export async function handler(event) {
     const paymentToken = crypto.randomBytes(32).toString('hex')
     const paymentTokenExpires = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000) // 30 days
 
-    // Calculate amounts (convert dollars to cents for storage)
-    const amountCents = Math.round(parseFloat(amount) * 100)
+    // Calculate amounts (store as dollars, no cents math)
+    const amountValue = parseFloat(amount)
     const taxRate = 0 // No tax by default for quick invoices
     const taxAmount = 0
-    const totalAmount = amountCents
+    const totalAmount = amountValue
 
     // Check if contact exists
     let contactId = null
@@ -130,7 +130,7 @@ export async function handler(event) {
         invoice_number: invoiceNumber,
         contact_id: contactId,
         description,
-        amount: amountCents,
+        amount: amountValue,
         tax_rate: taxRate,
         tax_amount: taxAmount,
         total_amount: totalAmount,
@@ -140,8 +140,7 @@ export async function handler(event) {
         payment_token: paymentToken,
         payment_token_expires: paymentTokenExpires.toISOString(),
         sent_to_email: email.toLowerCase(),
-        sent_at: finalSendNow ? new Date().toISOString() : null,
-        line_items: lineItems.length > 0 ? lineItems : [{ description, quantity: 1, unitPrice: amountCents }]
+        sent_at: finalSendNow ? new Date().toISOString() : null
       })
       .select()
       .single()
@@ -172,14 +171,14 @@ export async function handler(event) {
         await resend.emails.send({
           from: RESEND_FROM,
           to: email,
-          subject: `Invoice ${invoiceNumber} from Uptrade Media - $${(amountCents / 100).toFixed(2)}`,
+          subject: `Invoice ${invoiceNumber} from Uptrade Media - $${amountValue.toFixed(2)}`,
           html: invoiceEmail({
             recipientName: recipientName,
             invoiceNumber: invoiceNumber,
             description: description,
-            amount: amountCents / 100,
+            amount: amountValue,
             taxAmount: 0,
-            totalAmount: totalAmount / 100,
+            totalAmount: totalAmount,
             dueDate: invoice.due_date,
             paymentToken: paymentToken,
             invoiceId: invoice.id
@@ -200,7 +199,7 @@ export async function handler(event) {
         invoice: {
           id: invoice.id,
           invoiceNumber: invoice.invoice_number,
-          amount: totalAmount / 100,
+          amount: totalAmount,
           description,
           dueDate: invoice.due_date,
           status: invoice.status,

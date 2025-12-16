@@ -32,7 +32,8 @@ import {
   Repeat,
   Pause,
   Play,
-  BarChart3
+  BarChart3,
+  Trash
 } from 'lucide-react'
 import useBillingStore from '@/lib/billing-store'
 import useProjectsStore from '@/lib/projects-store'
@@ -54,6 +55,7 @@ const Billing = () => {
     createInvoice,
     updateInvoice,
     markInvoicePaid,
+    deleteInvoice,
     sendInvoice,
     sendReminder,
     toggleRecurringPause,
@@ -340,6 +342,20 @@ const Billing = () => {
     
     if (result.success) {
       fetchInvoices() // Refresh to get updated status
+    }
+  }
+
+  const handleDeleteInvoice = async (invoice) => {
+    if (!window.confirm(`Delete invoice ${invoice.invoiceNumber}? This action cannot be undone.`)) return
+
+    const result = await deleteInvoice(invoice.id)
+
+    if (result.success) {
+      fetchInvoices()
+      fetchBillingSummary()
+      alert('Invoice deleted.')
+    } else {
+      alert(result.error || 'Failed to delete invoice.')
     }
   }
 
@@ -1106,6 +1122,15 @@ const Billing = () => {
                             Mark Paid
                           </Button>
                         )}
+                        <Button 
+                          variant="outline" 
+                          size="sm"
+                          onClick={() => handleDeleteInvoice(invoice)}
+                          className="text-red-600 hover:text-red-700 hover:bg-red-50 border-red-200"
+                        >
+                          <Trash className="w-4 h-4 mr-2" />
+                          Delete
+                        </Button>
                         {invoice.isRecurring && (
                           <Button 
                             variant="outline"
