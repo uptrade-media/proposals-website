@@ -3,7 +3,7 @@
  */
 
 import { useState, useEffect } from 'react'
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
@@ -48,15 +48,12 @@ import {
   Phone,
   Building2,
   Globe,
-  Clock,
   User,
   ChevronLeft,
   ChevronRight,
   Eye,
-  CheckCircle,
   XCircle,
   MessageSquare,
-  ArrowUpRight,
   Smartphone,
   Monitor,
   Tablet,
@@ -101,6 +98,15 @@ function DeviceIcon({ device }) {
 
 // Forms overview cards
 function FormsOverview({ forms, onSelectForm }) {
+  // Form type display labels
+  const formTypeLabels = {
+    'lead-capture': 'Lead Capture',
+    'contact': 'Contact',
+    'newsletter': 'Newsletter',
+    'scheduler': 'Scheduler',
+    'custom': 'Custom'
+  }
+
   return (
     <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
       {forms.map(form => (
@@ -115,29 +121,37 @@ function FormsOverview({ forms, onSelectForm }) {
                 <div className="p-2 rounded-lg bg-primary/10">
                   <FileText className="h-4 w-4 text-primary" />
                 </div>
-                <div>
+                <div className="min-w-0 flex-1">
                   <CardTitle className="text-sm font-semibold">{form.name}</CardTitle>
-                  <CardDescription className="text-xs">{form.slug}</CardDescription>
+                  <div className="flex items-center gap-2 mt-0.5">
+                    <Badge variant="outline" className="text-[10px] px-1.5 py-0">
+                      {formTypeLabels[form.form_type] || form.form_type}
+                    </Badge>
+                    <span className="text-xs text-muted-foreground font-mono">{form.slug}</span>
+                  </div>
                 </div>
               </div>
               {form.new_count > 0 && (
-                <Badge variant="destructive" className="h-5 text-xs">
+                <Badge variant="destructive" className="h-5 text-xs shrink-0">
                   {form.new_count} new
                 </Badge>
               )}
             </div>
           </CardHeader>
-          <CardContent>
+          <CardContent className="space-y-2">
+            {/* Website/Page URL - prominent display */}
+            {form.website_url && (
+              <div className="flex items-center gap-1.5 p-2 rounded-md bg-muted/50">
+                <Globe className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+                <span className="text-xs text-muted-foreground truncate">{form.website_url}</span>
+              </div>
+            )}
+            
+            {/* Submission count */}
             <div className="flex items-center justify-between text-sm">
               <span className="text-muted-foreground">Total submissions</span>
               <span className="font-semibold">{form.submission_count || 0}</span>
             </div>
-            {form.website_url && (
-              <div className="flex items-center gap-1 mt-2 text-xs text-muted-foreground">
-                <Globe className="h-3 w-3" />
-                <span className="truncate">{form.website_url}</span>
-              </div>
-            )}
           </CardContent>
         </Card>
       ))}

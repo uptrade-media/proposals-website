@@ -2,6 +2,7 @@
 import { createSupabaseAdmin, getAuthenticatedUser } from './utils/supabase.js'
 import { Client, Environment } from 'square'
 import { Resend } from 'resend'
+import { paymentConfirmationEmail, paymentNotificationAdminEmail } from './utils/email-templates.js'
 
 const SQUARE_ACCESS_TOKEN = process.env.SQUARE_ACCESS_TOKEN
 const SQUARE_LOCATION_ID = process.env.SQUARE_LOCATION_ID
@@ -221,40 +222,27 @@ export async function handler(event) {
       })
     }
 
-    // Send confirmation emails
+    // Send confirmation emails with branded templates
     if (RESEND_API_KEY) {
       const resend = new Resend(RESEND_API_KEY)
       
       // Email to client
-      if (invoice.contact?.email) {
+      const clientEmail = invoice.contact?.email || invoice.sent_to_email
+      if (clientEmail) {
         try {
           await resend.emails.send({
             from: RESEND_FROM,
-            to: invoice.contact.email,
-            subject: `Payment Successful - Invoice ${invoice.invoice_number}`,
-            html: `
-              <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto;">
-                <h2 style="color: #4bbf39;">Payment Confirmed</h2>
-                <p>Hi ${invoice.contact.name || 'there'},</p>
-                <p>Your payment has been processed successfully. Thank you!</p>
-                <div style="background: #f5f5f5; padding: 20px; border-radius: 8px; margin: 20px 0;">
-                  <p><strong>Invoice Number:</strong> ${invoice.invoice_number}</p>
-                  <p><strong>Amount Paid:</strong> $${invoice.total_amount.toFixed(2)}</p>
-                  <p><strong>Payment Date:</strong> ${new Date().toLocaleDateString()}</p>
-                  <p><strong>Transaction ID:</strong> ${payment.id}</p>
-                </div>
-                <p>
-                  <a href="https://portal.uptrademedia.com/billing" 
-                     style="display: inline-block; background: #4bbf39; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px;">
-                    View Receipt
-                  </a>
-                </p>
-                <p style="color: #666; font-size: 14px; margin-top: 30px;">
-                  Best regards,<br>Uptrade Media
-                </p>
-              </div>
-            `
+            to: clientEmail,
+            subject: `Payment Confirmed - Invoice ${invoice.invoice_number}`,
+            html: paymentConfirmationEmail({
+              recipientName: invoice.contact?.name || clientEmail.split('@')[0],
+              invoiceNumber: invoice.invoice_number,
+              amount: invoice.total_amount,
+              transactionId: payment.id,
+              paidDate: now
+            })
           })
+          console.log(`[invoices-pay] Sent payment confirmation to ${clientEmail}`)
         } catch (emailError) {
           console.error('[invoices-pay] Client email error:', emailError)
         }
@@ -266,20 +254,16 @@ export async function handler(event) {
           await resend.emails.send({
             from: RESEND_FROM,
             to: ADMIN_EMAIL,
-            subject: `Payment Received - ${invoice.invoice_number} ($${invoice.total_amount.toFixed(2)})`,
-            html: `
-              <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto;">
-                <h2>Payment Received</h2>
-                <p>A payment has been processed:</p>
-                <div style="background: #f5f5f5; padding: 20px; border-radius: 8px; margin: 20px 0;">
-                  <p><strong>Client:</strong> ${invoice.contact?.name || 'Unknown'} (${invoice.contact?.email || 'N/A'})</p>
-                  <p><strong>Invoice:</strong> ${invoice.invoice_number}</p>
-                  <p><strong>Amount:</strong> $${invoice.total_amount.toFixed(2)}</p>
-                  <p><strong>Transaction ID:</strong> ${payment.id}</p>
-                </div>
-              </div>
-            `
+            subject: `💰 Payment Received - ${invoice.invoice_number} ($${invoice.total_amount.toFixed(2)})`,
+            html: paymentNotificationAdminEmail({
+              clientName: invoice.contact?.name || 'Quick Invoice Customer',
+              clientEmail: clientEmail || 'N/A',
+              invoiceNumber: invoice.invoice_number,
+              amount: invoice.total_amount,
+              transactionId: payment.id
+            })
           })
+          console.log(`[invoices-pay] Sent payment notification to admin`)
         } catch (emailError) {
           console.error('[invoices-pay] Admin email error:', emailError)
         }

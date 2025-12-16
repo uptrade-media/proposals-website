@@ -40,14 +40,10 @@ export async function handler(event) {
 
     const supabase = createSupabaseAdmin()
 
-    // Build query
+    // Build query - use simple select first, then join relations if they exist
     let query = supabase
       .from('invoices')
-      .select(`
-        *,
-        contact:contacts(id, name, email, company),
-        project:projects(id, title)
-      `)
+      .select('*')
       .order('created_at', { ascending: false })
 
     // Apply filters based on role
@@ -74,8 +70,37 @@ export async function handler(event) {
       return {
         statusCode: 500,
         headers,
-        body: JSON.stringify({ error: 'Failed to fetch invoices' })
+        body: JSON.stringify({ 
+          error: 'Failed to fetch invoices',
+          details: queryError.message,
+          code: queryError.code
+        })
       }
+    }
+
+    // Fetch related contact and project data if we have invoices
+    const contactIds = [...new Set((invoices || []).filter(i => i.contact_id).map(i => i.contact_id))]
+    const projectIds = [...new Set((invoices || []).filter(i => i.project_id).map(i => i.project_id))]
+
+    let contactsMap = {}
+    let projectsMap = {}
+
+    if (contactIds.length > 0) {
+      const { data: contacts } = await supabase
+        .from('contacts')
+        .select('id, name, email, company')
+        .in('id', contactIds)
+      
+      contacts?.forEach(c => { contactsMap[c.id] = c })
+    }
+
+    if (projectIds.length > 0) {
+      const { data: projects } = await supabase
+        .from('projects')
+        .select('id, title')
+        .in('id', projectIds)
+      
+      projects?.forEach(p => { projectsMap[p.id] = p })
     }
 
     // Format response
@@ -93,8 +118,10 @@ export async function handler(event) {
       paymentMethod: inv.payment_method,
       squareInvoiceId: inv.square_invoice_id,
       squarePaymentId: inv.square_payment_id,
-      contact: inv.contact,
-      project: inv.project,
+      contactId: inv.contact_id,
+      projectId: inv.project_id,
+      contact: contactsMap[inv.contact_id] || null,
+      project: projectsMap[inv.project_id] || null,
       // Send tracking
       sentAt: inv.sent_at,
       sentToEmail: inv.sent_to_email,

@@ -2,6 +2,8 @@
 import { createSupabaseAdmin, getAuthenticatedUser } from './utils/supabase.js'
 import { Client, Environment } from 'square'
 import { Resend } from 'resend'
+import crypto from 'crypto'
+import { invoiceEmail } from './utils/email-templates.js'
 
 const SQUARE_ACCESS_TOKEN = process.env.SQUARE_ACCESS_TOKEN
 const SQUARE_ENVIRONMENT = process.env.SQUARE_ENVIRONMENT || 'sandbox'
@@ -225,6 +227,10 @@ export async function handler(event) {
       }
     }
 
+    // Generate payment token (magic link)
+    const paymentToken = crypto.randomBytes(32).toString('hex')
+    const paymentTokenExpires = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000) // 30 days
+
     // Calculate next recurring date if this is a recurring invoice
     let nextRecurringDate = null
     if (isRecurring) {
@@ -245,8 +251,12 @@ export async function handler(event) {
         total_amount: totalAmountValue,
         description: description || null,
         due_date: dueDate || new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
-        status: 'pending',
+        status: 'sent',
         square_invoice_id: squareInvoiceId,
+        payment_token: paymentToken,
+        payment_token_expires: paymentTokenExpires.toISOString(),
+        sent_to_email: targetContact.email.toLowerCase(),
+        sent_at: new Date().toISOString(),
         // Recurring invoice fields
         is_recurring: isRecurring,
         recurring_interval: isRecurring ? recurringInterval : null,
@@ -272,39 +282,27 @@ export async function handler(event) {
       }
     }
 
-    // Send email notification to client
+    // Send email notification to client with magic payment link
     if (RESEND_API_KEY && targetContact.email) {
       try {
         const resend = new Resend(RESEND_API_KEY)
         await resend.emails.send({
           from: RESEND_FROM,
           to: targetContact.email,
-          subject: `New Invoice ${invoiceNumber} - $${totalAmountValue.toFixed(2)}`,
-          html: `
-            <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto;">
-              <h2 style="color: #4bbf39;">New Invoice</h2>
-              <p>Hi ${targetContact.name || 'there'},</p>
-              <p>A new invoice has been created for you:</p>
-              <div style="background: #f5f5f5; padding: 20px; border-radius: 8px; margin: 20px 0;">
-                <p><strong>Invoice Number:</strong> ${invoiceNumber}</p>
-                <p><strong>Amount:</strong> $${amountValue.toFixed(2)}</p>
-                ${taxAmountValue > 0 ? `<p><strong>Tax:</strong> $${taxAmountValue.toFixed(2)}</p>` : ''}
-                <p><strong>Total:</strong> $${totalAmountValue.toFixed(2)}</p>
-                <p><strong>Due Date:</strong> ${new Date(dueDate || Date.now() + 30 * 24 * 60 * 60 * 1000).toLocaleDateString()}</p>
-                ${description ? `<p><strong>Description:</strong> ${description}</p>` : ''}
-              </div>
-              <p>
-                <a href="https://portal.uptrademedia.com/billing" 
-                   style="display: inline-block; background: #4bbf39; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px;">
-                  View Invoice
-                </a>
-              </p>
-              <p style="color: #666; font-size: 14px; margin-top: 30px;">
-                Best regards,<br>Uptrade Media
-              </p>
-            </div>
-          `
+          subject: `Invoice ${invoiceNumber} from Uptrade Media - $${totalAmountValue.toFixed(2)}`,
+          html: invoiceEmail({
+            recipientName: targetContact.name || targetContact.email.split('@')[0],
+            invoiceNumber: invoiceNumber,
+            description: description,
+            amount: amountValue,
+            taxAmount: taxAmountValue,
+            totalAmount: totalAmountValue,
+            dueDate: dueDate || new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
+            paymentToken: paymentToken,
+            invoiceId: newInvoice.id
+          })
         })
+        console.log(`[invoices-create] Sent invoice email to ${targetContact.email}`)
       } catch (emailError) {
         console.error('[invoices-create] Email error:', emailError)
         // Don't fail the request if email fails

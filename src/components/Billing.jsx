@@ -103,6 +103,20 @@ const Billing = () => {
   const [statusFilter, setStatusFilter] = useState('')
   const [paymentDialogOpen, setPaymentDialogOpen] = useState(false)
   const [invoiceToPay, setInvoiceToPay] = useState(null)
+  
+  // Quick Invoice state
+  const [isQuickInvoiceDialogOpen, setIsQuickInvoiceDialogOpen] = useState(false)
+  const [quickInvoiceLoading, setQuickInvoiceLoading] = useState(false)
+  const [quickInvoiceSuccess, setQuickInvoiceSuccess] = useState(null)
+  const [quickInvoiceData, setQuickInvoiceData] = useState({
+    email: '',
+    name: '',
+    company: '',
+    amount: '',
+    description: '',
+    due_date: '',
+    send_now: true
+  })
 
   // Fetch initial data only once
   useEffect(() => {
@@ -198,6 +212,64 @@ const Billing = () => {
     const result = await updateInvoice(selectedInvoice.id, invoiceData)
     
     if (result.success) {
+      setIsEditDialogOpen(false)
+      setSelectedInvoice(null)
+      resetForm()
+    }
+  }
+  
+  const handleQuickInvoice = async (e) => {
+    e.preventDefault()
+    setQuickInvoiceLoading(true)
+    setQuickInvoiceSuccess(null)
+    
+    try {
+      const response = await api.post('/.netlify/functions/invoices-create-quick', quickInvoiceData)
+      
+      if (response.data.success) {
+        setQuickInvoiceSuccess({
+          invoice: response.data.invoice,
+          payment_url: response.data.payment_url
+        })
+        
+        // Refresh invoices list
+        fetchInvoices()
+        fetchBillingSummary()
+        
+        // Reset form after showing success
+        setTimeout(() => {
+          setQuickInvoiceData({
+            email: '',
+            name: '',
+            company: '',
+            amount: '',
+            description: '',
+            due_date: '',
+            send_now: true
+          })
+        }, 5000)
+      }
+    } catch (err) {
+      console.error('Quick invoice error:', err)
+      alert(err.response?.data?.error || 'Failed to create quick invoice')
+    } finally {
+      setQuickInvoiceLoading(false)
+    }
+  }
+  
+  const resetQuickInvoiceDialog = () => {
+    setIsQuickInvoiceDialogOpen(false)
+    setQuickInvoiceSuccess(null)
+    setQuickInvoiceData({
+      email: '',
+      name: '',
+      company: '',
+      amount: '',
+      description: '',
+      due_date: '',
+      send_now: true
+    })
+  }
       setIsEditDialogOpen(false)
       setSelectedInvoice(null)
       resetForm()
@@ -319,13 +391,200 @@ const Billing = () => {
           <p className="text-[var(--text-secondary)]">Manage invoices and billing information</p>
         </div>
         {isAdmin && (
-          <Dialog open={isCreateDialogOpen} onOpenChange={setIsCreateDialogOpen}>
-            <DialogTrigger asChild>
-              <Button variant="glass-primary">
-                <Plus className="w-4 h-4 mr-2" />
-                Create Invoice
-              </Button>
-            </DialogTrigger>
+          <div className="flex gap-2">
+            <Dialog open={isQuickInvoiceDialogOpen} onOpenChange={setIsQuickInvoiceDialogOpen}>
+              <DialogTrigger asChild>
+                <Button variant="outline">
+                  <Mail className="w-4 h-4 mr-2" />
+                  Quick Invoice
+                </Button>
+              </DialogTrigger>
+              <DialogContent className="max-w-md">
+                <DialogHeader>
+                  <DialogTitle>Quick Invoice</DialogTitle>
+                  <DialogDescription>
+                    Send a one-off invoice to anyone via email with magic payment link.
+                  </DialogDescription>
+                </DialogHeader>
+                
+                {quickInvoiceSuccess ? (
+                  <div className="space-y-4">
+                    <Alert>
+                      <CheckCircle className="h-4 w-4" />
+                      <AlertDescription>
+                        Invoice created successfully! {quickInvoiceData.send_now && 'Email sent with payment link.'}
+                      </AlertDescription>
+                    </Alert>
+                    
+                    <div className="space-y-2">
+                      <Label>Payment Link</Label>
+                      <div className="flex gap-2">
+                        <Input 
+                          value={quickInvoiceSuccess.payment_url} 
+                          readOnly 
+                          className="font-mono text-xs"
+                        />
+                        <Button
+                          size="sm"
+                          onClick={() => {
+                            navigator.clipboard.writeText(quickInvoiceSuccess.payment_url)
+                            alert('Link copied to clipboard!')
+                          }}
+                        >
+                          Copy
+                        </Button>
+                      </div>
+                      <p className="text-xs text-[var(--text-muted)]">
+                        Share this link directly or via the email that was sent.
+                      </p>
+                    </div>
+                    
+                    <div className="flex justify-end space-x-2">
+                      <Button variant="outline" onClick={resetQuickInvoiceDialog}>
+                        Close
+                      </Button>
+                      <Button 
+                        variant="glass-primary" 
+                        onClick={() => {
+                          setQuickInvoiceSuccess(null)
+                          setQuickInvoiceData({
+                            email: '',
+                            name: '',
+                            company: '',
+                            amount: '',
+                            description: '',
+                            due_date: '',
+                            send_now: true
+                          })
+                        }}
+                      >
+                        Create Another
+                      </Button>
+                    </div>
+                  </div>
+                ) : (
+                  <form onSubmit={handleQuickInvoice} className="space-y-4">
+                    <div className="space-y-2">
+                      <Label htmlFor="quick_email">Email Address *</Label>
+                      <Input
+                        id="quick_email"
+                        type="email"
+                        value={quickInvoiceData.email}
+                        onChange={(e) => setQuickInvoiceData(prev => ({ ...prev, email: e.target.value }))}
+                        placeholder="client@example.com"
+                        required
+                      />
+                    </div>
+                    
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="space-y-2">
+                        <Label htmlFor="quick_name">Name</Label>
+                        <Input
+                          id="quick_name"
+                          value={quickInvoiceData.name}
+                          onChange={(e) => setQuickInvoiceData(prev => ({ ...prev, name: e.target.value }))}
+                          placeholder="John Doe"
+                        />
+                      </div>
+                      
+                      <div className="space-y-2">
+                        <Label htmlFor="quick_company">Company</Label>
+                        <Input
+                          id="quick_company"
+                          value={quickInvoiceData.company}
+                          onChange={(e) => setQuickInvoiceData(prev => ({ ...prev, company: e.target.value }))}
+                          placeholder="Acme Inc"
+                        />
+                      </div>
+                    </div>
+                    
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="space-y-2">
+                        <Label htmlFor="quick_amount">Amount ($) *</Label>
+                        <Input
+                          id="quick_amount"
+                          type="number"
+                          step="0.01"
+                          value={quickInvoiceData.amount}
+                          onChange={(e) => setQuickInvoiceData(prev => ({ ...prev, amount: e.target.value }))}
+                          placeholder="0.00"
+                          required
+                        />
+                      </div>
+                      
+                      <div className="space-y-2">
+                        <Label htmlFor="quick_due_date">Due Date *</Label>
+                        <Input
+                          id="quick_due_date"
+                          type="date"
+                          value={quickInvoiceData.due_date}
+                          onChange={(e) => setQuickInvoiceData(prev => ({ ...prev, due_date: e.target.value }))}
+                          required
+                        />
+                      </div>
+                    </div>
+                    
+                    <div className="space-y-2">
+                      <Label htmlFor="quick_description">Description</Label>
+                      <Textarea
+                        id="quick_description"
+                        value={quickInvoiceData.description}
+                        onChange={(e) => setQuickInvoiceData(prev => ({ ...prev, description: e.target.value }))}
+                        placeholder="Services rendered..."
+                        rows={3}
+                      />
+                    </div>
+                    
+                    <div className="flex items-center space-x-2">
+                      <Checkbox 
+                        id="quick_send_now" 
+                        checked={quickInvoiceData.send_now}
+                        onCheckedChange={(checked) => setQuickInvoiceData(prev => ({ ...prev, send_now: checked }))}
+                      />
+                      <Label htmlFor="quick_send_now" className="cursor-pointer">
+                        Send email immediately with payment link
+                      </Label>
+                    </div>
+                    
+                    <div className="flex justify-end space-x-2">
+                      <Button 
+                        type="button" 
+                        variant="outline" 
+                        onClick={() => setIsQuickInvoiceDialogOpen(false)}
+                        disabled={quickInvoiceLoading}
+                      >
+                        Cancel
+                      </Button>
+                      <Button 
+                        type="submit" 
+                        disabled={quickInvoiceLoading || !quickInvoiceData.email || !quickInvoiceData.amount || !quickInvoiceData.due_date}
+                        variant="glass-primary"
+                      >
+                        {quickInvoiceLoading ? (
+                          <>
+                            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                            Creating...
+                          </>
+                        ) : (
+                          <>
+                            <Send className="mr-2 h-4 w-4" />
+                            {quickInvoiceData.send_now ? 'Create & Send' : 'Create Invoice'}
+                          </>
+                        )}
+                      </Button>
+                    </div>
+                  </form>
+                )}
+              </DialogContent>
+            </Dialog>
+            
+            <Dialog open={isCreateDialogOpen} onOpenChange={setIsCreateDialogOpen}>
+              <DialogTrigger asChild>
+                <Button variant="glass-primary">
+                  <Plus className="w-4 h-4 mr-2" />
+                  Create Invoice
+                </Button>
+              </DialogTrigger>
             <DialogContent className="max-w-md">
               <DialogHeader>
                 <DialogTitle>Create New Invoice</DialogTitle>
@@ -544,6 +803,7 @@ const Billing = () => {
               </form>
             </DialogContent>
           </Dialog>
+          </div>
         )}
       </div>
 

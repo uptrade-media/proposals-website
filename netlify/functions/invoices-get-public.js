@@ -30,32 +30,40 @@ export async function handler(event) {
     // Fetch invoice by payment token
     const { data: invoice, error: invoiceError } = await supabase
       .from('invoices')
-      .select(`
-        id,
-        invoice_number,
-        amount,
-        tax_amount,
-        total_amount,
-        description,
-        due_date,
-        status,
-        paid_at,
-        view_count,
-        payment_token_expires,
-        contact:contacts(id, name, email, company),
-        project:projects(id, title)
-      `)
+      .select('*')
       .eq('payment_token', token)
       .single()
 
     if (invoiceError || !invoice) {
-      console.error('[invoices-get-public] Invoice not found for token')
+      console.error('[invoices-get-public] Invoice not found for token:', invoiceError?.message)
       return { statusCode: 404, headers, body: JSON.stringify({ error: 'Invoice not found or link has expired' }) }
     }
 
     // Check if token is expired
     if (invoice.payment_token_expires && new Date(invoice.payment_token_expires) < new Date()) {
       return { statusCode: 410, headers, body: JSON.stringify({ error: 'Payment link has expired. Please contact us for a new invoice.' }) }
+    }
+
+    // Fetch related data separately
+    let contactData = null
+    let projectData = null
+
+    if (invoice.contact_id) {
+      const { data: contact } = await supabase
+        .from('contacts')
+        .select('id, name, email, company')
+        .eq('id', invoice.contact_id)
+        .single()
+      contactData = contact
+    }
+
+    if (invoice.project_id) {
+      const { data: project } = await supabase
+        .from('projects')
+        .select('id, title')
+        .eq('id', invoice.project_id)
+        .single()
+      projectData = project
     }
 
     // Track view
@@ -87,12 +95,13 @@ export async function handler(event) {
       dueDate: invoice.due_date,
       status: invoice.status,
       paidAt: invoice.paid_at,
-      contact: invoice.contact ? {
-        name: invoice.contact.name,
-        company: invoice.contact.company
+      sentToEmail: invoice.sent_to_email,
+      contact: contactData ? {
+        name: contactData.name,
+        company: contactData.company
       } : null,
-      project: invoice.project ? {
-        title: invoice.project.title
+      project: projectData ? {
+        title: projectData.title
       } : null
     }
 
