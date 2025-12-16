@@ -8,8 +8,7 @@ const SQUARE_ACCESS_TOKEN = process.env.SQUARE_ACCESS_TOKEN
 const SQUARE_LOCATION_ID = process.env.SQUARE_LOCATION_ID
 const SQUARE_ENVIRONMENT = process.env.SQUARE_ENVIRONMENT || 'sandbox'
 const RESEND_API_KEY = process.env.RESEND_API_KEY
-const RESEND_FROM_EMAIL = process.env.RESEND_FROM_EMAIL || 'portal@send.uptrademedia.com'
-const RESEND_FROM = `Uptrade Media <${RESEND_FROM_EMAIL}>`
+const RESEND_FROM = process.env.RESEND_FROM || 'Uptrade Media <portal@send.uptrademedia.com>'
 const ADMIN_EMAIL = process.env.ADMIN_EMAIL
 
 // Simple in-memory rate limiting (resets on function cold start)

@@ -75,7 +75,7 @@ export async function handler(event) {
 
       try {
         const emailResult = await resend.emails.send({
-          from: process.env.RESEND_FROM_EMAIL || 'portal@uptrademedia.com',
+          from: process.env.RESEND_FROM || 'Uptrade Media <portal@uptrademedia.com>',
           to: clientContact.email,
           subject: emailSubject,
           html: `

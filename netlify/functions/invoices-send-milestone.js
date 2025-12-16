@@ -10,8 +10,7 @@ const supabase = createClient(
 )
 
 const RESEND_API_KEY = process.env.RESEND_API_KEY
-const RESEND_FROM_EMAIL = process.env.RESEND_FROM_EMAIL || 'portal@send.uptrademedia.com'
-const RESEND_FROM = `Uptrade Media <${RESEND_FROM_EMAIL}>`
+const RESEND_FROM = process.env.RESEND_FROM || 'Uptrade Media <portal@send.uptrademedia.com>'
 const PORTAL_URL = process.env.URL || 'https://portal.uptrademedia.com'
 
 export async function handler(event) {

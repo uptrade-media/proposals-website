@@ -14,7 +14,7 @@ import crypto from 'crypto'
 import { invoiceEmail } from './utils/email-templates.js'
 
 const RESEND_API_KEY = process.env.RESEND_API_KEY
-const RESEND_FROM = process.env.RESEND_FROM_EMAIL || 'Uptrade Media <billing@uptrademedia.com>'
+const RESEND_FROM = process.env.RESEND_FROM || 'Uptrade Media <billing@uptrademedia.com>'
 const PORTAL_URL = process.env.PORTAL_URL || process.env.URL || 'https://portal.uptrademedia.com'
 
 export async function handler(event) {
@@ -160,6 +160,12 @@ export async function handler(event) {
     // Send email if requested
     if (finalSendNow && RESEND_API_KEY) {
       try {
+        console.log('[quick-invoice] Sending email with config:', {
+          from: RESEND_FROM,
+          to: email,
+          hasApiKey: !!RESEND_API_KEY,
+          apiKeyPrefix: RESEND_API_KEY?.substring(0, 7)
+        })
         console.log('[quick-invoice] Attempting to send email to:', email)
         const resend = new Resend(RESEND_API_KEY)
         const recipientName = name || email.split('@')[0]
@@ -185,10 +191,16 @@ export async function handler(event) {
             invoiceId: invoice.id
           })
         })
-        console.log('[quick-invoice] Email sent successfully:', emailResult.data?.id)
+        console.log('[quick-invoice] Email sent successfully:', emailResult?.id || emailResult?.data?.id)
+        console.log('[quick-invoice] Full email result:', JSON.stringify(emailResult))
       } catch (emailError) {
         console.error('[quick-invoice] Email send error:', emailError.message)
-        console.error('[quick-invoice] Email error details:', emailError)
+        console.error('[quick-invoice] Email error details:', JSON.stringify({
+          name: emailError.name,
+          message: emailError.message,
+          statusCode: emailError.statusCode,
+          stack: emailError.stack
+        }))
         // Don't fail the request, invoice was still created
       }
     } else {

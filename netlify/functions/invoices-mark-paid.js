@@ -3,8 +3,7 @@ import { createSupabaseAdmin, getAuthenticatedUser } from './utils/supabase.js'
 import { Resend } from 'resend'
 
 const RESEND_API_KEY = process.env.RESEND_API_KEY
-const RESEND_FROM_EMAIL = process.env.RESEND_FROM_EMAIL || 'portal@send.uptrademedia.com'
-const RESEND_FROM = `Uptrade Media <${RESEND_FROM_EMAIL}>`
+const RESEND_FROM = process.env.RESEND_FROM || 'Uptrade Media <portal@send.uptrademedia.com>'
 const ADMIN_EMAIL = process.env.ADMIN_EMAIL
 
 export async function handler(event) {
