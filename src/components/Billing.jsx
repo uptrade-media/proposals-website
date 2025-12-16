@@ -270,12 +270,6 @@ const Billing = () => {
       send_now: true
     })
   }
-      setIsEditDialogOpen(false)
-      setSelectedInvoice(null)
-      resetForm()
-      fetchBillingSummary() // Refresh summary
-    }
-  }
 
   const openEditDialog = (invoice) => {
     setSelectedInvoice(invoice)
