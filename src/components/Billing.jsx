@@ -335,10 +335,11 @@ const Billing = () => {
   const handleSendInvoice = async (invoice) => {
     if (invoice.status === 'paid') return
     
+    const recipientEmail = invoice.sentToEmail || invoice.contact?.email || 'recipient'
     const action = invoice.sentAt ? 'Resend' : 'Send'
     const description = invoice.sentAt 
-      ? `Resend invoice ${invoice.invoiceNumber} to ${invoice.contact?.email}?`
-      : `Send invoice ${invoice.invoiceNumber} to ${invoice.contact?.email}?`
+      ? `Resend invoice ${invoice.invoiceNumber} to ${recipientEmail}?`
+      : `Send invoice ${invoice.invoiceNumber} to ${recipientEmail}?`
     
     setConfirmDialog({
       open: true,
@@ -371,10 +372,12 @@ const Billing = () => {
       return
     }
     
+    const recipientEmail = invoice.sentToEmail || invoice.contact?.email || 'recipient'
+    
     setConfirmDialog({
       open: true,
       title: 'Send Payment Reminder',
-      description: `Send payment reminder for ${invoice.invoiceNumber} to ${invoice.contact?.email}? (Reminder ${(invoice.reminderCount || 0) + 1}/3)`,
+      description: `Send payment reminder for ${invoice.invoiceNumber} to ${recipientEmail}? (Reminder ${(invoice.reminderCount || 0) + 1}/3)`,
       onConfirm: async () => {
         setConfirmDialog({ ...confirmDialog, open: false })
         setSendingReminderId(invoice.id)

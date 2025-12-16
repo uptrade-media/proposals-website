@@ -4,9 +4,9 @@ import { Alert, AlertDescription } from '@/components/ui/alert'
 import { CreditCard, CheckCircle, Loader2, Lock, Shield } from 'lucide-react'
 
 // Square Web Payments SDK
-const SQUARE_APPLICATION_ID = import.meta.env.VITE_SQUARE_APPLICATION_ID
-const SQUARE_LOCATION_ID = import.meta.env.VITE_SQUARE_LOCATION_ID
-const SQUARE_ENVIRONMENT = import.meta.env.VITE_SQUARE_ENVIRONMENT || 'sandbox'
+const SQUARE_APPLICATION_ID = import.meta.env.SQUARE_APPLICATION_ID
+const SQUARE_LOCATION_ID = import.meta.env.SQUARE_LOCATION_ID
+const SQUARE_ENVIRONMENT = import.meta.env.SQUARE_ENVIRONMENT || 'sandbox'
 
 export default function ProposalDepositPayment({
   proposalId,

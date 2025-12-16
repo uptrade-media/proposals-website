@@ -29,7 +29,7 @@ export default function PaymentForm({ invoice, customer, onSuccess, onError, onC
   // Load Square Web Payments SDK
   useEffect(() => {
     const script = document.createElement('script')
-    const isProduction = import.meta.env.VITE_SQUARE_ENVIRONMENT === 'production'
+    const isProduction = import.meta.env.SQUARE_ENVIRONMENT === 'production'
     script.src = isProduction 
       ? 'https://web.squarecdn.com/v1/square.js'
       : 'https://sandbox.web.squarecdn.com/v1/square.js'
@@ -59,15 +59,15 @@ export default function PaymentForm({ invoice, customer, onSuccess, onError, onC
 
     try {
       // Get application ID and location ID from environment variables
-      const applicationId = import.meta.env.VITE_SQUARE_APPLICATION_ID
-      const locationId = import.meta.env.VITE_SQUARE_LOCATION_ID
+      const applicationId = import.meta.env.SQUARE_APPLICATION_ID
+      const locationId = import.meta.env.SQUARE_LOCATION_ID
 
       if (!applicationId) {
-        throw new Error('VITE_SQUARE_APPLICATION_ID is required')
+        throw new Error('SQUARE_APPLICATION_ID is required')
       }
 
       if (!locationId) {
-        throw new Error('VITE_SQUARE_LOCATION_ID is required')
+        throw new Error('SQUARE_LOCATION_ID is required')
       }
 
       // Initialize payments

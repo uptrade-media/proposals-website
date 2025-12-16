@@ -6,9 +6,9 @@ import { CreditCard, CheckCircle, Loader2, Lock, Shield, Receipt } from 'lucide-
 import api from '@/lib/api'
 
 // Square Web Payments SDK
-const SQUARE_APPLICATION_ID = import.meta.env.VITE_SQUARE_APPLICATION_ID
-const SQUARE_LOCATION_ID = import.meta.env.VITE_SQUARE_LOCATION_ID
-const SQUARE_ENVIRONMENT = import.meta.env.VITE_SQUARE_ENVIRONMENT || 'sandbox'
+const SQUARE_APPLICATION_ID = import.meta.env.SQUARE_APPLICATION_ID
+const SQUARE_LOCATION_ID = import.meta.env.SQUARE_LOCATION_ID
+const SQUARE_ENVIRONMENT = import.meta.env.SQUARE_ENVIRONMENT || 'sandbox'
 
 export default function InvoicePaymentDialog({
   invoice,

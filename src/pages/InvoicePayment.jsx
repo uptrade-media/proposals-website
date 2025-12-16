@@ -18,9 +18,9 @@ import {
 import api from '@/lib/api'
 
 // Square Web SDK
-const SQUARE_APP_ID = import.meta.env.VITE_SQUARE_APPLICATION_ID
-const SQUARE_LOCATION_ID = import.meta.env.VITE_SQUARE_LOCATION_ID
-const SQUARE_ENV = import.meta.env.VITE_SQUARE_ENVIRONMENT || 'sandbox'
+const SQUARE_APP_ID = import.meta.env.SQUARE_APPLICATION_ID
+const SQUARE_LOCATION_ID = import.meta.env.SQUARE_LOCATION_ID
+const SQUARE_ENV = import.meta.env.SQUARE_ENVIRONMENT || 'sandbox'
 
 function formatCurrency(amount) {
   return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(amount || 0)
@@ -120,65 +120,103 @@ export default function InvoicePayment() {
 
   const initializeSquare = async () => {
     try {
-      // Load Square Web SDK
+      console.log('[Square Init] Starting Square initialization...')
+      console.log('[Square Init] App ID:', SQUARE_APP_ID ? 'Present' : 'Missing')
+      console.log('[Square Init] Location ID:', SQUARE_LOCATION_ID ? 'Present' : 'Missing')
+      console.log('[Square Init] Environment:', SQUARE_ENV)
+      
+      // Check if Square environment variables are present
+      if (!SQUARE_APP_ID || !SQUARE_LOCATION_ID) {
+        throw new Error('Square payment configuration is missing. Please contact support.')
+      }
+      
+      // Load Square Web SDK with timeout
       if (!window.Square) {
-        await new Promise((resolve, reject) => {
-          const script = document.createElement('script')
-          script.src = SQUARE_ENV === 'production' 
-            ? 'https://web.squarecdn.com/v1/square.js'
-            : 'https://sandbox.web.squarecdn.com/v1/square.js'
-          script.onload = resolve
-          script.onerror = reject
-          document.body.appendChild(script)
-        })
+        console.log('[Square Init] Loading Square SDK...')
+        await Promise.race([
+          new Promise((resolve, reject) => {
+            const script = document.createElement('script')
+            script.src = SQUARE_ENV === 'production' 
+              ? 'https://web.squarecdn.com/v1/square.js'
+              : 'https://sandbox.web.squarecdn.com/v1/square.js'
+            script.onload = () => {
+              console.log('[Square Init] SDK loaded successfully')
+              resolve()
+            }
+            script.onerror = () => {
+              console.error('[Square Init] Failed to load SDK')
+              reject(new Error('Failed to load Square SDK'))
+            }
+            document.body.appendChild(script)
+          }),
+          new Promise((_, reject) => 
+            setTimeout(() => reject(new Error('Square SDK load timeout')), 10000)
+          )
+        ])
       }
 
+      console.log('[Square Init] Initializing payments instance...')
       const paymentsInstance = window.Square.payments(SQUARE_APP_ID, SQUARE_LOCATION_ID)
       
-      const cardInstance = await paymentsInstance.card({
-        style: {
-          '.input-container': {
-            borderColor: '#e5e7eb',
-            borderRadius: '8px',
-          },
-          '.input-container.is-focus': {
-            borderColor: '#4bbf39',
-          },
-          '.input-container.is-error': {
-            borderColor: '#ef4444',
-          },
-          '.message-text': {
-            color: '#6b7280',
-          },
-          '.message-icon': {
-            color: '#6b7280',
-          },
-          '.message-text.is-error': {
-            color: '#ef4444',
-          },
-          '.message-icon.is-error': {
-            color: '#ef4444',
-          },
-          input: {
-            backgroundColor: '#ffffff',
-            color: '#1f2937',
-            fontSize: '16px',
-          },
-          'input::placeholder': {
-            color: '#9ca3af',
-          },
-          'input.is-error': {
-            color: '#ef4444',
-          },
-        }
-      })
+      console.log('[Square Init] Creating card instance...')
+      const cardInstance = await Promise.race([
+        paymentsInstance.card({
+          style: {
+            '.input-container': {
+              borderColor: '#e5e7eb',
+              borderRadius: '8px',
+            },
+            '.input-container.is-focus': {
+              borderColor: '#4bbf39',
+            },
+            '.input-container.is-error': {
+              borderColor: '#ef4444',
+            },
+            '.message-text': {
+              color: '#6b7280',
+            },
+            '.message-icon': {
+              color: '#6b7280',
+            },
+            '.message-text.is-error': {
+              color: '#ef4444',
+            },
+            '.message-icon.is-error': {
+              color: '#ef4444',
+            },
+            input: {
+              backgroundColor: '#ffffff',
+              color: '#1f2937',
+              fontSize: '16px',
+            },
+            'input::placeholder': {
+              color: '#9ca3af',
+            },
+            'input.is-error': {
+              color: '#ef4444',
+            },
+          }
+        }),
+        new Promise((_, reject) => 
+          setTimeout(() => reject(new Error('Card initialization timeout')), 10000)
+        )
+      ])
       
-      await cardInstance.attach('#card-container')
+      console.log('[Square Init] Attaching card to container...')
+      await Promise.race([
+        cardInstance.attach('#card-container'),
+        new Promise((_, reject) => 
+          setTimeout(() => reject(new Error('Card attach timeout')), 10000)
+        )
+      ])
+      
+      console.log('[Square Init] Card ready!')
       setCard(cardInstance)
       setCardReady(true)
     } catch (err) {
-      console.error('Failed to initialize Square:', err)
-      setPaymentError('Failed to initialize payment form. Please refresh and try again.')
+      console.error('[Square Init] Failed:', err)
+      setPaymentError(err.message || 'Failed to initialize payment form. Please refresh and try again.')
+      setCardReady(false)
     }
   }
 
