@@ -50,14 +50,7 @@ export default function App() {
 
   // Show loading ONLY while checking initial auth (not for subsequent checks)
   if (!initialized) {
-    return (
-      <div className="min-h-screen bg-[var(--surface-page)] flex items-center justify-center">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-[var(--brand-primary)] mx-auto mb-4"></div>
-          <p className="text-[var(--text-secondary)]">Loading...</p>
-        </div>
-      </div>
-    )
+    return <UptradeLoading />
   }
 
   return (

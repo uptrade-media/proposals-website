@@ -14,6 +14,14 @@ const UptradeLoading = () => {
           top: 0;
           left: 0;
           z-index: 50;
+          background: var(--surface-page, #ffffff);
+          transition: background-color 0.3s ease;
+        }
+        
+        @media (prefers-color-scheme: dark) {
+          .loader-container {
+            background: var(--surface-page, #000000);
+          }
         }
         
         .loader-content {

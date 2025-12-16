@@ -141,8 +141,7 @@ export async function handler(event) {
         payment_token_expires: paymentTokenExpires.toISOString(),
         sent_to_email: email.toLowerCase(),
         sent_at: finalSendNow ? new Date().toISOString() : null,
-        line_items: lineItems.length > 0 ? lineItems : [{ description, quantity: 1, unitPrice: amountCents }],
-        created_by: contact.id
+        line_items: lineItems.length > 0 ? lineItems : [{ description, quantity: 1, unitPrice: amountCents }]
       })
       .select()
       .single()
