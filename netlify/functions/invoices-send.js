@@ -315,9 +315,16 @@ export async function handler(event) {
       return { statusCode: 400, headers, body: JSON.stringify({ error: 'Invoice is already paid' }) }
     }
 
-    if (!invoice.contact?.email) {
-      return { statusCode: 400, headers, body: JSON.stringify({ error: 'Contact has no email address' }) }
+    // Get recipient email - from contact or sent_to_email (for quick invoices)
+    const recipientEmail = invoice.contact?.email || invoice.sent_to_email
+    const recipientName = invoice.contact?.name || invoice.sent_to_email?.split('@')[0] || 'there'
+    
+    if (!recipientEmail) {
+      return { statusCode: 400, headers, body: JSON.stringify({ error: 'No email address for this invoice' }) }
     }
+
+    // Create a contact-like object for email template
+    const contactForEmail = invoice.contact || { name: recipientName, email: recipientEmail }
 
     // Generate payment token
     const paymentToken = generatePaymentToken()
@@ -335,7 +342,7 @@ export async function handler(event) {
         payment_token_expires: tokenExpires.toISOString(),
         status: 'sent',
         sent_at: new Date().toISOString(),
-        sent_to_email: invoice.contact.email,
+        sent_to_email: recipientEmail,
         next_reminder_date: nextReminderDate,
         updated_at: new Date().toISOString()
       })
@@ -364,12 +371,12 @@ export async function handler(event) {
     }
 
     const resend = new Resend(RESEND_API_KEY)
-    const emailHtml = generateInvoiceEmailHTML(invoice, invoice.contact, paymentUrl)
+    const emailHtml = generateInvoiceEmailHTML(invoice, contactForEmail, paymentUrl)
 
     // Send the initial invoice email immediately
     const { error: emailError } = await resend.emails.send({
       from: RESEND_FROM,
-      to: invoice.contact.email,
+      to: recipientEmail,
       subject: `Invoice ${invoice.invoice_number} from Uptrade Media - ${formatCurrency(invoice.total_amount)}`,
       html: emailHtml
     })
@@ -397,12 +404,12 @@ export async function handler(event) {
       reminderDate.setHours(9, 0, 0, 0) // 9 AM
 
       const reminderNumber = i + 1
-      const reminderHtml = generateReminderEmailHTML(invoice, invoice.contact, paymentUrl, reminderNumber, days)
+      const reminderHtml = generateReminderEmailHTML(invoice, contactForEmail, paymentUrl, reminderNumber, days)
 
       try {
         const { data: scheduled, error: scheduleError } = await resend.emails.send({
           from: RESEND_FROM,
-          to: invoice.contact.email,
+          to: recipientEmail,
           subject: `${days > 7 ? '⚠️ ' : ''}Reminder: Invoice ${invoice.invoice_number} - ${formatCurrency(invoice.total_amount)} Due`,
           html: reminderHtml,
           scheduledAt: reminderDate.toISOString(),
@@ -439,7 +446,7 @@ export async function handler(event) {
         .eq('id', invoiceId)
     }
 
-    console.log(`[invoices-send] Invoice ${invoice.invoice_number} sent to ${invoice.contact.email}`)
+    console.log(`[invoices-send] Invoice ${invoice.invoice_number} sent to ${recipientEmail}`)
 
     return {
       statusCode: 200,
@@ -448,7 +455,7 @@ export async function handler(event) {
         success: true,
         message: 'Invoice sent successfully',
         invoiceNumber: invoice.invoice_number,
-        sentTo: invoice.contact.email,
+        sentTo: recipientEmail,
         paymentUrl,
         scheduledReminders
       })

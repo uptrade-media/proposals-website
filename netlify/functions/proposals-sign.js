@@ -410,11 +410,10 @@ export async function handler(event) {
       .from('proposals')
       .update({
         signed_at: signedAt,
-        client_signature: signatureUrl || signature,
         client_signature_url: signatureUrl || signature,
         client_signed_by: signedBy || null,
         client_signed_at: signedAt,
-        client_signature_ip: clientIp,
+        client_signed_ip: clientIp,
         fully_executed_at: new Date().toISOString(), // Contract is fully executed on client signature
         deposit_amount: depositAmount,
         status: 'accepted', // Immediately accepted

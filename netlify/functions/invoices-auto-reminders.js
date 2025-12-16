@@ -189,7 +189,11 @@ export async function handler(event) {
 
     for (const invoice of invoices) {
       try {
-        if (!invoice.contact?.email) {
+        // Support quick invoices that have sent_to_email instead of contact
+        const recipientEmail = invoice.sent_to_email || invoice.contact?.email
+        const contactForEmail = invoice.contact || { name: recipientEmail?.split('@')[0] || 'Customer', email: recipientEmail }
+
+        if (!recipientEmail) {
           console.log(`[invoices-auto-reminders] Skipping ${invoice.invoice_number} - no email`)
           results.push({ invoiceNumber: invoice.invoice_number, status: 'skipped', reason: 'no email' })
           continue
@@ -207,11 +211,11 @@ export async function handler(event) {
         const paymentUrl = `${PORTAL_URL}/pay/${invoice.payment_token}`
 
         // Send email
-        const emailHtml = generateReminderEmailHTML(invoice, invoice.contact, paymentUrl, newReminderCount, daysOverdue)
+        const emailHtml = generateReminderEmailHTML(invoice, contactForEmail, paymentUrl, newReminderCount, daysOverdue)
 
         const { error: emailError } = await resend.emails.send({
           from: RESEND_FROM,
-          to: invoice.contact.email,
+          to: recipientEmail,
           subject: `${daysOverdue > 7 ? '⚠️ ' : ''}Reminder: Invoice ${invoice.invoice_number} - ${formatCurrency(invoice.total_amount)} Due`,
           html: emailHtml
         })
@@ -237,12 +241,12 @@ export async function handler(event) {
           console.error(`[invoices-auto-reminders] Update failed for ${invoice.invoice_number}:`, updateError)
         }
 
-        console.log(`[invoices-auto-reminders] Sent reminder ${newReminderCount} for ${invoice.invoice_number} to ${invoice.contact.email}`)
+        console.log(`[invoices-auto-reminders] Sent reminder ${newReminderCount} for ${invoice.invoice_number} to ${recipientEmail}`)
         results.push({ 
           invoiceNumber: invoice.invoice_number, 
           status: 'sent', 
           reminderCount: newReminderCount,
-          sentTo: invoice.contact.email
+          sentTo: recipientEmail
         })
 
       } catch (invoiceError) {

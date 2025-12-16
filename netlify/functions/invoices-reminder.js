@@ -178,9 +178,16 @@ export async function handler(event) {
       return { statusCode: 400, headers, body: JSON.stringify({ error: 'Cannot send reminder for paid invoice' }) }
     }
 
-    if (!invoice.contact?.email) {
-      return { statusCode: 400, headers, body: JSON.stringify({ error: 'Contact has no email address' }) }
+    // Get recipient email - from contact or sent_to_email (for quick invoices)
+    const recipientEmail = invoice.contact?.email || invoice.sent_to_email
+    const recipientName = invoice.contact?.name || invoice.sent_to_email?.split('@')[0] || 'there'
+    
+    if (!recipientEmail) {
+      return { statusCode: 400, headers, body: JSON.stringify({ error: 'No email address for this invoice' }) }
     }
+
+    // Create a contact-like object for email template
+    const contactForEmail = invoice.contact || { name: recipientName, email: recipientEmail }
 
     if (!invoice.payment_token) {
       return { statusCode: 400, headers, body: JSON.stringify({ error: 'Invoice has not been sent yet. Send the invoice first.' }) }
@@ -228,11 +235,11 @@ export async function handler(event) {
     }
 
     const resend = new Resend(RESEND_API_KEY)
-    const emailHtml = generateReminderEmailHTML(invoice, invoice.contact, paymentUrl, newReminderCount, daysOverdue)
+    const emailHtml = generateReminderEmailHTML(invoice, contactForEmail, paymentUrl, newReminderCount, daysOverdue)
 
     const { error: emailError } = await resend.emails.send({
       from: RESEND_FROM,
-      to: invoice.contact.email,
+      to: recipientEmail,
       subject: `${daysOverdue > 7 ? '⚠️ ' : ''}Reminder: Invoice ${invoice.invoice_number} - ${formatCurrency(invoice.total_amount)} Due`,
       html: emailHtml
     })
@@ -246,7 +253,7 @@ export async function handler(event) {
       }
     }
 
-    console.log(`[invoices-reminder] Reminder ${newReminderCount} sent for ${invoice.invoice_number} to ${invoice.contact.email}`)
+    console.log(`[invoices-reminder] Reminder ${newReminderCount} sent for ${invoice.invoice_number} to ${recipientEmail}`)
 
     return {
       statusCode: 200,
@@ -256,7 +263,7 @@ export async function handler(event) {
         message: 'Reminder sent successfully',
         reminderCount: newReminderCount,
         nextReminderDate,
-        sentTo: invoice.contact.email
+        sentTo: recipientEmail
       })
     }
 
