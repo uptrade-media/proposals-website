@@ -160,6 +160,7 @@ export async function handler(event) {
     // Send email if requested
     if (finalSendNow && RESEND_API_KEY) {
       try {
+        console.log('[quick-invoice] Attempting to send email to:', email)
         const resend = new Resend(RESEND_API_KEY)
         const recipientName = name || email.split('@')[0]
         const dueDateFormatted = new Date(invoice.due_date).toLocaleDateString('en-US', {
@@ -168,7 +169,7 @@ export async function handler(event) {
           day: 'numeric'
         })
 
-        await resend.emails.send({
+        const emailResult = await resend.emails.send({
           from: RESEND_FROM,
           to: email,
           subject: `Invoice ${invoiceNumber} from Uptrade Media - $${amountValue.toFixed(2)}`,
@@ -184,11 +185,14 @@ export async function handler(event) {
             invoiceId: invoice.id
           })
         })
-        console.log(`[quick-invoice] Sent invoice email to ${email}`)
+        console.log('[quick-invoice] Email sent successfully:', emailResult.data?.id)
       } catch (emailError) {
-        console.error('[quick-invoice] Email send error:', emailError)
+        console.error('[quick-invoice] Email send error:', emailError.message)
+        console.error('[quick-invoice] Email error details:', emailError)
         // Don't fail the request, invoice was still created
       }
+    } else {
+      console.log('[quick-invoice] Email not sent. sendNow:', finalSendNow, 'hasApiKey:', !!RESEND_API_KEY)
     }
 
     return {

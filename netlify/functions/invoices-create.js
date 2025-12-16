@@ -266,11 +266,7 @@ export async function handler(event) {
         recurring_count: isRecurring && recurringCount ? recurringCount : null,
         next_recurring_date: nextRecurringDate
       })
-      .select(`
-        *,
-        contact:contacts(id, name, email, company),
-        project:projects(id, title)
-      `)
+      .select()
       .single()
 
     if (insertError) {
@@ -280,6 +276,17 @@ export async function handler(event) {
         headers,
         body: JSON.stringify({ error: 'Failed to create invoice' })
       }
+    }
+    
+    // Attach contact and project data we already fetched
+    newInvoice.contact = targetContact
+    if (projectId) {
+      const { data: project } = await supabase
+        .from('projects')
+        .select('id, title')
+        .eq('id', projectId)
+        .single()
+      newInvoice.project = project
     }
 
     // Send email notification to client with magic payment link

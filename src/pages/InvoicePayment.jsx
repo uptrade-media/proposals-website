@@ -1,33 +1,29 @@
 // src/pages/InvoicePayment.jsx
-// Public invoice payment page - no login required
-// Accessible via /pay/:token
+// World-class public invoice payment page - no login required
+// Accessible via /pay/:invoiceId?token=xxx
 
-import { useState, useEffect } from 'react'
-import { useParams, useNavigate } from 'react-router-dom'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { useState, useEffect, useRef } from 'react'
+import { useParams } from 'react-router-dom'
 import { Button } from '@/components/ui/button'
-import { Badge } from '@/components/ui/badge'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { 
-  Receipt, 
   CheckCircle, 
   Loader2, 
   AlertCircle,
-  Calendar,
-  Building,
+  Lock,
+  Shield,
   CreditCard,
-  Lock
+  ArrowRight
 } from 'lucide-react'
 import api from '@/lib/api'
 
-// Square Web SDK - use VITE_ prefix for client-side access
-// These should match your Netlify env vars (All scopes = available to frontend)
-const SQUARE_APP_ID = import.meta.env.VITE_SQUARE_APPLICATION_ID || import.meta.env.SQUARE_APPLICATION_ID
-const SQUARE_LOCATION_ID = import.meta.env.VITE_SQUARE_LOCATION_ID || import.meta.env.SQUARE_LOCATION_ID
-const SQUARE_ENV = import.meta.env.VITE_SQUARE_ENVIRONMENT || import.meta.env.SQUARE_ENVIRONMENT || 'sandbox'
+// Square Web SDK
+const SQUARE_APP_ID = import.meta.env.VITE_SQUARE_APPLICATION_ID
+const SQUARE_LOCATION_ID = import.meta.env.VITE_SQUARE_LOCATION_ID
+const SQUARE_ENV = import.meta.env.VITE_SQUARE_ENVIRONMENT || 'sandbox'
 
 function formatCurrency(amount) {
-  return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(amount)
+  return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(amount || 0)
 }
 
 function formatDate(dateString) {
@@ -39,9 +35,33 @@ function formatDate(dateString) {
   })
 }
 
+// Uptrade Logo Component - uses actual logo file with text
+const UptradeLogo = ({ className = "h-10", showText = true }) => (
+  <div className="flex items-center gap-3">
+    <img 
+      src="/logo.svg" 
+      alt="Uptrade Media" 
+      className={className}
+      onError={(e) => {
+        // Fallback to PNG if SVG fails
+        e.target.onerror = null
+        e.target.src = '/logo.png'
+      }}
+    />
+    {showText && (
+      <span className="text-xl font-bold text-gray-900">
+        Uptrade <span className="text-[#4bbf39]">Media</span>
+      </span>
+    )}
+  </div>
+)
+
 export default function InvoicePayment() {
-  const { token } = useParams()
-  const navigate = useNavigate()
+  const { token: invoiceId } = useParams()
+  
+  // Get token from query string
+  const searchParams = new URLSearchParams(window.location.search)
+  const token = searchParams.get('token')
   
   const [invoice, setInvoice] = useState(null)
   const [loading, setLoading] = useState(true)
@@ -50,7 +70,10 @@ export default function InvoicePayment() {
   const [processing, setProcessing] = useState(false)
   const [paymentSuccess, setPaymentSuccess] = useState(false)
   const [card, setCard] = useState(null)
-  const [payments, setPayments] = useState(null)
+  const [cardReady, setCardReady] = useState(false)
+  
+  const cardContainerRef = useRef(null)
+  const cardInitializedRef = useRef(false)
 
   // Fetch invoice on mount
   useEffect(() => {
@@ -59,15 +82,22 @@ export default function InvoicePayment() {
       setLoading(false)
       return
     }
-
     fetchInvoice()
   }, [token])
 
-  // Initialize Square Web SDK
+  // Initialize Square Web SDK - only once
   useEffect(() => {
-    if (!invoice || invoice.status === 'paid' || !SQUARE_APP_ID) return
-
+    if (!invoice || invoice.status === 'paid' || !SQUARE_APP_ID || cardInitializedRef.current) return
+    
+    cardInitializedRef.current = true
     initializeSquare()
+    
+    return () => {
+      // Cleanup card instance
+      if (card) {
+        card.destroy?.()
+      }
+    }
   }, [invoice])
 
   const fetchInvoice = async () => {
@@ -104,11 +134,48 @@ export default function InvoicePayment() {
       }
 
       const paymentsInstance = window.Square.payments(SQUARE_APP_ID, SQUARE_LOCATION_ID)
-      setPayments(paymentsInstance)
-
-      const cardInstance = await paymentsInstance.card()
+      
+      const cardInstance = await paymentsInstance.card({
+        style: {
+          '.input-container': {
+            borderColor: '#e5e7eb',
+            borderRadius: '8px',
+          },
+          '.input-container.is-focus': {
+            borderColor: '#4bbf39',
+          },
+          '.input-container.is-error': {
+            borderColor: '#ef4444',
+          },
+          '.message-text': {
+            color: '#6b7280',
+          },
+          '.message-icon': {
+            color: '#6b7280',
+          },
+          '.message-text.is-error': {
+            color: '#ef4444',
+          },
+          '.message-icon.is-error': {
+            color: '#ef4444',
+          },
+          input: {
+            backgroundColor: '#ffffff',
+            color: '#1f2937',
+            fontSize: '16px',
+          },
+          'input::placeholder': {
+            color: '#9ca3af',
+          },
+          'input.is-error': {
+            color: '#ef4444',
+          },
+        }
+      })
+      
       await cardInstance.attach('#card-container')
       setCard(cardInstance)
+      setCardReady(true)
     } catch (err) {
       console.error('Failed to initialize Square:', err)
       setPaymentError('Failed to initialize payment form. Please refresh and try again.')
@@ -122,14 +189,12 @@ export default function InvoicePayment() {
     setPaymentError(null)
 
     try {
-      // Tokenize card
       const result = await card.tokenize()
       
       if (result.status !== 'OK') {
         throw new Error(result.errors?.[0]?.message || 'Card validation failed')
       }
 
-      // Process payment
       const response = await api.post('/.netlify/functions/invoices-pay-public', {
         token,
         sourceId: result.token
@@ -150,13 +215,14 @@ export default function InvoicePayment() {
   // Loading state
   if (loading) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 flex items-center justify-center p-4">
-        <Card className="w-full max-w-md">
-          <CardContent className="p-8 text-center">
-            <Loader2 className="w-12 h-12 animate-spin text-[#4bbf39] mx-auto mb-4" />
-            <p className="text-gray-600">Loading invoice...</p>
-          </CardContent>
-        </Card>
+      <div className="min-h-screen bg-[#fafafa] flex items-center justify-center p-4">
+        <div className="text-center">
+          <div className="w-16 h-16 rounded-full bg-gradient-to-br from-[#4bbf39] to-[#3a9c2d] flex items-center justify-center mx-auto mb-6 animate-pulse">
+            <CreditCard className="w-8 h-8 text-white" />
+          </div>
+          <Loader2 className="w-6 h-6 animate-spin text-[#4bbf39] mx-auto mb-3" />
+          <p className="text-gray-500 font-medium">Loading your invoice...</p>
+        </div>
       </div>
     )
   }
@@ -164,17 +230,23 @@ export default function InvoicePayment() {
   // Error state
   if (error) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 flex items-center justify-center p-4">
-        <Card className="w-full max-w-md">
-          <CardContent className="p-8 text-center">
-            <AlertCircle className="w-16 h-16 text-red-500 mx-auto mb-4" />
-            <h2 className="text-xl font-semibold text-gray-900 mb-2">Unable to Load Invoice</h2>
-            <p className="text-gray-600 mb-6">{error}</p>
-            <Button onClick={() => window.location.href = 'mailto:hello@uptrademedia.com'}>
+      <div className="min-h-screen bg-[#fafafa] flex items-center justify-center p-4">
+        <div className="max-w-md w-full">
+          <div className="bg-white rounded-3xl shadow-xl shadow-gray-200/50 p-8 text-center">
+            <div className="w-20 h-20 rounded-full bg-red-50 flex items-center justify-center mx-auto mb-6">
+              <AlertCircle className="w-10 h-10 text-red-500" />
+            </div>
+            <h2 className="text-2xl font-bold text-gray-900 mb-3">Unable to Load Invoice</h2>
+            <p className="text-gray-500 mb-8 leading-relaxed">{error}</p>
+            <a 
+              href="mailto:hello@uptrademedia.com"
+              className="inline-flex items-center gap-2 bg-gray-900 text-white px-6 py-3 rounded-full font-medium hover:bg-gray-800 transition-colors"
+            >
               Contact Support
-            </Button>
-          </CardContent>
-        </Card>
+              <ArrowRight className="w-4 h-4" />
+            </a>
+          </div>
+        </div>
       </div>
     )
   }
@@ -182,117 +254,155 @@ export default function InvoicePayment() {
   // Payment success state
   if (paymentSuccess || invoice?.status === 'paid') {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-green-50 to-emerald-100 flex items-center justify-center p-4">
-        <Card className="w-full max-w-md overflow-hidden">
-          <div className="bg-gradient-to-r from-[#4bbf39] to-[#3a9c2d] p-6 text-center">
-            <CheckCircle className="w-16 h-16 text-white mx-auto mb-2" />
-            <h1 className="text-2xl font-bold text-white">Payment Successful!</h1>
+      <div className="min-h-screen bg-gradient-to-b from-[#f0fdf4] to-white flex items-center justify-center p-4">
+        <div className="max-w-md w-full">
+          <div className="text-center mb-8">
+            <UptradeLogo className="h-10 mx-auto" />
           </div>
-          <CardContent className="p-8 text-center">
-            <p className="text-gray-600 mb-6">
-              Thank you for your payment. A receipt has been sent to your email.
-            </p>
-            
-            <div className="bg-gray-50 rounded-lg p-4 mb-6">
-              <div className="flex justify-between mb-2">
-                <span className="text-gray-500">Invoice</span>
-                <span className="font-medium">{invoice?.invoiceNumber}</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-gray-500">Amount Paid</span>
-                <span className="font-bold text-[#4bbf39]">{formatCurrency(invoice?.totalAmount)}</span>
+          
+          <div className="bg-white rounded-3xl shadow-xl shadow-green-100/50 overflow-hidden">
+            {/* Success Header */}
+            <div className="bg-gradient-to-br from-[#4bbf39] to-[#2d8a24] p-8 text-center relative overflow-hidden">
+              <div className="absolute inset-0 opacity-10" style={{ backgroundImage: 'radial-gradient(circle, white 1px, transparent 1px)', backgroundSize: '20px 20px' }} />
+              <div className="relative">
+                <div className="w-20 h-20 rounded-full bg-white/20 backdrop-blur flex items-center justify-center mx-auto mb-4">
+                  <CheckCircle className="w-12 h-12 text-white" />
+                </div>
+                <h1 className="text-2xl font-bold text-white mb-1">Payment Successful!</h1>
+                <p className="text-white/80 text-sm">Thank you for your payment</p>
               </div>
             </div>
             
-            <p className="text-sm text-gray-500">
-              Questions? Contact us at{' '}
-              <a href="mailto:hello@uptrademedia.com" className="text-[#4bbf39] hover:underline">
-                hello@uptrademedia.com
-              </a>
-            </p>
-          </CardContent>
-        </Card>
+            {/* Receipt Details */}
+            <div className="p-8">
+              <div className="space-y-4 mb-8">
+                <div className="flex justify-between items-center py-3 border-b border-gray-100">
+                  <span className="text-gray-500">Invoice</span>
+                  <span className="font-semibold text-gray-900">{invoice?.invoiceNumber}</span>
+                </div>
+                <div className="flex justify-between items-center py-3 border-b border-gray-100">
+                  <span className="text-gray-500">Date</span>
+                  <span className="font-semibold text-gray-900">{formatDate(new Date().toISOString())}</span>
+                </div>
+                <div className="flex justify-between items-center py-3">
+                  <span className="text-gray-500">Amount Paid</span>
+                  <span className="text-2xl font-bold text-[#4bbf39]">{formatCurrency(invoice?.totalAmount)}</span>
+                </div>
+              </div>
+              
+              <div className="bg-gray-50 rounded-2xl p-4 text-center">
+                <p className="text-sm text-gray-500">
+                  A receipt has been sent to your email.
+                </p>
+              </div>
+            </div>
+          </div>
+          
+          <p className="text-center text-sm text-gray-400 mt-8">
+            Questions? <a href="mailto:hello@uptrademedia.com" className="text-[#4bbf39] hover:underline">Contact us</a>
+          </p>
+        </div>
       </div>
     )
   }
 
   // Main payment view
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 py-8 px-4">
-      <div className="max-w-lg mx-auto">
-        {/* Header */}
-        <div className="text-center mb-8">
-          <img 
-            src="https://uptrademedia.com/logo.png" 
-            alt="Uptrade Media" 
-            className="h-10 mx-auto mb-4"
-          />
-          <h1 className="text-2xl font-bold text-gray-900">Pay Invoice</h1>
-          <p className="text-gray-600">Secure payment powered by Square</p>
+    <div className="min-h-screen bg-[#fafafa]">
+      {/* Header */}
+      <header className="bg-white border-b border-gray-100 sticky top-0 z-10">
+        <div className="max-w-2xl mx-auto px-4 py-4 flex items-center justify-between">
+          <UptradeLogo className="h-8 md:h-10" />
+          <div className="flex items-center gap-2 text-sm text-gray-500">
+            <Lock className="w-4 h-4 text-[#4bbf39]" />
+            <span className="hidden sm:inline">Secure Checkout</span>
+          </div>
         </div>
+      </header>
 
-        {/* Invoice Details */}
-        <Card className="mb-6">
-          <CardHeader className="pb-2">
-            <div className="flex items-center justify-between">
-              <CardTitle className="text-lg flex items-center gap-2">
-                <Receipt className="w-5 h-5 text-[#4bbf39]" />
-                {invoice.invoiceNumber}
-              </CardTitle>
-              <Badge className="bg-yellow-100 text-yellow-800 border-yellow-200">
-                Due
-              </Badge>
-            </div>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            {invoice.contact && (
-              <div className="flex items-center gap-2 text-gray-600">
-                <Building className="w-4 h-4" />
-                <span>{invoice.contact.company || invoice.contact.name}</span>
+      <main className="max-w-2xl mx-auto px-4 py-8 md:py-12">
+        {/* Invoice Card */}
+        <div className="bg-white rounded-3xl shadow-xl shadow-gray-200/50 overflow-hidden mb-6">
+          {/* Invoice Header */}
+          <div className="bg-gradient-to-br from-gray-900 to-gray-800 p-6 md:p-8 text-white">
+            <div className="flex items-start justify-between mb-6">
+              <div>
+                <p className="text-gray-400 text-sm uppercase tracking-wider mb-1">Invoice</p>
+                <h1 className="text-2xl md:text-3xl font-bold">{invoice?.invoiceNumber}</h1>
               </div>
-            )}
+              <div className="bg-amber-400/20 text-amber-300 px-4 py-2 rounded-full text-sm font-medium flex items-center gap-2">
+                <div className="w-2 h-2 bg-amber-400 rounded-full animate-pulse" />
+                Payment Due
+              </div>
+            </div>
             
-            {invoice.description && (
-              <p className="text-gray-600 text-sm border-l-2 border-[#4bbf39] pl-3">
+            {invoice?.description && (
+              <p className="text-gray-300 text-sm md:text-base leading-relaxed max-w-md">
                 {invoice.description}
               </p>
             )}
+          </div>
+          
+          {/* Invoice Details */}
+          <div className="p-6 md:p-8">
+            {invoice?.contact && (
+              <div className="mb-6 pb-6 border-b border-gray-100">
+                <p className="text-xs uppercase tracking-wider text-gray-400 mb-2">Billed To</p>
+                <p className="font-semibold text-gray-900">{invoice.contact.name}</p>
+                {invoice.contact.company && (
+                  <p className="text-gray-500">{invoice.contact.company}</p>
+                )}
+              </div>
+            )}
             
-            <div className="flex items-center gap-2 text-gray-600">
-              <Calendar className="w-4 h-4" />
-              <span>Due: {formatDate(invoice.dueDate)}</span>
-            </div>
-
-            <div className="border-t pt-4 mt-4">
-              <div className="flex justify-between text-sm text-gray-500 mb-1">
-                <span>Subtotal</span>
-                <span>{formatCurrency(invoice.amount)}</span>
+            <div className="grid grid-cols-2 gap-6 mb-6">
+              <div>
+                <p className="text-xs uppercase tracking-wider text-gray-400 mb-2">Due Date</p>
+                <p className="font-semibold text-gray-900">{formatDate(invoice?.dueDate)}</p>
               </div>
-              {invoice.taxAmount > 0 && (
-                <div className="flex justify-between text-sm text-gray-500 mb-1">
-                  <span>Tax</span>
-                  <span>{formatCurrency(invoice.taxAmount)}</span>
+              <div className="text-right">
+                <p className="text-xs uppercase tracking-wider text-gray-400 mb-2">Status</p>
+                <p className="font-semibold text-amber-600">Awaiting Payment</p>
+              </div>
+            </div>
+            
+            {/* Amount Breakdown */}
+            <div className="bg-gray-50 rounded-2xl p-5 md:p-6">
+              <div className="space-y-3 mb-4">
+                <div className="flex justify-between text-gray-600">
+                  <span>Subtotal</span>
+                  <span>{formatCurrency(invoice?.amount)}</span>
                 </div>
-              )}
-              <div className="flex justify-between text-xl font-bold pt-2 border-t">
-                <span>Total Due</span>
-                <span className="text-[#4bbf39]">{formatCurrency(invoice.totalAmount)}</span>
+                {invoice?.taxAmount > 0 && (
+                  <div className="flex justify-between text-gray-600">
+                    <span>Tax</span>
+                    <span>{formatCurrency(invoice.taxAmount)}</span>
+                  </div>
+                )}
+              </div>
+              <div className="flex justify-between items-center pt-4 border-t border-gray-200">
+                <span className="text-lg font-semibold text-gray-900">Total Due</span>
+                <span className="text-3xl font-bold text-[#4bbf39]">{formatCurrency(invoice?.totalAmount)}</span>
               </div>
             </div>
-          </CardContent>
-        </Card>
+          </div>
+        </div>
 
-        {/* Payment Form */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-lg flex items-center gap-2">
-              <CreditCard className="w-5 h-5" />
-              Payment Details
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
+        {/* Payment Form Card */}
+        <div className="bg-white rounded-3xl shadow-xl shadow-gray-200/50 overflow-hidden">
+          <div className="p-6 md:p-8">
+            <div className="flex items-center gap-3 mb-6">
+              <div className="w-10 h-10 rounded-full bg-[#4bbf39]/10 flex items-center justify-center">
+                <CreditCard className="w-5 h-5 text-[#4bbf39]" />
+              </div>
+              <div>
+                <h2 className="text-lg font-semibold text-gray-900">Payment Details</h2>
+                <p className="text-sm text-gray-500">Enter your card information</p>
+              </div>
+            </div>
+
             {paymentError && (
-              <Alert variant="destructive">
+              <Alert variant="destructive" className="mb-6 rounded-xl">
                 <AlertCircle className="h-4 w-4" />
                 <AlertDescription>{paymentError}</AlertDescription>
               </Alert>
@@ -301,45 +411,61 @@ export default function InvoicePayment() {
             {/* Square Card Element Container */}
             <div 
               id="card-container" 
-              className="min-h-[50px] border border-gray-200 rounded-lg p-3 bg-white"
+              ref={cardContainerRef}
+              className="mb-6 min-h-[100px]"
             />
 
             <Button 
               onClick={handlePayment}
-              disabled={processing || !card}
-              className="w-full bg-[#4bbf39] hover:bg-[#3a9c2d] text-white py-6 text-lg"
+              disabled={processing || !cardReady}
+              className="w-full bg-gradient-to-r from-[#4bbf39] to-[#3a9c2d] hover:from-[#43ac33] hover:to-[#348a28] text-white py-6 text-lg rounded-2xl font-semibold shadow-lg shadow-green-500/25 transition-all duration-200 hover:shadow-xl hover:shadow-green-500/30 disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {processing ? (
                 <>
                   <Loader2 className="w-5 h-5 mr-2 animate-spin" />
-                  Processing...
+                  Processing Payment...
+                </>
+              ) : !cardReady ? (
+                <>
+                  <Loader2 className="w-5 h-5 mr-2 animate-spin" />
+                  Loading...
                 </>
               ) : (
                 <>
                   <Lock className="w-5 h-5 mr-2" />
-                  Pay {formatCurrency(invoice.totalAmount)}
+                  Pay {formatCurrency(invoice?.totalAmount)}
                 </>
               )}
             </Button>
 
-            <p className="text-center text-xs text-gray-500 flex items-center justify-center gap-1">
-              <Lock className="w-3 h-3" />
-              Secure payment - Your card details are encrypted
-            </p>
-          </CardContent>
-        </Card>
+            {/* Security Badges */}
+            <div className="mt-6 flex flex-col sm:flex-row items-center justify-center gap-4 text-center">
+              <div className="flex items-center gap-2 text-gray-400 text-sm">
+                <Lock className="w-4 h-4" />
+                <span>256-bit SSL Encrypted</span>
+              </div>
+              <div className="hidden sm:block w-1 h-1 bg-gray-300 rounded-full" />
+              <div className="flex items-center gap-2 text-gray-400 text-sm">
+                <Shield className="w-4 h-4" />
+                <span>Secured by Square</span>
+              </div>
+            </div>
+          </div>
+        </div>
 
         {/* Footer */}
-        <div className="text-center mt-8 text-sm text-gray-500">
-          <p>
+        <footer className="text-center mt-8 space-y-2">
+          <p className="text-sm text-gray-500">
             Questions about this invoice?{' '}
-            <a href="mailto:hello@uptrademedia.com" className="text-[#4bbf39] hover:underline">
+            <a href="mailto:hello@uptrademedia.com" className="text-[#4bbf39] hover:underline font-medium">
               Contact us
             </a>
           </p>
-          <p className="mt-2">© {new Date().getFullYear()} Uptrade Media</p>
-        </div>
-      </div>
+          <p className="text-xs text-gray-400">
+            © {new Date().getFullYear()} Uptrade Media. All rights reserved.
+          </p>
+        </footer>
+      </main>
     </div>
   )
 }
