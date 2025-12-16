@@ -186,6 +186,8 @@ export async function handler(event) {
         paid_at: now,
         payment_method: 'square',
         square_payment_id: payment.id,
+        next_reminder_date: null, // Clear any scheduled reminders
+        scheduled_reminder_ids: [], // Clear stored IDs
         updated_at: now
       })
       .eq('id', invoiceId)
@@ -195,6 +197,19 @@ export async function handler(event) {
         project:projects(id, title)
       `)
       .single()
+
+    // Cancel any scheduled reminder emails
+    if (RESEND_API_KEY && invoice.scheduled_reminder_ids && invoice.scheduled_reminder_ids.length > 0) {
+      const resend = new Resend(RESEND_API_KEY)
+      for (const emailId of invoice.scheduled_reminder_ids) {
+        try {
+          await resend.emails.cancel(emailId)
+          console.log(`[invoices-pay] Cancelled scheduled email: ${emailId}`)
+        } catch (cancelErr) {
+          console.log(`[invoices-pay] Could not cancel email ${emailId}:`, cancelErr.message)
+        }
+      }
+    }
 
     if (updateError) {
       console.error('[invoices-pay] Database error:', updateError)

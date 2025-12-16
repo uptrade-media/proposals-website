@@ -177,6 +177,12 @@ LIQUID-GLASS-*.md
 # README folder (internal docs)
 README/
 
+# Docs folder (auto-generated)
+docs/
+
+# Drizzle migrations (run via Supabase Dashboard)
+drizzle/
+
 # Keep essential docs
 !README.md
 

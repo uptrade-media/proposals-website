@@ -20,6 +20,7 @@ const Audits = lazy(() => import('./pages/Audits'))
 const AuditDetail = lazy(() => import('./pages/AuditDetail'))
 const UserProfile = lazy(() => import('./pages/UserProfile'))
 const AuthCallback = lazy(() => import('./pages/AuthCallback'))
+const InvoicePayment = lazy(() => import('./pages/InvoicePayment'))
 
 export default function App() {
   const { isAuthenticated, checkAuth, isLoading } = useAuthStore()
@@ -75,6 +76,7 @@ export default function App() {
               <Route path="/reset-password" element={<ResetPassword />} />
               <Route path="/p/:slug" element={<ProposalGate />} />
               <Route path="/audit/:id" element={<AuditGate />} />
+              <Route path="/pay/:token" element={<InvoicePayment />} />
               <Route
                 path="/dashboard"
                 element={

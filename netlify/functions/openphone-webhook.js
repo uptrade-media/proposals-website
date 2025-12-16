@@ -280,6 +280,36 @@ async function processCall(supabase, callData, transcript, openphoneSummary, aiA
 }
 
 /**
+ * Find a pre-logged call intent that matches this call
+ * (for outgoing calls initiated from CRM)
+ */
+async function findMatchingIntent(supabase, phoneNumber, direction) {
+  if (direction !== 'outgoing') return null
+  
+  // Normalize phone number for matching
+  const normalized = phoneNumber.replace(/[\s\-\+]/g, '').slice(-10)
+  
+  // Look for a pending call log created in the last 5 minutes
+  const fiveMinutesAgo = new Date(Date.now() - 5 * 60 * 1000).toISOString()
+  
+  const { data: pendingLogs, error } = await supabase
+    .from('call_logs')
+    .select('*')
+    .eq('processing_status', 'awaiting_call')
+    .gte('initiated_at', fiveMinutesAgo)
+    .or(`phone_number.ilike.%${normalized}%`)
+    .order('initiated_at', { ascending: false })
+    .limit(1)
+  
+  if (error) {
+    console.error('Error finding matching intent:', error)
+    return null
+  }
+  
+  return pendingLogs?.[0] || null
+}
+
+/**
  * Main webhook handler
  */
 export async function handler(event) {
@@ -305,35 +335,71 @@ export async function handler(event) {
     // Handle different event types
     switch (eventType) {
       case 'call.completed': {
-        // Create initial call log
-        const { data: callLog } = await supabase
-          .from('call_logs')
-          .insert({
-            openphone_call_id: data.id,
-            openphone_conversation_id: data.conversationId,
-            phone_number: data.phoneNumber,
-            direction: data.direction,
-            status: data.status,
-            duration: data.duration,
-            recording_url: data.recordingUrl,
-            processing_status: 'pending'
-          })
-          .select()
-          .single()
+        // Check if there's a pre-logged intent from CRM click-to-call
+        const matchingIntent = await findMatchingIntent(supabase, data.phoneNumber, data.direction)
         
-        console.log('Call log created:', callLog.id)
-        
-        // Try to fetch transcript and summary immediately (might not be ready)
-        const transcript = await fetchTranscript(data.id).catch(() => null)
-        const summary = await fetchSummary(data.id).catch(() => null)
-        
-        if (transcript || summary) {
-          // If available, analyze immediately
-          const analysis = await analyzeCallWithAI(transcript, summary)
-          await processCall(supabase, data, transcript, summary, analysis)
-          console.log('Call analyzed immediately')
+        if (matchingIntent) {
+          // Update the existing pre-logged call with OpenPhone data
+          console.log('Found matching intent:', matchingIntent.id)
+          
+          const { data: callLog } = await supabase
+            .from('call_logs')
+            .update({
+              openphone_call_id: data.id,
+              openphone_conversation_id: data.conversationId,
+              status: data.status,
+              duration: data.duration,
+              recording_url: data.recordingUrl,
+              handled_by: data.answeredBy,
+              processing_status: 'pending'
+            })
+            .eq('id', matchingIntent.id)
+            .select()
+            .single()
+          
+          console.log('Updated pre-logged call:', callLog.id)
+          
+          // Try to fetch and analyze
+          const transcript = await fetchTranscript(data.id).catch(() => null)
+          const summary = await fetchSummary(data.id).catch(() => null)
+          
+          if (transcript || summary) {
+            const analysis = await analyzeCallWithAI(transcript, summary)
+            await processCall(supabase, { ...data, id: data.id }, transcript, summary, analysis)
+            console.log('Call analyzed immediately')
+          }
         } else {
-          console.log('Transcript/summary not ready, waiting for webhook events')
+          // Create new call log (incoming or no matching intent)
+          const { data: callLog } = await supabase
+            .from('call_logs')
+            .insert({
+              openphone_call_id: data.id,
+              openphone_conversation_id: data.conversationId,
+              phone_number: data.phoneNumber,
+              direction: data.direction,
+              status: data.status,
+              duration: data.duration,
+              recording_url: data.recordingUrl,
+              handled_by: data.answeredBy,
+              processing_status: 'pending'
+            })
+            .select()
+            .single()
+          
+          console.log('Call log created:', callLog.id)
+          
+          // Try to fetch transcript and summary immediately (might not be ready)
+          const transcript = await fetchTranscript(data.id).catch(() => null)
+          const summary = await fetchSummary(data.id).catch(() => null)
+          
+          if (transcript || summary) {
+            // If available, analyze immediately
+            const analysis = await analyzeCallWithAI(transcript, summary)
+            await processCall(supabase, data, transcript, summary, analysis)
+            console.log('Call analyzed immediately')
+          } else {
+            console.log('Transcript/summary not ready, waiting for webhook events')
+          }
         }
         
         break

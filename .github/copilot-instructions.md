@@ -29,15 +29,10 @@ All **7 Zustand Stores** wired to backend:
 - ✅ Admin.jsx component - Client management UI
 
 ### Database Schema Complete
-**6 tables** with full relations (Drizzle ORM):
-- `contacts` - Users (Google OAuth + password auth)
-- `projects` - Client projects with budget tracking
-- `proposals` - MDX proposals with signatures
-- `files` - Netlify Blobs file storage
-- `messages` - Threaded messaging system
-- `invoices` - Square payment integration
+**18+ tables** with full relations (Supabase PostgreSQL):
 
-**See:** `API-TESTING-GUIDE.md` for comprehensive testing documentation
+**See:** `docs/DATABASE-SCHEMA.md` for complete auto-generated schema  
+**Update:** Run `pnpm pull-schema` after any migration
 
 ---
 
@@ -79,10 +74,11 @@ Files: `auth-verify.js`, `auth-forgot.js`, `contact-support.js`
 - **Edge protection**: Only `/p/*` routes via `netlify/edge-functions/login-auth.js`
 
 ### Database
-- **Current**: Single table `contacts` in `src/db/schema.ts`
-- **Needed**: See `IMPLEMENTATION-PLAN.md` for full schema
-- **Migrations**: Run via `drizzle-kit` when implementing features
-- **Connection**: Supabase PostgreSQL via Supabase client
+- **Schema**: See `docs/DATABASE-SCHEMA.md` (auto-generated)
+- **Update schema docs**: `pnpm pull-schema` after any migration
+- **Migrations**: SQL files in `supabase/migrations/`, run in Supabase Dashboard (SQL Editor)
+- **Connection**: Supabase PostgreSQL via `@supabase/supabase-js` client
+- **NEVER use Drizzle** - We use Supabase JS client only
 
 ---
 
@@ -314,125 +310,31 @@ VITE_SUPABASE_ANON_KEY
 *Note: Netlify will populate these automatically during `netlify dev`*
 
 ### Client: Supabase JS
-Schema defined in `src/db/schema.ts`
+Schema documented in `docs/DATABASE-SCHEMA.md` (auto-generated via `pnpm pull-schema`)
 
 ### Core Tables
 
-#### Contacts (Users)
-```typescript
-contacts:
-- id: uuid (primary key)
-- email: string (unique)
-- name: string
-- company: string | null
-- accountSetup: boolean // KEY: Determines auth flow
-- googleId: string | null // For OAuth users
-- avatar: string | null // Profile picture URL
-- password: string | null // Bcrypt hash, null for Google users
-- role: 'client' | 'admin'
-- createdAt: timestamp
-```
+> 📋 **See `docs/DATABASE-SCHEMA.md` for complete, auto-generated schema**
+> Run `pnpm pull-schema` after any migration to update the documentation.
 
-#### Audits
-```typescript
-audits:
-- id: uuid
-- contactId: uuid (foreign key)
-- targetUrl: string
-- scores: jsonb // PageSpeed & SEO metrics
-- pdfUrl: string // Netlify Blob path
-- status: 'pending' | 'completed' | 'failed'
-- createdAt: timestamp
+#### Key Tables Summary
 
-// Managed by audits-store.js
-```
-
-#### Proposals (MDX-Based)
-```typescript
-proposals:
-- id: uuid
-- contactId: uuid
-- title: string
-- status: 'draft' | 'sent' | 'viewed' | 'accepted' | 'declined'
-- totalAmount: decimal
-- content: jsonb // MDX component tree
-- validUntil: date
-- acceptedAt: timestamp | null
-- createdAt: timestamp
-
-proposal_line_items:
-- id: uuid
-- proposalId: uuid
-- description: string
-- quantity: integer
-- unitPrice: decimal
-- total: decimal
-```
-
-**IMPORTANT**: Proposals are **server-rendered MDX**, not DocuSign documents
-
-#### Projects
-```typescript
-projects:
-- id: uuid
-- contactId: uuid
-- proposalId: uuid | null // Created from accepted proposals
-- name: string
-- status: 'active' | 'on-hold' | 'completed'
-- startDate: date
-- endDate: date | null
-
-project_milestones:
-- id: uuid
-- projectId: uuid
-- title: string
-- status: 'pending' | 'in-progress' | 'completed'
-- dueDate: date
-- completedAt: timestamp | null
-```
-
-#### Files (Netlify Blobs)
-```typescript
-files:
-- id: uuid
-- contactId: uuid
-- projectId: uuid | null
-- filename: string
-- blobPath: string // Netlify Blob storage key
-- mimeType: string
-- size: integer (bytes)
-- category: 'audit' | 'proposal' | 'project' | 'message' | 'invoice'
-- uploadedAt: timestamp
-
-// Managed by files-store.js
-```
-
-#### Messages
-```typescript
-messages:
-- id: uuid
-- contactId: uuid
-- threadId: uuid // Groups conversations
-- sender: 'client' | 'team'
-- content: text
-- attachments: jsonb // Array of file IDs
-- readAt: timestamp | null
-- createdAt: timestamp
-
-// Managed by messages-store.js
-```
-
-#### Notifications
-```typescript
-notifications:
-- id: uuid
-- contactId: uuid
-- type: string // 'audit_complete', 'proposal_created', 'message_received', etc.
-- subject: string
-- relatedId: uuid | null // Links to audits, proposals, messages, etc.
-- readAt: timestamp | null
-- sentAt: timestamp // When email was sent
-```
+| Table | Purpose |
+|-------|---------|
+| `contacts` | Users - Google OAuth + password auth, CRM fields, pipeline stage |
+| `projects` | Client projects with budget tracking |
+| `proposals` | MDX proposals with signatures and payment tracking |
+| `proposal_line_items` | Line items for proposals |
+| `audits` | PageSpeed audits with scores and magic tokens |
+| `files` | File metadata (Netlify Blobs storage) |
+| `messages` | Threaded messaging system |
+| `invoices` | Square payment integration |
+| `call_logs` | OpenPhone call recordings and transcripts |
+| `call_tasks` | AI-extracted tasks from calls |
+| `call_follow_ups` | Scheduled follow-ups from calls |
+| `email_tracking` | Gmail send tracking |
+| `blog_posts` | CMS blog content |
+| `portfolio_items` | Portfolio/case studies |
 
 ### Database Access Pattern
 ```typescript
@@ -465,20 +367,19 @@ const { error } = await supabase
 ### Copilot Guidelines for Database
 ```typescript
 // When modifying database code:
-// 1. NEVER run migrations from portal.uptrademedia.com
-// 2. Migrations ONLY from www.uptrademedia.com
-// 3. Always use Drizzle ORM, never raw SQL
-// 4. Use transactions for multi-table operations
+// 1. NEVER use Drizzle - use Supabase JS client only
+// 2. Run migrations in Supabase Dashboard SQL Editor
+// 3. After migrations, run `pnpm pull-schema` to update docs
+// 4. Use RPC functions for multi-table transactions
 // 5. Check accountSetup flag before sending emails
 // 6. Index foreign keys for query performance
 // 7. Use JSONB for flexible schema (scores, content, attachments)
 // 8. Always handle null values (googleId, avatar, password, etc.)
 
-// Transaction pattern:
-await db.transaction(async (tx) => {
-  const proposal = await tx.insert(proposals).values({...})
-  await tx.insert(proposal_line_items).values([...])
-  await tx.insert(notifications).values({...})
+// Supabase transaction pattern (via RPC):
+const { data, error } = await supabase.rpc('create_proposal_with_items', {
+  proposal_data: {...},
+  line_items: [...]
 })
 
 // Google OAuth user check:
@@ -742,8 +643,9 @@ const totalAmount = lineItems.reduce((sum, item) => sum + item.total, 0)
 - **Verify** JWT tokens in every Netlify function
 
 ### Database
-- **Only** run migrations from www.uptrademedia.com
-- **Always** use Drizzle ORM (no raw SQL)
+- **Run migrations** in Supabase Dashboard SQL Editor
+- **After migrations** run `pnpm pull-schema` to update `docs/DATABASE-SCHEMA.md`
+- **Always** use Supabase JS client (NEVER Drizzle or raw pg)
 - **Check** `accountSetup` flag before sending emails
 - **Handle** null values for Google OAuth users
 
@@ -886,6 +788,6 @@ Before deploying any changes:
 - **Square Dashboard**: https://developer.squareup.com/
 - **Supabase Dashboard**: https://supabase.com/dashboard
 - **Netlify Dashboard**: https://app.netlify.com/
-- **Drizzle ORM Docs**: https://orm.drizzle.team/
+- **Supabase JS Docs**: https://supabase.com/docs/reference/javascript
 
 For questions about architecture decisions, refer to this audit document.

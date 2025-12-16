@@ -172,7 +172,8 @@ export async function handler(event) {
         },
         body: JSON.stringify({
           auditId: newAudit.id,
-          source: 'portal'
+          source: 'portal',
+          skipEmail: true  // Portal audits don't auto-send emails
         })
       })
       

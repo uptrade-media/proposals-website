@@ -19,18 +19,34 @@ import {
   Mail,
   LineChart,
   BookOpen,
-  Briefcase
+  Briefcase,
+  Send,
+  Trophy,
+  Building2,
+  ClipboardList,
+  ShoppingCart
 } from 'lucide-react'
-import useAuthStore from '@/lib/auth-store'
+import useAuthStore, { useOrgFeatures } from '@/lib/auth-store'
 import useReportsStore from '@/lib/reports-store'
 import useMessagesStore from '@/lib/messages-store'
 import useBillingStore from '@/lib/billing-store'
 import useNotificationStore from '@/lib/notification-store'
+import OrgSwitcher from './OrgSwitcher'
 
-const Sidebar = ({ activeSection, onSectionChange, isMobile = false }) => {
-  const [isCollapsed, setIsCollapsed] = useState(false)
+const Sidebar = ({ 
+  activeSection, 
+  onSectionChange, 
+  isMobile = false,
+  isCollapsed: propIsCollapsed,
+  onToggleCollapse
+}) => {
+  // Use prop-controlled state if provided, otherwise internal state
+  const [internalCollapsed, setInternalCollapsed] = useState(false)
+  const isCollapsed = propIsCollapsed !== undefined ? propIsCollapsed : internalCollapsed
+  const toggleCollapse = onToggleCollapse || (() => setInternalCollapsed(!internalCollapsed))
   const navigate = useNavigate()
-  const { user, logout } = useAuthStore()
+  const { user, logout, isSuperAdmin, currentOrg } = useAuthStore()
+  const { hasFeature } = useOrgFeatures()
   const { getUnreadAuditsCount } = useReportsStore()
   const { unreadCount: unreadMessages, fetchUnreadCount: fetchUnreadMessages } = useMessagesStore()
   const { invoices } = useBillingStore()
@@ -51,26 +67,71 @@ const Sidebar = ({ activeSection, onSectionChange, isMobile = false }) => {
     inv.status === 'pending' || inv.status === 'overdue'
   ).length
 
-  const navigationItems = [
+  // Check user roles - super admins get full access to everything
+  const isAdmin = user?.role === 'admin' || isSuperAdmin
+  const isSalesRep = user?.teamRole === 'sales_rep' && !isSuperAdmin
+  const isManager = user?.teamRole === 'manager' || isSuperAdmin
+
+  // Base navigation items available to everyone
+  const baseNavigationItems = [
     { id: 'dashboard', label: 'Dashboard', icon: Home, badge: null, route: null },
     { id: 'audits', label: 'Audits', icon: LineChart, badge: unreadAudits > 0 ? unreadAudits.toString() : null, route: null },
+    { id: 'proposals', label: 'Proposals', icon: Send, badge: null, route: null },
+  ]
+
+  // Sales rep sees a simplified navigation (their assigned clients only)
+  const salesRepItems = isSalesRep ? [
+    { id: 'clients', label: 'My Clients', icon: Users, badge: null, route: null },
+  ] : []
+
+  // Full navigation for admins and managers (not sales reps)
+  const fullNavigationItems = !isSalesRep ? [
     { id: 'projects', label: 'Projects', icon: FileText, badge: null, route: null },
     { id: 'files', label: 'Files', icon: FolderOpen, badge: null, route: null },
     { id: 'messages', label: 'Messages', icon: MessageSquare, badge: unreadMessages > 0 ? unreadMessages.toString() : null, route: null },
     { id: 'billing', label: 'Billing', icon: DollarSign, badge: unpaidInvoicesCount > 0 ? unpaidInvoicesCount.toString() : null, route: null },
-    { id: 'reports', label: 'Reports', icon: BarChart3, badge: null, route: null },
-  ]
+    { id: 'analytics', label: 'Analytics', icon: BarChart3, badge: null, route: null },
+  ] : []
 
   // Admin-only navigation items
-  const adminItems = user?.role === 'admin' ? [
+  const adminItems = isAdmin ? [
     { id: 'clients', label: 'Clients', icon: Users, badge: newLeadsCount > 0 ? newLeadsCount.toString() : null, route: null },
+    { id: 'team', label: 'Team', icon: Shield, badge: null, route: null },
+    { id: 'team-metrics', label: 'Team Metrics', icon: Trophy, badge: null, route: null },
+    { id: 'forms', label: 'Forms', icon: ClipboardList, badge: null, route: null },
     { id: 'blog', label: 'Blog', icon: BookOpen, badge: null, route: null },
     { id: 'portfolio', label: 'Portfolio', icon: Briefcase, badge: null, route: null },
     { id: 'email', label: 'Email Manager', icon: Mail, badge: null, route: null },
   ] : []
+  
+  // Super admin items (tenant management is now in Projects tab)
+  const superAdminItems = isSuperAdmin ? [
+    // Tenants management moved to Projects tab - completed projects convert to tenants
+  ] : []
 
-  // Combine navigation items
-  const allNavigationItems = [...navigationItems, ...adminItems]
+  // Manager gets team access but not blog/portfolio/email
+  const managerItems = (isManager && !isAdmin) ? [
+    { id: 'clients', label: 'Clients', icon: Users, badge: newLeadsCount > 0 ? newLeadsCount.toString() : null, route: null },
+    { id: 'team', label: 'Team', icon: Shield, badge: null, route: null },
+    { id: 'team-metrics', label: 'Team Metrics', icon: Trophy, badge: null, route: null },
+  ] : []
+
+  // Tenant-specific items (when viewing as a tenant/client organization)
+  // This shows "My Sales" for clients who have their own websites with forms/customers
+  const tenantItems = currentOrg ? [
+    { id: 'my-sales', label: 'My Sales', icon: ShoppingCart, badge: null, route: null, divider: true },
+  ] : []
+
+  // Combine navigation items based on role
+  const allNavigationItems = [
+    ...baseNavigationItems,
+    ...salesRepItems,
+    ...fullNavigationItems,
+    ...managerItems,
+    ...adminItems,
+    ...superAdminItems,
+    ...tenantItems,
+  ]
 
   const handleNavigation = (item) => {
     if (item.route) {
@@ -87,27 +148,43 @@ const Sidebar = ({ activeSection, onSectionChange, isMobile = false }) => {
 
   const sidebarContent = (
     <div className="flex flex-col h-full">
-      {/* Header */}
+      {/* Header - Org Switcher or Logo */}
       <div className="p-4 border-b border-[var(--glass-border)]">
         <div className="flex items-center justify-between">
           {!isCollapsed && (
-            <div className="flex items-center space-x-3">
-              <img 
-                src="/favicon.svg" 
-                alt="Uptrade Media" 
-                className="w-8 h-8"
-              />
-              <div>
-                <h2 className="font-semibold text-sm text-[var(--text-primary)]">Uptrade Media</h2>
-                <p className="text-xs text-[var(--text-tertiary)]">Client Portal</p>
-              </div>
-            </div>
+            <>
+              {/* Show OrgSwitcher for super admins or when multi-tenant is enabled */}
+              {(isSuperAdmin || currentOrg) ? (
+                <OrgSwitcher 
+                  collapsed={false}
+                  onManageTenants={() => onSectionChange('projects')}
+                />
+              ) : (
+                <div className="flex items-center space-x-3">
+                  <img 
+                    src="/favicon.svg" 
+                    alt="Uptrade Media" 
+                    className="w-8 h-8"
+                  />
+                  <div>
+                    <h2 className="font-semibold text-sm text-[var(--text-primary)]">Uptrade Media</h2>
+                    <p className="text-xs text-[var(--text-tertiary)]">Client Portal</p>
+                  </div>
+                </div>
+              )}
+            </>
+          )}
+          {isCollapsed && (isSuperAdmin || currentOrg) && (
+            <OrgSwitcher 
+              collapsed={true}
+              onManageTenants={() => onSectionChange('projects')}
+            />
           )}
           {!isMobile && (
             <Button
               variant="ghost"
               size="sm"
-              onClick={() => setIsCollapsed(!isCollapsed)}
+              onClick={toggleCollapse}
               className="p-1 text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--glass-bg-hover)]"
             >
               {isCollapsed ? <Menu className="h-4 w-4" /> : <X className="h-4 w-4" />}
@@ -125,11 +202,13 @@ const Sidebar = ({ activeSection, onSectionChange, isMobile = false }) => {
             </div>
             <div className="flex-1 min-w-0">
               <p className="font-medium text-sm truncate text-[var(--text-primary)]">
-                {user?.first_name} {user?.last_name}
+                {user?.name || `${user?.first_name || ''} ${user?.last_name || ''}`.trim() || user?.email}
               </p>
               <p className="text-xs text-[var(--text-secondary)] truncate">{user?.email}</p>
-              {user?.company && (
-                <p className="text-xs text-[var(--text-tertiary)] truncate">{user.company.name}</p>
+              {user?.teamRole && (
+                <Badge variant="outline" className="mt-1 text-[10px] px-1.5 py-0 capitalize border-[var(--glass-border)] text-[var(--text-tertiary)]">
+                  {user.teamRole === 'sales_rep' ? 'Sales Rep' : user.teamRole}
+                </Badge>
               )}
             </div>
           </div>
@@ -146,7 +225,7 @@ const Sidebar = ({ activeSection, onSectionChange, isMobile = false }) => {
             <Button
               key={item.id}
               variant={isActive ? "secondary" : "ghost"}
-              className={`w-full justify-start ${isCollapsed ? 'px-2' : 'px-3'} ${
+              className={`w-full ${isCollapsed ? 'justify-center px-2' : 'justify-start px-3'} ${
                 isActive 
                   ? 'bg-[var(--brand-primary)]/10 text-[var(--brand-primary)] hover:bg-[var(--brand-primary)]/20' 
                   : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--glass-bg-hover)]'
@@ -173,7 +252,7 @@ const Sidebar = ({ activeSection, onSectionChange, isMobile = false }) => {
       <div className="p-4 border-t border-[var(--glass-border)] space-y-1">
         <Button
           variant="ghost"
-          className={`w-full justify-start text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--glass-bg-hover)] ${isCollapsed ? 'px-2' : 'px-3'}`}
+          className={`w-full text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--glass-bg-hover)] ${isCollapsed ? 'justify-center px-2' : 'justify-start px-3'}`}
           onClick={() => onSectionChange('settings')}
         >
           <Settings className={`h-4 w-4 ${isCollapsed ? '' : 'mr-3'}`} />
@@ -182,7 +261,7 @@ const Sidebar = ({ activeSection, onSectionChange, isMobile = false }) => {
         
         <Button
           variant="ghost"
-          className={`w-full justify-start text-[var(--accent-red)] hover:text-[var(--accent-red)] hover:bg-[var(--accent-red)]/10 ${isCollapsed ? 'px-2' : 'px-3'}`}
+          className={`w-full text-[var(--accent-red)] hover:text-[var(--accent-red)] hover:bg-[var(--accent-red)]/10 ${isCollapsed ? 'justify-center px-2' : 'justify-start px-3'}`}
           onClick={handleLogout}
         >
           <LogOut className={`h-4 w-4 ${isCollapsed ? '' : 'mr-3'}`} />

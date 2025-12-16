@@ -10,8 +10,9 @@ import { evaluate } from '@mdx-js/mdx'
 import * as runtime from 'react/jsx-runtime'
 import { mdxComponents, ProposalHero } from './mdx/ProposalBlocks'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
-import { Loader2, Clock } from 'lucide-react'
+import { Loader2, Clock, ArrowLeft } from 'lucide-react'
 import ProposalSignature from './ProposalSignature'
 import ProposalTerms from './ProposalTerms'
 
@@ -109,6 +110,7 @@ export default function ProposalView({
   proposal, 
   isPublicView = false,
   showSignature = true,
+  onBack,
   className = ''
 }) {
   if (!proposal) {
@@ -205,6 +207,16 @@ export default function ProposalView({
 
   return (
     <div className={`max-w-6xl mx-auto ${className}`}>
+      {/* Back Button - only show when onBack is provided (internal views) */}
+      {onBack && (
+        <div className="mb-6">
+          <Button variant="ghost" onClick={onBack} className="gap-2">
+            <ArrowLeft className="w-4 h-4" />
+            Back to Proposals
+          </Button>
+        </div>
+      )}
+
       {/* Hero Section */}
       <ProposalHero
         title={proposal.title}

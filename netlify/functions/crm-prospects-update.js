@@ -34,6 +34,7 @@ export async function handler(event) {
     const {
       id,
       pipelineStage,
+      assignedTo,
       name,
       email,
       company,
@@ -58,6 +59,7 @@ export async function handler(event) {
     }
 
     if (pipelineStage !== undefined) updates.pipeline_stage = pipelineStage
+    if (assignedTo !== undefined) updates.assigned_to = assignedTo
     if (name !== undefined) updates.name = name
     if (email !== undefined) updates.email = email
     if (company !== undefined) updates.company = company

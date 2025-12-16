@@ -3,7 +3,7 @@
   "private": true,
   "version": "0.0.0",
   "type": "module",
-  "packageManager": "pnpm@9.15.0",
+  "packageManager": "pnpm@10.26.0",
   "scripts": {
     "dev": "netlify dev",
     "dev:fe": "vite",
@@ -13,7 +13,8 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "test:ui": "vitest --ui",
-    "test:coverage": "vitest run --coverage"
+    "test:coverage": "vitest run --coverage",
+    "pull-schema": "node scripts/pull-schema.mjs"
   },
   "dependencies": {
     "@hookform/resolvers": "^5.2.2",
@@ -54,11 +55,13 @@
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "cmdk": "^1.1.1",
+    "csv-parse": "^6.1.0",
     "date-fns": "^4.1.0",
     "embla-carousel-react": "^8.6.0",
     "framer-motion": "^12.23.25",
     "google-auth-library": "^10.5.0",
     "googleapis": "^166.0.0",
+    "grapesjs": "^0.22.14",
     "gray-matter": "^4.0.3",
     "html2canvas": "^1.4.1",
     "input-otp": "^1.4.2",

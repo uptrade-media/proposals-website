@@ -107,6 +107,35 @@ const useProjectsStore = create((set, get) => ({
     }
   },
 
+  // Mark project as complete - triggers completion invoices
+  completeProject: async (projectId) => {
+    set({ isLoading: true, error: null })
+    
+    try {
+      const response = await api.post('/.netlify/functions/projects-complete', { projectId })
+      
+      // Update project in the list
+      set(state => ({
+        projects: state.projects.map(p => 
+          p.id === projectId ? { ...p, status: 'completed', completed_at: response.data.project.completedAt } : p
+        ),
+        currentProject: state.currentProject?.id === projectId 
+          ? { ...state.currentProject, status: 'completed', completed_at: response.data.project.completedAt }
+          : state.currentProject,
+        isLoading: false
+      }))
+      
+      return { success: true, data: response.data }
+    } catch (error) {
+      const errorMessage = error.response?.data?.error || 'Failed to complete project'
+      set({ 
+        isLoading: false, 
+        error: errorMessage 
+      })
+      return { success: false, error: errorMessage }
+    }
+  },
+
   // Delete project
   deleteProject: async (projectId) => {
     set({ isLoading: true, error: null })

@@ -85,6 +85,75 @@ export default function LoginPage() {
   const [supportLoading, setSupportLoading] = useState(false)
   const [supportMsg, setSupportMsg] = useState('')
 
+  // DEV BYPASS: Direct super admin login (localhost only)
+  async function handleDevBypass() {
+    if (!window.location.hostname.includes('localhost') && !window.location.hostname.includes('127.0.0.1')) {
+      setError('Dev bypass only available on localhost')
+      return
+    }
+    
+    setIsSubmitting(true)
+    setError('')
+    
+    try {
+      // Directly set user state without auth flow
+      const mockUser = {
+        id: 'dev-bypass',
+        email: 'ramsey@uptrademedia.com',
+        name: 'Ramsey Deal',
+        role: 'admin',
+        company: 'Uptrade Media',
+        avatar: null,
+        accountSetup: 'true',
+        googleId: null
+      }
+      
+      const mockOrg = {
+        id: 'org_uptrade_media',
+        name: 'Uptrade Media',
+        slug: 'uptrade_media',
+        domain: 'uptrademedia.com',
+        status: 'active',
+        plan: 'enterprise',
+        features: {
+          analytics: true,
+          blog: true,
+          crm: true,
+          projects: true,
+          proposals: true,
+          billing: true,
+          ecommerce: true,
+          files: true,
+          messages: true,
+          emailManager: true,
+          seo: true
+        }
+      }
+      
+      // Directly set auth state
+      useAuthStore.setState({
+        user: mockUser,
+        isAuthenticated: true,
+        currentOrg: mockOrg,
+        availableOrgs: [mockOrg],
+        isSuperAdmin: true,
+        isLoading: false,
+        error: null
+      })
+      
+      console.log('[Dev Bypass] Set mock user and org:', mockUser, mockOrg)
+      
+      // Navigate to admin
+      setTimeout(() => {
+        navigate('/admin')
+      }, 100)
+    } catch (err) {
+      console.error('[Dev Bypass] Error:', err)
+      setError(String(err.message || 'Dev bypass failed'))
+      setIsSubmitting(false)
+    }
+  }
+
   // Handle Google Sign-In with Supabase
   async function handleGoogleSignIn() {
     setIsSubmitting(true)
@@ -232,6 +301,31 @@ export default function LoginPage() {
         </CardHeader>
 
         <CardContent className="pt-2">
+          {/* DEV ONLY: Direct Login Bypass (localhost only) */}
+          {(window.location.hostname.includes('localhost') || window.location.hostname.includes('127.0.0.1')) && (
+            <div className="mb-6 p-3 bg-yellow-500/10 border border-yellow-500/30 rounded-lg">
+              <div className="text-xs font-medium text-yellow-600 dark:text-yellow-400 mb-2">
+                🔧 Dev Mode Active
+              </div>
+              <Button
+                type="button"
+                onClick={handleDevBypass}
+                disabled={isSubmitting}
+                variant="outline"
+                className="w-full h-10 text-sm"
+              >
+                {isSubmitting ? (
+                  <span className="inline-flex items-center gap-2">
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                    Bypassing...
+                  </span>
+                ) : (
+                  'Dev Login (Skip OAuth)'
+                )}
+              </Button>
+            </div>
+          )}
+
           {/* Google Sign-In Button - Primary */}
           <Button
             type="button"

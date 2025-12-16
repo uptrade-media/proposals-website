@@ -168,7 +168,7 @@ const useBillingStore = create((set, get) => ({
     set({ isLoading: true, error: null })
     
     try {
-      const response = await api.get('/billing/summary')
+      const response = await api.get('/.netlify/functions/billing-summary')
       set({ 
         summary: response.data.summary,
         isLoading: false 
@@ -188,7 +188,7 @@ const useBillingStore = create((set, get) => ({
   // Fetch overdue invoices
   fetchOverdueInvoices: async () => {
     try {
-      const response = await api.get('/billing/overdue')
+      const response = await api.get('/.netlify/functions/billing-overdue')
       set({ overdueInvoices: response.data.overdue_invoices })
       
       return { success: true, data: response.data }
@@ -251,7 +251,7 @@ const useBillingStore = create((set, get) => ({
   // Check if invoice is overdue
   isOverdue: (invoice) => {
     if (invoice.status !== 'pending') return false
-    const dueDate = new Date(invoice.due_date)
+    const dueDate = new Date(invoice.dueDate)
     const today = new Date()
     today.setHours(0, 0, 0, 0)
     return dueDate < today
@@ -260,7 +260,7 @@ const useBillingStore = create((set, get) => ({
   // Get days overdue
   getDaysOverdue: (invoice) => {
     if (!get().isOverdue(invoice)) return 0
-    const dueDate = new Date(invoice.due_date)
+    const dueDate = new Date(invoice.dueDate)
     const today = new Date()
     const diffTime = today - dueDate
     return Math.ceil(diffTime / (1000 * 60 * 60 * 24))
@@ -301,6 +301,102 @@ const useBillingStore = create((set, get) => ({
         error: errorMessage 
       })
       return { success: false, error: errorMessage }
+    }
+  },
+
+  // Send invoice with magic payment link
+  sendInvoice: async (invoiceId) => {
+    set({ isLoading: true, error: null })
+    
+    try {
+      const response = await api.post('/.netlify/functions/invoices-send', { invoiceId })
+      
+      // Update invoice in list
+      set(state => ({
+        invoices: state.invoices.map(inv => 
+          inv.id === invoiceId 
+            ? { ...inv, status: 'sent', sentAt: new Date().toISOString(), hasPaymentToken: true }
+            : inv
+        ),
+        isLoading: false
+      }))
+
+      return { success: true, data: response.data }
+    } catch (error) {
+      const errorMessage = error.response?.data?.error || 'Failed to send invoice'
+      set({ isLoading: false, error: errorMessage })
+      return { success: false, error: errorMessage }
+    }
+  },
+
+  // Send reminder for unpaid invoice
+  sendReminder: async (invoiceId) => {
+    set({ isLoading: true, error: null })
+    
+    try {
+      const response = await api.post('/.netlify/functions/invoices-reminder', { invoiceId })
+      
+      // Update invoice in list with new reminder count
+      set(state => ({
+        invoices: state.invoices.map(inv => 
+          inv.id === invoiceId 
+            ? { 
+                ...inv, 
+                reminderCount: response.data.reminderCount,
+                lastReminderSent: new Date().toISOString(),
+                nextReminderDate: response.data.nextReminderDate
+              }
+            : inv
+        ),
+        isLoading: false
+      }))
+
+      return { success: true, data: response.data }
+    } catch (error) {
+      const errorMessage = error.response?.data?.error || 'Failed to send reminder'
+      set({ isLoading: false, error: errorMessage })
+      return { success: false, error: errorMessage }
+    }
+  },
+
+  // Toggle recurring invoice pause/resume
+  toggleRecurringPause: async (invoiceId, paused) => {
+    set({ isLoading: true, error: null })
+    
+    try {
+      const response = await api.post('/.netlify/functions/invoices-recurring-toggle', { 
+        invoiceId, 
+        paused 
+      })
+      
+      // Update invoice in list
+      set(state => ({
+        invoices: state.invoices.map(inv => 
+          inv.id === invoiceId 
+            ? { ...inv, recurringPaused: paused }
+            : inv
+        ),
+        isLoading: false
+      }))
+
+      return { success: true, data: response.data }
+    } catch (error) {
+      const errorMessage = error.response?.data?.error || 'Failed to update recurring status'
+      set({ isLoading: false, error: errorMessage })
+      return { success: false, error: errorMessage }
+    }
+  },
+
+  // Get recurring interval label
+  getRecurringIntervalLabel: (interval) => {
+    switch (interval) {
+      case 'weekly': return 'Weekly'
+      case 'bi-weekly': return 'Bi-Weekly'
+      case 'monthly': return 'Monthly'
+      case 'quarterly': return 'Quarterly'
+      case 'semi-annual': return 'Semi-Annual'
+      case 'annual': return 'Annual'
+      default: return interval
     }
   },
 

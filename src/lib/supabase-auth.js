@@ -19,7 +19,13 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
  * Sign in with Google OAuth
  */
 export async function signInWithGoogle() {
-  const redirectUrl = import.meta.env.VITE_SUPABASE_AUTH_REDIRECT_URL || `${window.location.origin}/auth/callback`
+  // Force localhost redirect in development
+  const isLocalhost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
+  const redirectUrl = isLocalhost 
+    ? `${window.location.origin}/auth/callback`
+    : (import.meta.env.VITE_SUPABASE_AUTH_REDIRECT_URL || `${window.location.origin}/auth/callback`)
+  
+  console.log('[Supabase Auth] Redirect URL:', redirectUrl)
   
   const { data, error } = await supabase.auth.signInWithOAuth({
     provider: 'google',
@@ -170,6 +176,10 @@ export async function getCurrentUser() {
     role: contact.role || 'client',
     company: contact.company,
     avatar: session.user.user_metadata?.avatar_url || session.user.user_metadata?.picture,
+    // Team member fields
+    isTeamMember: contact.is_team_member || false,
+    teamRole: contact.team_role || null,
+    teamStatus: contact.team_status || null,
     contact
   }
 }

@@ -57,7 +57,7 @@ export async function handler(event) {
 
     // Parse request body
     const body = JSON.parse(event.body || '{}')
-    const { name, company, phone, website, source, role, password } = body
+    const { name, email, company, phone, website, source, role, password } = body
 
     const supabase = createSupabaseAdmin()
 
@@ -81,6 +81,19 @@ export async function handler(event) {
 
     if (name !== undefined) {
       updates.name = name
+    }
+
+    if (email !== undefined) {
+      // Validate email format
+      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+      if (email && !emailRegex.test(email)) {
+        return {
+          statusCode: 400,
+          headers,
+          body: JSON.stringify({ error: 'Invalid email format' })
+        }
+      }
+      updates.email = email
     }
 
     if (company !== undefined) {

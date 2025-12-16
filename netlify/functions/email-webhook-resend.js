@@ -132,7 +132,67 @@ export async function handler(event) {
       }
     }
 
-    // Find recipient by message ID
+    // ==== CRM Email Tracking ====
+    // Check if this email is tracked in email_tracking table (CRM audits, proposals, etc.)
+    const { data: emailTracking } = await supabase
+      .from('email_tracking')
+      .select('id, open_count, click_count, clicked_links')
+      .eq('resend_email_id', messageId)
+      .single()
+
+    if (emailTracking) {
+      const now = new Date().toISOString()
+      let trackingUpdate = {}
+
+      switch (ourEventType) {
+        case 'delivered':
+          trackingUpdate = { delivered_at: now, status: 'delivered' }
+          break
+        case 'open':
+          trackingUpdate = {
+            opened_at: emailTracking.opened_at || now,
+            last_opened_at: now,
+            open_count: (emailTracking.open_count || 0) + 1,
+            status: 'opened',
+            engagement_score: ((emailTracking.open_count || 0) + 1) * 1 + (emailTracking.click_count || 0) * 5
+          }
+          break
+        case 'click':
+          const clickedUrl = data.link || data.url
+          const existingLinks = emailTracking.clicked_links || []
+          if (clickedUrl) existingLinks.push({ url: clickedUrl, clicked_at: now })
+          trackingUpdate = {
+            clicked_at: emailTracking.clicked_at || now,
+            click_count: (emailTracking.click_count || 0) + 1,
+            clicked_links: existingLinks,
+            status: 'clicked',
+            engagement_score: (emailTracking.open_count || 0) * 1 + ((emailTracking.click_count || 0) + 1) * 5
+          }
+          break
+        case 'bounce':
+          trackingUpdate = { status: 'bounced', bounce_reason: data.bounce?.type || 'Unknown' }
+          break
+        case 'complaint':
+          trackingUpdate = { status: 'complained', bounce_reason: 'Marked as spam' }
+          break
+      }
+
+      if (Object.keys(trackingUpdate).length > 0) {
+        await supabase
+          .from('email_tracking')
+          .update(trackingUpdate)
+          .eq('id', emailTracking.id)
+        console.log(`[email-webhook-resend] Updated email_tracking ${emailTracking.id} with ${ourEventType}`)
+      }
+
+      return {
+        statusCode: 200,
+        body: JSON.stringify({ ok: true, source: 'email_tracking', event: ourEventType })
+      }
+    }
+
+    // ==== Campaign Email Tracking ====
+    // Find recipient by message ID (campaign emails)
     const { data: recipient } = await supabase
       .from('recipients')
       .select('*, campaigns(*)')

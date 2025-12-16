@@ -1,3 +1,6 @@
+// netlify/functions/email-campaigns-list.js
+// List email campaigns for the current org
+
 import { createSupabaseAdmin, getAuthenticatedUser } from './utils/supabase.js'
 
 export async function handler(event) {
@@ -12,60 +15,64 @@ export async function handler(event) {
     return { statusCode: 204, headers }
   }
 
+  if (event.httpMethod !== 'GET') {
+    return { statusCode: 405, headers, body: JSON.stringify({ error: 'Method not allowed' }) }
+  }
+
+  const { contact, error: authError } = await getAuthenticatedUser(event)
+  
+  if (authError || !contact) {
+    return { statusCode: 401, headers, body: JSON.stringify({ error: 'Not authenticated' }) }
+  }
+
+  if (contact.role !== 'admin') {
+    return { statusCode: 403, headers, body: JSON.stringify({ error: 'Admin access required' }) }
+  }
+
+  const supabase = createSupabaseAdmin()
+
   try {
-    // Verify auth using Supabase
-    const { user, contact, error: authError } = await getAuthenticatedUser(event)
-    if (authError || !contact) {
-      return { statusCode: 401, headers, body: JSON.stringify({ error: 'Unauthorized' }) }
-    }
+    const {
+      orgId,
+      status,
+      limit = 50,
+      offset = 0
+    } = event.queryStringParameters || {}
 
-    if (contact.role !== 'admin') {
-      return { statusCode: 403, headers, body: JSON.stringify({ error: 'Admin only' }) }
-    }
+    const targetOrgId = orgId || contact.org_id || '00000000-0000-0000-0000-000000000001'
 
-    // Get query params
-    const type = event.queryStringParameters?.type || 'all'
-    const limit = parseInt(event.queryStringParameters?.limit || '50')
-    const offset = parseInt(event.queryStringParameters?.offset || '0')
-
-    const supabase = createSupabaseAdmin()
-
-    // Build query
     let query = supabase
-      .from('campaigns')
-      .select('id, type, name, status, scheduled_start, created_at, updated_at', { count: 'exact' })
+      .from('email_campaigns')
+      .select('*', { count: 'exact' })
+      .eq('org_id', targetOrgId)
       .order('created_at', { ascending: false })
-      .range(offset, offset + limit - 1)
+      .range(parseInt(offset), parseInt(offset) + parseInt(limit) - 1)
 
-    if (type !== 'all') {
-      query = query.eq('type', type)
+    if (status && status !== 'all') {
+      query = query.eq('status', status)
     }
 
-    const { data: campaigns, count, error } = await query
+    const { data: campaigns, error, count } = await query
 
-    if (error) {
-      console.error('Query error:', error)
-      return {
-        statusCode: 500,
-        body: JSON.stringify({ error: 'Failed to list campaigns' })
-      }
-    }
+    if (error) throw error
 
     return {
       statusCode: 200,
-      body: JSON.stringify({
+      headers,
+      body: JSON.stringify({ 
         campaigns: campaigns || [],
-        total: count || 0,
-        limit,
-        offset
-      }),
-      headers: { 'Content-Type': 'application/json' }
+        total: count,
+        limit: parseInt(limit),
+        offset: parseInt(offset)
+      })
     }
-  } catch (err) {
-    console.error('List campaigns error:', err)
+
+  } catch (error) {
+    console.error('[email-campaigns-list] Error:', error)
     return {
       statusCode: 500,
-      body: JSON.stringify({ error: 'Failed to list campaigns' })
+      headers,
+      body: JSON.stringify({ error: error.message })
     }
   }
 }

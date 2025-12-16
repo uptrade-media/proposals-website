@@ -44,6 +44,21 @@
   node_bundler = "esbuild"
   included_files = ["netlify/functions/assets/**"]
 
+# Scheduled function for generating recurring invoices
+# Runs daily at 6:00 AM UTC (1:00 AM EST)
+[functions."invoices-generate-recurring"]
+  schedule = "0 6 * * *"
+
+# Scheduled function for generating smart notifications
+# Runs every 15 minutes
+[functions."crm-notifications-generate"]
+  schedule = "*/15 * * * *"
+
+# Scheduled function for processing email follow-ups
+# Runs every hour to check for due follow-ups and send them
+[functions."scheduled-followups-process"]
+  schedule = "0 * * * *"
+
 [dev]
   framework     = "#custom"
   command       = "vite"

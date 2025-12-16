@@ -16,6 +16,10 @@ const useSiteAnalyticsStore = create((set, get) => ({
   pageViewsByDay: null,
   pageViewsByHour: null,
   topPages: null,
+  webVitals: null,
+  sessions: null,
+  scrollDepth: null,
+  heatmap: null,
   isLoading: false,
   error: null,
   
@@ -132,6 +136,90 @@ const useSiteAnalyticsStore = create((set, get) => ({
     }
   },
 
+  // Fetch Web Vitals summary
+  fetchWebVitals: async (days = null) => {
+    const period = days || get().dateRange
+    
+    try {
+      const response = await fetch(buildProxyUrl('web-vitals', { days: period }))
+      
+      if (!response.ok) {
+        console.warn('[SiteAnalytics] Web Vitals API returned', response.status)
+        return { success: false, data: null }
+      }
+      
+      const data = await response.json()
+      set({ webVitals: data })
+      return { success: true, data }
+    } catch (error) {
+      console.error('[SiteAnalytics] Error fetching web vitals:', error)
+      return { success: false, error: error.message }
+    }
+  },
+
+  // Fetch session breakdown (browser, OS, UTM, etc.)
+  fetchSessions: async (days = null) => {
+    const period = days || get().dateRange
+    
+    try {
+      const response = await fetch(buildProxyUrl('sessions', { days: period }))
+      
+      if (!response.ok) {
+        console.warn('[SiteAnalytics] Sessions API returned', response.status)
+        return { success: false, data: null }
+      }
+      
+      const data = await response.json()
+      set({ sessions: data })
+      return { success: true, data }
+    } catch (error) {
+      console.error('[SiteAnalytics] Error fetching sessions:', error)
+      return { success: false, error: error.message }
+    }
+  },
+
+  // Fetch scroll depth data
+  fetchScrollDepth: async (days = null) => {
+    const period = days || get().dateRange
+    
+    try {
+      const response = await fetch(buildProxyUrl('scroll-depth', { days: period }))
+      
+      if (!response.ok) {
+        console.warn('[SiteAnalytics] Scroll Depth API returned', response.status)
+        return { success: false, data: null }
+      }
+      
+      const data = await response.json()
+      set({ scrollDepth: data })
+      return { success: true, data }
+    } catch (error) {
+      console.error('[SiteAnalytics] Error fetching scroll depth:', error)
+      return { success: false, error: error.message }
+    }
+  },
+
+  // Fetch heatmap click data
+  fetchHeatmap: async (days = null) => {
+    const period = days || get().dateRange
+    
+    try {
+      const response = await fetch(buildProxyUrl('heatmap', { days: period }))
+      
+      if (!response.ok) {
+        console.warn('[SiteAnalytics] Heatmap API returned', response.status)
+        return { success: false, data: null }
+      }
+      
+      const data = await response.json()
+      set({ heatmap: data })
+      return { success: true, data }
+    } catch (error) {
+      console.error('[SiteAnalytics] Error fetching heatmap:', error)
+      return { success: false, error: error.message }
+    }
+  },
+
   // Fetch all analytics data at once
   fetchAllAnalytics: async (days = null) => {
     const period = days || get().dateRange
@@ -139,11 +227,15 @@ const useSiteAnalyticsStore = create((set, get) => ({
     
     try {
       // Fetch all data in parallel via proxy
-      const [overviewRes, topPagesRes, dailyRes, hourlyRes] = await Promise.all([
+      const [overviewRes, topPagesRes, dailyRes, hourlyRes, webVitalsRes, sessionsRes, scrollDepthRes, heatmapRes] = await Promise.all([
         fetch(buildProxyUrl('overview', { days: period })),
         fetch(buildProxyUrl('page-views', { days: period, groupBy: 'path', limit: 20 })),
         fetch(buildProxyUrl('page-views', { days: period, groupBy: 'day' })),
-        fetch(buildProxyUrl('page-views', { days: period, groupBy: 'hour' }))
+        fetch(buildProxyUrl('page-views', { days: period, groupBy: 'hour' })),
+        fetch(buildProxyUrl('web-vitals', { days: period })),
+        fetch(buildProxyUrl('sessions', { days: period })),
+        fetch(buildProxyUrl('scroll-depth', { days: period })),
+        fetch(buildProxyUrl('heatmap', { days: period }))
       ])
 
       // Check for errors
@@ -153,12 +245,20 @@ const useSiteAnalyticsStore = create((set, get) => ({
       const topPages = topPagesRes.ok ? (await topPagesRes.json()).data : []
       const pageViewsByDay = dailyRes.ok ? (await dailyRes.json()).data : []
       const pageViewsByHour = hourlyRes.ok ? (await hourlyRes.json()).data : []
+      const webVitals = webVitalsRes.ok ? await webVitalsRes.json() : null
+      const sessions = sessionsRes.ok ? await sessionsRes.json() : null
+      const scrollDepth = scrollDepthRes.ok ? await scrollDepthRes.json() : null
+      const heatmap = heatmapRes.ok ? await heatmapRes.json() : null
       
       set({ 
         overview,
         topPages,
         pageViewsByDay,
         pageViewsByHour,
+        webVitals,
+        sessions,
+        scrollDepth,
+        heatmap,
         isLoading: false 
       })
       

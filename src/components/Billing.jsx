@@ -9,6 +9,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import { Checkbox } from '@/components/ui/checkbox'
+import { AreaChart, BarChart, DonutChart } from '@tremor/react'
 import { 
   DollarSign, 
   Receipt, 
@@ -22,11 +24,21 @@ import {
   TrendingUp,
   Calendar,
   Loader2,
-  Download
+  Download,
+  Send,
+  Bell,
+  ExternalLink,
+  Mail,
+  Repeat,
+  Pause,
+  Play,
+  BarChart3
 } from 'lucide-react'
 import useBillingStore from '@/lib/billing-store'
 import useProjectsStore from '@/lib/projects-store'
 import useAuthStore from '@/lib/auth-store'
+import useReportsStore from '@/lib/reports-store'
+import InvoicePaymentDialog from './InvoicePaymentDialog'
 import api from '@/lib/api'
 
 const Billing = () => {
@@ -42,6 +54,10 @@ const Billing = () => {
     createInvoice,
     updateInvoice,
     markInvoicePaid,
+    sendInvoice,
+    sendReminder,
+    toggleRecurringPause,
+    getRecurringIntervalLabel,
     getStatusColor,
     formatCurrency,
     formatDate,
@@ -52,12 +68,23 @@ const Billing = () => {
     clearError 
   } = useBillingStore()
   
+  const { 
+    financialReport,
+    fetchFinancialReport,
+    formatCurrency: formatReportCurrency,
+    isLoading: reportsLoading 
+  } = useReportsStore()
+  
   const hasFetchedRef = useRef(false)
   const [activeTab, setActiveTab] = useState('overview')
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false)
   const [selectedInvoice, setSelectedInvoice] = useState(null)
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false)
+  const [sendingInvoiceId, setSendingInvoiceId] = useState(null)
+  const [sendingReminderId, setSendingReminderId] = useState(null)
+  const [togglingRecurringId, setTogglingRecurringId] = useState(null)
   const [clients, setClients] = useState([])
+  const [reportDateFilters, setReportDateFilters] = useState({ start_date: '', end_date: '' })
   const [formData, setFormData] = useState({
     contactId: '',
     project_id: '',
@@ -65,9 +92,17 @@ const Billing = () => {
     tax_rate: '0',
     due_date: '',
     description: '',
-    status: 'pending'
+    status: 'pending',
+    // Recurring invoice fields
+    isRecurring: false,
+    recurringInterval: '',
+    recurringDayOfMonth: '',
+    recurringEndDate: '',
+    recurringCount: ''
   })
   const [statusFilter, setStatusFilter] = useState('')
+  const [paymentDialogOpen, setPaymentDialogOpen] = useState(false)
+  const [invoiceToPay, setInvoiceToPay] = useState(null)
 
   // Fetch initial data only once
   useEffect(() => {
@@ -112,7 +147,13 @@ const Billing = () => {
       tax_rate: '0',
       due_date: '',
       description: '',
-      status: 'pending'
+      status: 'pending',
+      // Recurring invoice fields
+      isRecurring: false,
+      recurringInterval: '',
+      recurringDayOfMonth: '',
+      recurringEndDate: '',
+      recurringCount: ''
     })
   }
 
@@ -125,7 +166,13 @@ const Billing = () => {
       amount: parseFloat(formData.amount),
       taxRate: parseFloat(formData.tax_rate),
       dueDate: formData.due_date,
-      description: formData.description || null
+      description: formData.description || null,
+      // Recurring invoice fields
+      isRecurring: formData.isRecurring,
+      recurringInterval: formData.isRecurring ? formData.recurringInterval : null,
+      recurringDayOfMonth: formData.isRecurring && formData.recurringDayOfMonth ? parseInt(formData.recurringDayOfMonth) : null,
+      recurringEndDate: formData.isRecurring && formData.recurringEndDate ? formData.recurringEndDate : null,
+      recurringCount: formData.isRecurring && formData.recurringCount ? parseInt(formData.recurringCount) : null
     }
     
     const result = await createInvoice(invoiceData)
@@ -161,10 +208,10 @@ const Billing = () => {
   const openEditDialog = (invoice) => {
     setSelectedInvoice(invoice)
     setFormData({
-      project_id: invoice.project_id?.toString() || '',
+      project_id: invoice.project?.id?.toString() || '',
       amount: invoice.amount?.toString() || '',
-      tax_rate: ((invoice.tax_amount / invoice.amount) * 100).toFixed(2) || '0',
-      due_date: invoice.due_date || '',
+      tax_rate: ((invoice.taxAmount / invoice.amount) * 100).toFixed(2) || '0',
+      due_date: invoice.dueDate || '',
       description: invoice.description || '',
       status: invoice.status || 'pending'
     })
@@ -172,9 +219,76 @@ const Billing = () => {
   }
 
   const handleMarkPaid = async (invoice) => {
-    if (window.confirm(`Mark invoice ${invoice.invoice_number} as paid?`)) {
+    if (window.confirm(`Mark invoice ${invoice.invoiceNumber} as paid?`)) {
       await markInvoicePaid(invoice.id)
     }
+  }
+
+  const handleSendInvoice = async (invoice) => {
+    if (invoice.status === 'paid') return
+    
+    const confirmText = invoice.sentAt 
+      ? `Resend invoice ${invoice.invoiceNumber} to ${invoice.contact?.email}?`
+      : `Send invoice ${invoice.invoiceNumber} to ${invoice.contact?.email}?`
+    
+    if (!window.confirm(confirmText)) return
+    
+    setSendingInvoiceId(invoice.id)
+    const result = await sendInvoice(invoice.id)
+    setSendingInvoiceId(null)
+    
+    if (result.success) {
+      fetchInvoices() // Refresh to get updated status
+    }
+  }
+
+  const handleSendReminder = async (invoice) => {
+    if (invoice.status === 'paid') return
+    if (!invoice.hasPaymentToken && !invoice.sentAt) {
+      alert('Please send the invoice first before sending reminders.')
+      return
+    }
+    
+    const confirmText = `Send payment reminder for ${invoice.invoiceNumber} to ${invoice.contact?.email}? (Reminder ${(invoice.reminderCount || 0) + 1}/3)`
+    if (!window.confirm(confirmText)) return
+    
+    setSendingReminderId(invoice.id)
+    const result = await sendReminder(invoice.id)
+    setSendingReminderId(null)
+    
+    if (result.success) {
+      fetchInvoices() // Refresh to get updated reminder count
+    }
+  }
+
+  const handleToggleRecurring = async (invoice) => {
+    if (!invoice.isRecurring) return
+    
+    const action = invoice.recurringPaused ? 'resume' : 'pause'
+    const confirmText = `${action === 'pause' ? 'Pause' : 'Resume'} recurring invoice ${invoice.invoiceNumber}?`
+    if (!window.confirm(confirmText)) return
+    
+    setTogglingRecurringId(invoice.id)
+    const result = await toggleRecurringPause(invoice.id, !invoice.recurringPaused)
+    setTogglingRecurringId(null)
+    
+    if (result.success) {
+      fetchInvoices() // Refresh to get updated status
+    }
+  }
+
+  const openPaymentDialog = (invoice) => {
+    setInvoiceToPay(invoice)
+    setPaymentDialogOpen(true)
+  }
+
+  const handlePaymentSuccess = () => {
+    // Refresh invoices after successful payment
+    fetchInvoices()
+    fetchBillingSummary()
+    fetchOverdueInvoices()
+    setPaymentDialogOpen(false)
+    setInvoiceToPay(null)
   }
 
   const filteredInvoices = statusFilter 
@@ -236,7 +350,7 @@ const Billing = () => {
                       <SelectValue placeholder="Select client" />
                     </SelectTrigger>
                     <SelectContent>
-                      {clients.map((client) => (
+                      {clients.filter(client => client.id).map((client) => (
                         <SelectItem key={client.id} value={client.id}>
                           {client.name} ({client.email})
                         </SelectItem>
@@ -248,14 +362,15 @@ const Billing = () => {
                 <div className="space-y-2">
                   <Label htmlFor="project_id">Project (Optional)</Label>
                   <Select 
-                    value={formData.project_id} 
-                    onValueChange={(value) => handleFormChange('project_id', value)}
+                    value={formData.project_id || 'none'} 
+                    onValueChange={(value) => handleFormChange('project_id', value === 'none' ? '' : value)}
                   >
                     <SelectTrigger>
                       <SelectValue placeholder="Select project (optional)" />
                     </SelectTrigger>
                     <SelectContent>
-                      {projects.map((project) => (
+                      <SelectItem value="none">No project</SelectItem>
+                      {projects.filter(project => project.id).map((project) => (
                         <SelectItem key={project.id} value={project.id.toString()}>
                           {project.title}
                         </SelectItem>
@@ -312,6 +427,95 @@ const Billing = () => {
                     rows={3}
                   />
                 </div>
+
+                {/* Recurring Invoice Options */}
+                <div className="space-y-4 pt-4 border-t border-[var(--glass-border)]">
+                  <div className="flex items-center space-x-2">
+                    <Checkbox 
+                      id="isRecurring" 
+                      checked={formData.isRecurring}
+                      onCheckedChange={(checked) => handleFormChange('isRecurring', checked)}
+                    />
+                    <Label htmlFor="isRecurring" className="flex items-center gap-2 cursor-pointer">
+                      <Repeat className="w-4 h-4" />
+                      Make this a recurring invoice
+                    </Label>
+                  </div>
+
+                  {formData.isRecurring && (
+                    <div className="space-y-4 pl-6">
+                      <div className="space-y-2">
+                        <Label htmlFor="recurringInterval">Billing Frequency *</Label>
+                        <Select 
+                          value={formData.recurringInterval} 
+                          onValueChange={(value) => handleFormChange('recurringInterval', value)}
+                        >
+                          <SelectTrigger>
+                            <SelectValue placeholder="Select frequency" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="weekly">Weekly</SelectItem>
+                            <SelectItem value="bi-weekly">Bi-Weekly</SelectItem>
+                            <SelectItem value="monthly">Monthly</SelectItem>
+                            <SelectItem value="quarterly">Quarterly</SelectItem>
+                            <SelectItem value="semi-annual">Semi-Annual</SelectItem>
+                            <SelectItem value="annual">Annual</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+
+                      {['monthly', 'quarterly', 'semi-annual', 'annual'].includes(formData.recurringInterval) && (
+                        <div className="space-y-2">
+                          <Label htmlFor="recurringDayOfMonth">Day of Month</Label>
+                          <Select 
+                            value={formData.recurringDayOfMonth} 
+                            onValueChange={(value) => handleFormChange('recurringDayOfMonth', value)}
+                          >
+                            <SelectTrigger>
+                              <SelectValue placeholder="Select day (1-28)" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {[...Array(28)].map((_, i) => (
+                                <SelectItem key={i + 1} value={(i + 1).toString()}>
+                                  {i + 1}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                          <p className="text-xs text-[var(--text-muted)]">
+                            Invoice will be generated on this day each period
+                          </p>
+                        </div>
+                      )}
+
+                      <div className="grid grid-cols-2 gap-4">
+                        <div className="space-y-2">
+                          <Label htmlFor="recurringEndDate">End Date (Optional)</Label>
+                          <Input
+                            id="recurringEndDate"
+                            type="date"
+                            value={formData.recurringEndDate}
+                            onChange={(e) => handleFormChange('recurringEndDate', e.target.value)}
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <Label htmlFor="recurringCount">Max Invoices (Optional)</Label>
+                          <Input
+                            id="recurringCount"
+                            type="number"
+                            min="1"
+                            value={formData.recurringCount}
+                            onChange={(e) => handleFormChange('recurringCount', e.target.value)}
+                            placeholder="e.g. 12"
+                          />
+                        </div>
+                      </div>
+                      <p className="text-xs text-[var(--text-muted)]">
+                        Leave both blank for indefinite recurring. Set one or both to limit.
+                      </p>
+                    </div>
+                  )}
+                </div>
                 
                 <div className="flex justify-end space-x-2">
                   <Button 
@@ -324,7 +528,7 @@ const Billing = () => {
                   </Button>
                   <Button 
                     type="submit" 
-                    disabled={isLoading || !formData.contactId || !formData.amount || !formData.due_date}
+                    disabled={isLoading || !formData.contactId || !formData.amount || !formData.due_date || (formData.isRecurring && !formData.recurringInterval)}
                     variant="glass-primary"
                   >
                     {isLoading ? (
@@ -333,7 +537,7 @@ const Billing = () => {
                         Creating...
                       </>
                     ) : (
-                      'Create Invoice'
+                      formData.isRecurring ? 'Create Recurring Invoice' : 'Create Invoice'
                     )}
                   </Button>
                 </div>
@@ -344,10 +548,11 @@ const Billing = () => {
       </div>
 
       <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-        <TabsList className="grid w-full grid-cols-3">
+        <TabsList className="grid w-full grid-cols-4">
           <TabsTrigger value="overview">Overview</TabsTrigger>
           <TabsTrigger value="invoices">All Invoices</TabsTrigger>
           <TabsTrigger value="overdue">Overdue</TabsTrigger>
+          <TabsTrigger value="reports">Reports</TabsTrigger>
         </TabsList>
 
         <TabsContent value="overview" className="space-y-6">
@@ -360,7 +565,7 @@ const Billing = () => {
                     <div>
                       <p className="text-sm font-medium text-[var(--text-secondary)]">Total Revenue</p>
                       <p className="text-2xl font-bold text-[var(--text-primary)]">
-                        {formatCurrency(summary.amounts.total_amount)}
+                        {formatCurrency(summary.totalRevenue)}
                       </p>
                     </div>
                     <div className="w-12 h-12 bg-[var(--accent-success)]/20 rounded-xl flex items-center justify-center">
@@ -376,7 +581,7 @@ const Billing = () => {
                     <div>
                       <p className="text-sm font-medium text-[var(--text-secondary)]">Pending</p>
                       <p className="text-2xl font-bold text-[var(--accent-warning)]">
-                        {formatCurrency(summary.amounts.pending_amount)}
+                        {formatCurrency(summary.pendingAmount)}
                       </p>
                     </div>
                     <div className="w-12 h-12 bg-[var(--accent-warning)]/20 rounded-xl flex items-center justify-center">
@@ -390,9 +595,9 @@ const Billing = () => {
                 <CardContent className="p-6">
                   <div className="flex items-center justify-between">
                     <div>
-                      <p className="text-sm font-medium text-[var(--text-secondary)]">Paid</p>
+                      <p className="text-sm font-medium text-[var(--text-secondary)]">This Month</p>
                       <p className="text-2xl font-bold text-[var(--accent-success)]">
-                        {formatCurrency(summary.amounts.paid_amount)}
+                        {formatCurrency(summary.thisMonthRevenue)}
                       </p>
                     </div>
                     <div className="w-12 h-12 bg-[var(--accent-success)]/20 rounded-xl flex items-center justify-center">
@@ -408,7 +613,7 @@ const Billing = () => {
                     <div>
                       <p className="text-sm font-medium text-[var(--text-secondary)]">Overdue</p>
                       <p className="text-2xl font-bold text-[var(--accent-error)]">
-                        {formatCurrency(summary.amounts.overdue_amount)}
+                        {formatCurrency(summary.overdueAmount)}
                       </p>
                     </div>
                     <div className="w-12 h-12 bg-[var(--accent-error)]/20 rounded-xl flex items-center justify-center">
@@ -427,26 +632,26 @@ const Billing = () => {
               <CardDescription>Latest billing activity</CardDescription>
             </CardHeader>
             <CardContent>
-              {summary?.recent_invoices?.length === 0 ? (
+              {summary?.recentInvoices?.length === 0 ? (
                 <div className="text-center py-8">
                   <Receipt className="h-12 w-12 text-[var(--text-tertiary)] mx-auto mb-4" />
                   <p className="text-[var(--text-secondary)]">No invoices yet</p>
                 </div>
               ) : (
                 <div className="space-y-4">
-                  {summary?.recent_invoices?.map((invoice) => (
+                  {summary?.recentInvoices?.map((invoice) => (
                     <div key={invoice.id} className="flex items-center justify-between p-4 border border-[var(--glass-border)] rounded-xl bg-[var(--glass-bg)] backdrop-blur-sm">
                       <div className="flex items-center space-x-4">
                         <div className="w-10 h-10 bg-[var(--brand-primary)]/10 rounded-xl flex items-center justify-center">
                           <Receipt className="w-5 h-5 text-[var(--brand-primary)]" />
                         </div>
                         <div>
-                          <p className="font-medium text-[var(--text-primary)]">{invoice.invoice_number}</p>
-                          <p className="text-sm text-[var(--text-secondary)]">{invoice.project_title}</p>
+                          <p className="font-medium text-[var(--text-primary)]">{invoice.invoiceNumber}</p>
+                          <p className="text-sm text-[var(--text-secondary)]">{invoice.projectName || invoice.contactName}</p>
                         </div>
                       </div>
                       <div className="text-right">
-                        <p className="font-medium">{formatCurrency(invoice.total_amount)}</p>
+                        <p className="font-medium">{formatCurrency(invoice.totalAmount)}</p>
                         <Badge className={getStatusColor(invoice.status)}>
                           <div className="flex items-center space-x-1">
                             {getStatusIcon(invoice.status)}
@@ -465,12 +670,12 @@ const Billing = () => {
         <TabsContent value="invoices" className="space-y-4">
           {/* Filters */}
           <div className="flex items-center space-x-4">
-            <Select value={statusFilter} onValueChange={setStatusFilter}>
+            <Select value={statusFilter || 'all'} onValueChange={(value) => setStatusFilter(value === 'all' ? '' : value)}>
               <SelectTrigger className="w-48">
                 <SelectValue placeholder="All statuses" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="">All statuses</SelectItem>
+                <SelectItem value="all">All statuses</SelectItem>
                 <SelectItem value="pending">Pending</SelectItem>
                 <SelectItem value="paid">Paid</SelectItem>
                 <SelectItem value="overdue">Overdue</SelectItem>
@@ -514,17 +719,35 @@ const Billing = () => {
                     <div className="flex items-center justify-between">
                       <div className="flex items-center space-x-4">
                         <div className="w-12 h-12 bg-[#4bbf39]/10 rounded-lg flex items-center justify-center">
-                          <Receipt className="w-6 h-6 text-[#4bbf39]" />
+                          {invoice.isRecurring ? (
+                            <Repeat className="w-6 h-6 text-[#4bbf39]" />
+                          ) : (
+                            <Receipt className="w-6 h-6 text-[#4bbf39]" />
+                          )}
                         </div>
                         <div>
-                          <h4 className="font-semibold text-lg">{invoice.invoice_number}</h4>
-                          <p className="text-[var(--text-secondary)]">{invoice.project_title}</p>
-                          <p className="text-sm text-[var(--text-tertiary)]">{invoice.company_name}</p>
+                          <div className="flex items-center gap-2">
+                            <h4 className="font-semibold text-lg">{invoice.invoiceNumber}</h4>
+                            {invoice.isRecurring && (
+                              <Badge variant="outline" className="text-xs bg-[#4bbf39]/10 text-[#4bbf39] border-[#4bbf39]/30">
+                                <Repeat className="w-3 h-3 mr-1" />
+                                {getRecurringIntervalLabel(invoice.recurringInterval)}
+                                {invoice.recurringPaused && <span className="ml-1">(Paused)</span>}
+                              </Badge>
+                            )}
+                          </div>
+                          <p className="text-[var(--text-secondary)]">{invoice.project?.title || invoice.projectName}</p>
+                          <p className="text-sm text-[var(--text-tertiary)]">{invoice.contact?.company}</p>
+                          {invoice.isRecurring && invoice.nextRecurringDate && !invoice.recurringPaused && (
+                            <p className="text-xs text-[var(--text-tertiary)]">
+                              Next invoice: {formatDate(invoice.nextRecurringDate)}
+                            </p>
+                          )}
                         </div>
                       </div>
                       
                       <div className="text-right">
-                        <p className="text-2xl font-bold">{formatCurrency(invoice.total_amount)}</p>
+                        <p className="text-2xl font-bold">{formatCurrency(invoice.totalAmount)}</p>
                         <div className="flex items-center space-x-2 mt-2">
                           <Badge className={getStatusColor(isOverdue(invoice) ? 'overdue' : invoice.status)}>
                             <div className="flex items-center space-x-1">
@@ -541,17 +764,76 @@ const Billing = () => {
                           )}
                         </div>
                         <p className="text-sm text-[var(--text-tertiary)] mt-1">
-                          Due: {formatDate(invoice.due_date)}
+                          Due: {formatDate(invoice.dueDate)}
                         </p>
                       </div>
                     </div>
                     
+                    {/* Admin Tracking Info */}
+                    {isAdmin && invoice.status !== 'paid' && (
+                      <div className="mt-4 pt-4 border-t border-dashed flex flex-wrap gap-4 text-sm text-[var(--text-tertiary)]">
+                        {invoice.sentAt && (
+                          <div className="flex items-center gap-1">
+                            <Mail className="w-3.5 h-3.5" />
+                            <span>Sent: {formatDate(invoice.sentAt)}</span>
+                          </div>
+                        )}
+                        {invoice.viewCount > 0 && (
+                          <div className="flex items-center gap-1">
+                            <Eye className="w-3.5 h-3.5" />
+                            <span>Views: {invoice.viewCount}</span>
+                            {invoice.lastViewedAt && (
+                              <span className="text-xs">(last: {formatDate(invoice.lastViewedAt)})</span>
+                            )}
+                          </div>
+                        )}
+                        {invoice.reminderCount > 0 && (
+                          <div className="flex items-center gap-1">
+                            <Bell className="w-3.5 h-3.5" />
+                            <span>Reminders: {invoice.reminderCount}/3</span>
+                            {invoice.lastReminderSent && (
+                              <span className="text-xs">(last: {formatDate(invoice.lastReminderSent)})</span>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    )}
+                    
                     {isAdmin && (
-                      <div className="flex space-x-2 mt-4 pt-4 border-t">
-                        <Button variant="outline" size="sm">
-                          <Eye className="w-4 h-4 mr-2" />
-                          View
-                        </Button>
+                      <div className="flex flex-wrap gap-2 mt-4 pt-4 border-t">
+                        {invoice.status !== 'paid' && (
+                          <>
+                            <Button 
+                              variant={invoice.sentAt ? "outline" : "default"}
+                              size="sm"
+                              onClick={() => handleSendInvoice(invoice)}
+                              disabled={sendingInvoiceId === invoice.id}
+                            >
+                              {sendingInvoiceId === invoice.id ? (
+                                <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                              ) : (
+                                <Send className="w-4 h-4 mr-2" />
+                              )}
+                              {invoice.sentAt ? 'Resend' : 'Send Invoice'}
+                            </Button>
+                            {invoice.sentAt && (
+                              <Button 
+                                variant="outline"
+                                size="sm"
+                                onClick={() => handleSendReminder(invoice)}
+                                disabled={sendingReminderId === invoice.id || invoice.reminderCount >= 3}
+                                title={invoice.reminderCount >= 3 ? 'Maximum reminders sent' : 'Send payment reminder'}
+                              >
+                                {sendingReminderId === invoice.id ? (
+                                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                                ) : (
+                                  <Bell className="w-4 h-4 mr-2" />
+                                )}
+                                Remind ({invoice.reminderCount || 0}/3)
+                              </Button>
+                            )}
+                          </>
+                        )}
                         <Button 
                           variant="outline" 
                           size="sm"
@@ -560,7 +842,7 @@ const Billing = () => {
                           <Edit className="w-4 h-4 mr-2" />
                           Edit
                         </Button>
-                        {invoice.status === 'pending' && (
+                        {invoice.status !== 'paid' && (
                           <Button 
                             size="sm"
                             variant="glass-primary"
@@ -570,6 +852,38 @@ const Billing = () => {
                             Mark Paid
                           </Button>
                         )}
+                        {invoice.isRecurring && (
+                          <Button 
+                            variant="outline"
+                            size="sm"
+                            onClick={() => handleToggleRecurring(invoice)}
+                            disabled={togglingRecurringId === invoice.id}
+                            title={invoice.recurringPaused ? 'Resume recurring invoices' : 'Pause recurring invoices'}
+                          >
+                            {togglingRecurringId === invoice.id ? (
+                              <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                            ) : invoice.recurringPaused ? (
+                              <Play className="w-4 h-4 mr-2" />
+                            ) : (
+                              <Pause className="w-4 h-4 mr-2" />
+                            )}
+                            {invoice.recurringPaused ? 'Resume' : 'Pause'}
+                          </Button>
+                        )}
+                      </div>
+                    )}
+                    
+                    {/* Client Pay Button */}
+                    {!isAdmin && (invoice.status === 'pending' || invoice.status === 'sent' || isOverdue(invoice)) && (
+                      <div className="mt-4 pt-4 border-t">
+                        <Button 
+                          onClick={() => openPaymentDialog(invoice)}
+                          variant="glass-primary"
+                          className="w-full"
+                        >
+                          <CreditCard className="w-4 h-4 mr-2" />
+                          Pay Now - {formatCurrency(invoice.totalAmount)}
+                        </Button>
                       </div>
                     )}
                   </CardContent>
@@ -608,22 +922,22 @@ const Billing = () => {
                           <AlertTriangle className="w-6 h-6 text-red-600" />
                         </div>
                         <div>
-                          <h4 className="font-semibold text-lg">{invoice.invoice_number}</h4>
-                          <p className="text-[var(--text-secondary)]">{invoice.project_title}</p>
+                          <h4 className="font-semibold text-lg">{invoice.invoiceNumber}</h4>
+                          <p className="text-[var(--text-secondary)]">{invoice.projectName}</p>
                           <p className="text-sm text-red-600 font-medium">
-                            {invoice.days_overdue} days overdue
+                            {invoice.daysOverdue} days overdue
                           </p>
                         </div>
                       </div>
                       
                       <div className="text-right">
                         <p className="text-2xl font-bold text-red-600">
-                          {formatCurrency(invoice.total_amount)}
+                          {formatCurrency(invoice.totalAmount)}
                         </p>
                         <p className="text-sm text-[var(--text-tertiary)]">
-                          Due: {formatDate(invoice.due_date)}
+                          Due: {formatDate(invoice.dueDate)}
                         </p>
-                        {isAdmin && (
+                        {isAdmin ? (
                           <Button 
                             size="sm"
                             variant="glass-primary"
@@ -633,6 +947,15 @@ const Billing = () => {
                             <CreditCard className="w-4 h-4 mr-2" />
                             Mark Paid
                           </Button>
+                        ) : (
+                          <Button 
+                            size="sm"
+                            onClick={() => openPaymentDialog(invoice)}
+                            className="mt-2 bg-red-600 hover:bg-red-700 text-white"
+                          >
+                            <CreditCard className="w-4 h-4 mr-2" />
+                            Pay Now
+                          </Button>
                         )}
                       </div>
                     </div>
@@ -640,6 +963,213 @@ const Billing = () => {
                 </Card>
               ))}
             </div>
+          )}
+        </TabsContent>
+
+        {/* Financial Reports Tab */}
+        <TabsContent value="reports" className="space-y-6">
+          {/* Date Filters */}
+          <Card>
+            <CardContent className="p-4">
+              <div className="flex items-center space-x-4">
+                <div className="flex-1">
+                  <Label htmlFor="report_start_date">Start Date</Label>
+                  <Input
+                    id="report_start_date"
+                    type="date"
+                    value={reportDateFilters.start_date}
+                    onChange={(e) => setReportDateFilters(prev => ({ ...prev, start_date: e.target.value }))}
+                  />
+                </div>
+                <div className="flex-1">
+                  <Label htmlFor="report_end_date">End Date</Label>
+                  <Input
+                    id="report_end_date"
+                    type="date"
+                    value={reportDateFilters.end_date}
+                    onChange={(e) => setReportDateFilters(prev => ({ ...prev, end_date: e.target.value }))}
+                  />
+                </div>
+                <div className="flex space-x-2 pt-6">
+                  <Button 
+                    onClick={() => fetchFinancialReport(reportDateFilters)} 
+                    disabled={reportsLoading}
+                  >
+                    {reportsLoading ? (
+                      <>
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                        Loading...
+                      </>
+                    ) : (
+                      'Load Report'
+                    )}
+                  </Button>
+                  <Button 
+                    variant="outline" 
+                    onClick={() => {
+                      setReportDateFilters({ start_date: '', end_date: '' })
+                      fetchFinancialReport({})
+                    }}
+                  >
+                    Reset
+                  </Button>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Load prompt if no data */}
+          {!financialReport && !reportsLoading && (
+            <Card>
+              <CardContent className="flex flex-col items-center justify-center py-12">
+                <BarChart3 className="h-12 w-12 text-[var(--text-tertiary)] mb-4" />
+                <h3 className="text-lg font-medium text-[var(--text-primary)] mb-2">Financial Reports</h3>
+                <p className="text-[var(--text-secondary)] text-center mb-4">
+                  Click "Load Report" to view detailed financial analytics
+                </p>
+                <Button 
+                  variant="glass-primary"
+                  onClick={() => fetchFinancialReport(reportDateFilters)}
+                  disabled={reportsLoading}
+                >
+                  <BarChart3 className="w-4 h-4 mr-2" />
+                  Load Financial Report
+                </Button>
+              </CardContent>
+            </Card>
+          )}
+
+          {financialReport && (
+            <>
+              {/* Financial Summary Cards */}
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                <Card>
+                  <CardContent className="p-6">
+                    <div className="text-center">
+                      <p className="text-2xl font-bold text-green-600">
+                        {formatCurrency(financialReport.summary?.total_revenue || 0)}
+                      </p>
+                      <p className="text-sm text-[var(--text-secondary)]">Total Revenue</p>
+                    </div>
+                  </CardContent>
+                </Card>
+                
+                <Card>
+                  <CardContent className="p-6">
+                    <div className="text-center">
+                      <p className="text-2xl font-bold text-blue-600">
+                        {formatCurrency(financialReport.summary?.avg_invoice_value || 0)}
+                      </p>
+                      <p className="text-sm text-[var(--text-secondary)]">Avg Invoice Value</p>
+                    </div>
+                  </CardContent>
+                </Card>
+                
+                <Card>
+                  <CardContent className="p-6">
+                    <div className="text-center">
+                      <p className="text-2xl font-bold text-yellow-600">
+                        {formatCurrency(financialReport.summary?.overdue_amount || 0)}
+                      </p>
+                      <p className="text-sm text-[var(--text-secondary)]">Overdue Amount</p>
+                    </div>
+                  </CardContent>
+                </Card>
+                
+                <Card>
+                  <CardContent className="p-6">
+                    <div className="text-center">
+                      <p className="text-2xl font-bold text-purple-600">
+                        {financialReport.summary?.avg_payment_days || 0}
+                      </p>
+                      <p className="text-sm text-[var(--text-secondary)]">Avg Payment Days</p>
+                    </div>
+                  </CardContent>
+                </Card>
+              </div>
+
+              {/* Revenue Trend Chart */}
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <TrendingUp className="h-5 w-5 text-green-500" />
+                    Monthly Revenue Trend
+                  </CardTitle>
+                  <CardDescription>Revenue breakdown by month</CardDescription>
+                </CardHeader>
+                <CardContent>
+                  {financialReport.breakdown?.monthly_revenue?.length > 0 ? (
+                    <AreaChart
+                      data={financialReport.breakdown.monthly_revenue}
+                      index="month_name"
+                      categories={['revenue']}
+                      colors={['emerald']}
+                      valueFormatter={(v) => formatCurrency(v)}
+                      className="h-72"
+                      showLegend={false}
+                      showGridLines={true}
+                    />
+                  ) : (
+                    <div className="h-72 flex items-center justify-center text-[var(--text-tertiary)]">
+                      No monthly revenue data available
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+
+              {/* Invoice Status Distribution */}
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                <Card>
+                  <CardHeader>
+                    <CardTitle>Invoice Status Distribution</CardTitle>
+                    <CardDescription>Breakdown by payment status</CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    {financialReport.breakdown?.status_distribution?.length > 0 ? (
+                      <DonutChart
+                        data={financialReport.breakdown.status_distribution.map(s => ({
+                          name: s.status?.charAt(0).toUpperCase() + s.status?.slice(1) || 'Unknown',
+                          count: s.count || 0
+                        }))}
+                        index="name"
+                        category="count"
+                        colors={['emerald', 'amber', 'rose', 'gray']}
+                        className="h-64"
+                        showLabel={true}
+                      />
+                    ) : (
+                      <div className="h-64 flex items-center justify-center text-[var(--text-tertiary)]">
+                        No status data available
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
+
+                <Card>
+                  <CardHeader>
+                    <CardTitle>Revenue by Client</CardTitle>
+                    <CardDescription>Top clients by revenue</CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    {financialReport.breakdown?.top_clients?.length > 0 ? (
+                      <BarChart
+                        data={financialReport.breakdown.top_clients.slice(0, 5)}
+                        index="client_name"
+                        categories={['total_revenue']}
+                        colors={['blue']}
+                        valueFormatter={(v) => formatCurrency(v)}
+                        className="h-64"
+                        showLegend={false}
+                      />
+                    ) : (
+                      <div className="h-64 flex items-center justify-center text-[var(--text-tertiary)]">
+                        No client revenue data available
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
+              </div>
+            </>
           )}
         </TabsContent>
       </Tabs>
@@ -663,14 +1193,15 @@ const Billing = () => {
             <div className="space-y-2">
               <Label htmlFor="edit_project_id">Project</Label>
               <Select 
-                value={formData.project_id} 
-                onValueChange={(value) => handleFormChange('project_id', value)}
+                value={formData.project_id || 'none'} 
+                onValueChange={(value) => handleFormChange('project_id', value === 'none' ? '' : value)}
               >
                 <SelectTrigger>
                   <SelectValue placeholder="Select project" />
                 </SelectTrigger>
                 <SelectContent>
-                  {projects.map((project) => (
+                  <SelectItem value="none">No project</SelectItem>
+                  {projects.filter(project => project.id).map((project) => (
                     <SelectItem key={project.id} value={project.id.toString()}>
                       {project.title}
                     </SelectItem>
@@ -771,6 +1302,14 @@ const Billing = () => {
           </form>
         </DialogContent>
       </Dialog>
+
+      {/* Invoice Payment Dialog (for clients) */}
+      <InvoicePaymentDialog
+        invoice={invoiceToPay}
+        open={paymentDialogOpen}
+        onOpenChange={setPaymentDialogOpen}
+        onPaymentSuccess={handlePaymentSuccess}
+      />
     </div>
   )
 }

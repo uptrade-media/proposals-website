@@ -1,5 +1,6 @@
 // netlify/functions/admin-clients-list.js
 import { createSupabaseAdmin, getAuthenticatedUser } from './utils/supabase.js'
+import { requireTeamMember } from './utils/permissions.js'
 
 export async function handler(event) {
   // CORS headers
@@ -34,29 +35,39 @@ export async function handler(event) {
   }
 
   try {
-    // Only admins can list clients
-    if (contact.role !== 'admin') {
-      return {
-        statusCode: 403,
-        headers,
-        body: JSON.stringify({ error: 'Admin access required' })
-      }
-    }
+    // Require team member access
+    requireTeamMember(contact)
 
     const supabase = createSupabaseAdmin()
+    const isAdmin = contact.team_role === 'admin' || contact.team_role === 'manager'
 
-    // Parse query parameters (for future filtering)
+    // Parse query parameters
     const params = new URLSearchParams(event.queryStringParameters || {})
     const search = params.get('search') || ''
     const role = params.get('role') // 'client' or 'admin'
     const accountSetup = params.get('accountSetup') // 'true' or 'false'
+    const assignedTo = params.get('assignedTo') // Filter by rep
 
-    // Build query
+    // Build query - exclude team members, show only actual clients
     let query = supabase
       .from('contacts')
-      .select('id, email, name, company, role, account_setup, google_id, avatar, created_at')
-      .neq('role', 'admin')
+      .select('id, email, name, company, role, account_setup, google_id, avatar, created_at, assigned_to')
+      .eq('is_team_member', false) // Only show clients, not team members
       .order('created_at', { ascending: false })
+
+    // Non-admin reps only see their assigned contacts
+    if (!isAdmin) {
+      query = query.eq('assigned_to', contact.id)
+    }
+    
+    // Admin can filter by assigned rep
+    if (assignedTo && isAdmin) {
+      if (assignedTo === 'unassigned') {
+        query = query.is('assigned_to', null)
+      } else {
+        query = query.eq('assigned_to', assignedTo)
+      }
+    }
 
     // Apply search filter if provided
     if (search) {
@@ -95,6 +106,7 @@ export async function handler(event) {
       hasGoogleAuth: !!row.google_id,
       avatar: row.avatar,
       createdAt: row.created_at,
+      assignedTo: row.assigned_to, // Include ownership info
       stats: {
         projectCount: 0,
         proposalCount: 0,

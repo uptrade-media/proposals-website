@@ -3,6 +3,7 @@
 import { createClient } from '@supabase/supabase-js'
 import { Resend } from 'resend'
 import { getAuthenticatedUser } from './utils/supabase.js'
+import { requireTeamMember } from './utils/permissions.js'
 
 const RESEND_API_KEY = process.env.RESEND_API_KEY
 const RESEND_FROM_EMAIL = process.env.RESEND_FROM_EMAIL || 'portal@send.uptrademedia.com'
@@ -55,12 +56,14 @@ export async function handler(event) {
       }
     }
 
-    // Only admins can create proposals
-    if (contact.role !== 'admin') {
+    // Require team member access
+    try {
+      requireTeamMember(contact)
+    } catch (err) {
       return {
         statusCode: 403,
         headers,
-        body: JSON.stringify({ error: 'Only admins can create proposals' })
+        body: JSON.stringify({ error: err.message })
       }
     }
 
@@ -146,7 +149,9 @@ export async function handler(event) {
         mdx_content: mdxContent,
         status,
         total_amount: totalAmount ? String(totalAmount) : null,
-        valid_until: validUntil || null
+        valid_until: validUntil || null,
+        created_by: contact.id, // Track who created this proposal
+        assigned_to: contact.id // Initially assigned to creator
       })
       .select()
       .single()

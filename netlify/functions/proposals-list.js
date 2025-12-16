@@ -1,6 +1,7 @@
 // netlify/functions/proposals-list.js
 // Migrated to Supabase
 import { createSupabaseAdmin, getAuthenticatedUser } from './utils/supabase.js'
+import { requireTeamMember, applyOwnershipFilter } from './utils/permissions.js'
 
 export async function handler(event) {
   const headers = {
@@ -32,7 +33,8 @@ export async function handler(event) {
     
     console.log('Auth result:', { 
       hasContact: !!contact, 
-      role: contact?.role, 
+      role: contact?.role,
+      teamRole: contact?.team_role,
       authError: authError 
     })
     
@@ -44,9 +46,21 @@ export async function handler(event) {
       }
     }
 
+    // Require team member access
+    try {
+      requireTeamMember(contact)
+    } catch (err) {
+      return {
+        statusCode: 403,
+        headers,
+        body: JSON.stringify({ error: err.message })
+      }
+    }
+
     // Parse query parameters for filtering
     const queryParams = event.queryStringParameters || {}
-    const { projectId, status, contactId } = queryParams
+    const { projectId, status, contactId, createdBy } = queryParams
+    const isAdmin = contact.team_role === 'admin' || contact.team_role === 'manager'
 
     // Build query (note: proposal_line_items table doesn't exist in schema)
     let query = supabase
@@ -68,12 +82,17 @@ export async function handler(event) {
       `)
       .order('created_at', { ascending: false })
 
-    // Filter by user role
-    if (contact.role !== 'admin') {
-      query = query.eq('contact_id', contact.id)
-    } else if (contactId) {
-      // Admins can filter by specific contact
+    // Apply ownership filter (reps only see their proposals, admins see all)
+    query = applyOwnershipFilter(query, contact, 'created_by')
+
+    // Apply optional filters
+    if (contactId) {
       query = query.eq('contact_id', contactId)
+    }
+    
+    if (createdBy && isAdmin) {
+      // Only admins can filter by creator
+      query = query.eq('created_by', createdBy)
     }
 
     if (projectId) {
@@ -114,8 +133,10 @@ export async function handler(event) {
       fullyExecutedAt: p.fully_executed_at,
       createdAt: p.created_at,
       updatedAt: p.updated_at,
-      // Include contact info for admin view
-      ...(contact.role === 'admin' && p.contact ? {
+      createdBy: p.created_by,
+      assignedTo: p.assigned_to,
+      // Include contact info for admin/manager view
+      ...(isAdmin && p.contact ? {
         contact: {
           id: p.contact.id,
           name: p.contact.name,

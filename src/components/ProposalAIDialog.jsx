@@ -126,6 +126,7 @@ export default function ProposalAIDialog({
   clients = [], 
   preselectedClientId = null,
   preselectedType = null,
+  initialFormData = null, // Pre-fill form with prospect data
   open: externalOpen,
   onOpenChange: externalOnOpenChange,
   triggerButton = true
@@ -493,10 +494,12 @@ export default function ProposalAIDialog({
         notes: '',
         heroImage: null,
         heroImagePreview: '',
-        validDays: '30'
+        validDays: '30',
+        // Merge initial form data if provided
+        ...initialFormData
       })
     }
-  }, [isOpen, preselectedClientId, preselectedType])
+  }, [isOpen, preselectedClientId, preselectedType, initialFormData])
 
   // When entering step 4, start AI clarification
   useEffect(() => {

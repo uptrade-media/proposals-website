@@ -34,7 +34,15 @@ export async function handler(event) {
     }
 
     // Validate endpoint to prevent arbitrary URL fetching
-    const allowedEndpoints = ['overview', 'page-views']
+    const allowedEndpoints = [
+      'overview',
+      'page-views',
+      'sessions',
+      'events',
+      'web-vitals',
+      'scroll-depth',
+      'heatmap'
+    ]
     if (!allowedEndpoints.includes(endpoint)) {
       return {
         statusCode: 400,

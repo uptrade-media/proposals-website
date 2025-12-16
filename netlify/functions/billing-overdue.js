@@ -42,7 +42,7 @@ export async function handler(event) {
       .select(`
         *,
         contact:contacts!contact_id(id, name, email, company),
-        project:projects!project_id(id, name)
+        project:projects!project_id(id, title)
       `)
       .eq('status', 'pending')
 

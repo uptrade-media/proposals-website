@@ -397,3 +397,216 @@ body {
   font-style: italic;
   color: var(--text-secondary);
 }
+
+/* ================================================
+   TREMOR CHART DARK THEME FIXES
+   ================================================ */
+
+/* Tremor uses these CSS custom properties for chart colors */
+:root {
+  /* Chart color palette - these map to Tremor's color names */
+  --color-emerald-500: #10b981;
+  --color-blue-500: #3b82f6;
+  --color-amber-500: #f59e0b;
+  --color-violet-500: #8b5cf6;
+  --color-cyan-500: #06b6d4;
+  --color-indigo-500: #6366f1;
+  --color-purple-500: #a855f7;
+  --color-fuchsia-500: #d946ef;
+  --color-pink-500: #ec4899;
+  --color-rose-500: #f43f5e;
+  --color-red-500: #ef4444;
+  --color-orange-500: #f97316;
+  --color-teal-500: #14b8a6;
+  --color-sky-500: #0ea5e9;
+}
+
+/* Override Tremor default colors globally in dark mode */
+.dark {
+  /* Tremor color overrides for dark theme */
+  --tremor-content-DEFAULT: rgba(255, 255, 255, 0.55);
+  --tremor-content-emphasis: rgba(255, 255, 255, 0.92);
+  --tremor-content-subtle: rgba(255, 255, 255, 0.35);
+  
+  --tremor-border-DEFAULT: rgba(255, 255, 255, 0.08);
+  
+  --tremor-background-DEFAULT: transparent;
+  --tremor-background-subtle: rgba(255, 255, 255, 0.04);
+  --tremor-background-muted: rgba(44, 44, 46, 0.72);
+}
+
+/* Force text colors on all Tremor chart text elements */
+.dark text {
+  fill: rgba(255, 255, 255, 0.55) !important;
+}
+
+/* Axis lines and ticks */
+.dark .recharts-cartesian-axis-line,
+.dark .recharts-cartesian-axis-tick-line {
+  stroke: rgba(255, 255, 255, 0.15) !important;
+}
+
+/* Grid lines */
+.dark .recharts-cartesian-grid-horizontal line,
+.dark .recharts-cartesian-grid-vertical line {
+  stroke: rgba(255, 255, 255, 0.08) !important;
+}
+
+/* ================================================
+   FORCE CHART FILL COLORS (Dark Mode Override)
+   Tremor's fill classes may not resolve in dark mode
+   ================================================ */
+
+/* Emerald / Green */
+.dark .fill-emerald-500,
+.dark [class*="fill-emerald"] {
+  fill: #10b981 !important;
+}
+
+/* Blue */
+.dark .fill-blue-500,
+.dark [class*="fill-blue"] {
+  fill: #3b82f6 !important;
+}
+
+/* Amber / Yellow */
+.dark .fill-amber-500,
+.dark [class*="fill-amber"] {
+  fill: #f59e0b !important;
+}
+
+/* Violet / Purple */
+.dark .fill-violet-500,
+.dark [class*="fill-violet"] {
+  fill: #8b5cf6 !important;
+}
+
+/* Cyan */
+.dark .fill-cyan-500,
+.dark [class*="fill-cyan"] {
+  fill: #06b6d4 !important;
+}
+
+/* Indigo */
+.dark .fill-indigo-500,
+.dark [class*="fill-indigo"] {
+  fill: #6366f1 !important;
+}
+
+/* Purple */
+.dark .fill-purple-500,
+.dark [class*="fill-purple"] {
+  fill: #a855f7 !important;
+}
+
+/* Fuchsia */
+.dark .fill-fuchsia-500,
+.dark [class*="fill-fuchsia"] {
+  fill: #d946ef !important;
+}
+
+/* Pink */
+.dark .fill-pink-500,
+.dark [class*="fill-pink"] {
+  fill: #ec4899 !important;
+}
+
+/* Rose */
+.dark .fill-rose-500,
+.dark [class*="fill-rose"] {
+  fill: #f43f5e !important;
+}
+
+/* Red */
+.dark .fill-red-500,
+.dark [class*="fill-red"] {
+  fill: #ef4444 !important;
+}
+
+/* Orange */
+.dark .fill-orange-500,
+.dark [class*="fill-orange"] {
+  fill: #f97316 !important;
+}
+
+/* Teal */
+.dark .fill-teal-500,
+.dark [class*="fill-teal"] {
+  fill: #14b8a6 !important;
+}
+
+/* Sky */
+.dark .fill-sky-500,
+.dark [class*="fill-sky"] {
+  fill: #0ea5e9 !important;
+}
+
+/* Force stroke colors too */
+.dark .stroke-emerald-500,
+.dark [class*="stroke-emerald"] {
+  stroke: #10b981 !important;
+}
+
+.dark .stroke-blue-500,
+.dark [class*="stroke-blue"] {
+  stroke: #3b82f6 !important;
+}
+
+.dark .stroke-violet-500,
+.dark [class*="stroke-violet"] {
+  stroke: #8b5cf6 !important;
+}
+
+.dark .stroke-cyan-500,
+.dark [class*="stroke-cyan"] {
+  stroke: #06b6d4 !important;
+}
+
+/* Recharts specific elements */
+.dark .recharts-sector,
+.dark .recharts-pie-sector path,
+.dark .recharts-bar-rectangle path,
+.dark .recharts-rectangle,
+.dark .recharts-area-area,
+.dark .recharts-line-curve {
+  opacity: 1 !important;
+}
+
+/* Area chart fill should be slightly transparent */
+.dark .recharts-area-area {
+  fill-opacity: 0.4 !important;
+}
+
+/* Pie/Donut stroke */
+.dark .recharts-pie-sector path,
+.dark .recharts-sector {
+  stroke: rgba(0, 0, 0, 0.3) !important;
+  stroke-width: 2;
+}
+
+/* Tooltips */
+.dark .recharts-tooltip-wrapper {
+  outline: none !important;
+}
+
+.dark .recharts-default-tooltip {
+  background: rgba(44, 44, 46, 0.95) !important;
+  backdrop-filter: blur(12px) !important;
+  border: 1px solid rgba(255, 255, 255, 0.08) !important;
+  border-radius: 12px !important;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.3) !important;
+}
+
+.dark .recharts-tooltip-label {
+  color: rgba(255, 255, 255, 0.92) !important;
+}
+
+.dark .recharts-tooltip-item {
+  color: rgba(255, 255, 255, 0.72) !important;
+}
+
+/* Legend */
+.dark .recharts-legend-wrapper text,
+.dark .recharts-legend-item-text {
+  fill: rgba(255, 255, 255, 0.72) !important;
+}

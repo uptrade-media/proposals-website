@@ -9,6 +9,50 @@ const RESEND_API_KEY = process.env.RESEND_API_KEY
 const RESEND_FROM_EMAIL = process.env.RESEND_FROM_EMAIL || 'portal@send.uptrademedia.com'
 const RESEND_FROM = `Uptrade Media <${RESEND_FROM_EMAIL}>`
 
+// Helper function to calculate next recurring date
+function calculateNextRecurringDate(baseDate, interval, dayOfMonth, dayOfWeek) {
+  const date = new Date(baseDate)
+  
+  switch (interval) {
+    case 'weekly':
+      date.setDate(date.getDate() + 7)
+      break
+    case 'bi-weekly':
+      date.setDate(date.getDate() + 14)
+      break
+    case 'monthly':
+      date.setMonth(date.getMonth() + 1)
+      if (dayOfMonth) {
+        const lastDay = new Date(date.getFullYear(), date.getMonth() + 1, 0).getDate()
+        date.setDate(Math.min(dayOfMonth, lastDay))
+      }
+      break
+    case 'quarterly':
+      date.setMonth(date.getMonth() + 3)
+      if (dayOfMonth) {
+        const lastDay = new Date(date.getFullYear(), date.getMonth() + 1, 0).getDate()
+        date.setDate(Math.min(dayOfMonth, lastDay))
+      }
+      break
+    case 'semi-annual':
+      date.setMonth(date.getMonth() + 6)
+      if (dayOfMonth) {
+        const lastDay = new Date(date.getFullYear(), date.getMonth() + 1, 0).getDate()
+        date.setDate(Math.min(dayOfMonth, lastDay))
+      }
+      break
+    case 'annual':
+      date.setFullYear(date.getFullYear() + 1)
+      if (dayOfMonth) {
+        const lastDay = new Date(date.getFullYear(), date.getMonth() + 1, 0).getDate()
+        date.setDate(Math.min(dayOfMonth, lastDay))
+      }
+      break
+  }
+  
+  return date.toISOString()
+}
+
 export async function handler(event) {
   // CORS headers
   const headers = {
@@ -59,7 +103,14 @@ export async function handler(event) {
       amount,
       taxRate = 0,
       description,
-      dueDate
+      dueDate,
+      // Recurring invoice fields
+      isRecurring = false,
+      recurringInterval,
+      recurringDayOfMonth,
+      recurringDayOfWeek,
+      recurringEndDate,
+      recurringCount
     } = body
 
     // Validate required fields
@@ -68,6 +119,18 @@ export async function handler(event) {
         statusCode: 400,
         headers,
         body: JSON.stringify({ error: 'contactId and amount are required' })
+      }
+    }
+
+    // Validate recurring invoice fields
+    if (isRecurring) {
+      const validIntervals = ['weekly', 'bi-weekly', 'monthly', 'quarterly', 'semi-annual', 'annual']
+      if (!recurringInterval || !validIntervals.includes(recurringInterval)) {
+        return {
+          statusCode: 400,
+          headers,
+          body: JSON.stringify({ error: 'Valid recurringInterval is required for recurring invoices' })
+        }
       }
     }
 
@@ -162,6 +225,13 @@ export async function handler(event) {
       }
     }
 
+    // Calculate next recurring date if this is a recurring invoice
+    let nextRecurringDate = null
+    if (isRecurring) {
+      const baseDate = dueDate ? new Date(dueDate) : new Date()
+      nextRecurringDate = calculateNextRecurringDate(baseDate, recurringInterval, recurringDayOfMonth, recurringDayOfWeek)
+    }
+
     // Create invoice in database
     const { data: newInvoice, error: insertError } = await supabase
       .from('invoices')
@@ -176,7 +246,15 @@ export async function handler(event) {
         description: description || null,
         due_date: dueDate || new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
         status: 'pending',
-        square_invoice_id: squareInvoiceId
+        square_invoice_id: squareInvoiceId,
+        // Recurring invoice fields
+        is_recurring: isRecurring,
+        recurring_interval: isRecurring ? recurringInterval : null,
+        recurring_day_of_month: isRecurring ? recurringDayOfMonth : null,
+        recurring_day_of_week: isRecurring ? recurringDayOfWeek : null,
+        recurring_end_date: isRecurring && recurringEndDate ? recurringEndDate : null,
+        recurring_count: isRecurring && recurringCount ? recurringCount : null,
+        next_recurring_date: nextRecurringDate
       })
       .select(`
         *,
@@ -251,7 +329,15 @@ export async function handler(event) {
           squareInvoiceId: newInvoice.square_invoice_id,
           contact: newInvoice.contact,
           project: newInvoice.project,
-          createdAt: newInvoice.created_at
+          createdAt: newInvoice.created_at,
+          // Recurring fields
+          isRecurring: newInvoice.is_recurring,
+          recurringInterval: newInvoice.recurring_interval,
+          recurringDayOfMonth: newInvoice.recurring_day_of_month,
+          recurringDayOfWeek: newInvoice.recurring_day_of_week,
+          recurringEndDate: newInvoice.recurring_end_date,
+          recurringCount: newInvoice.recurring_count,
+          nextRecurringDate: newInvoice.next_recurring_date
         }
       })
     }

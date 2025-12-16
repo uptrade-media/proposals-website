@@ -95,6 +95,31 @@ export async function handler(event) {
       squarePaymentId: inv.square_payment_id,
       contact: inv.contact,
       project: inv.project,
+      // Send tracking
+      sentAt: inv.sent_at,
+      sentToEmail: inv.sent_to_email,
+      // Reminder tracking (admin only)
+      reminderCount: inv.reminder_count || 0,
+      lastReminderSent: inv.last_reminder_sent,
+      nextReminderDate: inv.next_reminder_date,
+      // View tracking (admin only)
+      viewCount: inv.view_count || 0,
+      firstViewedAt: inv.first_viewed_at,
+      lastViewedAt: inv.last_viewed_at,
+      // Token info (admin only - don't expose actual token)
+      hasPaymentToken: !!inv.payment_token,
+      paymentTokenExpires: inv.payment_token_expires,
+      // Recurring invoice fields
+      isRecurring: inv.is_recurring || false,
+      recurringInterval: inv.recurring_interval,
+      recurringDayOfMonth: inv.recurring_day_of_month,
+      recurringDayOfWeek: inv.recurring_day_of_week,
+      recurringEndDate: inv.recurring_end_date,
+      recurringCount: inv.recurring_count,
+      recurringPaused: inv.recurring_paused || false,
+      nextRecurringDate: inv.next_recurring_date,
+      lastRecurringGenerated: inv.last_recurring_generated,
+      parentInvoiceId: inv.parent_invoice_id,
       createdAt: inv.created_at,
       updatedAt: inv.updated_at
     }))

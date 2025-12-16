@@ -152,6 +152,31 @@ export const invoices = pgTable('invoices', {
   squarePaymentId: text('square_payment_id'),
   lineItems: text('line_items'), // JSON
   notes: text('notes'),
+  // Magic link for public payment access
+  paymentToken: text('payment_token'),
+  paymentTokenExpires: timestamp('payment_token_expires'),
+  // Reminder tracking
+  reminderCount: integer('reminder_count').default(0),
+  lastReminderSent: timestamp('last_reminder_sent'),
+  nextReminderDate: timestamp('next_reminder_date'),
+  scheduledReminderIds: jsonb('scheduled_reminder_ids').default([]), // Resend email IDs for cancellation
+  // View tracking
+  viewCount: integer('view_count').default(0),
+  lastViewedAt: timestamp('last_viewed_at'),
+  firstViewedAt: timestamp('first_viewed_at'),
+  // Send tracking
+  sentAt: timestamp('sent_at'),
+  sentToEmail: text('sent_to_email'),
+  // Recurring invoice configuration
+  isRecurring: boolean('is_recurring').default(false),
+  recurringFrequency: text('recurring_frequency'), // 'monthly', 'quarterly', 'yearly', 'custom'
+  recurringInterval: integer('recurring_interval'), // For custom: number of units
+  recurringIntervalUnit: text('recurring_interval_unit'), // 'days', 'weeks', 'months'
+  recurringStartDate: timestamp('recurring_start_date'),
+  recurringEndDate: timestamp('recurring_end_date'), // Optional: when to stop
+  recurringNextDate: timestamp('recurring_next_date'), // When next invoice generates
+  recurringParentId: uuid('recurring_parent_id'), // Links to parent recurring template
+  recurringCount: integer('recurring_count').default(0), // How many generated
   createdAt: timestamp('created_at').defaultNow(),
   updatedAt: timestamp('updated_at').defaultNow()
 })
