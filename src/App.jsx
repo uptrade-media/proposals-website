@@ -27,6 +27,16 @@ export default function App() {
   const [initialized, setInitialized] = useState(false)
   const hasCheckedAuthRef = useRef(false)
 
+  // Fade out the HTML loader when React is ready
+  const hideInitialLoader = () => {
+    const loader = document.getElementById('initial-loader')
+    if (loader) {
+      loader.classList.add('fade-out')
+      // Remove from DOM after animation
+      setTimeout(() => loader.remove(), 300)
+    }
+  }
+
   // Check authentication on app mount (only once)
   useEffect(() => {
     if (hasCheckedAuthRef.current) return
@@ -42,15 +52,19 @@ export default function App() {
         console.error('[App] Error during initial auth check:', error);
       } finally {
         setInitialized(true);
+        // Wait a tiny bit for React to render, then hide loader
+        requestAnimationFrame(() => {
+          hideInitialLoader()
+        })
       }
     };
     
     checkAuthOnce();
   }, []) // Empty dependency array - only run once on mount
 
-  // Show loading ONLY while checking initial auth (not for subsequent checks)
+  // Don't show anything while initializing - the HTML loader is still visible
   if (!initialized) {
-    return <UptradeLoading />
+    return null
   }
 
   return (

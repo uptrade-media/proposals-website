@@ -72,8 +72,12 @@ export default defineConfig(({ mode }) => {
     },
 
     // Some libs reference process.env in the browser; this avoids undefined errors.
+    // Also expose Square environment variables to the client
     define: {
       'process.env': {},
+      'import.meta.env.SQUARE_APPLICATION_ID': JSON.stringify(process.env.SQUARE_APPLICATION_ID),
+      'import.meta.env.SQUARE_LOCATION_ID': JSON.stringify(process.env.SQUARE_LOCATION_ID),
+      'import.meta.env.SQUARE_ENVIRONMENT': JSON.stringify(process.env.SQUARE_ENVIRONMENT),
     },
   }
 })
