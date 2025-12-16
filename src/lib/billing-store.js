@@ -248,6 +248,26 @@ const useBillingStore = create((set, get) => ({
     })
   },
 
+  formatDateTime: (dateString) => {
+    if (!dateString) return ''
+    // Ensure we're treating the timestamp as UTC if it doesn't have timezone info
+    let date = new Date(dateString)
+    
+    // If the string doesn't end with 'Z' and doesn't have timezone offset, treat it as UTC
+    if (typeof dateString === 'string' && !dateString.endsWith('Z') && !dateString.match(/[+-]\d{2}:\d{2}$/)) {
+      date = new Date(dateString + 'Z')
+    }
+    
+    return date.toLocaleString('en-US', {
+      year: 'numeric',
+      month: 'short',
+      day: 'numeric',
+      hour: 'numeric',
+      minute: '2-digit',
+      hour12: true
+    })
+  },
+
   // Check if invoice is overdue
   isOverdue: (invoice) => {
     if (invoice.status !== 'pending') return false

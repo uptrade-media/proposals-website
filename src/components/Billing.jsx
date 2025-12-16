@@ -63,6 +63,7 @@ const Billing = () => {
     getStatusColor,
     formatCurrency,
     formatDate,
+    formatDateTime,
     isOverdue,
     getDaysOverdue,
     isLoading, 
@@ -78,6 +79,14 @@ const Billing = () => {
   } = useReportsStore()
   
   const hasFetchedRef = useRef(false)
+  
+  // Helper function to get default due date (14 days from now)
+  const getDefaultDueDate = () => {
+    const date = new Date()
+    date.setDate(date.getDate() + 14)
+    return date.toISOString().split('T')[0]
+  }
+  
   const [activeTab, setActiveTab] = useState('overview')
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false)
   const [selectedInvoice, setSelectedInvoice] = useState(null)
@@ -92,7 +101,7 @@ const Billing = () => {
     project_id: '',
     amount: '',
     tax_rate: '0',
-    due_date: '',
+    due_date: getDefaultDueDate(),
     description: '',
     status: 'pending',
     // Recurring invoice fields
@@ -116,8 +125,26 @@ const Billing = () => {
     company: '',
     amount: '',
     description: '',
-    due_date: '',
+    due_date: getDefaultDueDate(),
     send_now: true
+  })
+  
+  // Confirmation dialog state
+  const [confirmDialog, setConfirmDialog] = useState({
+    open: false,
+    title: '',
+    description: '',
+    onConfirm: null,
+    confirmText: 'Confirm',
+    variant: 'default'
+  })
+  
+  // Alert dialog state
+  const [alertDialog, setAlertDialog] = useState({
+    open: false,
+    title: '',
+    description: '',
+    variant: 'default'
   })
 
   // Fetch initial data only once
@@ -161,7 +188,7 @@ const Billing = () => {
       project_id: '',
       amount: '',
       tax_rate: '0',
-      due_date: '',
+      due_date: getDefaultDueDate(),
       description: '',
       status: 'pending',
       // Recurring invoice fields
@@ -253,7 +280,12 @@ const Billing = () => {
       }
     } catch (err) {
       console.error('Quick invoice error:', err)
-      alert(err.response?.data?.error || 'Failed to create quick invoice')
+      setAlertDialog({
+        open: true,
+        title: 'Failed to Create Invoice',
+        description: err.response?.data?.error || 'Failed to create quick invoice',
+        variant: 'destructive'
+      })
     } finally {
       setQuickInvoiceLoading(false)
     }
@@ -268,7 +300,7 @@ const Billing = () => {
       company: '',
       amount: '',
       description: '',
-      due_date: '',
+      due_date: getDefaultDueDate(),
       send_now: true
     })
   }
@@ -287,76 +319,132 @@ const Billing = () => {
   }
 
   const handleMarkPaid = async (invoice) => {
-    if (window.confirm(`Mark invoice ${invoice.invoiceNumber} as paid?`)) {
-      await markInvoicePaid(invoice.id)
-    }
+    setConfirmDialog({
+      open: true,
+      title: 'Mark Invoice as Paid',
+      description: `Mark invoice ${invoice.invoiceNumber} as paid?`,
+      onConfirm: async () => {
+        await markInvoicePaid(invoice.id)
+        setConfirmDialog({ ...confirmDialog, open: false })
+      },
+      confirmText: 'Mark Paid',
+      variant: 'default'
+    })
   }
 
   const handleSendInvoice = async (invoice) => {
     if (invoice.status === 'paid') return
     
-    const confirmText = invoice.sentAt 
+    const action = invoice.sentAt ? 'Resend' : 'Send'
+    const description = invoice.sentAt 
       ? `Resend invoice ${invoice.invoiceNumber} to ${invoice.contact?.email}?`
       : `Send invoice ${invoice.invoiceNumber} to ${invoice.contact?.email}?`
     
-    if (!window.confirm(confirmText)) return
-    
-    setSendingInvoiceId(invoice.id)
-    const result = await sendInvoice(invoice.id)
-    setSendingInvoiceId(null)
-    
-    if (result.success) {
-      fetchInvoices() // Refresh to get updated status
-    }
+    setConfirmDialog({
+      open: true,
+      title: `${action} Invoice`,
+      description,
+      onConfirm: async () => {
+        setConfirmDialog({ ...confirmDialog, open: false })
+        setSendingInvoiceId(invoice.id)
+        const result = await sendInvoice(invoice.id)
+        setSendingInvoiceId(null)
+        
+        if (result.success) {
+          fetchInvoices() // Refresh to get updated status
+        }
+      },
+      confirmText: action,
+      variant: 'default'
+    })
   }
 
   const handleSendReminder = async (invoice) => {
     if (invoice.status === 'paid') return
     if (!invoice.hasPaymentToken && !invoice.sentAt) {
-      alert('Please send the invoice first before sending reminders.')
+      setAlertDialog({
+        open: true,
+        title: 'Cannot Send Reminder',
+        description: 'Please send the invoice first before sending reminders.',
+        variant: 'warning'
+      })
       return
     }
     
-    const confirmText = `Send payment reminder for ${invoice.invoiceNumber} to ${invoice.contact?.email}? (Reminder ${(invoice.reminderCount || 0) + 1}/3)`
-    if (!window.confirm(confirmText)) return
-    
-    setSendingReminderId(invoice.id)
-    const result = await sendReminder(invoice.id)
-    setSendingReminderId(null)
-    
-    if (result.success) {
-      fetchInvoices() // Refresh to get updated reminder count
-    }
+    setConfirmDialog({
+      open: true,
+      title: 'Send Payment Reminder',
+      description: `Send payment reminder for ${invoice.invoiceNumber} to ${invoice.contact?.email}? (Reminder ${(invoice.reminderCount || 0) + 1}/3)`,
+      onConfirm: async () => {
+        setConfirmDialog({ ...confirmDialog, open: false })
+        setSendingReminderId(invoice.id)
+        const result = await sendReminder(invoice.id)
+        setSendingReminderId(null)
+        
+        if (result.success) {
+          fetchInvoices() // Refresh to get updated reminder count
+        }
+      },
+      confirmText: 'Send Reminder',
+      variant: 'default'
+    })
   }
 
   const handleToggleRecurring = async (invoice) => {
     if (!invoice.isRecurring) return
     
     const action = invoice.recurringPaused ? 'resume' : 'pause'
-    const confirmText = `${action === 'pause' ? 'Pause' : 'Resume'} recurring invoice ${invoice.invoiceNumber}?`
-    if (!window.confirm(confirmText)) return
+    const actionLabel = action === 'pause' ? 'Pause' : 'Resume'
     
-    setTogglingRecurringId(invoice.id)
-    const result = await toggleRecurringPause(invoice.id, !invoice.recurringPaused)
-    setTogglingRecurringId(null)
-    
-    if (result.success) {
-      fetchInvoices() // Refresh to get updated status
-    }
+    setConfirmDialog({
+      open: true,
+      title: `${actionLabel} Recurring Invoice`,
+      description: `${actionLabel} recurring invoice ${invoice.invoiceNumber}?`,
+      onConfirm: async () => {
+        setConfirmDialog({ ...confirmDialog, open: false })
+        setTogglingRecurringId(invoice.id)
+        const result = await toggleRecurringPause(invoice.id, !invoice.recurringPaused)
+        setTogglingRecurringId(null)
+        
+        if (result.success) {
+          fetchInvoices() // Refresh to get updated status
+        }
+      },
+      confirmText: actionLabel,
+      variant: 'default'
+    })
   }
 
   const handleDeleteInvoice = async (invoice) => {
-    if (!window.confirm(`Delete invoice ${invoice.invoiceNumber}? This action cannot be undone.`)) return
+    setConfirmDialog({
+      open: true,
+      title: 'Delete Invoice',
+      description: `Delete invoice ${invoice.invoiceNumber}? This action cannot be undone.`,
+      onConfirm: async () => {
+        setConfirmDialog({ ...confirmDialog, open: false })
+        const result = await deleteInvoice(invoice.id)
 
-    const result = await deleteInvoice(invoice.id)
-
-    if (result.success) {
-      fetchInvoices()
-      fetchBillingSummary()
-      alert('Invoice deleted.')
-    } else {
-      alert(result.error || 'Failed to delete invoice.')
-    }
+        if (result.success) {
+          fetchInvoices()
+          fetchBillingSummary()
+          setAlertDialog({
+            open: true,
+            title: 'Invoice Deleted',
+            description: 'Invoice has been deleted successfully.',
+            variant: 'success'
+          })
+        } else {
+          setAlertDialog({
+            open: true,
+            title: 'Delete Failed',
+            description: result.error || 'Failed to delete invoice.',
+            variant: 'destructive'
+          })
+        }
+      },
+      confirmText: 'Delete',
+      variant: 'destructive'
+    })
   }
 
   const openPaymentDialog = (invoice) => {
@@ -438,7 +526,12 @@ const Billing = () => {
                           size="sm"
                           onClick={() => {
                             navigator.clipboard.writeText(quickInvoiceSuccess.payment_url)
-                            alert('Link copied to clipboard!')
+                            setAlertDialog({
+                              open: true,
+                              title: 'Link Copied',
+                              description: 'Payment link has been copied to clipboard!',
+                              variant: 'success'
+                            })
                           }}
                         >
                           Copy
@@ -982,189 +1075,197 @@ const Billing = () => {
               </CardContent>
             </Card>
           ) : (
-            <div className="space-y-4">
+            <div className="space-y-2">
               {filteredInvoices.map((invoice) => (
-                <Card key={invoice.id} className="hover:shadow-lg transition-shadow">
-                  <CardContent className="p-6">
+                <Card key={invoice.id} className="group hover:shadow-lg transition-all duration-200">
+                  <CardContent className="p-4">
+                    {/* Compact View - Always Visible */}
                     <div className="flex items-center justify-between">
-                      <div className="flex items-center space-x-4">
-                        <div className="w-12 h-12 bg-[#4bbf39]/10 rounded-lg flex items-center justify-center">
+                      <div className="flex items-center space-x-3 flex-1 min-w-0">
+                        <div className="w-10 h-10 bg-[#4bbf39]/10 rounded-lg flex items-center justify-center flex-shrink-0">
                           {invoice.isRecurring ? (
-                            <Repeat className="w-6 h-6 text-[#4bbf39]" />
+                            <Repeat className="w-5 h-5 text-[#4bbf39]" />
                           ) : (
-                            <Receipt className="w-6 h-6 text-[#4bbf39]" />
+                            <Receipt className="w-5 h-5 text-[#4bbf39]" />
                           )}
                         </div>
-                        <div>
+                        <div className="flex-1 min-w-0">
                           <div className="flex items-center gap-2">
-                            <h4 className="font-semibold text-lg">{invoice.invoiceNumber}</h4>
-                            {invoice.isRecurring && (
-                              <Badge variant="outline" className="text-xs bg-[#4bbf39]/10 text-[#4bbf39] border-[#4bbf39]/30">
-                                <Repeat className="w-3 h-3 mr-1" />
-                                {getRecurringIntervalLabel(invoice.recurringInterval)}
-                                {invoice.recurringPaused && <span className="ml-1">(Paused)</span>}
-                              </Badge>
-                            )}
+                            <h4 className="font-semibold text-base">{invoice.invoiceNumber}</h4>
+                            <Badge className={getStatusColor(isOverdue(invoice) ? 'overdue' : invoice.status)}>
+                              <span className="capitalize text-xs">
+                                {isOverdue(invoice) ? 'Overdue' : invoice.status}
+                              </span>
+                            </Badge>
                           </div>
-                          <p className="text-[var(--text-secondary)]">{invoice.project?.title || invoice.projectName}</p>
-                          <p className="text-sm text-[var(--text-tertiary)]">{invoice.contact?.company}</p>
-                          {invoice.isRecurring && invoice.nextRecurringDate && !invoice.recurringPaused && (
+                          <p className="text-sm text-[var(--text-secondary)] truncate">
+                            {invoice.sentToEmail || invoice.contact?.email || 'No recipient'}
+                          </p>
+                          {invoice.lastViewedAt && (
                             <p className="text-xs text-[var(--text-tertiary)]">
-                              Next invoice: {formatDate(invoice.nextRecurringDate)}
+                              Last viewed: {formatDateTime(invoice.lastViewedAt)}
                             </p>
                           )}
                         </div>
                       </div>
                       
-                      <div className="text-right">
-                        <p className="text-2xl font-bold">{formatCurrency(invoice.totalAmount)}</p>
-                        <div className="flex items-center space-x-2 mt-2">
-                          <Badge className={getStatusColor(isOverdue(invoice) ? 'overdue' : invoice.status)}>
-                            <div className="flex items-center space-x-1">
-                              {getStatusIcon(isOverdue(invoice) ? 'overdue' : invoice.status)}
-                              <span className="capitalize">
-                                {isOverdue(invoice) ? 'Overdue' : invoice.status}
-                              </span>
-                            </div>
-                          </Badge>
-                          {isOverdue(invoice) && (
-                            <span className="text-xs text-red-600">
-                              {getDaysOverdue(invoice)} days
-                            </span>
-                          )}
-                        </div>
-                        <p className="text-sm text-[var(--text-tertiary)] mt-1">
+                      <div className="text-right flex-shrink-0 ml-4">
+                        <p className="text-xl font-bold">{formatCurrency(invoice.totalAmount)}</p>
+                        <p className="text-xs text-[var(--text-tertiary)]">
                           Due: {formatDate(invoice.dueDate)}
                         </p>
                       </div>
                     </div>
                     
-                    {/* Admin Tracking Info */}
-                    {isAdmin && invoice.status !== 'paid' && (
-                      <div className="mt-4 pt-4 border-t border-dashed flex flex-wrap gap-4 text-sm text-[var(--text-tertiary)]">
-                        {invoice.sentAt && (
-                          <div className="flex items-center gap-1">
-                            <Mail className="w-3.5 h-3.5" />
-                            <span>Sent: {formatDate(invoice.sentAt)}</span>
+                    {/* Expanded View - Shows on Hover */}
+                    <div className="max-h-0 overflow-hidden group-hover:max-h-96 transition-all duration-300 ease-in-out">
+                      <div className="pt-4 mt-4 border-t space-y-3">
+                        {/* Full Details */}
+                        <div className="grid grid-cols-2 gap-2 text-sm">
+                          <div>
+                            <span className="text-[var(--text-tertiary)]">Description:</span>
+                            <p className="text-[var(--text-primary)] font-medium">
+                              {invoice.project?.title || invoice.projectName || invoice.description}
+                            </p>
                           </div>
-                        )}
-                        {invoice.viewCount > 0 && (
-                          <div className="flex items-center gap-1">
-                            <Eye className="w-3.5 h-3.5" />
-                            <span>Views: {invoice.viewCount}</span>
-                            {invoice.lastViewedAt && (
-                              <span className="text-xs">(last: {formatDate(invoice.lastViewedAt)})</span>
-                            )}
-                          </div>
-                        )}
-                        {invoice.reminderCount > 0 && (
-                          <div className="flex items-center gap-1">
-                            <Bell className="w-3.5 h-3.5" />
-                            <span>Reminders: {invoice.reminderCount}/3</span>
-                            {invoice.lastReminderSent && (
-                              <span className="text-xs">(last: {formatDate(invoice.lastReminderSent)})</span>
-                            )}
-                          </div>
-                        )}
-                      </div>
-                    )}
-                    
-                    {isAdmin && (
-                      <div className="flex flex-wrap gap-2 mt-4 pt-4 border-t">
-                        {invoice.status !== 'paid' && (
-                          <>
-                            <Button 
-                              variant={invoice.sentAt ? "outline" : "default"}
-                              size="sm"
-                              onClick={() => handleSendInvoice(invoice)}
-                              disabled={sendingInvoiceId === invoice.id}
-                            >
-                              {sendingInvoiceId === invoice.id ? (
-                                <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                              ) : (
-                                <Send className="w-4 h-4 mr-2" />
-                              )}
-                              {invoice.sentAt ? 'Resend' : 'Send Invoice'}
-                            </Button>
+                          {invoice.contact?.company && (
+                            <div>
+                              <span className="text-[var(--text-tertiary)]">Company:</span>
+                              <p className="text-[var(--text-primary)] font-medium">{invoice.contact.company}</p>
+                            </div>
+                          )}
+                        </div>
+                        
+                        {/* Admin Tracking Info */}
+                        {isAdmin && invoice.status !== 'paid' && (
+                          <div className="flex flex-wrap gap-4 text-sm text-[var(--text-tertiary)]">
                             {invoice.sentAt && (
+                              <div className="flex items-center gap-1">
+                                <Mail className="w-3.5 h-3.5" />
+                                <span>Sent: {formatDate(invoice.sentAt)}</span>
+                              </div>
+                            )}
+                            {invoice.viewCount > 0 && (
+                              <div className="flex items-center gap-1">
+                                <Eye className="w-3.5 h-3.5" />
+                                <span>Views: {invoice.viewCount}</span>
+                              </div>
+                            )}
+                            {invoice.reminderCount > 0 && (
+                              <div className="flex items-center gap-1">
+                                <Bell className="w-3.5 h-3.5" />
+                                <span>Reminders: {invoice.reminderCount}/3</span>
+                              </div>
+                            )}
+                          </div>
+                        )}
+                        
+                        {/* Action Buttons */}
+                        {isAdmin && (
+                          <div className="flex flex-wrap gap-2">
+                            <Button 
+                              variant="outline"
+                              size="sm"
+                              onClick={() => {
+                                const paymentUrl = invoice.hasPaymentToken 
+                                  ? `${window.location.origin}/pay/${invoice.id}?token=${invoice.paymentToken}`
+                                  : `${window.location.origin}/pay/${invoice.id}`
+                                window.open(paymentUrl, '_blank')
+                              }}
+                            >
+                              <Eye className="w-4 h-4 mr-2" />
+                              View
+                            </Button>
+                            {invoice.status !== 'paid' && (
+                              <>
+                                <Button 
+                                  variant={invoice.sentAt ? "outline" : "default"}
+                                  size="sm"
+                                  onClick={() => handleSendInvoice(invoice)}
+                                  disabled={sendingInvoiceId === invoice.id}
+                                >
+                                  {sendingInvoiceId === invoice.id ? (
+                                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                                  ) : (
+                                    <Send className="w-4 h-4 mr-2" />
+                                  )}
+                                  {invoice.sentAt ? 'Resend' : 'Send'}
+                                </Button>
+                                {invoice.sentAt && (
+                                  <Button 
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={() => handleSendReminder(invoice)}
+                                    disabled={sendingReminderId === invoice.id || invoice.reminderCount >= 3}
+                                  >
+                                    {sendingReminderId === invoice.id ? (
+                                      <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                                    ) : (
+                                      <Bell className="w-4 h-4 mr-2" />
+                                    )}
+                                    Remind
+                                  </Button>
+                                )}
+                                <Button 
+                                  size="sm"
+                                  variant="glass-primary"
+                                  onClick={() => handleMarkPaid(invoice)}
+                                >
+                                  <CreditCard className="w-4 h-4 mr-2" />
+                                  Mark Paid
+                                </Button>
+                              </>
+                            )}
+                            <Button 
+                              variant="outline" 
+                              size="sm"
+                              onClick={() => openEditDialog(invoice)}
+                            >
+                              <Edit className="w-4 h-4 mr-2" />
+                              Edit
+                            </Button>
+                            <Button 
+                              variant="outline" 
+                              size="sm"
+                              onClick={() => handleDeleteInvoice(invoice)}
+                              className="text-red-600 hover:text-red-700 hover:bg-red-50 border-red-200"
+                            >
+                              <Trash className="w-4 h-4 mr-2" />
+                              Delete
+                            </Button>
+                            {invoice.isRecurring && (
                               <Button 
                                 variant="outline"
                                 size="sm"
-                                onClick={() => handleSendReminder(invoice)}
-                                disabled={sendingReminderId === invoice.id || invoice.reminderCount >= 3}
-                                title={invoice.reminderCount >= 3 ? 'Maximum reminders sent' : 'Send payment reminder'}
+                                onClick={() => handleToggleRecurring(invoice)}
+                                disabled={togglingRecurringId === invoice.id}
                               >
-                                {sendingReminderId === invoice.id ? (
+                                {togglingRecurringId === invoice.id ? (
                                   <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                                ) : invoice.recurringPaused ? (
+                                  <Play className="w-4 h-4 mr-2" />
                                 ) : (
-                                  <Bell className="w-4 h-4 mr-2" />
+                                  <Pause className="w-4 h-4 mr-2" />
                                 )}
-                                Remind ({invoice.reminderCount || 0}/3)
+                                {invoice.recurringPaused ? 'Resume' : 'Pause'}
                               </Button>
                             )}
-                          </>
+                          </div>
                         )}
-                        <Button 
-                          variant="outline" 
-                          size="sm"
-                          onClick={() => openEditDialog(invoice)}
-                        >
-                          <Edit className="w-4 h-4 mr-2" />
-                          Edit
-                        </Button>
-                        {invoice.status !== 'paid' && (
+                        
+                        {/* Client Pay Button */}
+                        {!isAdmin && (invoice.status === 'pending' || invoice.status === 'sent' || isOverdue(invoice)) && (
                           <Button 
-                            size="sm"
+                            onClick={() => openPaymentDialog(invoice)}
                             variant="glass-primary"
-                            onClick={() => handleMarkPaid(invoice)}
+                            className="w-full"
                           >
                             <CreditCard className="w-4 h-4 mr-2" />
-                            Mark Paid
-                          </Button>
-                        )}
-                        <Button 
-                          variant="outline" 
-                          size="sm"
-                          onClick={() => handleDeleteInvoice(invoice)}
-                          className="text-red-600 hover:text-red-700 hover:bg-red-50 border-red-200"
-                        >
-                          <Trash className="w-4 h-4 mr-2" />
-                          Delete
-                        </Button>
-                        {invoice.isRecurring && (
-                          <Button 
-                            variant="outline"
-                            size="sm"
-                            onClick={() => handleToggleRecurring(invoice)}
-                            disabled={togglingRecurringId === invoice.id}
-                            title={invoice.recurringPaused ? 'Resume recurring invoices' : 'Pause recurring invoices'}
-                          >
-                            {togglingRecurringId === invoice.id ? (
-                              <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                            ) : invoice.recurringPaused ? (
-                              <Play className="w-4 h-4 mr-2" />
-                            ) : (
-                              <Pause className="w-4 h-4 mr-2" />
-                            )}
-                            {invoice.recurringPaused ? 'Resume' : 'Pause'}
+                            Pay Now - {formatCurrency(invoice.totalAmount)}
                           </Button>
                         )}
                       </div>
-                    )}
-                    
-                    {/* Client Pay Button */}
-                    {!isAdmin && (invoice.status === 'pending' || invoice.status === 'sent' || isOverdue(invoice)) && (
-                      <div className="mt-4 pt-4 border-t">
-                        <Button 
-                          onClick={() => openPaymentDialog(invoice)}
-                          variant="glass-primary"
-                          className="w-full"
-                        >
-                          <CreditCard className="w-4 h-4 mr-2" />
-                          Pay Now - {formatCurrency(invoice.totalAmount)}
-                        </Button>
-                      </div>
-                    )}
+                    </div>
                   </CardContent>
                 </Card>
               ))}
@@ -1589,6 +1690,54 @@ const Billing = () => {
         onOpenChange={setPaymentDialogOpen}
         onPaymentSuccess={handlePaymentSuccess}
       />
+      
+      {/* Confirmation Dialog */}
+      <Dialog open={confirmDialog.open} onOpenChange={(open) => setConfirmDialog({ ...confirmDialog, open })}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>{confirmDialog.title}</DialogTitle>
+            <DialogDescription>{confirmDialog.description}</DialogDescription>
+          </DialogHeader>
+          <div className="flex justify-end gap-2 mt-4">
+            <Button 
+              variant="outline" 
+              onClick={() => setConfirmDialog({ ...confirmDialog, open: false })}
+            >
+              Cancel
+            </Button>
+            <Button 
+              variant={confirmDialog.variant === 'destructive' ? 'destructive' : 'default'}
+              onClick={confirmDialog.onConfirm}
+            >
+              {confirmDialog.confirmText}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+      
+      {/* Alert Dialog */}
+      <Dialog open={alertDialog.open} onOpenChange={(open) => setAlertDialog({ ...alertDialog, open })}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle className={
+              alertDialog.variant === 'success' ? 'text-green-600' : 
+              alertDialog.variant === 'warning' ? 'text-yellow-600' : 
+              alertDialog.variant === 'destructive' ? 'text-red-600' : ''
+            }>
+              {alertDialog.title}
+            </DialogTitle>
+            <DialogDescription>{alertDialog.description}</DialogDescription>
+          </DialogHeader>
+          <div className="flex justify-end mt-4">
+            <Button 
+              variant="default"
+              onClick={() => setAlertDialog({ ...alertDialog, open: false })}
+            >
+              OK
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }
