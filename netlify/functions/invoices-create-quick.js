@@ -47,11 +47,17 @@ export async function handler(event) {
       description,
       amount, // In dollars
       dueDate,
+      due_date, // Also accept snake_case
       lineItems = [], // Optional: [{ description, quantity, unitPrice }]
       notes,
       sendNow = true,
+      send_now, // Also accept snake_case
       createContact = false
     } = JSON.parse(event.body || '{}')
+    
+    // Use snake_case if provided, otherwise camelCase
+    const finalDueDate = due_date || dueDate
+    const finalSendNow = send_now !== undefined ? send_now : sendNow
 
     // Validation
     if (!email || !email.includes('@')) {
@@ -128,13 +134,13 @@ export async function handler(event) {
         tax_rate: taxRate,
         tax_amount: taxAmount,
         total_amount: totalAmount,
-        due_date: dueDate || new Date(Date.now() + 14 * 24 * 60 * 60 * 1000).toISOString().split('T')[0], // 14 days default
-        status: sendNow ? 'sent' : 'draft',
+        due_date: finalDueDate || new Date(Date.now() + 14 * 24 * 60 * 60 * 1000).toISOString().split('T')[0], // 14 days default
+        status: finalSendNow ? 'sent' : 'draft',
         notes: notes || null,
         payment_token: paymentToken,
         payment_token_expires: paymentTokenExpires.toISOString(),
         sent_to_email: email.toLowerCase(),
-        sent_at: sendNow ? new Date().toISOString() : null,
+        sent_at: finalSendNow ? new Date().toISOString() : null,
         line_items: lineItems.length > 0 ? lineItems : [{ description, quantity: 1, unitPrice: amountCents }],
         created_by: contact.id
       })
@@ -154,7 +160,7 @@ export async function handler(event) {
     const paymentLink = `${PORTAL_URL}/pay/${invoice.id}?token=${paymentToken}`
 
     // Send email if requested
-    if (sendNow && RESEND_API_KEY) {
+    if (finalSendNow && RESEND_API_KEY) {
       try {
         const resend = new Resend(RESEND_API_KEY)
         const recipientName = name || email.split('@')[0]
