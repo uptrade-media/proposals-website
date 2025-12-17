@@ -165,16 +165,14 @@ function ProposalRow({ proposal, onView, onEdit, onDelete, showSignedDate = fals
                 Edit
               </Button>
             )}
-            {!['signed', 'accepted'].includes(proposal.status) && (
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={onDelete}
-                className="text-red-600 hover:text-red-700 hover:bg-red-50"
-              >
-                <Trash2 className="w-3 h-3" />
-              </Button>
-            )}
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={onDelete}
+              className="text-red-600 hover:text-red-700 hover:bg-red-50"
+            >
+              <Trash2 className="w-3 h-3" />
+            </Button>
           </div>
         </div>
 
@@ -348,7 +346,7 @@ const Proposals = ({ onNavigate }) => {
   const [viewingProposal, setViewingProposal] = useState(null)
   const [loadingProposalView, setLoadingProposalView] = useState(false)
   const [editingProposal, setEditingProposal] = useState(null)
-  const [deleteProposalDialog, setDeleteProposalDialog] = useState({ open: false, id: null, title: '' })
+  const [deleteProposalDialog, setDeleteProposalDialog] = useState({ open: false, id: null, title: '', isSigned: false })
   const [showAIProposalDialog, setShowAIProposalDialog] = useState(false)
 
   // Fetch data only once on mount
@@ -410,13 +408,15 @@ const Proposals = ({ onNavigate }) => {
     if (!deleteProposalDialog.id) return
     
     try {
-      await api.delete(`/.netlify/functions/proposals-delete?id=${deleteProposalDialog.id}`)
+      // Add confirm=true for signed proposals
+      const confirmParam = deleteProposalDialog.isSigned ? '&confirm=true' : ''
+      await api.delete(`/.netlify/functions/proposals-delete?id=${deleteProposalDialog.id}${confirmParam}`)
       setProposals(proposals.filter(p => p.id !== deleteProposalDialog.id))
       toast.success('Proposal deleted')
     } catch (err) {
       toast.error('Failed to delete proposal')
     } finally {
-      setDeleteProposalDialog({ open: false, id: null, title: '' })
+      setDeleteProposalDialog({ open: false, id: null, title: '', isSigned: false })
     }
   }
 
@@ -644,7 +644,8 @@ const Proposals = ({ onNavigate }) => {
                     onDelete={() => setDeleteProposalDialog({
                       open: true,
                       id: proposal.id,
-                      title: proposal.title
+                      title: proposal.title,
+                      isSigned: true
                     })}
                     showSignedDate
                   />
@@ -697,10 +698,14 @@ const Proposals = ({ onNavigate }) => {
       {/* Delete Proposal Confirmation */}
       <ConfirmDialog
         open={deleteProposalDialog.open}
-        onOpenChange={(open) => !open && setDeleteProposalDialog({ open: false, id: null, title: '' })}
-        title="Delete Proposal"
-        description={`Are you sure you want to delete "${deleteProposalDialog.title}"? This action cannot be undone.`}
-        confirmLabel="Delete"
+        onOpenChange={(open) => !open && setDeleteProposalDialog({ open: false, id: null, title: '', isSigned: false })}
+        title={deleteProposalDialog.isSigned ? "⚠️ Delete SIGNED Proposal" : "Delete Proposal"}
+        description={
+          deleteProposalDialog.isSigned 
+            ? `WARNING: This is a legally signed contract! Deleting "${deleteProposalDialog.title}" will permanently remove all signature data, contract records, and cannot be recovered. Only proceed if this was a test proposal.`
+            : `Are you sure you want to delete "${deleteProposalDialog.title}"? This action cannot be undone.`
+        }
+        confirmLabel={deleteProposalDialog.isSigned ? "Yes, Delete Signed Contract" : "Delete"}
         variant="destructive"
         onConfirm={handleDeleteProposal}
       />

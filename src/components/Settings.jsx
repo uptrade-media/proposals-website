@@ -1,0 +1,357 @@
+// Settings.jsx - Module toggles and org settings
+import { useState, useEffect } from 'react'
+import useAuthStore, { useOrgFeatures } from '@/lib/auth-store'
+import { getSession } from '@/lib/supabase-auth'
+import { 
+  Settings as SettingsIcon, 
+  ToggleLeft, 
+  ToggleRight, 
+  Search, 
+  ShoppingCart, 
+  BarChart3, 
+  FileText,
+  Users,
+  MessageSquare,
+  DollarSign,
+  FolderOpen,
+  Shield,
+  Trophy,
+  ClipboardList,
+  BookOpen,
+  Briefcase,
+  Mail,
+  Loader2,
+  CheckCircle,
+  AlertCircle,
+  Info
+} from 'lucide-react'
+import { cn } from '@/lib/utils'
+import axios from 'axios'
+
+// All available modules with their metadata
+const AVAILABLE_MODULES = [
+  {
+    key: 'seo',
+    label: 'SEO',
+    description: 'Track search rankings, crawl pages, identify optimization opportunities',
+    icon: Search,
+    category: 'marketing'
+  },
+  {
+    key: 'my_sales',
+    label: 'My Sales',
+    description: 'Track form submissions, leads, and customers from your website',
+    icon: ShoppingCart,
+    category: 'sales'
+  },
+  {
+    key: 'analytics',
+    label: 'Analytics',
+    description: 'View traffic and performance analytics',
+    icon: BarChart3,
+    category: 'marketing'
+  },
+  {
+    key: 'proposals',
+    label: 'Proposals',
+    description: 'Create and manage client proposals',
+    icon: FileText,
+    category: 'core'
+  },
+  {
+    key: 'billing',
+    label: 'Billing',
+    description: 'Invoices and payment management',
+    icon: DollarSign,
+    category: 'core'
+  },
+  {
+    key: 'files',
+    label: 'Files',
+    description: 'File storage and sharing',
+    icon: FolderOpen,
+    category: 'core'
+  },
+  {
+    key: 'messages',
+    label: 'Messages',
+    description: 'Internal messaging system',
+    icon: MessageSquare,
+    category: 'core'
+  },
+  {
+    key: 'team',
+    label: 'Team',
+    description: 'Team member management',
+    icon: Shield,
+    category: 'admin'
+  },
+  {
+    key: 'team_metrics',
+    label: 'Team Metrics',
+    description: 'Sales team performance tracking',
+    icon: Trophy,
+    category: 'admin'
+  },
+  {
+    key: 'forms',
+    label: 'Forms',
+    description: 'Form builder and submissions',
+    icon: ClipboardList,
+    category: 'marketing'
+  },
+  {
+    key: 'blog',
+    label: 'Blog',
+    description: 'Blog post management',
+    icon: BookOpen,
+    category: 'content'
+  },
+  {
+    key: 'portfolio',
+    label: 'Portfolio',
+    description: 'Portfolio/case study management',
+    icon: Briefcase,
+    category: 'content'
+  },
+  {
+    key: 'email',
+    label: 'Email Manager',
+    description: 'Email campaign management',
+    icon: Mail,
+    category: 'marketing'
+  }
+]
+
+const CATEGORIES = {
+  core: { label: 'Core Modules', order: 1 },
+  marketing: { label: 'Marketing', order: 2 },
+  sales: { label: 'Sales', order: 3 },
+  admin: { label: 'Administration', order: 4 },
+  content: { label: 'Content', order: 5 }
+}
+
+export default function Settings() {
+  const { currentOrg, isSuperAdmin, setOrganization } = useAuthStore()
+  const { features } = useOrgFeatures()
+  const [localFeatures, setLocalFeatures] = useState({})
+  const [saving, setSaving] = useState(null) // Which module is currently saving
+  const [saveStatus, setSaveStatus] = useState({}) // { moduleKey: 'success' | 'error' }
+  
+  // Initialize local features from current org
+  useEffect(() => {
+    if (currentOrg?.features) {
+      setLocalFeatures(currentOrg.features)
+    }
+  }, [currentOrg])
+
+  // Toggle a feature
+  const toggleFeature = async (moduleKey) => {
+    if (!currentOrg) return
+    
+    const newValue = !localFeatures[moduleKey]
+    
+    // Optimistically update local state
+    setLocalFeatures(prev => ({ ...prev, [moduleKey]: newValue }))
+    setSaving(moduleKey)
+    setSaveStatus(prev => ({ ...prev, [moduleKey]: null }))
+    
+    try {
+      // Get session token for auth header
+      const { data: { session } } = await getSession()
+      if (!session?.access_token) {
+        throw new Error('Not authenticated')
+      }
+      
+      const res = await axios.patch('/.netlify/functions/admin-tenants-update', {
+        id: currentOrg.id,
+        features: { [moduleKey]: newValue }
+      }, {
+        headers: {
+          Authorization: `Bearer ${session.access_token}`
+        }
+      })
+      
+      // Update the auth store with new org data
+      if (res.data.organization) {
+        setOrganization(res.data.organization)
+      }
+      
+      setSaveStatus(prev => ({ ...prev, [moduleKey]: 'success' }))
+      
+      // Clear success status after 2 seconds
+      setTimeout(() => {
+        setSaveStatus(prev => ({ ...prev, [moduleKey]: null }))
+      }, 2000)
+    } catch (error) {
+      console.error('Failed to update feature:', error)
+      // Revert on error
+      setLocalFeatures(prev => ({ ...prev, [moduleKey]: !newValue }))
+      setSaveStatus(prev => ({ ...prev, [moduleKey]: 'error' }))
+      
+      // Clear error status after 3 seconds
+      setTimeout(() => {
+        setSaveStatus(prev => ({ ...prev, [moduleKey]: null }))
+      }, 3000)
+    } finally {
+      setSaving(null)
+    }
+  }
+
+  // Group modules by category
+  const groupedModules = AVAILABLE_MODULES.reduce((acc, module) => {
+    const cat = module.category
+    if (!acc[cat]) acc[cat] = []
+    acc[cat].push(module)
+    return acc
+  }, {})
+
+  // Sort categories
+  const sortedCategories = Object.keys(groupedModules).sort(
+    (a, b) => CATEGORIES[a].order - CATEGORIES[b].order
+  )
+
+  if (!currentOrg) {
+    return (
+      <div className="max-w-4xl mx-auto">
+        <div className="text-center py-12">
+          <Info className="w-12 h-12 mx-auto text-[var(--text-tertiary)] mb-4" />
+          <h2 className="text-lg font-medium text-[var(--text-primary)]">No Organization Selected</h2>
+          <p className="text-[var(--text-secondary)] mt-2">Select an organization to manage settings.</p>
+        </div>
+      </div>
+    )
+  }
+
+  return (
+    <div className="max-w-4xl mx-auto">
+      {/* Header */}
+      <div className="flex items-center gap-3 mb-8">
+        <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-[var(--accent-primary)] to-[var(--accent-secondary)] flex items-center justify-center">
+          <SettingsIcon className="w-5 h-5 text-white" />
+        </div>
+        <div>
+          <h1 className="text-2xl font-bold text-[var(--text-primary)]">Settings</h1>
+          <p className="text-[var(--text-secondary)] text-sm">
+            {currentOrg.name} • Manage visible modules and features
+          </p>
+        </div>
+      </div>
+
+      {/* Info Banner */}
+      <div className="bg-[var(--glass-bg)] backdrop-blur-sm border border-[var(--glass-border)] rounded-lg p-4 mb-6">
+        <div className="flex items-start gap-3">
+          <Info className="w-5 h-5 text-[var(--accent-primary)] flex-shrink-0 mt-0.5" />
+          <div>
+            <p className="text-sm text-[var(--text-primary)]">
+              Toggle modules on or off to customize your sidebar navigation. 
+              Disabled modules will be hidden from the menu but data is preserved.
+            </p>
+            {isSuperAdmin && (
+              <p className="text-xs text-[var(--text-tertiary)] mt-1">
+                As a super admin, you can see all modules regardless of toggle state.
+              </p>
+            )}
+          </div>
+        </div>
+      </div>
+
+      {/* Module Toggles by Category */}
+      <div className="space-y-8">
+        {sortedCategories.map(category => (
+          <div key={category}>
+            <h3 className="text-sm font-semibold text-[var(--text-tertiary)] uppercase tracking-wider mb-4">
+              {CATEGORIES[category].label}
+            </h3>
+            <div className="space-y-2">
+              {groupedModules[category].map(module => {
+                const Icon = module.icon
+                const isEnabled = localFeatures[module.key] === true
+                const isSaving = saving === module.key
+                const status = saveStatus[module.key]
+                
+                return (
+                  <div 
+                    key={module.key}
+                    className={cn(
+                      "flex items-center justify-between p-4 rounded-lg border transition-all duration-200",
+                      isEnabled 
+                        ? "bg-[var(--glass-bg)] border-[var(--accent-primary)]/30"
+                        : "bg-[var(--surface-secondary)] border-[var(--glass-border)]",
+                      "hover:border-[var(--accent-primary)]/50"
+                    )}
+                  >
+                    <div className="flex items-center gap-4">
+                      <div className={cn(
+                        "w-10 h-10 rounded-lg flex items-center justify-center transition-colors",
+                        isEnabled 
+                          ? "bg-[var(--accent-primary)]/20 text-[var(--accent-primary)]"
+                          : "bg-[var(--surface-primary)] text-[var(--text-tertiary)]"
+                      )}>
+                        <Icon className="w-5 h-5" />
+                      </div>
+                      <div>
+                        <h4 className={cn(
+                          "font-medium transition-colors",
+                          isEnabled ? "text-[var(--text-primary)]" : "text-[var(--text-secondary)]"
+                        )}>
+                          {module.label}
+                        </h4>
+                        <p className="text-sm text-[var(--text-tertiary)]">
+                          {module.description}
+                        </p>
+                      </div>
+                    </div>
+                    
+                    <div className="flex items-center gap-3">
+                      {/* Status indicator */}
+                      {status === 'success' && (
+                        <CheckCircle className="w-5 h-5 text-green-500 animate-in fade-in" />
+                      )}
+                      {status === 'error' && (
+                        <AlertCircle className="w-5 h-5 text-red-500 animate-in fade-in" />
+                      )}
+                      
+                      {/* Toggle button */}
+                      <button
+                        onClick={() => toggleFeature(module.key)}
+                        disabled={isSaving}
+                        className={cn(
+                          "relative w-14 h-8 rounded-full transition-colors duration-200",
+                          isEnabled 
+                            ? "bg-[var(--accent-primary)]" 
+                            : "bg-[var(--surface-primary)] border border-[var(--glass-border)]",
+                          isSaving && "opacity-50 cursor-wait"
+                        )}
+                      >
+                        <div className={cn(
+                          "absolute top-1 w-6 h-6 rounded-full bg-white shadow-md transition-transform duration-200 flex items-center justify-center",
+                          isEnabled ? "translate-x-7" : "translate-x-1"
+                        )}>
+                          {isSaving ? (
+                            <Loader2 className="w-3 h-3 text-[var(--accent-primary)] animate-spin" />
+                          ) : isEnabled ? (
+                            <ToggleRight className="w-3 h-3 text-[var(--accent-primary)]" />
+                          ) : (
+                            <ToggleLeft className="w-3 h-3 text-[var(--text-tertiary)]" />
+                          )}
+                        </div>
+                      </button>
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+          </div>
+        ))}
+      </div>
+
+      {/* Footer Note */}
+      <div className="mt-8 pt-6 border-t border-[var(--glass-border)]">
+        <p className="text-xs text-[var(--text-tertiary)] text-center">
+          Changes are saved automatically. Refresh the page to see updated navigation.
+        </p>
+      </div>
+    </div>
+  )
+}

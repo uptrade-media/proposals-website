@@ -24,7 +24,8 @@ import {
   Trophy,
   Building2,
   ClipboardList,
-  ShoppingCart
+  ShoppingCart,
+  Search
 } from 'lucide-react'
 import useAuthStore, { useOrgFeatures } from '@/lib/auth-store'
 import useReportsStore from '@/lib/reports-store'
@@ -46,11 +47,14 @@ const Sidebar = ({
   const toggleCollapse = onToggleCollapse || (() => setInternalCollapsed(!internalCollapsed))
   const navigate = useNavigate()
   const { user, logout, isSuperAdmin, currentOrg } = useAuthStore()
-  const { hasFeature } = useOrgFeatures()
+  const { hasFeatureRaw } = useOrgFeatures()
   const { getUnreadAuditsCount } = useReportsStore()
   const { unreadCount: unreadMessages, fetchUnreadCount: fetchUnreadMessages } = useMessagesStore()
   const { invoices } = useBillingStore()
   const { newLeadsCount, fetchNewLeadsCount } = useNotificationStore()
+  
+  // Use raw feature check so super admins can also toggle modules on/off
+  const hasFeature = hasFeatureRaw
 
   // Fetch notification counts on mount
   useEffect(() => {
@@ -85,23 +89,25 @@ const Sidebar = ({
   ] : []
 
   // Full navigation for admins and managers (not sales reps)
+  // Respects feature flags - items only show if feature is enabled (or user is super admin)
   const fullNavigationItems = !isSalesRep ? [
     { id: 'projects', label: 'Projects', icon: FileText, badge: null, route: null },
-    { id: 'files', label: 'Files', icon: FolderOpen, badge: null, route: null },
-    { id: 'messages', label: 'Messages', icon: MessageSquare, badge: unreadMessages > 0 ? unreadMessages.toString() : null, route: null },
-    { id: 'billing', label: 'Billing', icon: DollarSign, badge: unpaidInvoicesCount > 0 ? unpaidInvoicesCount.toString() : null, route: null },
-    { id: 'analytics', label: 'Analytics', icon: BarChart3, badge: null, route: null },
+    ...(hasFeature('files') ? [{ id: 'files', label: 'Files', icon: FolderOpen, badge: null, route: null }] : []),
+    ...(hasFeature('messages') ? [{ id: 'messages', label: 'Messages', icon: MessageSquare, badge: unreadMessages > 0 ? unreadMessages.toString() : null, route: null }] : []),
+    ...(hasFeature('billing') ? [{ id: 'billing', label: 'Billing', icon: DollarSign, badge: unpaidInvoicesCount > 0 ? unpaidInvoicesCount.toString() : null, route: null }] : []),
+    ...(hasFeature('analytics') ? [{ id: 'analytics', label: 'Analytics', icon: BarChart3, badge: null, route: null }] : []),
   ] : []
 
-  // Admin-only navigation items
+  // Admin-only navigation items - all respect feature flags
   const adminItems = isAdmin ? [
     { id: 'clients', label: 'Clients', icon: Users, badge: newLeadsCount > 0 ? newLeadsCount.toString() : null, route: null },
-    { id: 'team', label: 'Team', icon: Shield, badge: null, route: null },
-    { id: 'team-metrics', label: 'Team Metrics', icon: Trophy, badge: null, route: null },
-    { id: 'forms', label: 'Forms', icon: ClipboardList, badge: null, route: null },
-    { id: 'blog', label: 'Blog', icon: BookOpen, badge: null, route: null },
-    { id: 'portfolio', label: 'Portfolio', icon: Briefcase, badge: null, route: null },
-    { id: 'email', label: 'Email Manager', icon: Mail, badge: null, route: null },
+    ...(hasFeature('seo') ? [{ id: 'seo', label: 'SEO', icon: Search, badge: null, route: null }] : []),
+    ...(hasFeature('team') ? [{ id: 'team', label: 'Team', icon: Shield, badge: null, route: null }] : []),
+    ...(hasFeature('team_metrics') ? [{ id: 'team-metrics', label: 'Team Metrics', icon: Trophy, badge: null, route: null }] : []),
+    ...(hasFeature('forms') ? [{ id: 'forms', label: 'Forms', icon: ClipboardList, badge: null, route: null }] : []),
+    ...(hasFeature('blog') ? [{ id: 'blog', label: 'Blog', icon: BookOpen, badge: null, route: null }] : []),
+    ...(hasFeature('portfolio') ? [{ id: 'portfolio', label: 'Portfolio', icon: Briefcase, badge: null, route: null }] : []),
+    ...(hasFeature('email') ? [{ id: 'email', label: 'Email Manager', icon: Mail, badge: null, route: null }] : []),
   ] : []
   
   // Super admin items (tenant management is now in Projects tab)
@@ -109,17 +115,17 @@ const Sidebar = ({
     // Tenants management moved to Projects tab - completed projects convert to tenants
   ] : []
 
-  // Manager gets team access but not blog/portfolio/email
+  // Manager gets team access but not blog/portfolio/email - respects feature flags
   const managerItems = (isManager && !isAdmin) ? [
     { id: 'clients', label: 'Clients', icon: Users, badge: newLeadsCount > 0 ? newLeadsCount.toString() : null, route: null },
-    { id: 'team', label: 'Team', icon: Shield, badge: null, route: null },
-    { id: 'team-metrics', label: 'Team Metrics', icon: Trophy, badge: null, route: null },
+    ...(hasFeature('team') ? [{ id: 'team', label: 'Team', icon: Shield, badge: null, route: null }] : []),
+    ...(hasFeature('team_metrics') ? [{ id: 'team-metrics', label: 'Team Metrics', icon: Trophy, badge: null, route: null }] : []),
   ] : []
 
   // Tenant-specific items (when viewing as a tenant/client organization)
   // This shows "My Sales" for clients who have their own websites with forms/customers
   const tenantItems = currentOrg ? [
-    { id: 'my-sales', label: 'My Sales', icon: ShoppingCart, badge: null, route: null, divider: true },
+    ...(hasFeature('my_sales') ? [{ id: 'my-sales', label: 'My Sales', icon: ShoppingCart, badge: null, route: null, divider: true }] : []),
   ] : []
 
   // Combine navigation items based on role

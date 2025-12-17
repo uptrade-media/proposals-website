@@ -71,14 +71,18 @@ export async function handler(event) {
       }
     }
 
-    // Check if proposal is already signed (prevent deletion of signed proposals)
-    if (existingProposal.status === 'signed' || existingProposal.status === 'fully_executed') {
+    // Check if proposal is already signed - require explicit confirmation
+    const isSignedProposal = ['signed', 'accepted', 'fully_executed'].includes(existingProposal.status)
+    const confirmDelete = event.queryStringParameters?.confirm === 'true'
+    
+    if (isSignedProposal && !confirmDelete) {
       return {
         statusCode: 400,
         headers,
         body: JSON.stringify({ 
-          error: 'Cannot delete signed or executed proposals',
-          suggestion: 'Archive or mark as cancelled instead'
+          error: 'Cannot delete signed or executed proposals without confirmation',
+          requiresConfirmation: true,
+          suggestion: 'Add ?confirm=true to permanently delete this signed proposal'
         })
       }
     }

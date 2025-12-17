@@ -333,9 +333,17 @@ export function useOrgFeatures() {
   
   return {
     features: currentOrg?.features || {},
-    hasFeature: (featureKey) => {
-      // Super admins see all features
-      if (isSuperAdmin) return true
+    // Check if feature is enabled
+    // - For super admins: returns true UNLESS ignoreSuperAdmin is true
+    // - For regular users: checks the features object
+    hasFeature: (featureKey, options = {}) => {
+      const { ignoreSuperAdmin = false } = options
+      // Super admins see all features unless explicitly checking raw value
+      if (isSuperAdmin && !ignoreSuperAdmin) return true
+      return currentOrg?.features?.[featureKey] === true
+    },
+    // Check raw feature value (ignores super admin override)
+    hasFeatureRaw: (featureKey) => {
       return currentOrg?.features?.[featureKey] === true
     },
     orgName: currentOrg?.name || 'Portal',

@@ -22,6 +22,9 @@ const UserProfile = lazy(() => import('./pages/UserProfile'))
 const AuthCallback = lazy(() => import('./pages/AuthCallback'))
 const InvoicePayment = lazy(() => import('./pages/InvoicePayment'))
 
+// SEO Module
+const SEOModule = lazy(() => import('./pages/seo/SEOModule'))
+
 export default function App() {
   const { isAuthenticated, checkAuth, isLoading } = useAuthStore()
   const [initialized, setInitialized] = useState(false)
@@ -113,6 +116,16 @@ export default function App() {
                 element={
                   <Protected>
                     <UserProfile />
+                  </Protected>
+                }
+              />
+              
+              {/* SEO Module - Full-featured SEO dashboard */}
+              <Route
+                path="/seo/*"
+                element={
+                  <Protected>
+                    <SEOModule />
                   </Protected>
                 }
               />

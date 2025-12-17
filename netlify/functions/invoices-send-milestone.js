@@ -101,7 +101,7 @@ export async function handler(event) {
 
     const now = new Date().toISOString()
     const resend = new Resend(RESEND_API_KEY)
-    const paymentLink = `${PORTAL_URL}/pay/${invoice.id}`
+    const paymentLink = `${PORTAL_URL}/pay/${invoice.payment_token || invoice.id}`
 
     // Send invoice email
     await resend.emails.send({

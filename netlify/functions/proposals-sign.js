@@ -189,11 +189,15 @@ function generateInvoiceNumber() {
 }
 
 // Create deposit invoice for the client
-async function createDepositInvoice({ contactId, projectId, proposalId, proposalTitle, depositAmount, depositPercentage, totalAmount }) {
+async function createDepositInvoice({ contactId, projectId, proposalId, proposalTitle, depositAmount, depositPercentage, totalAmount, clientEmail }) {
   try {
     const invoiceNumber = generateInvoiceNumber()
     const dueDate = new Date()
     dueDate.setDate(dueDate.getDate() + 7) // Due in 7 days
+
+    // Generate payment token for payment link
+    const paymentToken = randomBytes(32).toString('hex')
+    const paymentTokenExpires = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000) // 30 days
 
     const lineItems = JSON.stringify([{
       description: `Deposit (${depositPercentage}%) for ${proposalTitle}`,
@@ -210,11 +214,15 @@ async function createDepositInvoice({ contactId, projectId, proposalId, proposal
         invoice_number: invoiceNumber,
         status: 'sent',
         amount: depositAmount,
-        tax: '0.00',
-        total: depositAmount,
+        tax_amount: 0,
+        total_amount: depositAmount,
         due_date: dueDate.toISOString(),
         line_items: lineItems,
         notes: `Deposit invoice for proposal: ${proposalTitle}. Proposal ID: ${proposalId}`,
+        payment_token: paymentToken,
+        payment_token_expires: paymentTokenExpires.toISOString(),
+        sent_to_email: clientEmail,
+        sent_at: new Date().toISOString(),
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString()
       })
@@ -525,6 +533,7 @@ export async function handler(event) {
     }
 
     // Create deposit invoice (always, so client has it in billing)
+    const clientEmailForInvoice = clientEmail || proposal.contact?.email || proposal.client_email
     if (contact && parseFloat(depositAmount) > 0) {
       const invoice = await createDepositInvoice({
         contactId: contact.id,
@@ -533,7 +542,8 @@ export async function handler(event) {
         proposalTitle: proposal.title,
         depositAmount,
         depositPercentage,
-        totalAmount
+        totalAmount,
+        clientEmail: clientEmailForInvoice
       })
       if (invoice) {
         invoiceCreated = true

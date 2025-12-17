@@ -25,6 +25,9 @@ const ProposalEditor = lazy(() => import('./ProposalEditor'))
 const ChatBubble = lazy(() => import('./ChatBubble'))
 const FormsManager = lazy(() => import('./forms/FormsManager'))
 const TenantSales = lazy(() => import('./tenant/TenantSales'))
+// SEO Module sections
+const SEODashboard = lazy(() => import('./seo/SEODashboard'))
+const Settings = lazy(() => import('./Settings'))
 // Tenants management moved to Projects.jsx
 
 const MainLayout = () => {
@@ -83,6 +86,10 @@ const MainLayout = () => {
         return <FormsManager />
       case 'my-sales':
         return <TenantSales />
+      case 'seo':
+        return <SEODashboard onNavigate={navigateTo} />
+      case 'settings':
+        return <Settings />
       case 'proposal-editor':
         return (
           <ProposalEditor 

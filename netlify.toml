@@ -59,6 +59,11 @@
 [functions."scheduled-followups-process"]
   schedule = "0 * * * *"
 
+# Scheduled function for SEO automated analysis
+# Runs daily at 2:00 AM UTC to process all sites with enabled schedules
+[functions."seo-scheduled-run"]
+  schedule = "0 2 * * *"
+
 [dev]
   framework     = "#custom"
   command       = "vite"

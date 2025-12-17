@@ -231,7 +231,7 @@ async function sendInvoiceEmail(invoice, proposal, contact) {
   
   try {
     const resend = new Resend(RESEND_API_KEY)
-    const paymentLink = `${PORTAL_URL}/pay/${invoice.id}`
+    const paymentLink = `${PORTAL_URL}/pay/${invoice.payment_token || invoice.id}`
     
     await resend.emails.send({
       from: RESEND_FROM,

@@ -57,11 +57,13 @@ const UptradeLogo = ({ className = "h-10", showText = true }) => (
 )
 
 export default function InvoicePayment() {
-  const { token: invoiceId } = useParams()
+  const { token: urlToken } = useParams()
   
-  // Get token from query string
+  // Get token from query string OR URL path
+  // Supports both /pay/:token and /pay/:id?token=xxx formats
   const searchParams = new URLSearchParams(window.location.search)
-  const token = searchParams.get('token')
+  const queryToken = searchParams.get('token')
+  const token = queryToken || urlToken
   
   const [invoice, setInvoice] = useState(null)
   const [loading, setLoading] = useState(true)

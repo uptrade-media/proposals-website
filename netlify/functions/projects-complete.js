@@ -114,7 +114,7 @@ export async function handler(event) {
       
       for (const invoice of draftInvoices) {
         try {
-          const paymentLink = `${PORTAL_URL}/pay/${invoice.id}`
+          const paymentLink = `${PORTAL_URL}/pay/${invoice.payment_token || invoice.id}`
           
           // Send invoice email
           await resend.emails.send({
