@@ -91,6 +91,7 @@
 # Runs on the 1st of each month at 8:00 AM UTC
 [functions."seo-monthly-reports-background"]
   schedule = "0 8 1 * *"
+  timeout = 900
 
 # Scheduled function for competitor monitoring
 # Runs weekly on Thursdays at 3:00 AM UTC
@@ -182,9 +183,6 @@
   timeout = 900
 
 [functions."seo-backlinks-background"]
-  timeout = 900
-
-[functions."seo-monthly-reports-background"]
   timeout = 900
 
 [functions."seo-serp-analyze-background"]
