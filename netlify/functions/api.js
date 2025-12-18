@@ -27,6 +27,7 @@ import * as dashboardRoutes from './routes/dashboard.js'
 import * as messagesRoutes from './routes/messages.js'
 import * as jobsRoutes from './routes/jobs.js'
 import * as clientSeoRoutes from './routes/client-seo.js'
+import signalRoutes from './routes/signal.js'
 
 // ─────────────────────────────────────────────────────────────────────────────
 // CORS Headers
@@ -56,7 +57,8 @@ const ROUTE_MODULES = {
   'dashboard': dashboardRoutes,
   'messages': messagesRoutes,
   'jobs': jobsRoutes,
-  'client': clientSeoRoutes  // Client-facing SEO routes
+  'client': clientSeoRoutes,  // Client-facing SEO routes
+  'signal': { default: signalRoutes }  // Signal AI unified layer
 }
 
 // Routes that don't require authentication
