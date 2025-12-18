@@ -31,8 +31,8 @@ export async function handler(event) {
 
 // Get keyword tracking data
 async function getKeywordData(event, headers) {
-  const { user, error: authError } = await getAuthenticatedUser(event)
-  if (authError || !user) {
+  const { contact, error: authError } = await getAuthenticatedUser(event)
+  if (authError || !contact) {
     return { statusCode: 401, headers, body: JSON.stringify({ error: 'Not authenticated' }) }
   }
 
@@ -117,8 +117,8 @@ async function getKeywordData(event, headers) {
 
 // Track keywords - add new or refresh existing
 async function trackKeywords(event, headers) {
-  const { user, error: authError } = await getAuthenticatedUser(event)
-  if (authError || !user) {
+  const { contact, error: authError } = await getAuthenticatedUser(event)
+  if (authError || !contact) {
     return { statusCode: 401, headers, body: JSON.stringify({ error: 'Not authenticated' }) }
   }
 

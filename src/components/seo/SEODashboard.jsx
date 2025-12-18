@@ -24,7 +24,10 @@ import {
   MousePointerClick,
   Eye,
   BarChart3,
-  Brain
+  Brain,
+  Shield,
+  Calendar,
+  Clock
 } from 'lucide-react'
 import { useSeoStore } from '@/lib/seo-store'
 import useAuthStore from '@/lib/auth-store'
@@ -34,6 +37,15 @@ import SEOPagesList from './SEOPagesList'
 import SEOPageDetail from './SEOPageDetail'
 import SEOOpportunities from './SEOOpportunities'
 import SEOAIInsights from './SEOAIInsights'
+import SEOKeywordTracking from './SEOKeywordTracking'
+import SEOTechnicalAudit from './SEOTechnicalAudit'
+import SEOContentDecay from './SEOContentDecay'
+
+// New dashboard components
+import SEOHealthScore from './SEOHealthScore'
+import SEOQuickWins from './SEOQuickWins'
+import SEONavigation from './SEONavigation'
+import SEOTrends from './SEOTrends'
 
 export default function SEODashboard({ onNavigate }) {
   const { currentOrg } = useAuthStore()
@@ -41,6 +53,7 @@ export default function SEODashboard({ onNavigate }) {
     currentSite,
     pages,
     opportunities,
+    aiRecommendations,
     sitesLoading,
     pagesLoading,
     opportunitiesLoading,
@@ -48,6 +61,7 @@ export default function SEODashboard({ onNavigate }) {
     fetchSiteForOrg,
     fetchPages,
     fetchOpportunities,
+    fetchAiRecommendations,
     crawlSitemap,
     detectOpportunities,
     selectPage,
@@ -59,14 +73,19 @@ export default function SEODashboard({ onNavigate }) {
     gscLoading,
     gscError,
     fetchGscOverview,
-    fetchGscQueries
+    fetchGscQueries,
+    // CWV
+    cwvSummary,
+    fetchCwvSummary
   } = useSeoStore()
 
-  // Internal view state
-  const [view, setView] = useState('overview') // 'overview' | 'pages' | 'page-detail' | 'opportunities' | 'ai-insights'
+  // Internal view state - now aligned with navigation
+  const [view, setView] = useState('overview') // overview, pages, keywords, content, technical, reports
+  const [subView, setSubView] = useState(null) // page-detail, etc.
   const [crawling, setCrawling] = useState(false)
   const [detecting, setDetecting] = useState(false)
   const [syncing, setSyncing] = useState(false)
+  const [lastScan, setLastScan] = useState(null)
 
   // Fetch site data for current org on mount
   useEffect(() => {
@@ -78,8 +97,11 @@ export default function SEODashboard({ onNavigate }) {
   // Fetch pages, opportunities, and GSC data when site is loaded
   useEffect(() => {
     if (currentSite?.id) {
-      fetchPages(currentSite.id, { limit: 10 })
-      fetchOpportunities(currentSite.id, { limit: 10, status: 'open' })
+      fetchPages(currentSite.id, { limit: 50 })
+      fetchOpportunities(currentSite.id, { limit: 20, status: 'open' })
+      fetchAiRecommendations(currentSite.id)
+      fetchCwvSummary(currentSite.id)
+      setLastScan(currentSite.gsc_last_sync_at || currentSite.updated_at)
     }
     // Also fetch GSC data using the org domain
     if (currentOrg?.domain) {
@@ -93,7 +115,8 @@ export default function SEODashboard({ onNavigate }) {
     setCrawling(true)
     try {
       await crawlSitemap(currentSite.id)
-      await fetchPages(currentSite.id, { limit: 10 })
+      await fetchPages(currentSite.id, { limit: 50 })
+      setLastScan(new Date().toISOString())
     } finally {
       setCrawling(false)
     }
@@ -104,7 +127,7 @@ export default function SEODashboard({ onNavigate }) {
     setDetecting(true)
     try {
       await detectOpportunities(currentSite.id)
-      await fetchOpportunities(currentSite.id, { limit: 10, status: 'open' })
+      await fetchOpportunities(currentSite.id, { limit: 20, status: 'open' })
     } finally {
       setDetecting(false)
     }
@@ -116,6 +139,7 @@ export default function SEODashboard({ onNavigate }) {
     try {
       await fetchGscOverview(currentOrg.domain)
       await fetchGscQueries(currentOrg.domain, { limit: 20 })
+      setLastScan(new Date().toISOString())
     } finally {
       setSyncing(false)
     }
@@ -123,16 +147,27 @@ export default function SEODashboard({ onNavigate }) {
 
   const handleSelectPage = async (pageId) => {
     await selectPage(pageId)
-    setView('page-detail')
+    setSubView('page-detail')
+  }
+
+  const handleViewChange = (newView) => {
+    setView(newView)
+    setSubView(null)
+    clearCurrentPage()
   }
 
   const handleBack = () => {
-    if (view === 'page-detail') {
+    if (subView) {
+      setSubView(null)
       clearCurrentPage()
-      setView('pages')
-    } else if (view === 'pages' || view === 'opportunities' || view === 'ai-insights') {
+    } else {
       setView('overview')
     }
+  }
+
+  const handleFixIssues = (issues) => {
+    // Navigate to AI insights with issues pre-selected
+    setView('content')
   }
 
   const formatNumber = (num) => {
@@ -242,25 +277,90 @@ export default function SEODashboard({ onNavigate }) {
     )
   }
 
-  // Render sub-views
+  // Page counts for navigation badges
+  const opportunityCounts = {
+    technical: opportunities.filter(o => o.type === 'technical').length,
+    content: opportunities.filter(o => o.type === 'content').length
+  }
+
+  // Render sub-views (detail views)
+  if (subView === 'page-detail' && currentPage) {
+    return (
+      <div className="p-6">
+        <Button variant="ghost" size="sm" onClick={handleBack} className="mb-4 -ml-2">
+          <ArrowLeft className="h-4 w-4 mr-2" />
+          Back to Pages
+        </Button>
+        <SEOPageDetail page={currentPage} site={currentSite} />
+      </div>
+    )
+  }
+
+  // Render tab views
   if (view === 'pages') {
+    return (
+      <div className="p-6 space-y-6">
+        <SEONavigation activeView={view} onViewChange={handleViewChange} alerts={opportunityCounts.technical} opportunities={opportunityCounts.content} />
+        <SEOPagesList site={currentSite} onSelectPage={handleSelectPage} />
+      </div>
+    )
+  }
+
+  if (view === 'keywords') {
+    return (
+      <div className="p-6 space-y-6">
+        <SEONavigation activeView={view} onViewChange={handleViewChange} alerts={opportunityCounts.technical} opportunities={opportunityCounts.content} />
+        <SEOKeywordTracking site={currentSite} gscQueries={gscQueries} />
+      </div>
+    )
+  }
+
+  if (view === 'content') {
+    return (
+      <div className="p-6 space-y-6">
+        <SEONavigation activeView={view} onViewChange={handleViewChange} alerts={opportunityCounts.technical} opportunities={opportunityCounts.content} />
+        <SEOContentDecay site={currentSite} />
+      </div>
+    )
+  }
+
+  if (view === 'technical') {
+    return (
+      <div className="p-6 space-y-6">
+        <SEONavigation activeView={view} onViewChange={handleViewChange} alerts={opportunityCounts.technical} opportunities={opportunityCounts.content} />
+        <SEOTechnicalAudit site={currentSite} />
+      </div>
+    )
+  }
+
+  if (view === 'reports') {
+    return (
+      <div className="p-6 space-y-6">
+        <SEONavigation activeView={view} onViewChange={handleViewChange} alerts={opportunityCounts.technical} opportunities={opportunityCounts.content} />
+        <SEOTrends site={currentSite} onViewDetails={handleViewChange} />
+      </div>
+    )
+  }
+
+  // Legacy views for backwards compatibility
+  if (view === 'opportunities') {
     return (
       <div className="p-6">
         <Button variant="ghost" size="sm" onClick={handleBack} className="mb-4 -ml-2">
           <ArrowLeft className="h-4 w-4 mr-2" />
           Back to Overview
         </Button>
-        <SEOPagesList site={currentSite} onSelectPage={handleSelectPage} />
+        <SEOOpportunities site={currentSite} onSelectPage={handleSelectPage} />
       </div>
     )
   }
 
-  if (view === 'page-detail' && currentPage) {
+  if (view === 'ai-insights') {
     return (
       <div className="p-6">
         <Button variant="ghost" size="sm" onClick={handleBack} className="mb-4 -ml-2">
           <ArrowLeft className="h-4 w-4 mr-2" />
-          Back to Pages
+          Back
         </Button>
         <SEOPageDetail page={currentPage} site={currentSite} />
       </div>
@@ -302,7 +402,10 @@ export default function SEODashboard({ onNavigate }) {
 
   return (
     <div className="p-6 space-y-6">
-      {/* Header */}
+      {/* Navigation */}
+      <SEONavigation activeView={view} onViewChange={handleViewChange} alerts={opportunityCounts.technical} opportunities={opportunityCounts.content} />
+
+      {/* Header with Status */}
       <div className="flex items-start justify-between">
         <div>
           <h1 className="text-2xl font-bold text-[var(--text-primary)]">SEO Command Center</h1>
@@ -317,9 +420,10 @@ export default function SEODashboard({ onNavigate }) {
               {currentOrg.domain}
               <ExternalLink className="h-3 w-3" />
             </a>
-            {gscOverview?.period && (
-              <span className="text-xs text-[var(--text-tertiary)] ml-2">
-                {gscOverview.period.start} — {gscOverview.period.end}
+            {lastScan && (
+              <span className="text-xs text-[var(--text-tertiary)] ml-2 flex items-center gap-1">
+                <Clock className="h-3 w-3" />
+                Last scan: {new Date(lastScan).toLocaleDateString()}
               </span>
             )}
           </div>
@@ -328,50 +432,39 @@ export default function SEODashboard({ onNavigate }) {
           <Button 
             variant="outline" 
             size="sm"
+            onClick={async () => {
+              setCrawling(true)
+              setSyncing(true)
+              setDetecting(true)
+              try {
+                await Promise.all([
+                  handleCrawlSitemap(),
+                  handleSyncGsc(),
+                  handleDetectOpportunities()
+                ])
+              } finally {
+                setCrawling(false)
+                setSyncing(false)
+                setDetecting(false)
+              }
+            }}
+            disabled={crawling || syncing || detecting}
+          >
+            {(crawling || syncing || detecting) ? (
+              <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+            ) : (
+              <RefreshCw className="h-4 w-4 mr-2" />
+            )}
+            Scan Now
+          </Button>
+          <Button 
+            variant="outline" 
+            size="sm"
             onClick={() => setView('ai-insights')}
             className="border-purple-500/30 text-purple-400 hover:bg-purple-500/10"
           >
             <Brain className="h-4 w-4 mr-2" />
             AI Insights
-          </Button>
-          <Button 
-            variant="outline" 
-            size="sm"
-            onClick={handleSyncGsc}
-            disabled={syncing || gscLoading}
-          >
-            {syncing || gscLoading ? (
-              <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-            ) : (
-              <BarChart3 className="h-4 w-4 mr-2" />
-            )}
-            Sync GSC
-          </Button>
-          <Button 
-            variant="outline" 
-            size="sm"
-            onClick={handleCrawlSitemap}
-            disabled={crawling}
-          >
-            {crawling ? (
-              <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-            ) : (
-              <RefreshCw className="h-4 w-4 mr-2" />
-            )}
-            Crawl Sitemap
-          </Button>
-          <Button 
-            variant="outline" 
-            size="sm"
-            onClick={handleDetectOpportunities}
-            disabled={detecting}
-          >
-            {detecting ? (
-              <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-            ) : (
-              <Zap className="h-4 w-4 mr-2" />
-            )}
-            Detect Issues
           </Button>
         </div>
       </div>
@@ -390,6 +483,23 @@ export default function SEODashboard({ onNavigate }) {
           </CardContent>
         </Card>
       )}
+
+      {/* Health Score + Quick Wins Row */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <SEOHealthScore 
+          site={currentSite}
+          pages={pages}
+          opportunities={opportunities}
+          gscMetrics={gscMetrics}
+          cwvSummary={cwvSummary}
+          onViewDetails={() => handleViewChange('technical')}
+          onFixIssues={handleFixIssues}
+        />
+        <SEOQuickWins 
+          site={currentSite}
+          onViewAll={() => setView('ai-insights')}
+        />
+      </div>
 
       {/* Quick Stats from GSC */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">

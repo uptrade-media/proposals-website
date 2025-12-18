@@ -18,8 +18,8 @@ export async function handler(event) {
     return { statusCode: 405, headers, body: JSON.stringify({ error: 'Method not allowed' }) }
   }
 
-  const { user, error: authError } = await getAuthenticatedUser(event)
-  if (authError || !user) {
+  const { contact, error: authError } = await getAuthenticatedUser(event)
+  if (authError || !contact) {
     return { statusCode: 401, headers, body: JSON.stringify({ error: 'Not authenticated' }) }
   }
 
@@ -47,12 +47,12 @@ export async function handler(event) {
       console.error('[AI Knowledge] Query error:', knowledgeError)
     }
 
-    // Fetch topics
+    // Fetch topic clusters
     const { data: topics } = await supabase
-      .from('seo_topics')
+      .from('seo_topic_clusters')
       .select('*')
       .eq('site_id', siteId)
-      .order('pages_count', { ascending: false })
+      .order('cluster_strength', { ascending: false })
 
     // Get training status
     const trainingStatus = knowledge ? {

@@ -54,6 +54,43 @@ export async function handler(event) {
       return { statusCode: 400, headers, body: JSON.stringify({ error: 'No sitemap URL configured' }) }
     }
 
+    // Check if we should use background function
+    // Use background for sites we expect to have many pages
+    const useBackground = event.queryStringParameters?.background === 'true' || 
+                          (site.total_pages && site.total_pages > 100)
+
+    if (useBackground) {
+      // Create job record
+      const jobId = crypto.randomUUID()
+      await supabase.from('seo_background_jobs').insert({
+        id: jobId,
+        site_id: siteId,
+        job_type: 'crawl-sitemap',
+        status: 'pending',
+        payload: { siteId, sitemapUrl: targetSitemapUrl }
+      })
+
+      // Trigger background function (fire and forget)
+      const baseUrl = process.env.URL || 'https://portal.uptrademedia.com'
+      fetch(`${baseUrl}/.netlify/functions/seo-crawl-sitemap-background`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ siteId, sitemapUrl: targetSitemapUrl, jobId })
+      }).catch(err => console.error('[seo-crawl-sitemap] Background trigger error:', err))
+
+      return {
+        statusCode: 202,
+        headers,
+        body: JSON.stringify({ 
+          success: true, 
+          background: true,
+          jobId,
+          message: 'Sitemap crawl started in background',
+          checkStatusUrl: `/.netlify/functions/seo-background-jobs?jobId=${jobId}`
+        })
+      }
+    }
+
     // Create crawl log entry
     const { data: crawlLog } = await supabase
       .from('seo_crawl_log')

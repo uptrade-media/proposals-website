@@ -10,7 +10,7 @@ const openai = new OpenAI({
 })
 
 // Use env variable for model - easily update when new models release
-const SEO_AI_MODEL = process.env.SEO_AI_MODEL || 'gpt-5.2'
+const SEO_AI_MODEL = process.env.SEO_AI_MODEL || 'gpt-4o'
 
 const GSC_API_BASE = 'https://searchconsole.googleapis.com/webmasters/v3'
 
@@ -40,8 +40,8 @@ export async function handler(event) {
     return { statusCode: 405, headers, body: JSON.stringify({ error: 'Method not allowed' }) }
   }
 
-  const { user, error: authError } = await getAuthenticatedUser(event)
-  if (authError || !user) {
+  const { contact, error: authError } = await getAuthenticatedUser(event)
+  if (authError || !contact) {
     return { statusCode: 401, headers, body: JSON.stringify({ error: 'Not authenticated' }) }
   }
 

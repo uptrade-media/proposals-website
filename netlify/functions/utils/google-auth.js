@@ -29,7 +29,10 @@ export async function getGoogleAuthClient() {
       client_email: credentials.client_email,
       private_key: credentials.private_key,
     },
-    scopes: ['https://www.googleapis.com/auth/webmasters.readonly'],
+    scopes: [
+      'https://www.googleapis.com/auth/webmasters.readonly',
+      'https://www.googleapis.com/auth/webmasters', // For URL Inspection API
+    ],
   })
 
   authClient = await auth.getClient()

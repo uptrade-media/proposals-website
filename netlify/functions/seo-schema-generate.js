@@ -5,7 +5,7 @@ import { createSupabaseAdmin, getAuthenticatedUser } from './utils/supabase.js'
 import OpenAI from 'openai'
 
 // Use env variable for model - easily update when new models release
-const SEO_AI_MODEL = process.env.SEO_AI_MODEL || 'gpt-5.2'
+const SEO_AI_MODEL = process.env.SEO_AI_MODEL || 'gpt-4o'
 
 export async function handler(event) {
   const headers = {
@@ -34,8 +34,8 @@ export async function handler(event) {
 
 // Get schema status for site pages
 async function getSchemaStatus(event, headers) {
-  const { user, error: authError } = await getAuthenticatedUser(event)
-  if (authError || !user) {
+  const { contact, error: authError } = await getAuthenticatedUser(event)
+  if (authError || !contact) {
     return { statusCode: 401, headers, body: JSON.stringify({ error: 'Not authenticated' }) }
   }
 
@@ -106,8 +106,8 @@ async function getSchemaStatus(event, headers) {
 
 // Generate schema markup for a page
 async function generateSchema(event, headers) {
-  const { user, error: authError } = await getAuthenticatedUser(event)
-  if (authError || !user) {
+  const { contact, error: authError } = await getAuthenticatedUser(event)
+  if (authError || !contact) {
     return { statusCode: 401, headers, body: JSON.stringify({ error: 'Not authenticated' }) }
   }
 

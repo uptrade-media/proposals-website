@@ -53,7 +53,7 @@ export async function handler(event) {
       return { statusCode: 403, headers, body: JSON.stringify({ error: 'Admin access required' }) }
     }
 
-    const { siteId, pageId } = JSON.parse(event.body || '{}')
+    const { siteId, pageId, background } = JSON.parse(event.body || '{}')
 
     if (!siteId) {
       return { statusCode: 400, headers, body: JSON.stringify({ error: 'Site ID is required' }) }
@@ -61,7 +61,47 @@ export async function handler(event) {
 
     const supabase = createSupabaseAdmin()
 
-    // Fetch pages
+    // Check page count to decide if we should use background
+    if (!pageId && !background) {
+      const { count } = await supabase
+        .from('seo_pages')
+        .select('id', { count: 'exact', head: true })
+        .eq('site_id', siteId)
+
+      if (count && count > 50) {
+        // Use background function for sites with many pages
+        const jobId = crypto.randomUUID()
+        await supabase.from('seo_background_jobs').insert({
+          id: jobId,
+          site_id: siteId,
+          job_type: 'opportunities-detect',
+          status: 'pending',
+          payload: { siteId }
+        })
+
+        // Trigger background function (fire and forget)
+        const baseUrl = process.env.URL || 'https://portal.uptrademedia.com'
+        fetch(`${baseUrl}/.netlify/functions/seo-opportunities-detect-background`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ siteId, jobId })
+        }).catch(err => console.error('[seo-opportunities-detect] Background trigger error:', err))
+
+        return {
+          statusCode: 202,
+          headers,
+          body: JSON.stringify({ 
+            success: true, 
+            background: true,
+            jobId,
+            message: `Analyzing ${count} pages in background`,
+            checkStatusUrl: `/.netlify/functions/seo-background-jobs?jobId=${jobId}`
+          })
+        }
+      }
+    }
+
+    // Fetch pages (inline for smaller sites or single page)
     let pagesQuery = supabase
       .from('seo_pages')
       .select('*')

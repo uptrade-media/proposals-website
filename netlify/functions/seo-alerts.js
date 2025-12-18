@@ -37,8 +37,8 @@ export async function handler(event) {
 
 // Get alerts for a site
 async function getAlerts(event, headers) {
-  const { user, error: authError } = await getAuthenticatedUser(event)
-  if (authError || !user) {
+  const { contact, error: authError } = await getAuthenticatedUser(event)
+  if (authError || !contact) {
     return { statusCode: 401, headers, body: JSON.stringify({ error: 'Not authenticated' }) }
   }
 
@@ -98,8 +98,8 @@ async function getAlerts(event, headers) {
 
 // Check for new alerts
 async function checkAlerts(event, headers) {
-  const { user, error: authError } = await getAuthenticatedUser(event)
-  if (authError || !user) {
+  const { contact, error: authError } = await getAuthenticatedUser(event)
+  if (authError || !contact) {
     return { statusCode: 401, headers, body: JSON.stringify({ error: 'Not authenticated' }) }
   }
 
@@ -370,8 +370,8 @@ async function checkAlerts(event, headers) {
 
 // Update alert status
 async function updateAlert(event, headers) {
-  const { user, error: authError } = await getAuthenticatedUser(event)
-  if (authError || !user) {
+  const { contact, error: authError } = await getAuthenticatedUser(event)
+  if (authError || !contact) {
     return { statusCode: 401, headers, body: JSON.stringify({ error: 'Not authenticated' }) }
   }
 
@@ -393,10 +393,10 @@ async function updateAlert(event, headers) {
       updates.status = status
       if (status === 'acknowledged') {
         updates.acknowledged_at = new Date().toISOString()
-        updates.acknowledged_by = user.id
+        updates.acknowledged_by = contact.id
       } else if (status === 'resolved') {
         updates.resolved_at = new Date().toISOString()
-        updates.resolved_by = user.id
+        updates.resolved_by = contact.id
       }
     }
 

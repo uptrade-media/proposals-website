@@ -36,8 +36,8 @@ export async function handler(event) {
     return { statusCode: 405, headers, body: JSON.stringify({ error: 'Method not allowed' }) }
   }
 
-  const { user, error: authError } = await getAuthenticatedUser(event)
-  if (authError || !user) {
+  const { contact, error: authError } = await getAuthenticatedUser(event)
+  if (authError || !contact) {
     return { statusCode: 401, headers, body: JSON.stringify({ error: 'Not authenticated' }) }
   }
 
@@ -131,7 +131,7 @@ export async function handler(event) {
         site_id: siteId,
         analysis_type: analysisType,
         triggered_by: 'manual',
-        triggered_by_user: user.id,
+        triggered_by_user: contact.id,
         scope_description: focusAreas.length > 0 ? `Focus: ${focusAreas.join(', ')}` : 'Full site analysis',
         status: 'running',
         started_at: new Date().toISOString()
@@ -155,7 +155,7 @@ export async function handler(event) {
       },
       body: JSON.stringify({
         siteId,
-        userId: user.id,
+        userId: contact.id,
         analysisType,
         focusAreas,
         pageIds,
@@ -189,8 +189,8 @@ export async function handler(event) {
 
 // Get status of current/recent analysis runs
 async function getAnalysisStatus(event, headers) {
-  const { user, error: authError } = await getAuthenticatedUser(event)
-  if (authError || !user) {
+  const { contact, error: authError } = await getAuthenticatedUser(event)
+  if (authError || !contact) {
     return { statusCode: 401, headers, body: JSON.stringify({ error: 'Not authenticated' }) }
   }
 

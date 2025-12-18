@@ -19,8 +19,8 @@ export async function handler(event) {
     return { statusCode: 405, headers, body: JSON.stringify({ error: 'Method not allowed' }) }
   }
 
-  const { user, error: authError } = await getAuthenticatedUser(event)
-  if (authError || !user) {
+  const { contact, error: authError } = await getAuthenticatedUser(event)
+  if (authError || !contact) {
     return { statusCode: 401, headers, body: JSON.stringify({ error: 'Not authenticated' }) }
   }
 
@@ -117,7 +117,7 @@ async function processRecommendation(supabase, recId, action, user) {
       .update({
         status: 'dismissed',
         dismissed_at: new Date().toISOString(),
-        dismissed_by: user.id,
+        dismissed_by: contact.id,
         updated_at: new Date().toISOString()
       })
       .eq('id', recId)
@@ -176,7 +176,7 @@ async function processRecommendation(supabase, recId, action, user) {
       .update({
         status: 'applied',
         applied_at: new Date().toISOString(),
-        applied_by: user.id,
+        applied_by: contact.id,
         baseline_metrics: baselineMetrics,
         updated_at: new Date().toISOString()
       })
@@ -184,7 +184,7 @@ async function processRecommendation(supabase, recId, action, user) {
 
     // Log the activity
     await supabase.from('activity_logs').insert({
-      contact_id: user.id,
+      contact_id: contact.id,
       action: 'seo_recommendation_applied',
       entity_type: 'seo_recommendation',
       entity_id: recId,

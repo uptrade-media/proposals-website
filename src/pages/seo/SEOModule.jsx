@@ -45,6 +45,7 @@ import SEOSchemaMarkup from '@/components/seo/SEOSchemaMarkup'
 import SEOContentBriefs from '@/components/seo/SEOContentBriefs'
 import SEOAlerts from '@/components/seo/SEOAlerts'
 import SEOBlogBrain from '@/components/seo/SEOBlogBrain'
+import SEOSetupGate from '@/components/seo/SEOSetupGate'
 
 // Tab configuration
 const TAB_CONFIG = [
@@ -240,14 +241,15 @@ export default function SEOModule() {
 
       {/* Main Content */}
       {currentSite && (
-        <Tabs value={activeTab} onValueChange={handleTabChange}>
-          {/* Tab Navigation - Scrollable */}
-          <div className="border-b mb-6 overflow-x-auto">
-            <TabsList className="inline-flex h-auto p-1 bg-transparent">
-              {TAB_CONFIG.map(tab => (
-                <TabsTrigger
-                  key={tab.id}
-                  value={tab.id}
+        <SEOSetupGate siteId={currentSite.id}>
+          <Tabs value={activeTab} onValueChange={handleTabChange}>
+            {/* Tab Navigation - Scrollable */}
+            <div className="border-b mb-6 overflow-x-auto">
+              <TabsList className="inline-flex h-auto p-1 bg-transparent">
+                {TAB_CONFIG.map(tab => (
+                  <TabsTrigger
+                    key={tab.id}
+                    value={tab.id}
                   className="flex items-center gap-2 px-4 py-2 data-[state=active]:bg-muted rounded-lg whitespace-nowrap"
                 >
                   <tab.icon className="h-4 w-4" />
@@ -323,6 +325,7 @@ export default function SEOModule() {
             <SEOAlerts siteId={currentSite.id} />
           </TabsContent>
         </Tabs>
+        </SEOSetupGate>
       )}
     </div>
   )

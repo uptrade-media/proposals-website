@@ -34,7 +34,14 @@
     [context.production.headers.values]
       Basic-Auth = "mbfm:Revenue2025"
 
-# SPA fallback
+# ── Unified API Router ─────────────────────────────────────────────────────────
+# Route all /api/* requests to the unified router function
+[[redirects]]
+  from = "/api/*"
+  to   = "/.netlify/functions/api/:splat"
+  status = 200
+
+# SPA fallback (must come AFTER more specific redirects)
 [[redirects]]
   from = "/*"
   to   = "/index.html"
@@ -59,10 +66,35 @@
 [functions."scheduled-followups-process"]
   schedule = "0 * * * *"
 
+# Scheduled function for processing job queue
+# Runs every minute to process queued background jobs
+[functions."job-queue-worker"]
+  schedule = "* * * * *"
+
 # Scheduled function for SEO automated analysis
 # Runs daily at 2:00 AM UTC to process all sites with enabled schedules
 [functions."seo-scheduled-run"]
   schedule = "0 2 * * *"
+
+# Scheduled function for SEO jobs (ranking snapshots, reports, decay checks)
+# Runs daily at 6:00 AM UTC
+[functions."seo-scheduled-jobs"]
+  schedule = "0 6 * * *"
+
+# Scheduled function for measuring recommendation outcomes (AI learning)
+# Runs daily at 4:00 AM UTC to measure outcomes of implemented recommendations
+[functions."seo-ai-measure-outcomes-background"]
+  schedule = "0 4 * * *"
+
+# Scheduled function for monthly SEO reports
+# Runs on the 1st of each month at 8:00 AM UTC
+[functions."seo-monthly-reports-background"]
+  schedule = "0 8 1 * *"
+
+# Scheduled function for competitor monitoring
+# Runs weekly on Thursdays at 3:00 AM UTC
+[functions."seo-competitor-scheduled"]
+  schedule = "0 3 * * 4"
 
 [dev]
   framework     = "#custom"
@@ -70,3 +102,100 @@
   targetPort    = 5173
   port          = 8888
   functionsPort = 9999
+
+# ── Background Functions (15 min timeout) ───────────────────────────────────
+# These functions can run for up to 15 minutes instead of 10-26 seconds
+
+[functions."seo-cwv-background"]
+  timeout = 900
+
+[functions."seo-crawl-sitemap-background"]
+  timeout = 900
+
+[functions."seo-opportunities-detect-background"]
+  timeout = 900
+
+[functions."seo-ai-brain-background"]
+  timeout = 900
+
+# SEO AI Brain v2 - Uses OpenAI Assistants API with persistent threads
+[functions."seo-ai-brain-v2-background"]
+  timeout = 900
+
+# SEO AI Outcome Measurement - Measures wins/losses for learning
+[functions."seo-ai-measure-outcomes-background"]
+  timeout = 900
+
+[functions."seo-ai-train-background"]
+  timeout = 900
+
+[functions."seo-ai-blog-brain-background"]
+  timeout = 900
+
+[functions."seo-metadata-extract-background"]
+  timeout = 900
+
+[functions."proposals-create-ai-background"]
+  timeout = 900
+
+[functions."proposals-edit-ai-background"]
+  timeout = 900
+
+[functions."audits-internal-background"]
+  timeout = 900
+
+# SEO Analysis Background Functions (from session)
+[functions."seo-competitor-analyze-background"]
+  timeout = 900
+
+[functions."seo-content-brief-background"]
+  timeout = 900
+
+[functions."seo-cannibalization-background"]
+  timeout = 900
+
+[functions."seo-content-decay-background"]
+  timeout = 900
+
+[functions."seo-backlink-gap-background"]
+  timeout = 900
+
+[functions."seo-internal-links-background"]
+  timeout = 900
+
+[functions."seo-topic-clusters-background"]
+  timeout = 900
+
+[functions."seo-serp-features-background"]
+  timeout = 900
+
+[functions."seo-content-gap-analysis-background"]
+  timeout = 900
+
+[functions."seo-predictive-ranking-background"]
+  timeout = 900
+
+[functions."seo-schema-generate-background"]
+  timeout = 900
+
+[functions."seo-local-analyze-background"]
+  timeout = 900
+
+[functions."seo-title-ab-test-background"]
+  timeout = 900
+
+[functions."seo-backlinks-background"]
+  timeout = 900
+
+[functions."seo-monthly-reports-background"]
+  timeout = 900
+
+[functions."seo-serp-analyze-background"]
+  timeout = 900
+
+# Scheduled functions also need extended timeout
+[functions."seo-scheduled-jobs"]
+  timeout = 300
+
+[functions."seo-scheduled-run"]
+  timeout = 300

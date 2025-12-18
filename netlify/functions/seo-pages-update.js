@@ -18,13 +18,14 @@ export async function handler(event) {
     return { statusCode: 405, headers, body: JSON.stringify({ error: 'Method not allowed' }) }
   }
 
-  const { user, error: authError } = await getAuthenticatedUser(event)
-  if (authError || !user) {
+  const { contact, isSuperAdmin, error: authError } = await getAuthenticatedUser(event)
+  if (authError || !contact) {
     return { statusCode: 401, headers, body: JSON.stringify({ error: 'Not authenticated' }) }
   }
 
   // Only admins can update
-  if (user.role !== 'admin' && user.role !== 'super_admin') {
+  const isAdmin = contact.role === 'admin' || contact.role === 'super_admin' || isSuperAdmin
+  if (!isAdmin) {
     return { statusCode: 403, headers, body: JSON.stringify({ error: 'Admin access required' }) }
   }
 
@@ -77,13 +78,13 @@ export async function handler(event) {
 
     // Log the change for audit trail
     await supabase.from('activity_logs').insert({
-      contact_id: user.id,
+      contact_id: contact.id,
       action: 'seo_page_updated',
       entity_type: 'seo_page',
       entity_id: pageId,
       metadata: {
         changes: Object.keys(updateData).filter(k => k !== 'updated_at'),
-        updatedBy: user.email
+        updatedBy: contact.email
       },
       created_at: new Date().toISOString()
     })

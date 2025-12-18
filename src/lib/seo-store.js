@@ -1041,6 +1041,88 @@ export const useSeoStore = create((set, get) => ({
     }
   },
 
+  // ==================== INDEXING & GSC COVERAGE ====================
+
+  // Indexing state
+  indexingStatus: null,
+  indexingLoading: false,
+  indexingError: null,
+
+  // Fetch indexing status for all pages
+  fetchIndexingStatus: async (siteId) => {
+    set({ indexingLoading: true, indexingError: null })
+    try {
+      const response = await api.get(`/.netlify/functions/seo-gsc-indexing?siteId=${siteId}`)
+      set({ indexingStatus: response.data, indexingLoading: false })
+      return response.data
+    } catch (error) {
+      const message = error.response?.data?.error || error.message
+      set({ indexingError: message, indexingLoading: false })
+      throw error
+    }
+  },
+
+  // Fetch sitemaps status from GSC
+  fetchSitemapsStatus: async (siteId) => {
+    try {
+      const response = await api.get(`/.netlify/functions/seo-gsc-indexing?siteId=${siteId}&action=sitemaps`)
+      return response.data
+    } catch (error) {
+      throw error
+    }
+  },
+
+  // Inspect a single URL
+  inspectUrl: async (siteId, url) => {
+    set({ indexingLoading: true })
+    try {
+      const response = await api.post('/.netlify/functions/seo-gsc-indexing', {
+        siteId,
+        action: 'inspect',
+        url
+      })
+      set({ indexingLoading: false })
+      return response.data
+    } catch (error) {
+      set({ indexingLoading: false })
+      throw error
+    }
+  },
+
+  // Bulk inspect multiple URLs
+  bulkInspectUrls: async (siteId, urls) => {
+    set({ indexingLoading: true })
+    try {
+      const response = await api.post('/.netlify/functions/seo-gsc-indexing', {
+        siteId,
+        action: 'bulk-inspect',
+        urls
+      })
+      set({ indexingLoading: false })
+      return response.data
+    } catch (error) {
+      set({ indexingLoading: false })
+      throw error
+    }
+  },
+
+  // Analyze all pages for indexing issues
+  analyzeIndexingIssues: async (siteId) => {
+    set({ indexingLoading: true, indexingError: null })
+    try {
+      const response = await api.post('/.netlify/functions/seo-gsc-indexing', {
+        siteId,
+        action: 'analyze-all'
+      })
+      set({ indexingStatus: response.data, indexingLoading: false })
+      return response.data
+    } catch (error) {
+      const message = error.response?.data?.error || error.message
+      set({ indexingError: message, indexingLoading: false })
+      throw error
+    }
+  },
+
   // ==================== UTILITIES ====================
 
   clearCurrentSite: () => {
@@ -1336,9 +1418,313 @@ export const useSeoStore = create((set, get) => ({
     return get().startBackgroundJob('metadata-extract', { siteId })
   },
 
+  // ==================== SITE REVALIDATION ====================
+
+  // Trigger revalidation on the main site after SEO changes
+  triggerSiteRevalidation: async (options = {}) => {
+    const { paths, revalidateAll, domain, tag } = options
+    try {
+      const response = await api.post('/.netlify/functions/seo-site-revalidate', {
+        domain: domain || 'uptrademedia.com',
+        paths,
+        revalidateAll,
+        tag
+      })
+      return response.data
+    } catch (error) {
+      console.error('[SEO Store] Revalidation failed:', error)
+      throw error
+    }
+  },
+
+  // Revalidate specific paths
+  revalidatePaths: async (paths) => {
+    return get().triggerSiteRevalidation({ paths })
+  },
+
+  // Revalidate all SEO-managed pages
+  revalidateAllPages: async () => {
+    return get().triggerSiteRevalidation({ revalidateAll: true })
+  },
+
   // Clear current job
   clearCurrentJob: () => {
     set({ currentJob: null })
+  },
+
+  // ==================== GSC FIXES ====================
+
+  // GSC indexing issues state
+  gscIssues: null,
+  gscIssuesLoading: false,
+  gscIssuesError: null,
+  redirects: [],
+
+  // Fetch GSC indexing issues for a site
+  fetchGscIssues: async (siteId) => {
+    set({ gscIssuesLoading: true, gscIssuesError: null })
+    try {
+      const response = await api.get(`/.netlify/functions/seo-gsc-fix?siteId=${siteId}`)
+      set({ 
+        gscIssues: response.data.issues,
+        redirects: response.data.redirects || [],
+        gscIssuesLoading: false 
+      })
+      return response.data
+    } catch (error) {
+      const message = error.response?.data?.error || error.message
+      set({ gscIssuesError: message, gscIssuesLoading: false })
+      throw error
+    }
+  },
+
+  // Apply a GSC fix
+  applyGscFix: async (siteId, action, options = {}) => {
+    try {
+      const response = await api.post('/.netlify/functions/seo-gsc-fix', {
+        siteId,
+        action,
+        ...options
+      })
+      // Refresh issues after applying fix
+      await get().fetchGscIssues(siteId)
+      return response.data
+    } catch (error) {
+      throw error
+    }
+  },
+
+  // Create a redirect for a 404 page
+  createRedirect: async (siteId, fromPath, toPath, reason = 'GSC 404 fix') => {
+    return get().applyGscFix(siteId, 'create-redirect', {
+      fix: { fromPath, toPath, reason }
+    })
+  },
+
+  // Remove noindex from a page
+  removeNoindex: async (siteId, url) => {
+    return get().applyGscFix(siteId, 'remove-noindex', { url })
+  },
+
+  // Fix canonical URL
+  fixCanonical: async (siteId, url, canonicalUrl) => {
+    return get().applyGscFix(siteId, 'fix-canonical', {
+      url,
+      fix: { canonicalUrl }
+    })
+  },
+
+  // Apply multiple fixes at once
+  bulkApplyFixes: async (siteId, issues) => {
+    return get().applyGscFix(siteId, 'bulk-fix', { issues })
+  },
+
+  // Generate fix suggestions
+  generateFixSuggestions: async (siteId) => {
+    const response = await api.post('/.netlify/functions/seo-gsc-fix', {
+      siteId,
+      action: 'generate-fixes'
+    })
+    return response.data.suggestions
+  },
+
+  // Manage redirects
+  fetchRedirects: async (siteId) => {
+    try {
+      const response = await api.get(`/.netlify/functions/seo-redirects-api?siteId=${siteId}`)
+      set({ redirects: response.data.redirects || [] })
+      return response.data.redirects
+    } catch (error) {
+      throw error
+    }
+  },
+
+  createRedirectDirect: async (siteId, fromPath, toPath, statusCode = 301, reason = '') => {
+    const response = await api.post('/.netlify/functions/seo-redirects-api', {
+      siteId,
+      fromPath,
+      toPath,
+      statusCode,
+      reason
+    })
+    await get().fetchRedirects(siteId)
+    return response.data.redirect
+  },
+
+  deleteRedirect: async (id) => {
+    await api.delete('/.netlify/functions/seo-redirects-api', {
+      data: { id }
+    })
+    // Remove from local state
+    set(state => ({
+      redirects: state.redirects.filter(r => r.id !== id)
+    }))
+  },
+
+  // ==================== REPORTS ====================
+  reports: [],
+  reportsLoading: false,
+  reportsError: null,
+
+  // Fetch report history
+  fetchReports: async (siteId) => {
+    set({ reportsLoading: true, reportsError: null })
+    try {
+      const response = await api.get(`/.netlify/functions/seo-reports?siteId=${siteId}`)
+      set({ reports: response.data.reports || [], reportsLoading: false })
+      return response.data.reports
+    } catch (error) {
+      const message = error.response?.data?.error || error.message
+      set({ reportsError: message, reportsLoading: false })
+      throw error
+    }
+  },
+
+  // Generate a new report
+  generateReport: async (siteId, reportType = 'weekly', options = {}) => {
+    set({ reportsLoading: true })
+    try {
+      const response = await api.post('/.netlify/functions/seo-reports', {
+        siteId,
+        reportType,
+        period: options.period || '7d',
+        recipients: options.recipients || [],
+        sendEmail: options.sendEmail !== false
+      })
+      // Refresh reports list
+      await get().fetchReports(siteId)
+      return response.data
+    } catch (error) {
+      const message = error.response?.data?.error || error.message
+      set({ reportsError: message, reportsLoading: false })
+      throw error
+    }
+  },
+
+  // ==================== RANKING HISTORY ====================
+  rankingHistory: [],
+  rankingTrends: null,
+  rankingHistoryLoading: false,
+
+  // Fetch ranking history for a keyword
+  fetchRankingHistory: async (siteId, keyword = null, options = {}) => {
+    set({ rankingHistoryLoading: true })
+    try {
+      const params = new URLSearchParams({ siteId })
+      if (keyword) params.append('keyword', keyword)
+      if (options.startDate) params.append('startDate', options.startDate)
+      if (options.endDate) params.append('endDate', options.endDate)
+      if (options.limit) params.append('limit', options.limit)
+
+      const response = await api.get(`/.netlify/functions/seo-ranking-history?${params}`)
+      set({ 
+        rankingHistory: response.data.history || [],
+        rankingTrends: response.data.trends,
+        rankingHistoryLoading: false 
+      })
+      return response.data
+    } catch (error) {
+      set({ rankingHistoryLoading: false })
+      throw error
+    }
+  },
+
+  // Archive current rankings (take a snapshot)
+  archiveRankings: async (siteId) => {
+    const response = await api.post('/.netlify/functions/seo-ranking-history', {
+      siteId,
+      action: 'snapshot'
+    })
+    return response.data
+  },
+
+  // Backfill ranking history from GSC
+  backfillRankingHistory: async (siteId) => {
+    const response = await api.post('/.netlify/functions/seo-ranking-history', {
+      siteId,
+      action: 'backfill-gsc'
+    })
+    return response.data
+  },
+
+  // ==================== CORE WEB VITALS ====================
+  cwvHistory: [],
+  cwvAggregates: null,
+  cwvSummary: null,
+  cwvLoading: false,
+
+  // Fetch CWV history for a page or site
+  fetchCwvHistory: async (siteId, options = {}) => {
+    set({ cwvLoading: true })
+    try {
+      const params = new URLSearchParams({ siteId })
+      if (options.pageId) params.append('pageId', options.pageId)
+      if (options.url) params.append('url', options.url)
+      if (options.device) params.append('device', options.device)
+      if (options.days) params.append('days', options.days)
+
+      const response = await api.get(`/.netlify/functions/seo-cwv?${params}`)
+      set({ 
+        cwvHistory: response.data.history || [],
+        cwvAggregates: response.data.aggregates,
+        cwvLoading: false 
+      })
+      return response.data
+    } catch (error) {
+      set({ cwvLoading: false })
+      throw error
+    }
+  },
+
+  // Run a CWV check for a single URL
+  checkPageCwv: async (siteId, url, pageId = null, device = 'mobile') => {
+    set({ cwvLoading: true })
+    try {
+      const response = await api.post('/.netlify/functions/seo-cwv', {
+        siteId,
+        pageId,
+        url,
+        device,
+        action: 'check'
+      })
+      set({ cwvLoading: false })
+      return response.data.result
+    } catch (error) {
+      set({ cwvLoading: false })
+      throw error
+    }
+  },
+
+  // Check all pages (batch)
+  checkAllPagesCwv: async (siteId, device = 'mobile', limit = 10) => {
+    set({ cwvLoading: true })
+    try {
+      const response = await api.post('/.netlify/functions/seo-cwv', {
+        siteId,
+        device,
+        limit,
+        action: 'check-all'
+      })
+      set({ cwvLoading: false })
+      return response.data
+    } catch (error) {
+      set({ cwvLoading: false })
+      throw error
+    }
+  },
+
+  // Get site-wide CWV summary
+  fetchCwvSummary: async (siteId) => {
+    try {
+      const response = await api.post('/.netlify/functions/seo-cwv', {
+        siteId,
+        action: 'summary'
+      })
+      set({ cwvSummary: response.data.summary })
+      return response.data.summary
+    } catch (error) {
+      throw error
+    }
   }
 }))
 

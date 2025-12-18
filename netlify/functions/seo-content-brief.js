@@ -6,7 +6,7 @@ import { google } from 'googleapis'
 import OpenAI from 'openai'
 
 // Use env variable for model - easily update when new models release
-const SEO_AI_MODEL = process.env.SEO_AI_MODEL || 'gpt-5.2'
+const SEO_AI_MODEL = process.env.SEO_AI_MODEL || 'gpt-4o'
 
 export async function handler(event) {
   const headers = {
@@ -35,8 +35,8 @@ export async function handler(event) {
 
 // Get content briefs
 async function getContentBriefs(event, headers) {
-  const { user, error: authError } = await getAuthenticatedUser(event)
-  if (authError || !user) {
+  const { contact, error: authError } = await getAuthenticatedUser(event)
+  if (authError || !contact) {
     return { statusCode: 401, headers, body: JSON.stringify({ error: 'Not authenticated' }) }
   }
 
@@ -80,8 +80,8 @@ async function getContentBriefs(event, headers) {
 
 // Generate content brief
 async function generateContentBrief(event, headers) {
-  const { user, error: authError } = await getAuthenticatedUser(event)
-  if (authError || !user) {
+  const { contact, error: authError } = await getAuthenticatedUser(event)
+  if (authError || !contact) {
     return { statusCode: 401, headers, body: JSON.stringify({ error: 'Not authenticated' }) }
   }
 
@@ -341,7 +341,7 @@ Return as JSON:
       related_keywords: relatedKeywords.slice(0, 20),
       existing_page_url: existingPageData?.url || null,
       existing_position: existingPageData?.position || null,
-      created_by: user.id,
+      created_by: contact.id,
       created_at: new Date().toISOString(),
       updated_at: new Date().toISOString()
     }

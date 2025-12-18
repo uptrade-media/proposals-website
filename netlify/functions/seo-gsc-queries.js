@@ -22,8 +22,8 @@ export async function handler(event) {
   }
 
   // Verify authentication
-  const { user, isSuperAdmin, error: authError } = await getAuthenticatedUser(event)
-  if (authError || !user) {
+  const { contact, isSuperAdmin, error: authError } = await getAuthenticatedUser(event)
+  if (authError || !contact) {
     return { statusCode: 401, headers, body: JSON.stringify({ error: 'Not authenticated' }) }
   }
 

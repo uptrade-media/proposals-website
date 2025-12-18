@@ -25,6 +25,9 @@ const InvoicePayment = lazy(() => import('./pages/InvoicePayment'))
 // SEO Module
 const SEOModule = lazy(() => import('./pages/seo/SEOModule'))
 
+// Client SEO Dashboard (tenant-facing, read-only)
+const ClientSEODashboard = lazy(() => import('./pages/client/ClientSEODashboard'))
+
 export default function App() {
   const { isAuthenticated, checkAuth, isLoading } = useAuthStore()
   const [initialized, setInitialized] = useState(false)
@@ -126,6 +129,16 @@ export default function App() {
                 element={
                   <Protected>
                     <SEOModule />
+                  </Protected>
+                }
+              />
+              
+              {/* Client SEO Dashboard - Tenant-facing read-only view */}
+              <Route
+                path="/client/seo"
+                element={
+                  <Protected>
+                    <ClientSEODashboard />
                   </Protected>
                 }
               />

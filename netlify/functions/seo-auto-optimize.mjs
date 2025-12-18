@@ -10,7 +10,7 @@ export const config = {
 }
 
 // Use env variable for model - easily update when new models release
-const SEO_AI_MODEL = process.env.SEO_AI_MODEL || 'gpt-5.2'
+const SEO_AI_MODEL = process.env.SEO_AI_MODEL || 'gpt-4o'
 
 export async function handler(event) {
   const headers = {
