@@ -75,11 +75,13 @@
 # Runs daily at 2:00 AM UTC to process all sites with enabled schedules
 [functions."seo-scheduled-run"]
   schedule = "0 2 * * *"
+  timeout = 300
 
 # Scheduled function for SEO jobs (ranking snapshots, reports, decay checks)
 # Runs daily at 6:00 AM UTC
 [functions."seo-scheduled-jobs"]
   schedule = "0 6 * * *"
+  timeout = 300
 
 # Scheduled function for measuring recommendation outcomes (AI learning)
 # Runs daily at 4:00 AM UTC to measure outcomes of implemented recommendations
@@ -187,10 +189,3 @@
 
 [functions."seo-serp-analyze-background"]
   timeout = 900
-
-# Scheduled functions also need extended timeout
-[functions."seo-scheduled-jobs"]
-  timeout = 300
-
-[functions."seo-scheduled-run"]
-  timeout = 300
