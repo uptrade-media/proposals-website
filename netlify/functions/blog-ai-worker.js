@@ -530,9 +530,6 @@ Return ONLY valid JSON.`
     }
     
     console.log('[Blog AI Worker] Using slug:', slug)
-      .replace(/\s+/g, '-')
-      .replace(/-+/g, '-')
-      .substring(0, 100)
 
     // Process service callouts - replace markers with actual service data (Uptrade only)
     let processedContent = aiContent.content
@@ -610,7 +607,7 @@ Return ONLY valid JSON.`
     const { data: blogPost, error: insertError } = await supabase
       .from('blog_posts')
       .insert({
-        org_id: org?.id || null,
+        org_id: job.org_id, // Use org_id from the job directly
         slug,
         title: aiContent.title,
         subtitle: aiContent.subtitle || null,
@@ -638,10 +635,16 @@ Return ONLY valid JSON.`
       .single()
 
     if (insertError) {
+      console.error('[Blog AI Worker] Insert error:', insertError)
       throw insertError
     }
 
-    console.log('[Blog AI Worker] Blog post created:', blogPost.id, blogPost.title)
+    console.log('[Blog AI Worker] ✅ Blog post created successfully!')
+    console.log('[Blog AI Worker] - ID:', blogPost.id)
+    console.log('[Blog AI Worker] - Title:', blogPost.title)
+    console.log('[Blog AI Worker] - Slug:', blogPost.slug)
+    console.log('[Blog AI Worker] - Status:', blogPost.status)
+    console.log('[Blog AI Worker] - Org ID:', blogPost.org_id)
 
     const duration = Date.now() - startTime
 

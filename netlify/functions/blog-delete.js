@@ -56,26 +56,40 @@ export async function handler(event) {
       }
     }
 
-    // Soft delete - mark as archived
+    // Hard delete - permanently remove post
     const supabase = createSupabaseAdmin()
     
-    const { data, error: deleteError } = await supabase
+    // Get post data to check for featured image
+    const { data: post, error: fetchError } = await supabase
       .from('blog_posts')
-      .update({ status: 'archived' })
+      .select('id, featured_image')
       .eq('id', id)
-      .select('id')
       .single()
-
-    if (deleteError) {
-      if (deleteError.code === 'PGRST116') {
+    
+    if (fetchError) {
+      if (fetchError.code === 'PGRST116') {
         return {
           statusCode: 404,
           headers,
           body: JSON.stringify({ error: 'Blog post not found' })
         }
       }
+      throw fetchError
+    }
+    
+    // Delete the blog post (CASCADE will delete related data)
+    const { error: deleteError } = await supabase
+      .from('blog_posts')
+      .delete()
+      .eq('id', id)
+    
+    if (deleteError) {
       throw deleteError
     }
+    
+    // Note: If featured_image is stored in Supabase storage, delete it here
+    // For now, we just remove the DB reference
+    console.log('[Blog Delete] Post deleted:', id)
 
     return {
       statusCode: 200,

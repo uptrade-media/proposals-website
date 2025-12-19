@@ -41,7 +41,7 @@ export async function handler(event) {
     const supabase = createSupabaseAdmin()
     
     const url = new URL(event.rawUrl || `http://localhost${event.rawPath}`)
-    const status = url.searchParams.get('status') || 'published'
+    const status = url.searchParams.get('status') // Don't default to 'published' - return all unless specified
     const category = url.searchParams.get('category')
     const limit = Math.min(parseInt(url.searchParams.get('limit') || '50'), 100)
     const offset = parseInt(url.searchParams.get('offset') || '0')
@@ -62,9 +62,13 @@ export async function handler(event) {
     let query = supabase
       .from('blog_posts')
       .select('*')
-      .eq('status', status)
-      .order('published_at', { ascending: false })
+      .order('created_at', { ascending: false }) // Sort by created_at instead of published_at
       .range(offset, offset + limit - 1)
+    
+    // Only filter by status if explicitly provided
+    if (status) {
+      query = query.eq('status', status)
+    }
 
     // Filter by org_id - use header value or default to Uptrade Media
     const effectiveOrgId = orgId || UPTRADE_MEDIA_ORG_ID
@@ -82,7 +86,7 @@ export async function handler(event) {
       throw error
     }
 
-    console.log('[Blog API] Found', data?.length || 0, 'blog posts with status:', status)
+    console.log('[Blog API] Found', data?.length || 0, 'blog posts', status ? `with status: ${status}` : '(all statuses)')
 
     return {
       statusCode: 200,

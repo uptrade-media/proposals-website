@@ -251,7 +251,8 @@ export default function BlogAIDialog({ onSuccess }) {
             
             if (status.status === 'completed') {
               clearInterval(pollInterval)
-              console.log('[BlogAI] Job completed:', status.result?.title)
+              console.log('[BlogAI] ✅ Job completed successfully:', status.result?.title)
+              console.log('[BlogAI] Blog post ID:', status.blogPostId)
               
               // Mark as complete
               setGenerationStage(4)
@@ -278,15 +279,21 @@ export default function BlogAIDialog({ onSuccess }) {
               setUploadedImage(null)
               setImagePreview(null)
               
+              // Close dialog
               setIsOpen(false)
               setIsGenerating(false)
+              setGenerationStage(0)
               
               // Notify parent to refresh
+              console.log('[BlogAI] Calling onSuccess callback...')
               if (onSuccess) {
                 onSuccess(status.result)
+              } else {
+                console.warn('[BlogAI] No onSuccess callback provided!')
               }
             } else if (status.status === 'failed') {
               clearInterval(pollInterval)
+              console.error('[BlogAI] ❌ Job failed:', status.error)
               throw new Error(status.error || 'Job failed')
             }
           } catch (pollError) {

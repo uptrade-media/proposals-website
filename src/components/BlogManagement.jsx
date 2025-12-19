@@ -88,7 +88,7 @@ const categoryColors = {
 }
 
 // Blog Card Component
-function BlogCard({ blog, onEdit, onDelete, onPreview, onToggleFeatured, isLoading }) {
+function BlogCard({ blog, onEdit, onDelete, onPreview, onToggleFeatured, onPublish, isLoading }) {
   const [copied, setCopied] = useState(false)
   
   const copySlug = () => {
@@ -169,6 +169,11 @@ function BlogCard({ blog, onEdit, onDelete, onPreview, onToggleFeatured, isLoadi
                     <ExternalLink className="w-4 h-4 mr-2" /> View Live
                   </DropdownMenuItem>
                   <DropdownMenuSeparator />
+                  {blog.status === 'draft' && (
+                    <DropdownMenuItem onClick={() => onPublish(blog.id)} className="text-emerald-600 focus:text-emerald-600">
+                      <CheckCircle2 className="w-4 h-4 mr-2" /> Publish Post
+                    </DropdownMenuItem>
+                  )}
                   <DropdownMenuItem onClick={() => onToggleFeatured(blog.id, !blog.featured)}>
                     <Star className={`w-4 h-4 mr-2 ${blog.featured ? 'fill-amber-500 text-amber-500' : ''}`} />
                     {blog.featured ? 'Unfeature' : 'Feature'}
@@ -362,12 +367,21 @@ export default function BlogManagement() {
   const fetchBlogs = async () => {
     setIsLoading(true)
     try {
-      const res = await api.get('/.netlify/functions/blog-list?status=published&limit=100')
+      console.log('[BlogManagement] Fetching all blogs...')
+      // Fetch ALL posts (published + draft) so AI-generated posts show immediately
+      const res = await api.get('/.netlify/functions/blog-list?limit=100')
       if (res.data.success) {
-        setBlogs(res.data.posts || [])
+        const posts = res.data.posts || []
+        console.log('[BlogManagement] ✅ Fetched', posts.length, 'blogs')
+        console.log('[BlogManagement] Status breakdown:', {
+          published: posts.filter(p => p.status === 'published').length,
+          draft: posts.filter(p => p.status === 'draft').length,
+          other: posts.filter(p => p.status !== 'published' && p.status !== 'draft').length
+        })
+        setBlogs(posts)
       }
     } catch (err) {
-      console.error('Error fetching blogs:', err)
+      console.error('[BlogManagement] Error fetching blogs:', err)
     } finally {
       setIsLoading(false)
     }
@@ -534,6 +548,24 @@ export default function BlogManagement() {
     try {
       await api.delete('/.netlify/functions/blog-delete', { data: { id } })
       setSuccess('Blog deleted!')
+      fetchBlogs()
+      setTimeout(() => setSuccess(''), 3000)
+    } catch (err) {
+      setError(err.message)
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
+  const handlePublish = async (id) => {
+    setIsLoading(true)
+    try {
+      await api.put('/.netlify/functions/blog-update', { 
+        id, 
+        status: 'published',
+        publishedAt: new Date().toISOString()
+      })
+      setSuccess('Post published!')
       fetchBlogs()
       setTimeout(() => setSuccess(''), 3000)
     } catch (err) {
@@ -725,6 +757,7 @@ export default function BlogManagement() {
                   onDelete={handleDelete}
                   onPreview={setPreviewBlog}
                   onToggleFeatured={handleToggleFeatured}
+                  onPublish={handlePublish}
                   isLoading={isLoading}
                 />
               ))}
