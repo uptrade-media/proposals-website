@@ -139,30 +139,27 @@ async function fetchGSCData(siteUrl, pageId = null) {
   }
 
   try {
-    // Fetch queries
     const queriesUrl = `${GSC_API_BASE}/sites/${encodeURIComponent(siteUrl)}/searchAnalytics/query`
-    const queriesBody = {
-      ...dateRange,
-      dimensions: ['query', 'page'],
-      rowLimit: 500
-    }
     
-    const queriesData = await googleApiRequest(queriesUrl, {
-      method: 'POST',
-      body: JSON.stringify(queriesBody)
-    })
-
-    // Fetch page-level data
-    const pagesBody = {
-      ...dateRange,
-      dimensions: ['page'],
-      rowLimit: 100
-    }
-    
-    const pagesData = await googleApiRequest(queriesUrl, {
-      method: 'POST',
-      body: JSON.stringify(pagesBody)
-    })
+    // PARALLEL: Fetch queries and pages simultaneously
+    const [queriesData, pagesData] = await Promise.all([
+      googleApiRequest(queriesUrl, {
+        method: 'POST',
+        body: JSON.stringify({
+          ...dateRange,
+          dimensions: ['query', 'page'],
+          rowLimit: 500
+        })
+      }),
+      googleApiRequest(queriesUrl, {
+        method: 'POST',
+        body: JSON.stringify({
+          ...dateRange,
+          dimensions: ['page'],
+          rowLimit: 100
+        })
+      })
+    ])
 
     return {
       queries: queriesData.rows || [],

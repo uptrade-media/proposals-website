@@ -3,7 +3,6 @@
 // Identifies orphan pages, hub opportunities, and strategic linking gaps
 import { createSupabaseAdmin, getAuthenticatedUser } from './utils/supabase.js'
 import OpenAI from 'openai'
-import * as cheerio from 'cheerio'
 
 // Use env variable for model - easily update when new models release
 const SEO_AI_MODEL = process.env.SEO_AI_MODEL || 'gpt-4o'
@@ -108,6 +107,7 @@ async function getInternalLinkAnalysis(event, headers) {
 }
 
 // Analyze internal links and generate recommendations
+// This is now a thin wrapper - the heavy lifting is done in background function
 async function analyzeInternalLinks(event, headers) {
   const { contact, error: authError } = await getAuthenticatedUser(event)
   if (authError || !contact) {
@@ -123,244 +123,68 @@ async function analyzeInternalLinks(event, headers) {
     }
 
     const supabase = createSupabaseAdmin()
-    const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY })
 
-    // Get site and pages
-    const { data: site } = await supabase
+    // Get pages to compute current link count for immediate response
+    const { data: pages } = await supabase
+      .from('seo_pages')
+      .select('internal_links_out')
+      .eq('site_id', siteId)
+
+    // Get site to get org_id
+    const { data: site, error: siteError } = await supabase
       .from('seo_sites')
-      .select('*, org:organizations(domain)')
+      .select('org_id')
       .eq('id', siteId)
       .single()
 
-    const { data: pages } = await supabase
-      .from('seo_pages')
-      .select('*')
-      .eq('site_id', siteId)
-      .order('clicks_28d', { ascending: false, nullsFirst: false })
-      .limit(100)
+    if (siteError || !site) {
+      return { statusCode: 400, headers, body: JSON.stringify({ error: 'Site not found' }) }
+    }
 
-    const { data: knowledge } = await supabase
-      .from('seo_knowledge_base')
-      .select('content_pillars, primary_services')
-      .eq('site_id', siteId)
+    // Compute total from current database values
+    const totalInternalLinks = pages?.reduce((sum, p) => sum + (p.internal_links_out || 0), 0) || 0
+
+    // Create background job for tracking
+    const { data: job, error: jobError } = await supabase
+      .from('seo_background_jobs')
+      .insert({
+        site_id: siteId,
+        job_type: 'internal_links_analyze',
+        status: 'pending'
+      })
+      .select()
       .single()
 
-    const domain = site?.org?.domain || site?.domain
+    if (jobError || !job) {
+      console.error('[Internal Links] Failed to create job:', JSON.stringify({
+        error: jobError?.message,
+        details: jobError?.details,
+        hint: jobError?.hint,
+        code: jobError?.code,
+        site_id: siteId
+      }))
+      return { statusCode: 500, headers, body: JSON.stringify({ error: 'Failed to queue job' }) }
+    }
 
-    // If crawlLinks is true, crawl pages for link data
-    if (crawlLinks && pages?.length > 0) {
-      const linkMap = new Map() // url -> { inLinks: [], outLinks: [] }
-
-      // Initialize all pages
-      pages.forEach(p => {
-        linkMap.set(p.url, { inLinks: [], outLinks: [] })
+    // Trigger the background function asynchronously
+    fetch(`${process.env.URL}/.netlify/functions/seo-internal-links-background`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        siteId,
+        jobId: job.id,
+        crawlLinks: true  // Always crawl in background for setup wizard
       })
-
-      // Crawl top pages for links
-      const pagesToCrawl = pages.slice(0, 30) // Limit to avoid timeout
-      
-      for (const page of pagesToCrawl) {
-        try {
-          const response = await fetch(page.url, {
-            headers: { 'User-Agent': 'UptradeSEOBot/1.0' },
-            signal: AbortSignal.timeout(5000)
-          })
-          
-          if (!response.ok) continue
-          
-          const html = await response.text()
-          const $ = cheerio.load(html)
-          
-          // Find all internal links
-          const outLinks = []
-          $('a[href]').each((_, el) => {
-            const href = $(el).attr('href')
-            if (!href) return
-            
-            let fullUrl = href
-            if (href.startsWith('/')) {
-              fullUrl = `https://${domain}${href}`
-            }
-            
-            if (fullUrl.includes(domain) && !fullUrl.includes('#')) {
-              outLinks.push(fullUrl.split('?')[0]) // Remove query strings
-            }
-          })
-          
-          // Update page data
-          const pageData = linkMap.get(page.url) || { inLinks: [], outLinks: [] }
-          pageData.outLinks = [...new Set(outLinks)]
-          linkMap.set(page.url, pageData)
-          
-          // Update inLinks for linked pages
-          outLinks.forEach(linkedUrl => {
-            const linkedPageData = linkMap.get(linkedUrl)
-            if (linkedPageData) {
-              linkedPageData.inLinks.push(page.url)
-            }
-          })
-          
-        } catch (e) {
-          console.log(`[Internal Links] Failed to crawl ${page.url}: ${e.message}`)
-        }
-      }
-
-      // Update database with link counts
-      for (const page of pages) {
-        const pageData = linkMap.get(page.url)
-        if (pageData) {
-          await supabase
-            .from('seo_pages')
-            .update({
-              internal_links_in: pageData.inLinks.length,
-              internal_links_out: pageData.outLinks.length,
-              updated_at: new Date().toISOString()
-            })
-            .eq('id', page.id)
-        }
-      }
-    }
-
-    // Build context for AI analysis
-    const topPages = pages.slice(0, 30).map(p => ({
-      url: p.url.replace(`https://${domain}`, ''),
-      title: p.title,
-      clicks: p.clicks_28d,
-      linksIn: p.internal_links_in || 0,
-      linksOut: p.internal_links_out || 0
-    }))
-
-    const contentPillars = knowledge?.content_pillars || []
-    const services = knowledge?.primary_services?.map(s => s.name) || []
-
-    // AI Analysis
-    const prompt = `Analyze this site's internal linking structure and provide strategic recommendations.
-
-SITE STRUCTURE:
-Content Pillars: ${contentPillars.join(', ') || 'Not defined'}
-Services: ${services.join(', ') || 'Not defined'}
-
-TOP PAGES (by traffic):
-${JSON.stringify(topPages, null, 2)}
-
-Analyze and provide:
-1. Link equity distribution issues
-2. Strategic internal linking opportunities
-3. Topic cluster linking improvements
-4. Anchor text recommendations
-
-Return as JSON:
-{
-  "assessment": "Overall assessment of internal linking health",
-  "score": 0-100,
-  "criticalIssues": [
-    {
-      "issue": "Description",
-      "affectedPages": ["url1", "url2"],
-      "recommendation": "How to fix"
-    }
-  ],
-  "linkingOpportunities": [
-    {
-      "fromPage": "/source-page",
-      "toPage": "/target-page",
-      "suggestedAnchor": "anchor text",
-      "reason": "Why this link adds value",
-      "priority": "high|medium|low"
-    }
-  ],
-  "hubPageRecommendations": [
-    {
-      "page": "/page-url",
-      "role": "pillar|hub|spoke",
-      "shouldLinkTo": ["/page1", "/page2"],
-      "reason": "Why this creates good structure"
-    }
-  ],
-  "orphanPageFixes": [
-    {
-      "orphanPage": "/orphan-url",
-      "linkFrom": ["/page1", "/page2"],
-      "suggestedAnchors": ["anchor 1", "anchor 2"]
-    }
-  ],
-  "topicClusterStrategy": {
-    "clusters": [
-      {
-        "pillarPage": "/pillar-url",
-        "clusterPages": ["/spoke1", "/spoke2"],
-        "missingLinks": ["description of missing links"]
-      }
-    ]
-  }
-}`
-
-    const completion = await openai.chat.completions.create({
-      model: SEO_AI_MODEL,
-      messages: [
-        {
-          role: 'system',
-          content: 'You are an expert in site architecture and internal linking for SEO. Provide specific, strategic recommendations for improving link equity distribution and topic clustering.'
-        },
-        { role: 'user', content: prompt }
-      ],
-      response_format: { type: 'json_object' },
-      temperature: 0.3
-    })
-
-    const analysis = JSON.parse(completion.choices[0].message.content)
-
-    // Store recommendations
-    const recommendations = []
-    
-    // Add critical issues as recommendations
-    analysis.criticalIssues?.forEach(issue => {
-      recommendations.push({
-        site_id: siteId,
-        category: 'link',
-        subcategory: 'internal',
-        priority: 'high',
-        title: issue.issue,
-        description: issue.recommendation,
-        supporting_data: { affectedPages: issue.affectedPages },
-        auto_fixable: false,
-        status: 'pending',
-        ai_model: SEO_AI_MODEL,
-        created_at: new Date().toISOString()
-      })
-    })
-
-    // Add high priority linking opportunities
-    analysis.linkingOpportunities?.filter(o => o.priority === 'high').forEach(opp => {
-      recommendations.push({
-        site_id: siteId,
-        category: 'link',
-        subcategory: 'internal',
-        priority: 'medium',
-        title: `Add internal link from ${opp.fromPage} to ${opp.toPage}`,
-        description: opp.reason,
-        current_value: opp.fromPage,
-        suggested_value: `Link to ${opp.toPage} with anchor: "${opp.suggestedAnchor}"`,
-        auto_fixable: false,
-        status: 'pending',
-        ai_model: SEO_AI_MODEL,
-        created_at: new Date().toISOString()
-      })
-    })
-
-    if (recommendations.length > 0) {
-      await supabase
-        .from('seo_ai_recommendations')
-        .insert(recommendations)
-    }
+    }).catch(err => console.error('[Internal Links] Failed to trigger background job:', err))
 
     return {
-      statusCode: 200,
+      statusCode: 202,
       headers,
       body: JSON.stringify({
         success: true,
-        analysis,
-        recommendationsCreated: recommendations.length
+        jobId: job.id,
+        totalLinks: totalInternalLinks,
+        message: 'Internal link analysis queued - running in background'
       })
     }
 

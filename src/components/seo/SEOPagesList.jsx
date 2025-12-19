@@ -85,17 +85,56 @@ export default function SEOPagesList({ site, onSelectPage }) {
     return <Badge className="bg-red-500/20 text-red-400 border-red-500/30 text-xs">{score}</Badge>
   }
 
-  const getIndexStatusBadge = (status) => {
-    switch (status) {
-      case 'indexed':
-        return <CheckCircle className="h-4 w-4 text-green-400" />
-      case 'not-indexed':
-        return <XCircle className="h-4 w-4 text-red-400" />
-      case 'blocked':
-        return <AlertTriangle className="h-4 w-4 text-yellow-400" />
-      default:
-        return <span className="text-xs text-[var(--text-tertiary)]">?</span>
+  const getIndexStatusBadge = (page) => {
+    const status = page.index_status
+    const hasNoindex = page.has_noindex
+    const isBlocked = page.robots_blocked
+    
+    if (isBlocked) {
+      return (
+        <Badge className="bg-gray-500/20 text-gray-400 border-gray-500/30 text-xs gap-1">
+          <AlertTriangle className="h-3 w-3" />
+          Blocked
+        </Badge>
+      )
     }
+    if (hasNoindex) {
+      return (
+        <Badge className="bg-purple-500/20 text-purple-400 border-purple-500/30 text-xs gap-1">
+          <XCircle className="h-3 w-3" />
+          Noindex
+        </Badge>
+      )
+    }
+    if (status === 'indexed') {
+      return (
+        <Badge className="bg-green-500/20 text-green-400 border-green-500/30 text-xs gap-1">
+          <CheckCircle className="h-3 w-3" />
+          Indexed
+        </Badge>
+      )
+    }
+    if (status === 'not_indexed' || status === 'not-indexed') {
+      return (
+        <Badge className="bg-yellow-500/20 text-yellow-400 border-yellow-500/30 text-xs gap-1">
+          <AlertTriangle className="h-3 w-3" />
+          Not Indexed
+        </Badge>
+      )
+    }
+    if (status === 'removal_requested') {
+      return (
+        <Badge className="bg-red-500/20 text-red-400 border-red-500/30 text-xs gap-1">
+          <XCircle className="h-3 w-3" />
+          Removal
+        </Badge>
+      )
+    }
+    return (
+      <Badge variant="outline" className="text-xs text-[var(--text-tertiary)]">
+        Unknown
+      </Badge>
+    )
   }
 
   const formatNumber = (num) => {
@@ -237,7 +276,7 @@ export default function SEOPagesList({ site, onSelectPage }) {
                         </div>
                       </td>
                       <td className="px-4 py-3 text-center">
-                        {getIndexStatusBadge(page.index_status)}
+                        {getIndexStatusBadge(page)}
                       </td>
                       <td className="px-4 py-3 text-right text-sm text-[var(--text-primary)]">
                         {formatNumber(page.clicks_28d)}

@@ -7,11 +7,12 @@
 
 import { useState, useEffect } from 'react'
 import { motion } from 'framer-motion'
-import { Loader2, Brain, Sparkles, Settings } from 'lucide-react'
+import { Loader2, Sparkles, Settings } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import SEOSetupWizard from './SEOSetupWizard'
 import { useSeoStore } from '@/lib/seo-store'
-import axios from 'axios'
+import api from '@/lib/api'
+import SignalSEOLogo from './SignalSEOLogo'
 
 export default function SEOSetupGate({ children, siteId }) {
   const [loading, setLoading] = useState(true)
@@ -35,7 +36,7 @@ export default function SEOSetupGate({ children, siteId }) {
       setLoading(true)
       
       // Get site data
-      const siteRes = await axios.get(`/.netlify/functions/seo-sites-get?siteId=${siteId}`)
+      const siteRes = await api.get(`/.netlify/functions/seo-sites-get?siteId=${siteId}`)
       const site = siteRes.data.site
       
       if (!site) {
@@ -53,7 +54,7 @@ export default function SEOSetupGate({ children, siteId }) {
       // Also check if AI brain is trained
       let isBrainTrained = false
       try {
-        const knowledgeRes = await axios.get(`/.netlify/functions/seo-ai-knowledge?siteId=${siteId}`)
+        const knowledgeRes = await api.get(`/.netlify/functions/seo-ai-knowledge?siteId=${siteId}`)
         isBrainTrained = knowledgeRes.data.knowledge?.training_status === 'completed'
       } catch (e) {
         // No knowledge base yet
@@ -62,7 +63,7 @@ export default function SEOSetupGate({ children, siteId }) {
       // Check if we have pages
       let hasPages = false
       try {
-        const pagesRes = await axios.get(`/.netlify/functions/seo-pages-list?siteId=${siteId}&limit=1`)
+        const pagesRes = await api.get(`/.netlify/functions/seo-pages-list?siteId=${siteId}&limit=1`)
         hasPages = (pagesRes.data.pages?.length || 0) > 0
       } catch (e) {
         // No pages yet
@@ -108,18 +109,8 @@ export default function SEOSetupGate({ children, siteId }) {
           animate={{ opacity: 1, scale: 1 }}
           className="text-center"
         >
-          <div className="relative">
-            <Brain className="w-16 h-16 text-primary mx-auto mb-4" />
-            <motion.div
-              animate={{ rotate: 360 }}
-              transition={{ duration: 2, repeat: Infinity, ease: 'linear' }}
-              className="absolute inset-0"
-            >
-              <Sparkles className="w-6 h-6 text-amber-500 absolute -top-1 -right-1" />
-            </motion.div>
-          </div>
-          <Loader2 className="w-6 h-6 animate-spin text-primary mx-auto mb-2" />
-          <p className="text-gray-500">Loading SEO Intelligence...</p>
+          <SignalSEOLogo size={80} animate className="mx-auto mb-4" />
+          <p className="text-[var(--text-secondary)]">Loading Signal SEO...</p>
         </motion.div>
       </div>
     )
@@ -146,8 +137,8 @@ export default function SEOSetupGate({ children, siteId }) {
           animate={{ opacity: 1, y: 0 }}
           className="max-w-2xl mx-auto text-center"
         >
-          <div className="bg-gradient-to-br from-primary/10 to-purple-500/10 rounded-2xl p-8 mb-8">
-            <Brain className="w-20 h-20 text-primary mx-auto mb-6" />
+          <div className="bg-gradient-to-br from-[#95d47d]/10 to-[#238b95]/10 rounded-2xl p-8 mb-8">
+            <SignalSEOLogo size={80} animate className="mx-auto mb-6" />
             <h2 className="text-2xl font-bold text-gray-900 mb-4">
               Complete SEO Setup
             </h2>

@@ -179,18 +179,15 @@ async function trackKeywords(event, headers) {
             startDate: startDate.toISOString().split('T')[0],
             endDate: endDate.toISOString().split('T')[0],
             dimensions: ['query'],
-            rowLimit: 50,
-            dimensionFilterGroups: [{
-              filters: [{
-                dimension: 'position',
-                operator: 'lessThan',
-                expression: '30'
-              }]
-            }]
+            rowLimit: 100 // Fetch more, filter client-side
           }
         })
 
-        const topQueries = response.data.rows || []
+        // Filter by position client-side (position < 30)
+        const topQueries = (response.data.rows || [])
+          .filter(row => row.position < 30)
+          .slice(0, 50)
+        
         for (const row of topQueries) {
           // Check if already tracked
           const keywordHash = Buffer.from(row.keys[0]).toString('base64').substring(0, 32)

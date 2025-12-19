@@ -27,6 +27,7 @@ import {
 import useAuthStore from '@/lib/auth-store'
 import api from '@/lib/api'
 import UptradeLoading from './UptradeLoading'
+import TenantDashboard from './TenantDashboard'
 import { toast } from '@/lib/toast'
 import { DashboardSkeleton, StatsSkeleton, ListSkeleton } from './DashboardSkeleton'
 import { ProjectsEmptyState, MessagesEmptyState, InvoicesEmptyState } from './DashboardEmptyState'
@@ -47,6 +48,11 @@ const Dashboard = ({ onNavigate }) => {
   // Check if we're viewing a project-based tenant (web app)
   const isViewingTenant = currentOrg?.isProjectTenant === true
   const tenantName = currentOrg?.name
+  
+  // Use dedicated TenantDashboard for project tenants
+  if (isViewingTenant) {
+    return <TenantDashboard onNavigate={onNavigate} />
+  }
   
   // Exit tenant context and return to main dashboard
   const exitTenantDashboard = async () => {

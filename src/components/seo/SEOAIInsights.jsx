@@ -365,11 +365,23 @@ export default function SEOAIInsights({ site, onSelectPage }) {
                             <div className="mt-2 p-2 rounded bg-[var(--bg-primary)] text-xs">
                               <span className="text-[var(--text-tertiary)]">Suggested: </span>
                               <span className="text-[var(--text-secondary)]">
-                                {typeof rec.suggested_value === 'string' 
-                                  ? rec.suggested_value.substring(0, 100)
-                                  : JSON.stringify(rec.suggested_value).substring(0, 100)
-                                }
-                                {rec.suggested_value.length > 100 && '...'}
+                                {(() => {
+                                  if (typeof rec.suggested_value === 'string') {
+                                    return rec.suggested_value.length > 100 
+                                      ? rec.suggested_value.substring(0, 100) + '...'
+                                      : rec.suggested_value
+                                  } else if (Array.isArray(rec.suggested_value)) {
+                                    // Handle arrays (e.g., keywords array)
+                                    return rec.suggested_value
+                                      .map(item => typeof item === 'object' ? item.name || item.keyword || JSON.stringify(item) : String(item))
+                                      .join(', ')
+                                      .substring(0, 100) + (rec.suggested_value.length > 3 ? '...' : '')
+                                  } else {
+                                    // Handle objects
+                                    const str = JSON.stringify(rec.suggested_value)
+                                    return str.length > 100 ? str.substring(0, 100) + '...' : str
+                                  }
+                                })()}
                               </span>
                             </div>
                           )}

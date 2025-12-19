@@ -133,6 +133,7 @@ export async function handler(event) {
         site_id: siteId,
         url: url,
         path: new URL(url).pathname,
+        discovery_source: 'sitemap', // From NextJS sitemap (source of truth)
         first_seen_at: new Date().toISOString()
       }))
 

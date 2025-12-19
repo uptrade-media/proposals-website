@@ -4,8 +4,11 @@
  */
 import { useState, useEffect, useRef, lazy, Suspense } from 'react'
 import { Alert, AlertDescription } from '@/components/ui/alert'
+import { Card, CardContent } from '@/components/ui/card'
+import { Button } from '@/components/ui/button'
 import { Loader2 } from 'lucide-react'
 import useSiteAnalyticsStore from '@/lib/site-analytics-store'
+import useAuthStore from '@/lib/auth-store'
 
 // Import modular components
 import { AnalyticsHeader } from '@/components/analytics/AnalyticsHeader'
@@ -36,6 +39,11 @@ function ChartLoader() {
 }
 
 export default function Analytics() {
+  const { currentOrg } = useAuthStore()
+  const isProjectTenant = currentOrg?.isProjectTenant === true
+  const tenantName = currentOrg?.name || 'Your Site'
+  const tenantDomain = currentOrg?.domain
+  
   const {
     overview,
     topPages,
@@ -50,6 +58,7 @@ export default function Analytics() {
     dateRange,
     setDateRange,
     fetchAllAnalytics,
+    setDomain,
     formatNumber,
     formatDuration,
     formatPercent,
@@ -59,6 +68,15 @@ export default function Analytics() {
   const hasFetchedRef = useRef(false)
   const [isRefreshing, setIsRefreshing] = useState(false)
   const [showComparison, setShowComparison] = useState(false)
+
+  // Set domain for tenant analytics
+  useEffect(() => {
+    if (isProjectTenant && tenantDomain && setDomain) {
+      setDomain(tenantDomain)
+    } else if (!isProjectTenant && setDomain) {
+      setDomain(null) // Reset to default (uptrademedia.com)
+    }
+  }, [isProjectTenant, tenantDomain, setDomain])
 
   // Initial data fetch
   useEffect(() => {
@@ -73,7 +91,7 @@ export default function Analytics() {
       fetchAllAnalytics()
     }
   }, [dateRange])
-
+  
   // Handle refresh
   const handleRefresh = async () => {
     setIsRefreshing(true)
@@ -201,6 +219,8 @@ export default function Analytics() {
           onDateRangeChange={handleDateRangeChange}
           onRefresh={handleRefresh}
           isRefreshing={isRefreshing}
+          siteName={isProjectTenant ? tenantName : null}
+          siteDomain={isProjectTenant ? tenantDomain : null}
         />
         <Alert variant="destructive">
           <AlertDescription className="flex items-center justify-between">
@@ -227,8 +247,8 @@ export default function Analytics() {
         isRefreshing={isRefreshing}
         showComparison={showComparison}
         onToggleComparison={() => setShowComparison(!showComparison)}
-        title="Site Analytics"
-        subtitle="Traffic and engagement data from uptrademedia.com"
+        siteName={isProjectTenant ? tenantName : null}
+        siteDomain={isProjectTenant ? tenantDomain : 'uptrademedia.com'}
       />
 
       {/* Key Metrics */}

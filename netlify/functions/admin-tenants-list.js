@@ -101,15 +101,57 @@ export async function handler(event) {
     // Enrich organizations with user counts
     const enrichedOrgs = organizations.map(org => ({
       ...org,
-      userCount: countsByOrg[org.id] || 0
+      userCount: countsByOrg[org.id] || 0,
+      isProjectTenant: false
     }))
+    
+    // Also fetch project-based tenants (Web Apps)
+    const { data: projectTenants, error: projectError } = await supabase
+      .from('projects')
+      .select(`
+        id,
+        title,
+        tenant_domain,
+        tenant_features,
+        tenant_theme_color,
+        is_tenant,
+        org_id,
+        status,
+        created_at
+      `)
+      .eq('is_tenant', true)
+      .order('created_at', { ascending: false })
+    
+    if (projectError) {
+      console.error('[AdminTenants] Error fetching project tenants:', projectError)
+    }
+    
+    // Convert project tenants to organization-like format for the switcher
+    const projectOrgs = (projectTenants || []).map(p => ({
+      id: p.id,
+      slug: p.id,
+      name: p.title,
+      domain: p.tenant_domain,
+      features: p.tenant_features || [],
+      theme: { primaryColor: p.tenant_theme_color || '#4bbf39' },
+      plan: 'managed',
+      status: p.status === 'completed' ? 'active' : 'pending',
+      created_at: p.created_at,
+      userCount: 0,
+      isProjectTenant: true,
+      projectId: p.id,
+      org_id: p.org_id || p.id
+    }))
+    
+    // Combine both types
+    const allOrgs = [...enrichedOrgs, ...projectOrgs]
 
     return {
       statusCode: 200,
       headers,
       body: JSON.stringify({
-        organizations: enrichedOrgs,
-        total: enrichedOrgs.length
+        organizations: allOrgs,
+        total: allOrgs.length
       })
     }
   } catch (error) {

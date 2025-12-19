@@ -93,9 +93,20 @@ export async function handler(event) {
       status: p.status,
       budget: p.budget ? parseFloat(p.budget) : null,
       startDate: p.start_date,
+      start_date: p.start_date, // Include snake_case for frontend compatibility
       endDate: p.end_date,
+      end_date: p.end_date, // Include snake_case for frontend compatibility
       createdAt: p.created_at,
       updatedAt: p.updated_at,
+      // Include contact_id directly for edit operations
+      contact_id: p.contact_id,
+      // Tenant fields
+      is_tenant: p.is_tenant || false,
+      tenant_domain: p.tenant_domain || null,
+      tenant_features: p.tenant_features || [],
+      tenant_tracking_id: p.tenant_tracking_id || null,
+      // Transform features array to modules object for frontend compatibility
+      tenant_modules: (p.tenant_features || []).reduce((acc, f) => ({ ...acc, [f]: true }), {}),
       // Include contact info for admin view
       ...(contact.role === 'admin' && p.contact ? {
         contact: {
@@ -104,7 +115,8 @@ export async function handler(event) {
           email: p.contact.email,
           company: p.contact.company,
           avatar: p.contact.avatar
-        }
+        },
+        client_name: p.contact.name || p.contact.company
       } : {}),
       // Include proposals summary
       proposals: (p.proposals || []).map(prop => ({

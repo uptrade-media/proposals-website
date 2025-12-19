@@ -20,13 +20,38 @@ import {
   Zap,
   Copy,
   Edit,
-  Save
+  Save,
+  Search,
+  Code,
+  Send
 } from 'lucide-react'
 import { useSeoStore } from '@/lib/seo-store'
 
+// Guard component - handles null page before any hooks run
 export default function SEOPageDetail({ page, site }) {
-  const { crawlPage } = useSeoStore()
+  // Handle null page FIRST, before any hooks
+  if (!page) {
+    return (
+      <Card>
+        <CardContent className="py-8 text-center">
+          <p className="text-muted-foreground">No page selected</p>
+        </CardContent>
+      </Card>
+    )
+  }
+
+  // Render the inner component only when page exists
+  return <SEOPageDetailInner page={page} site={site} />
+}
+
+// Inner component - safe to use hooks since page is guaranteed to exist
+function SEOPageDetailInner({ page, site }) {
+  const { crawlPage, generateSchema, requestIndexing, inspectUrl } = useSeoStore()
   const [crawling, setCrawling] = useState(false)
+  const [requestingIndexing, setRequestingIndexing] = useState(false)
+  const [generatingSchema, setGeneratingSchema] = useState(false)
+  const [inspecting, setInspecting] = useState(false)
+  const [actionMessage, setActionMessage] = useState(null)
   const [activeTab, setActiveTab] = useState('overview')
   const [editingTitle, setEditingTitle] = useState(false)
   const [editingMeta, setEditingMeta] = useState(false)
@@ -35,10 +60,53 @@ export default function SEOPageDetail({ page, site }) {
 
   const handleCrawl = async () => {
     setCrawling(true)
+    setActionMessage(null)
     try {
       await crawlPage(page.id)
+      setActionMessage({ type: 'success', text: 'Page re-crawled successfully' })
+    } catch (err) {
+      setActionMessage({ type: 'error', text: err.message || 'Failed to crawl page' })
     } finally {
       setCrawling(false)
+    }
+  }
+
+  const handleRequestIndexing = async () => {
+    setRequestingIndexing(true)
+    setActionMessage(null)
+    try {
+      await requestIndexing(site?.id, page.url)
+      setActionMessage({ type: 'success', text: 'Indexing requested - Google will process within 48 hours' })
+    } catch (err) {
+      setActionMessage({ type: 'error', text: err.message || 'Failed to request indexing' })
+    } finally {
+      setRequestingIndexing(false)
+    }
+  }
+
+  const handleGenerateSchema = async () => {
+    setGeneratingSchema(true)
+    setActionMessage(null)
+    try {
+      await generateSchema(site?.id, page.id)
+      setActionMessage({ type: 'success', text: 'Schema markup generated successfully' })
+    } catch (err) {
+      setActionMessage({ type: 'error', text: err.message || 'Failed to generate schema' })
+    } finally {
+      setGeneratingSchema(false)
+    }
+  }
+
+  const handleInspectUrl = async () => {
+    setInspecting(true)
+    setActionMessage(null)
+    try {
+      await inspectUrl(site?.id, page.url)
+      setActionMessage({ type: 'success', text: 'URL inspection complete' })
+    } catch (err) {
+      setActionMessage({ type: 'error', text: err.message || 'Failed to inspect URL' })
+    } finally {
+      setInspecting(false)
     }
   }
 
@@ -125,6 +193,32 @@ export default function SEOPageDetail({ page, site }) {
 
   return (
     <div className="space-y-6">
+      {/* Action Message Toast */}
+      {actionMessage && (
+        <div 
+          className={`flex items-center gap-2 px-4 py-3 rounded-lg ${
+            actionMessage.type === 'success' 
+              ? 'bg-green-500/20 border border-green-500/30' 
+              : 'bg-red-500/20 border border-red-500/30'
+          }`}
+        >
+          {actionMessage.type === 'success' ? (
+            <CheckCircle className="h-4 w-4 text-green-400" />
+          ) : (
+            <XCircle className="h-4 w-4 text-red-400" />
+          )}
+          <span className={`text-sm ${actionMessage.type === 'success' ? 'text-green-400' : 'text-red-400'}`}>
+            {actionMessage.text}
+          </span>
+          <button 
+            onClick={() => setActionMessage(null)} 
+            className="ml-auto text-[var(--text-tertiary)] hover:text-[var(--text-primary)]"
+          >
+            ×
+          </button>
+        </div>
+      )}
+
       {/* Page Header */}
       <div className="flex items-start justify-between">
         <div className="flex-1">
@@ -145,27 +239,79 @@ export default function SEOPageDetail({ page, site }) {
             <ExternalLink className="h-3 w-3" />
           </a>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-wrap justify-end">
+          {/* Request Indexing */}
+          <Button 
+            variant="outline" 
+            size="sm"
+            onClick={handleRequestIndexing}
+            disabled={requestingIndexing}
+            title="Request Google to index this page"
+          >
+            {requestingIndexing ? (
+              <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+            ) : (
+              <Send className="h-4 w-4 mr-2" />
+            )}
+            Request Indexing
+          </Button>
+          
+          {/* Generate Schema */}
+          <Button 
+            variant="outline" 
+            size="sm"
+            onClick={handleGenerateSchema}
+            disabled={generatingSchema}
+            title="Generate Schema.org markup for this page"
+          >
+            {generatingSchema ? (
+              <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+            ) : (
+              <Code className="h-4 w-4 mr-2" />
+            )}
+            Generate Schema
+          </Button>
+          
+          {/* Inspect URL */}
+          <Button 
+            variant="outline" 
+            size="sm"
+            onClick={handleInspectUrl}
+            disabled={inspecting}
+            title="Inspect URL in Google Search Console"
+          >
+            {inspecting ? (
+              <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+            ) : (
+              <Search className="h-4 w-4 mr-2" />
+            )}
+            Inspect URL
+          </Button>
+          
+          {/* Re-crawl */}
           <Button 
             variant="outline" 
             size="sm"
             onClick={handleCrawl}
             disabled={crawling}
+            title="Re-crawl this page for updated metadata"
           >
             {crawling ? (
               <Loader2 className="h-4 w-4 mr-2 animate-spin" />
             ) : (
               <RefreshCw className="h-4 w-4 mr-2" />
             )}
-            Re-crawl Page
+            Re-crawl
           </Button>
+          
+          {/* View Page */}
           <Button 
             variant="outline" 
             size="sm"
             onClick={() => window.open(page.url, '_blank')}
           >
             <ExternalLink className="h-4 w-4 mr-2" />
-            View Page
+            View
           </Button>
         </div>
       </div>

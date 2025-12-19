@@ -1040,10 +1040,10 @@ export default function CRMDashboard() {
               isLoading={isLoadingUsers}
               onRefresh={fetchActiveUsers}
               onResendInvite={handleResendInvite}
+              onSendEmail={handleEmailProspect}
               onViewUser={(user) => {
-                // Find matching prospect and open detail panel
-                const prospect = prospects.find(p => p.id === user.id)
-                if (prospect) openProspectDetail(prospect)
+                // Open detail panel directly with the user - they share the same structure
+                openProspectDetail(user)
               }}
             />
           </TabsContent>

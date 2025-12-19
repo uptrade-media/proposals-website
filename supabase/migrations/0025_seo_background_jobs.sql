@@ -4,7 +4,7 @@
 -- Background jobs table
 CREATE TABLE IF NOT EXISTS seo_background_jobs (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  contact_id UUID REFERENCES contacts(id) ON DELETE SET NULL,
+  contact_id UUID,  -- No FK constraint due to multi-tenant schema layout
   site_id UUID REFERENCES seo_sites(id) ON DELETE CASCADE,
   
   -- Job details

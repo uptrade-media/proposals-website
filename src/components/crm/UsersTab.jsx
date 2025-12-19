@@ -27,7 +27,7 @@ import {
 import { GlassCard, GlassAvatar, GlassEmptyState, StatusBadge } from './ui'
 
 // User Row Component
-function UserRow({ user, onView, onResendInvite, onDisable }) {
+function UserRow({ user, onView, onResendInvite, onDisable, onSendEmail }) {
   const isActive = user.account_setup === 'true' || user.account_setup === true
   const hasGoogle = !!user.google_id
 
@@ -83,7 +83,7 @@ function UserRow({ user, onView, onResendInvite, onDisable }) {
                 <Eye className="h-4 w-4 mr-2" />
                 View Details
               </DropdownMenuItem>
-              <DropdownMenuItem>
+              <DropdownMenuItem onClick={() => onSendEmail?.(user)}>
                 <Mail className="h-4 w-4 mr-2" />
                 Send Email
               </DropdownMenuItem>
@@ -152,7 +152,8 @@ export default function UsersTab({
   onRefresh,
   onViewUser,
   onResendInvite,
-  onDisableUser
+  onDisableUser,
+  onSendEmail
 }) {
   const activeUsers = users.filter(u => u.account_setup === 'true' || u.account_setup === true)
   // Only show pending users who have actually been invited (have a magic_link_token)
@@ -208,6 +209,7 @@ export default function UsersTab({
                   user={user}
                   onView={onViewUser}
                   onDisable={onDisableUser}
+                  onSendEmail={onSendEmail}
                 />
               ))}
             </div>

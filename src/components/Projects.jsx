@@ -59,6 +59,7 @@ import {
 import useProjectsStore from '@/lib/projects-store'
 import useAuthStore from '@/lib/auth-store'
 import api from '@/lib/api'
+import TenantSetupWizard from './TenantSetupWizard'
 
 // Project status configuration
 const STATUS_CONFIG = {
@@ -193,19 +194,6 @@ const Projects = ({ onNavigate }) => {
     end_date: ''
   })
   
-  // Tenant conversion state
-  const [tenantForm, setTenantForm] = useState({
-    domain: '',
-    modules: {
-      analytics: true,
-      blog: false,
-      crm: true,
-      email_campaigns: false,
-      seo: true
-    },
-    themeColor: '#4bbf39'
-  })
-  const [tenantSaving, setTenantSaving] = useState(false)
   const [copied, setCopied] = useState(false)
 
   // Clients for dropdown
@@ -367,47 +355,18 @@ const Projects = ({ onNavigate }) => {
     setDetailsDialogOpen(true)
   }
 
-  // Tenant conversion
+  // Tenant conversion - now uses wizard
   const openConvertDialog = (project) => {
     setSelectedProject(project)
-    setTenantForm({
-      domain: project.tenant_domain || '',
-      modules: project.tenant_modules || {
-        analytics: true,
-        blog: false,
-        crm: true,
-        email_campaigns: false,
-        seo: true
-      },
-      themeColor: project.tenant_theme_color || '#4bbf39'
-    })
     setConvertDialogOpen(true)
   }
-
-  const handleConvertToTenant = async () => {
-    if (!selectedProject) return
-    setTenantSaving(true)
-    try {
-      const result = await updateProject(selectedProject.id, {
-        is_tenant: true,
-        tenant_domain: tenantForm.domain,
-        tenant_modules: tenantForm.modules,
-        tenant_theme_color: tenantForm.themeColor,
-        tenant_created_at: new Date().toISOString()
-      })
-      if (result.success) {
-        toast.success('🎉 Project converted to tenant!')
-        setConvertDialogOpen(false)
-        setSelectedProject(null)
-        setActiveTab('tenants')
-      } else {
-        toast.error(result.error || 'Conversion failed')
-      }
-    } catch (err) {
-      toast.error('Failed to convert project')
-    } finally {
-      setTenantSaving(false)
-    }
+  
+  // Handle tenant wizard completion
+  const handleTenantComplete = (result) => {
+    toast.success(`🎉 ${result.organization?.name || 'Tenant'} created successfully!`)
+    fetchProjects() // Refresh projects list
+    setSelectedProject(null)
+    setActiveTab('tenants')
   }
 
   const generateTrackingScript = (project) => {
@@ -470,9 +429,43 @@ const Projects = ({ onNavigate }) => {
     const statusConfig = STATUS_CONFIG[project.status] || STATUS_CONFIG.planning
     const StatusIcon = statusConfig.icon
     const deadlineStatus = getDeadlineStatus(project.end_date)
+    
+    // Generate screenshot URL using a public screenshot service
+    // microlink.io provides free screenshot API
+    const getWebsitePreviewUrl = (domain) => {
+      if (!domain) return null
+      const fullUrl = domain.startsWith('http') ? domain : `https://${domain}`
+      // Using microlink screenshot API - free tier
+      return `https://api.microlink.io/?url=${encodeURIComponent(fullUrl)}&screenshot=true&meta=false&embed=screenshot.url`
+    }
 
     return (
-      <Card className="group hover:shadow-lg transition-all duration-200 border-[var(--glass-border)]">
+      <Card className="group hover:shadow-lg transition-all duration-200 border-[var(--glass-border)] overflow-hidden">
+        {/* Website Preview for Web Apps with domain */}
+        {project.is_tenant && project.tenant_domain && (
+          <div className="relative h-32 bg-[var(--surface-secondary)] overflow-hidden">
+            <img
+              src={`https://image.thum.io/get/width/400/crop/300/${project.tenant_domain.startsWith('http') ? project.tenant_domain : 'https://' + project.tenant_domain}`}
+              alt={`${project.title} website preview`}
+              className="w-full h-full object-cover object-top opacity-90 group-hover:opacity-100 transition-opacity"
+              loading="lazy"
+              onError={(e) => {
+                // Hide image on error and show fallback
+                e.target.style.display = 'none'
+              }}
+            />
+            {/* Gradient overlay */}
+            <div className="absolute inset-0 bg-gradient-to-t from-[var(--surface-primary)] via-transparent to-transparent" />
+            {/* Live badge if site appears accessible */}
+            <div className="absolute top-2 right-2">
+              <Badge variant="secondary" className="text-xs bg-black/50 text-white border-0">
+                <Globe className="w-3 h-3 mr-1" />
+                {project.tenant_domain}
+              </Badge>
+            </div>
+          </div>
+        )}
+        
         <CardHeader className="pb-3">
           <div className="flex items-start justify-between gap-2">
             <div className="flex-1 min-w-0">
@@ -995,124 +988,13 @@ const Projects = ({ onNavigate }) => {
         </DialogContent>
       </Dialog>
 
-      {/* Convert to Tenant Dialog */}
-      <Dialog open={convertDialogOpen} onOpenChange={setConvertDialogOpen}>
-        <DialogContent className="max-w-lg">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              <Building2 className="w-5 h-5 text-emerald-600" />
-              Convert to Tenant Portal
-            </DialogTitle>
-            <DialogDescription>
-              Set up {selectedProject?.title} as a tenant with their own portal access
-            </DialogDescription>
-          </DialogHeader>
-          
-          <div className="space-y-6">
-            {/* Domain */}
-            <div className="space-y-2">
-              <Label>Client Website Domain</Label>
-              <div className="flex items-center gap-2">
-                <Globe className="w-4 h-4 text-[var(--text-tertiary)]" />
-                <Input
-                  value={tenantForm.domain}
-                  onChange={(e) => setTenantForm(prev => ({ ...prev, domain: e.target.value }))}
-                  placeholder="example.com"
-                />
-              </div>
-              <p className="text-xs text-[var(--text-tertiary)]">
-                The domain where the tracking script will be installed
-              </p>
-            </div>
-
-            <Separator />
-
-            {/* Module Selection */}
-            <div className="space-y-4">
-              <Label>Portal Modules</Label>
-              <p className="text-sm text-[var(--text-secondary)]">
-                Select which features this client can access in their portal
-              </p>
-              
-              <div className="space-y-3">
-                {TENANT_MODULES.map((module) => {
-                  const ModuleIcon = module.icon
-                  return (
-                    <div 
-                      key={module.key}
-                      className={`flex items-start gap-4 p-3 rounded-lg border transition-colors ${
-                        tenantForm.modules[module.key] 
-                          ? 'border-emerald-200 bg-emerald-50/50' 
-                          : 'border-[var(--glass-border)]'
-                      }`}
-                    >
-                      <Switch
-                        checked={tenantForm.modules[module.key]}
-                        onCheckedChange={(checked) => 
-                          setTenantForm(prev => ({
-                            ...prev,
-                            modules: { ...prev.modules, [module.key]: checked }
-                          }))
-                        }
-                      />
-                      <div className="flex-1">
-                        <div className="flex items-center gap-2">
-                          <ModuleIcon className="w-4 h-4 text-[var(--text-secondary)]" />
-                          <span className="font-medium">{module.label}</span>
-                          {module.recommended && (
-                            <Badge variant="secondary" className="text-xs">Recommended</Badge>
-                          )}
-                        </div>
-                        <p className="text-sm text-[var(--text-secondary)] mt-1">
-                          {module.description}
-                        </p>
-                      </div>
-                    </div>
-                  )
-                })}
-              </div>
-            </div>
-
-            <Separator />
-
-            {/* Theme Color */}
-            <div className="space-y-2">
-              <Label>Brand Color</Label>
-              <div className="flex items-center gap-3">
-                <input
-                  type="color"
-                  value={tenantForm.themeColor}
-                  onChange={(e) => setTenantForm(prev => ({ ...prev, themeColor: e.target.value }))}
-                  className="w-10 h-10 rounded border cursor-pointer"
-                />
-                <Input
-                  value={tenantForm.themeColor}
-                  onChange={(e) => setTenantForm(prev => ({ ...prev, themeColor: e.target.value }))}
-                  className="w-28"
-                />
-              </div>
-            </div>
-          </div>
-
-          <DialogFooter className="mt-6">
-            <Button variant="outline" onClick={() => setConvertDialogOpen(false)}>
-              Cancel
-            </Button>
-            <Button 
-              variant="glass-primary" 
-              onClick={handleConvertToTenant}
-              disabled={tenantSaving}
-            >
-              {tenantSaving ? (
-                <Loader2 className="w-4 h-4 animate-spin mr-2" />
-              ) : (
-                <Rocket className="w-4 h-4 mr-2" />
-              )}
-              Create Tenant Portal
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      {/* Tenant Setup Wizard - replaces inline convert dialog */}
+      <TenantSetupWizard
+        open={convertDialogOpen}
+        onOpenChange={setConvertDialogOpen}
+        project={selectedProject}
+        onComplete={handleTenantComplete}
+      />
 
       {/* Project Details Dialog */}
       <Dialog open={detailsDialogOpen} onOpenChange={setDetailsDialogOpen}>

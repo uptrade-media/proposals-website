@@ -403,6 +403,84 @@ export const useSeoStore = create((set, get) => ({
     }
   },
 
+  // ==================== SIGNAL AI ====================
+  // Signal is the premium AI layer - learning, memory, auto-fix
+  
+  signalLearning: null,
+  signalLearningLoading: false,
+  
+  // Fetch Signal learning patterns (wins/losses)
+  fetchSignalLearning: async (siteId, period = '30d') => {
+    set({ signalLearningLoading: true })
+    try {
+      const response = await api.get(`/.netlify/functions/seo-ai-measure-outcomes?siteId=${siteId}&period=${period}`)
+      set({ 
+        signalLearning: response.data,
+        signalLearningLoading: false
+      })
+      return response.data
+    } catch (error) {
+      set({ signalLearningLoading: false })
+      throw error
+    }
+  },
+  
+  // Apply all auto-fixable recommendations
+  applySignalAutoFixes: async (siteId, recommendationIds = null) => {
+    try {
+      const response = await api.post('/.netlify/functions/seo-auto-optimize', {
+        siteId,
+        recommendationIds, // If null, applies all safe auto-fixable
+        safeOnly: true
+      })
+      
+      // Refresh recommendations after applying
+      await get().fetchAiRecommendations(siteId)
+      
+      return response.data
+    } catch (error) {
+      throw error
+    }
+  },
+  
+  // Get Signal suggestions for a specific page
+  getSignalSuggestions: async (pageId, field = 'all') => {
+    try {
+      const response = await api.post('/.netlify/functions/seo-ai-recommendations', {
+        pageId,
+        field, // 'title', 'meta', 'schema', 'all'
+        action: 'generate'
+      })
+      return response.data.suggestions || []
+    } catch (error) {
+      throw error
+    }
+  },
+  
+  // Update page metadata (title, description, schema)
+  updatePageMetadata: async (pageId, updates) => {
+    try {
+      const response = await api.put('/.netlify/functions/seo-pages-update', {
+        pageId,
+        ...updates
+      })
+      
+      // Update local state
+      set(state => ({
+        pages: state.pages.map(p => 
+          p.id === pageId ? { ...p, ...updates } : p
+        ),
+        currentPage: state.currentPage?.id === pageId 
+          ? { ...state.currentPage, ...updates } 
+          : state.currentPage
+      }))
+      
+      return response.data.page
+    } catch (error) {
+      throw error
+    }
+  },
+
   // Fetch existing AI recommendations
   fetchAiRecommendations: async (siteId, options = {}) => {
     set({ aiRecommendationsLoading: true, aiRecommendationsError: null })
@@ -1763,3 +1841,53 @@ export const selectAppliedRecommendations = (state) =>
 
 export const selectIsSiteTrained = (state) =>
   state.aiTrainingStatus === 'complete' && state.siteKnowledge !== null
+
+// ==================== SIGNAL ACCESS HOOK ====================
+// Check if Signal (premium AI features) is enabled for the current site
+
+export const useSignalAccess = () => {
+  const currentSite = useSeoStore(state => state.currentSite)
+  return currentSite?.signal_enabled ?? false
+}
+
+export const useSignalStatus = () => {
+  const currentSite = useSeoStore(state => state.currentSite)
+  
+  if (!currentSite?.signal_enabled) {
+    return { 
+      enabled: false, 
+      reason: 'not_subscribed',
+      threadId: null,
+      analysisCount: 0,
+      lastAnalysis: null
+    }
+  }
+  
+  return {
+    enabled: true,
+    enabledAt: currentSite.signal_enabled_at,
+    threadId: currentSite.signal_thread_id,
+    analysisCount: currentSite.signal_analysis_count || 0,
+    lastAnalysis: currentSite.signal_last_analysis_at
+  }
+}
+
+// Signal-specific selectors
+export const selectSignalRecommendations = (state) =>
+  state.aiRecommendations.filter(r => r.status === 'pending')
+
+export const selectSignalAutoFixable = (state) =>
+  state.aiRecommendations.filter(r => 
+    r.status === 'pending' && r.auto_fixable === true && r.confidence >= 0.8
+  )
+
+export const selectSignalHighConfidence = (state) =>
+  state.aiRecommendations.filter(r => 
+    r.status === 'pending' && r.confidence >= 0.9
+  )
+
+export const selectSignalWins = (state) =>
+  state.aiRecommendations.filter(r => r.status === 'applied' && r.outcome === 'win')
+
+export const selectSignalLosses = (state) =>
+  state.aiRecommendations.filter(r => r.status === 'applied' && r.outcome === 'loss')

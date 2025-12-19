@@ -7,13 +7,28 @@ import axios from 'axios'
 let isCheckingAuth = false
 let authCheckPromise = null
 
-// Configure axios to include organization header
-axios.interceptors.request.use(config => {
+// Configure axios to include organization header and auth token
+axios.interceptors.request.use(async config => {
   const state = useAuthStore.getState()
+  
+  // Add organization ID header
   if (state.currentOrg?.id) {
     config.headers['X-Organization-Id'] = state.currentOrg.id
   }
+  
+  // Add auth token
+  try {
+    const { data } = await getSession()
+    if (data?.session?.access_token) {
+      config.headers['Authorization'] = `Bearer ${data.session.access_token}`
+    }
+  } catch (error) {
+    console.error('Failed to get session for axios request:', error)
+  }
+  
   return config
+}, error => {
+  return Promise.reject(error)
 })
 
 // Supabase Auth integration with multi-tenant support
@@ -133,6 +148,37 @@ const useAuthStore = create(
       // Fetch organization context from backend
       fetchOrganizationContext: async (accessToken) => {
         try {
+          // Check if we have a stored project-based tenant context
+          const storedTenantProject = localStorage.getItem('currentTenantProject')
+          
+          if (storedTenantProject) {
+            try {
+              const project = JSON.parse(storedTenantProject)
+              console.log('[AuthStore] Restoring project tenant context:', project.title, 'features:', project.features)
+              
+              // Restore the project-based tenant as currentOrg
+              set({
+                currentOrg: {
+                  id: project.id,
+                  org_id: project.org_id || project.id,
+                  slug: project.id,
+                  name: project.title,
+                  domain: project.domain,
+                  features: project.features || [],
+                  theme: { primaryColor: '#4bbf39' },
+                  plan: 'managed',
+                  status: 'active',
+                  isProjectTenant: true
+                },
+                isSuperAdmin: true // User who switched is admin
+              })
+              return // Don't overwrite with backend org
+            } catch (e) {
+              console.error('[AuthStore] Failed to parse stored tenant project:', e)
+              localStorage.removeItem('currentTenantProject')
+            }
+          }
+          
           // The backend's getAuthenticatedUser already returns org context
           // We'll call a lightweight endpoint to get org info
           const response = await axios.get('/.netlify/functions/auth-me', {
@@ -143,11 +189,17 @@ const useAuthStore = create(
           
           const { organization, availableOrgs, isSuperAdmin } = response.data
           
+          console.log('[AuthStore] auth-me response - org:', organization?.name, 'isSuperAdmin:', isSuperAdmin)
+          
+          // Always set isSuperAdmin, even if no org context
+          set({ 
+            isSuperAdmin: isSuperAdmin || false
+          })
+          
           if (organization) {
             set({ 
               currentOrg: organization,
-              availableOrgs: availableOrgs || [],
-              isSuperAdmin: isSuperAdmin || false
+              availableOrgs: availableOrgs || []
             })
           }
         } catch (error) {
@@ -186,8 +238,12 @@ const useAuthStore = create(
           })
           
           // Store project context if switching to a project-based tenant
+          // OR clear it if switching to a regular organization
           if (project) {
             localStorage.setItem('currentTenantProject', JSON.stringify(project))
+          } else {
+            // Switching to regular org - clear any project tenant context
+            localStorage.removeItem('currentTenantProject')
           }
           
           // Reload the page to apply new org context everywhere

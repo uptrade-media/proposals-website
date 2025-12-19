@@ -481,7 +481,10 @@ const Billing = () => {
     }
   }
 
-  const isAdmin = user?.role === 'admin'
+  const { currentOrg } = useAuthStore()
+  const isProjectTenant = currentOrg?.isProjectTenant === true
+  const isAdmin = user?.role === 'admin' && !isProjectTenant
+  const tenantName = currentOrg?.name || 'Your Account'
 
   return (
     <div className="space-y-6">
@@ -489,7 +492,11 @@ const Billing = () => {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold text-[var(--text-primary)]">Billing</h1>
-          <p className="text-[var(--text-secondary)]">Manage invoices and billing information</p>
+          <p className="text-[var(--text-secondary)]">
+            {isProjectTenant 
+              ? `Invoices and payments for ${tenantName}` 
+              : 'Manage invoices and billing information'}
+          </p>
         </div>
         {isAdmin && (
           <div className="flex gap-2">

@@ -336,8 +336,11 @@ function ClientProposalRow({ proposal, onView, showSignedDate = false }) {
 }
 
 const Proposals = ({ onNavigate }) => {
-  const { user } = useAuthStore()
+  const { user, currentOrg } = useAuthStore()
   const isAdmin = user?.role === 'admin'
+  // Project tenants should see proposals sent TO them, but not create/edit/delete
+  const isProjectTenant = currentOrg?.isProjectTenant === true
+  const canManageProposals = isAdmin && !isProjectTenant
   
   const hasFetchedRef = useRef(false)
   const [proposals, setProposals] = useState([])
@@ -434,8 +437,9 @@ const Proposals = ({ onNavigate }) => {
 
   // If viewing a proposal, show appropriate view based on role
   if (viewingProposal) {
-    // Admin sees proposal with analytics panel
-    if (isAdmin) {
+    // Project tenants see proposals as clients (view/sign only, no editing)
+    // Admins (not in tenant context) see with analytics panel
+    if (canManageProposals) {
       return (
         <ProposalViewWithAnalytics
           proposal={viewingProposal}
@@ -448,7 +452,7 @@ const Proposals = ({ onNavigate }) => {
       )
     }
     
-    // Client sees proposal template (can sign)
+    // Client or project tenant sees proposal template (can sign)
     return (
       <ProposalTemplate
         proposal={viewingProposal}
@@ -461,8 +465,8 @@ const Proposals = ({ onNavigate }) => {
     )
   }
 
-  // Client view
-  if (!isAdmin) {
+  // Client view OR project tenant view (they view proposals sent TO them)
+  if (!isAdmin || isProjectTenant) {
     const activeProposals = proposals.filter(p => !['signed', 'accepted', 'declined'].includes(p.status))
     const signedProposals = proposals.filter(p => ['signed', 'accepted'].includes(p.status))
 

@@ -8,9 +8,16 @@
  * - Canonical issues → Fixes canonical URL in managed metadata
  * - Robots blocking → Updates robots meta in managed metadata
  * - Orphan pages → Flags for internal linking
+ * - Not-indexed URLs → Bulk management from seo_not_indexed_urls table
  * 
  * POST /api/seo-gsc-fix
  * Body: { siteId, action, issues?, url?, fix? }
+ * 
+ * Actions:
+ * - get-not-indexed: Get all not-indexed URLs from the table
+ * - bulk-remove: Mark multiple URLs for removal
+ * - bulk-redirect: Create redirects for multiple URLs
+ * - apply-recommendation: Apply the AI recommendation for a URL
  */
 
 import { createSupabaseAdmin, getAuthenticatedUser } from './utils/supabase.js'
@@ -47,9 +54,9 @@ export async function handler(event) {
       // Get pages with indexing issues
       const { data: issuePages, error } = await supabase
         .from('seo_pages')
-        .select('id, url, path, indexing_status, indexing_verdict, http_status, has_noindex, canonical_url, managed_canonical_url, managed_robots_meta')
+        .select('id, url, path, indexing_status, indexing_verdict, http_status, has_noindex, canonical_url, managed_canonical_url, managed_robots_meta, discovery_source')
         .eq('site_id', siteId)
-        .or('indexing_status.neq.Indexed,http_status.gte.400,has_noindex.eq.true')
+        .or('indexing_status.neq.Indexed,http_status.gte.400,has_noindex.eq.true,discovery_source.eq.gsc')
         .order('http_status', { ascending: false })
         .limit(100)
 
@@ -61,8 +68,16 @@ export async function handler(event) {
         .select('*')
         .eq('site_id', siteId)
 
+      // Get not-indexed URLs from the dedicated table
+      const { data: notIndexedUrls } = await supabase
+        .from('seo_not_indexed_urls')
+        .select('*')
+        .eq('site_id', siteId)
+        .order('last_checked_at', { ascending: false })
+
       // Categorize issues
       const categorized = {
+        gscDiscovered: issuePages?.filter(p => p.discovery_source === 'gsc') || [], // Not in sitemap
         serverErrors: issuePages?.filter(p => p.http_status >= 500) || [],
         notFound: issuePages?.filter(p => p.http_status === 404) || [],
         noindex: issuePages?.filter(p => p.has_noindex && p.indexing_verdict !== 'PASS') || [],
@@ -83,13 +98,15 @@ export async function handler(event) {
         body: JSON.stringify({
           issues: categorized,
           redirects: redirects || [],
-          total: issuePages?.length || 0
+          notIndexedUrls: notIndexedUrls || [],
+          total: issuePages?.length || 0,
+          notIndexedTotal: notIndexedUrls?.length || 0
         })
       }
     }
 
     // POST - Apply fixes
-    const { siteId, action, issues, url, fix } = JSON.parse(event.body || '{}')
+    const { siteId, action, issues, url, fix, urls } = JSON.parse(event.body || '{}')
 
     if (!siteId) {
       return { statusCode: 400, headers, body: JSON.stringify({ error: 'siteId required' }) }
@@ -239,6 +256,22 @@ export async function handler(event) {
                   results.failed.push({ url: issue.url, error: bulkCanonicalErr.message })
                 }
                 break
+
+              case 'request-removal':
+                const { error: bulkRemovalErr } = await supabase
+                  .from('seo_pages')
+                  .update({ 
+                    index_removal_requested_at: new Date().toISOString(),
+                    index_status: 'removal_requested'
+                  })
+                  .eq('site_id', siteId)
+                  .eq('url', issue.url)
+                if (!bulkRemovalErr) {
+                  results.applied.push({ type: 'request-removal', url: issue.url })
+                } else {
+                  results.failed.push({ url: issue.url, error: bulkRemovalErr.message })
+                }
+                break
             }
           } catch (err) {
             results.failed.push({ url: issue.url || issue.fromPath, error: err.message })
@@ -270,19 +303,55 @@ export async function handler(event) {
         })
         break
 
+      case 'request-removal':
+        // Request removal of GSC-discovered pages that aren't in sitemap
+        if (!url) {
+          return { statusCode: 400, headers, body: JSON.stringify({ error: 'url required' }) }
+        }
+        
+        // Mark for removal - the actual removal should be done via GSC's Removals tool
+        // Google doesn't have an API for URL removal anymore
+        const { error: removalError } = await supabase
+          .from('seo_pages')
+          .update({ 
+            index_removal_requested_at: new Date().toISOString(),
+            index_status: 'removal_requested'
+          })
+          .eq('site_id', siteId)
+          .eq('url', url)
+
+        if (removalError) throw removalError
+        results.applied.push({ 
+          type: 'request-removal', 
+          url,
+          note: 'Flagged for removal. Submit removal request in Google Search Console > Removals tool.'
+        })
+        break
+
       case 'generate-fixes':
         // AI-generate fix suggestions for all issues
         const { data: allIssues } = await supabase
           .from('seo_pages')
-          .select('id, url, path, indexing_status, indexing_verdict, http_status, has_noindex')
+          .select('id, url, path, indexing_status, indexing_verdict, http_status, has_noindex, discovery_source')
           .eq('site_id', siteId)
-          .or('indexing_status.neq.Indexed,http_status.gte.400,has_noindex.eq.true')
+          .or('indexing_status.neq.Indexed,http_status.gte.400,has_noindex.eq.true,discovery_source.eq.gsc')
           .limit(50)
 
         const suggestions = []
         
         for (const page of allIssues || []) {
-          if (page.http_status === 404) {
+          if (page.discovery_source === 'gsc') {
+            // GSC-discovered pages that aren't in sitemap should be removed
+            suggestions.push({
+              url: page.url,
+              issue: 'Found in GSC but not in sitemap',
+              suggestedFix: 'request-removal',
+              suggestion: {
+                action: 'Request removal from Google index - page not in NextJS sitemap'
+              },
+              priority: 'high'
+            })
+          } else if (page.http_status === 404) {
             // Suggest redirect to similar page or homepage
             suggestions.push({
               url: page.url,
@@ -323,6 +392,190 @@ export async function handler(event) {
             total: suggestions.length
           })
         }
+
+      case 'get-not-indexed':
+        // Get all not-indexed URLs from the dedicated table
+        const { data: notIndexed, error: niError } = await supabase
+          .from('seo_not_indexed_urls')
+          .select('*')
+          .eq('site_id', siteId)
+          .order('last_checked_at', { ascending: false })
+
+        if (niError) throw niError
+
+        // Group by action status
+        const grouped = {
+          pending: notIndexed?.filter(u => u.action === 'pending') || [],
+          remove: notIndexed?.filter(u => u.action === 'remove') || [],
+          redirect: notIndexed?.filter(u => u.action === 'redirect') || [],
+          keep: notIndexed?.filter(u => u.action === 'keep') || [],
+          fixed: notIndexed?.filter(u => u.action === 'fixed') || []
+        }
+
+        return {
+          statusCode: 200,
+          headers,
+          body: JSON.stringify({
+            urls: notIndexed || [],
+            grouped,
+            total: notIndexed?.length || 0
+          })
+        }
+
+      case 'bulk-mark-remove':
+        // Mark multiple URLs for removal from index
+        if (!urls || !Array.isArray(urls) || urls.length === 0) {
+          return { statusCode: 400, headers, body: JSON.stringify({ error: 'urls array required' }) }
+        }
+
+        for (const urlItem of urls) {
+          try {
+            const { error: markErr } = await supabase
+              .from('seo_not_indexed_urls')
+              .update({
+                action: 'remove',
+                removal_requested_at: new Date().toISOString(),
+                updated_at: new Date().toISOString()
+              })
+              .eq('site_id', siteId)
+              .eq('url', urlItem.url || urlItem)
+
+            if (!markErr) {
+              results.applied.push({ type: 'mark-remove', url: urlItem.url || urlItem })
+            } else {
+              results.failed.push({ url: urlItem.url || urlItem, error: markErr.message })
+            }
+          } catch (err) {
+            results.failed.push({ url: urlItem.url || urlItem, error: err.message })
+          }
+        }
+        break
+
+      case 'bulk-redirect':
+        // Create redirects for multiple not-indexed URLs
+        if (!urls || !Array.isArray(urls) || urls.length === 0) {
+          return { statusCode: 400, headers, body: JSON.stringify({ error: 'urls array required with toPath' }) }
+        }
+
+        for (const urlItem of urls) {
+          try {
+            const fromUrl = urlItem.url || urlItem
+            const toPath = urlItem.toPath || '/'
+            
+            // Parse the URL to get the path
+            let fromPath
+            try {
+              const parsed = new URL(fromUrl)
+              fromPath = parsed.pathname
+            } catch {
+              fromPath = fromUrl.startsWith('/') ? fromUrl : `/${fromUrl}`
+            }
+
+            // Create redirect
+            const { error: redirectErr } = await supabase
+              .from('seo_redirects')
+              .insert({
+                site_id: siteId,
+                from_path: fromPath,
+                to_path: toPath,
+                status_code: 301,
+                reason: 'Not-indexed URL redirect',
+                created_by: contact.id
+              })
+
+            if (!redirectErr) {
+              // Update the not-indexed URL status
+              await supabase
+                .from('seo_not_indexed_urls')
+                .update({
+                  action: 'redirect',
+                  redirect_to: toPath,
+                  updated_at: new Date().toISOString()
+                })
+                .eq('site_id', siteId)
+                .eq('url', fromUrl)
+
+              results.applied.push({ type: 'redirect', from: fromPath, to: toPath })
+            } else {
+              results.failed.push({ url: fromUrl, error: redirectErr.message })
+            }
+          } catch (err) {
+            results.failed.push({ url: urlItem.url || urlItem, error: err.message })
+          }
+        }
+        break
+
+      case 'mark-keep':
+        // Mark a URL to keep (don't remove, will be indexed eventually)
+        if (!url) {
+          return { statusCode: 400, headers, body: JSON.stringify({ error: 'url required' }) }
+        }
+
+        const { error: keepErr } = await supabase
+          .from('seo_not_indexed_urls')
+          .update({
+            action: 'keep',
+            updated_at: new Date().toISOString()
+          })
+          .eq('site_id', siteId)
+          .eq('url', url)
+
+        if (keepErr) throw keepErr
+        results.applied.push({ type: 'mark-keep', url })
+        break
+
+      case 'apply-recommendation':
+        // Apply the AI recommendation for a specific not-indexed URL
+        if (!url) {
+          return { statusCode: 400, headers, body: JSON.stringify({ error: 'url required' }) }
+        }
+
+        // Get the URL's recommendation
+        const { data: urlData, error: urlErr } = await supabase
+          .from('seo_not_indexed_urls')
+          .select('*')
+          .eq('site_id', siteId)
+          .eq('url', url)
+          .single()
+
+        if (urlErr) throw urlErr
+        if (!urlData) {
+          return { statusCode: 404, headers, body: JSON.stringify({ error: 'URL not found' }) }
+        }
+
+        // Apply based on recommendation
+        if (urlData.recommendation?.includes('Remove') || urlData.recommendation?.includes('removal')) {
+          await supabase
+            .from('seo_not_indexed_urls')
+            .update({
+              action: 'remove',
+              removal_requested_at: new Date().toISOString(),
+              updated_at: new Date().toISOString()
+            })
+            .eq('id', urlData.id)
+          results.applied.push({ type: 'mark-remove', url, reason: urlData.recommendation })
+        } else if (urlData.recommendation?.includes('redirect') || urlData.recommendation?.includes('Redirect')) {
+          // Mark for redirect - user needs to specify destination
+          await supabase
+            .from('seo_not_indexed_urls')
+            .update({
+              action: 'redirect',
+              updated_at: new Date().toISOString()
+            })
+            .eq('id', urlData.id)
+          results.applied.push({ type: 'mark-redirect', url, reason: urlData.recommendation })
+        } else {
+          // Default: mark as keep and improve content
+          await supabase
+            .from('seo_not_indexed_urls')
+            .update({
+              action: 'keep',
+              updated_at: new Date().toISOString()
+            })
+            .eq('id', urlData.id)
+          results.applied.push({ type: 'mark-keep', url, reason: urlData.recommendation })
+        }
+        break
 
       default:
         return { statusCode: 400, headers, body: JSON.stringify({ error: `Unknown action: ${action}` }) }

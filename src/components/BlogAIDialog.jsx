@@ -1,42 +1,124 @@
 // src/components/BlogAIDialog.jsx
-import React, { useState } from 'react'
+import React, { useState, useEffect, useRef } from 'react'
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from './ui/dialog'
 import { Button } from './ui/button'
 import { Input } from './ui/input'
 import { Label } from './ui/label'
 import { Textarea } from './ui/textarea'
-import { Sparkles, Loader2, Upload, X } from 'lucide-react'
+import { Sparkles, Loader2, Upload, X, CheckCircle } from 'lucide-react'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select'
 import { Checkbox } from './ui/checkbox'
 import api from '../lib/api'
 import { createClient } from '@supabase/supabase-js'
+import useAuthStore from '@/lib/auth-store'
 
 const supabase = createClient(
   import.meta.env.VITE_SUPABASE_URL,
   import.meta.env.VITE_SUPABASE_ANON_KEY
 )
 
+// Tenant-specific category configurations
+const CATEGORY_CONFIGS = {
+  // Default (Uptrade Media)
+  default: {
+    categories: [
+      { value: 'insights', label: 'Insights' },
+      { value: 'news', label: 'News' },
+      { value: 'guides', label: 'Guides' },
+      { value: 'case-studies', label: 'Case Studies' },
+      { value: 'seo', label: 'SEO' },
+      { value: 'web-design', label: 'Web Design' },
+      { value: 'marketing', label: 'Digital Marketing' },
+    ],
+    defaultCategory: 'insights',
+    defaultAuthor: 'Uptrade Media',
+    defaultAudience: 'Small business owners and marketing professionals',
+    brandDescription: 'A digital marketing agency'
+  },
+  // God's Workout Apparel
+  'gods-workout-apparel': {
+    categories: [
+      { value: 'faith', label: 'Faith & Devotion' },
+      { value: 'training', label: 'Training & Fitness' },
+      { value: 'discipline', label: 'Discipline' },
+      { value: 'lifestyle', label: 'Lifestyle' },
+      { value: 'scripture', label: 'Scripture Study' },
+      { value: 'motivation', label: 'Motivation' },
+      { value: 'nutrition', label: 'Nutrition' },
+    ],
+    defaultCategory: 'discipline',
+    defaultAuthor: "God's Workout Apparel",
+    defaultAudience: 'Christian athletes and fitness enthusiasts seeking to honor God through physical discipline',
+    brandDescription: 'Faith-driven fitness apparel brand'
+  }
+}
+
+// Helper to get config based on org
+function getTenantConfig(org) {
+  if (!org) return CATEGORY_CONFIGS.default
+  
+  // Check by slug or name
+  const slug = org.slug?.toLowerCase() || ''
+  const name = org.name?.toLowerCase() || ''
+  
+  if (slug.includes('gods-workout') || slug.includes('gwa') || name.includes("god's workout")) {
+    return CATEGORY_CONFIGS['gods-workout-apparel']
+  }
+  
+  return CATEGORY_CONFIGS.default
+}
+
 export default function BlogAIDialog({ onSuccess }) {
+  const { currentOrg } = useAuthStore()
+  const tenantConfig = getTenantConfig(currentOrg)
+  
   const [isOpen, setIsOpen] = useState(false)
   const [isGenerating, setIsGenerating] = useState(false)
+  const [generationStage, setGenerationStage] = useState(0) // 0: idle, 1: writing content, 2: SEO metadata, 3: saving, 4: complete
   const [isUploading, setIsUploading] = useState(false)
   const [dragActive, setDragActive] = useState(false)
   const [uploadedImage, setUploadedImage] = useState(null)
+  const [imagePreview, setImagePreview] = useState(null)
   const [formData, setFormData] = useState({
     topic: '',
-    category: 'insights',
+    category: tenantConfig.defaultCategory,
     keywords: '',
     keyPoints: '',
-    targetAudience: 'Small business owners and marketing professionals',
+    targetAudience: tenantConfig.defaultAudience,
     wordCount: '1200-1500',
     tone: 'professional',
     featuredImage: '',
-    author: 'Uptrade Media',
+    author: tenantConfig.defaultAuthor,
     publishImmediately: false,
     includeStats: true,
     includeExamples: true,
     includeFAQ: false
   })
+  
+  const GENERATION_STAGES = [
+    { label: 'Starting...', icon: '🚀' },
+    { label: 'Writing content...', icon: '✍️' },
+    { label: 'Generating SEO metadata...', icon: '🔍' },
+    { label: 'Saving to database...', icon: '💾' },
+    { label: 'Complete!', icon: '✅' }
+  ]
+  
+  // Simulate stage progression during generation
+  useEffect(() => {
+    if (!isGenerating) {
+      setGenerationStage(0)
+      return
+    }
+    
+    // Stage 1 after 1s, Stage 2 after 15s, Stage 3 after 25s
+    const timers = [
+      setTimeout(() => setGenerationStage(1), 1000),
+      setTimeout(() => setGenerationStage(2), 15000),
+      setTimeout(() => setGenerationStage(3), 25000),
+    ]
+    
+    return () => timers.forEach(clearTimeout)
+  }, [isGenerating])
 
   const handleDrag = (e) => {
     e.preventDefault()
@@ -79,6 +161,17 @@ export default function BlogAIDialog({ onSuccess }) {
       return
     }
 
+    // Create immediate local preview
+    const reader = new FileReader()
+    reader.onload = (e) => {
+      setImagePreview({
+        url: e.target.result,
+        name: file.name,
+        isLocal: true
+      })
+    }
+    reader.readAsDataURL(file)
+
     setIsUploading(true)
     try {
       // Generate unique filename
@@ -106,11 +199,19 @@ export default function BlogAIDialog({ onSuccess }) {
         name: file.name
       })
       
+      // Update preview to use the uploaded URL
+      setImagePreview({
+        url: publicUrl,
+        name: file.name,
+        isLocal: false
+      })
+      
       setFormData({ ...formData, featuredImage: publicUrl })
       console.log('[BlogAI] Image uploaded:', publicUrl)
     } catch (error) {
       console.error('[BlogAI] Upload failed:', error)
       alert('Failed to upload image: ' + error.message)
+      setImagePreview(null) // Clear preview on error
     } finally {
       setIsUploading(false)
     }
@@ -118,51 +219,86 @@ export default function BlogAIDialog({ onSuccess }) {
 
   const removeImage = () => {
     setUploadedImage(null)
+    setImagePreview(null)
     setFormData({ ...formData, featuredImage: '' })
   }
 
   const handleSubmit = async (e) => {
     e.preventDefault()
     setIsGenerating(true)
+    setGenerationStage(0)
 
     try {
-      console.log('[BlogAI] Creating blog post with AI:', formData.topic)
+      console.log('[BlogAI] Starting blog generation:', formData.topic)
       
+      // Create job
       const response = await api.post('/.netlify/functions/blog-create-ai', formData)
 
       if (response.data.success) {
-        console.log('[BlogAI] Blog post created:', response.data.data.title)
+        const jobId = response.data.jobId
+        console.log('[BlogAI] Job created:', jobId)
         
-        // Reset form
-        setFormData({
-          topic: '',
-          category: 'insights',
-          keywords: '',
-          keyPoints: '',
-          targetAudience: 'Small business owners and marketing professionals',
-          wordCount: '1200-1500',
-          tone: 'professional',
-          featuredImage: '',
-          author: 'Uptrade Media',
-          publishImmediately: false,
-          includeStats: true,
-          includeExamples: true,
-          includeFAQ: false
-        })
-        setUploadedImage(null)
-        
-        setIsOpen(false)
-        
-        // Notify parent to refresh
-        if (onSuccess) {
-          onSuccess(response.data.data)
-        }
+        // Poll for job status
+        const pollInterval = setInterval(async () => {
+          try {
+            const statusResponse = await api.get(`/.netlify/functions/blog-job-status?jobId=${jobId}`)
+            const status = statusResponse.data
+            
+            // Update progress based on job status
+            if (status.progress && status.progress.stage !== undefined) {
+              setGenerationStage(status.progress.stage)
+            }
+            
+            if (status.status === 'completed') {
+              clearInterval(pollInterval)
+              console.log('[BlogAI] Job completed:', status.result?.title)
+              
+              // Mark as complete
+              setGenerationStage(4)
+              
+              // Wait a moment to show the success state
+              await new Promise(resolve => setTimeout(resolve, 1500))
+              
+              // Reset form
+              setFormData({
+                topic: '',
+                category: tenantConfig.defaultCategory,
+                keywords: '',
+                keyPoints: '',
+                targetAudience: tenantConfig.defaultAudience,
+                wordCount: '1200-1500',
+                tone: 'professional',
+                featuredImage: '',
+                author: tenantConfig.defaultAuthor,
+                publishImmediately: false,
+                includeStats: true,
+                includeExamples: true,
+                includeFAQ: false
+              })
+              setUploadedImage(null)
+              setImagePreview(null)
+              
+              setIsOpen(false)
+              setIsGenerating(false)
+              
+              // Notify parent to refresh
+              if (onSuccess) {
+                onSuccess(status.result)
+              }
+            } else if (status.status === 'failed') {
+              clearInterval(pollInterval)
+              throw new Error(status.error || 'Job failed')
+            }
+          } catch (pollError) {
+            console.error('[BlogAI] Polling error:', pollError)
+          }
+        }, 2000) // Poll every 2 seconds
       }
     } catch (error) {
       console.error('[BlogAI] Error:', error)
       alert('Failed to create blog post: ' + (error.response?.data?.error || error.message))
-    } finally {
       setIsGenerating(false)
+      setGenerationStage(0)
     }
   }
 
@@ -207,13 +343,9 @@ export default function BlogAIDialog({ onSuccess }) {
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="insights">Insights</SelectItem>
-                <SelectItem value="news">News</SelectItem>
-                <SelectItem value="guides">Guides</SelectItem>
-                <SelectItem value="case-studies">Case Studies</SelectItem>
-                <SelectItem value="seo">SEO</SelectItem>
-                <SelectItem value="web-design">Web Design</SelectItem>
-                <SelectItem value="marketing">Digital Marketing</SelectItem>
+                {tenantConfig.categories.map(cat => (
+                  <SelectItem key={cat.value} value={cat.value}>{cat.label}</SelectItem>
+                ))}
               </SelectContent>
             </Select>
           </div>
@@ -293,7 +425,7 @@ export default function BlogAIDialog({ onSuccess }) {
           <div className="space-y-2">
             <Label>Featured Image</Label>
             
-            {!uploadedImage ? (
+            {!imagePreview ? (
               <div
                 className={`border-2 border-dashed rounded-xl p-8 text-center transition-all duration-300 ${
                   dragActive 
@@ -315,48 +447,47 @@ export default function BlogAIDialog({ onSuccess }) {
                   disabled={isUploading}
                 />
                 
-                {isUploading ? (
-                  <div className="flex flex-col items-center gap-2">
-                    <Loader2 className="w-10 h-10 animate-spin text-emerald-500" />
-                    <p className="text-sm text-[var(--text-secondary)]">Uploading image...</p>
+                <div className="flex flex-col items-center gap-3">
+                  <div className="w-14 h-14 rounded-full bg-emerald-100 flex items-center justify-center">
+                    <Upload className="w-7 h-7 text-emerald-600" />
                   </div>
-                ) : (
-                  <div className="flex flex-col items-center gap-3">
-                    <div className="w-14 h-14 rounded-full bg-emerald-100 flex items-center justify-center">
-                      <Upload className="w-7 h-7 text-emerald-600" />
-                    </div>
-                    <div>
-                      <p className="text-sm text-[var(--text-secondary)]">
-                        <span className="font-semibold text-emerald-600">Click to upload</span> or drag and drop
-                      </p>
-                      <p className="text-xs text-[var(--text-tertiary)] mt-1">PNG, JPG, WebP up to 5MB</p>
-                    </div>
+                  <div>
+                    <p className="text-sm text-[var(--text-secondary)]">
+                      <span className="font-semibold text-emerald-600">Click to upload</span> or drag and drop
+                    </p>
+                    <p className="text-xs text-[var(--text-tertiary)] mt-1">PNG, JPG, WebP up to 5MB</p>
                   </div>
-                )}
+                </div>
               </div>
             ) : (
-              <div className="relative rounded-xl overflow-hidden border-2 border-emerald-200 shadow-lg">
+              <div className="relative rounded-xl overflow-hidden border-2 border-emerald-200 shadow-lg aspect-[1200/630]">
                 <img 
-                  src={uploadedImage.url} 
+                  src={imagePreview.url} 
                   alt="Featured" 
-                  className="w-full h-52 object-cover"
+                  className="w-full h-full object-cover"
                 />
-                {/* Success indicator overlay */}
-                <div className="absolute top-3 left-3 flex items-center gap-2 bg-emerald-500 text-white text-xs font-medium px-3 py-1.5 rounded-full shadow-md">
-                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                  </svg>
-                  Image uploaded
-                </div>
+                {/* Status indicator overlay */}
+                {isUploading ? (
+                  <div className="absolute top-3 left-3 flex items-center gap-2 bg-amber-500 text-white text-xs font-medium px-3 py-1.5 rounded-full shadow-md">
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                    Uploading...
+                  </div>
+                ) : (
+                  <div className="absolute top-3 left-3 flex items-center gap-2 bg-emerald-500 text-white text-xs font-medium px-3 py-1.5 rounded-full shadow-md">
+                    <CheckCircle className="w-4 h-4" />
+                    Image uploaded
+                  </div>
+                )}
                 <button
                   type="button"
                   onClick={removeImage}
                   className="absolute top-3 right-3 bg-red-500 text-white rounded-full p-1.5 hover:bg-red-600 transition-colors shadow-md"
+                  disabled={isUploading}
                 >
                   <X className="w-4 h-4" />
                 </button>
                 <div className="p-3 bg-gradient-to-r from-emerald-50 to-teal-50 border-t border-emerald-100">
-                  <p className="text-sm font-medium text-emerald-700 truncate">{uploadedImage.name}</p>
+                  <p className="text-sm font-medium text-emerald-700 truncate">{imagePreview.name}</p>
                 </div>
               </div>
             )}
@@ -412,28 +543,53 @@ export default function BlogAIDialog({ onSuccess }) {
           </div>
 
           {/* Submit */}
-          <div className="flex gap-3 pt-4">
-            <Button
-              type="button"
-              variant="outline"
-              onClick={() => setIsOpen(false)}
-              disabled={isGenerating}
-            >
-              Cancel
-            </Button>
-            <Button type="submit" disabled={isGenerating} className="flex-1">
-              {isGenerating ? (
-                <>
-                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                  Generating blog post...
-                </>
-              ) : (
-                <>
-                  <Sparkles className="w-4 h-4 mr-2" />
-                  Generate Blog Post
-                </>
-              )}
-            </Button>
+          <div className="flex flex-col gap-3 pt-4">
+            {isGenerating && (
+              <div className="bg-gradient-to-r from-emerald-50 to-teal-50 border border-emerald-200 rounded-lg p-4">
+                <div className="flex items-center gap-3 mb-3">
+                  <div className="text-2xl">{GENERATION_STAGES[generationStage]?.icon || '🚀'}</div>
+                  <div>
+                    <p className="font-medium text-emerald-800">{GENERATION_STAGES[generationStage]?.label || 'Starting...'}</p>
+                    <p className="text-xs text-emerald-600">This may take 30-60 seconds</p>
+                  </div>
+                </div>
+                {/* Progress bar */}
+                <div className="w-full h-2 bg-emerald-100 rounded-full overflow-hidden">
+                  <div 
+                    className="h-full bg-gradient-to-r from-emerald-500 to-teal-500 transition-all duration-1000 ease-out"
+                    style={{ width: `${((generationStage + 1) / GENERATION_STAGES.length) * 100}%` }}
+                  />
+                </div>
+              </div>
+            )}
+            
+            <div className="flex gap-3">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => setIsOpen(false)}
+                disabled={isGenerating}
+              >
+                Cancel
+              </Button>
+              <Button 
+                type="submit" 
+                disabled={isGenerating || isUploading} 
+                className="flex-1"
+              >
+                {isGenerating ? (
+                  <>
+                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                    {GENERATION_STAGES[generationStage]?.label || 'Generating...'}
+                  </>
+                ) : (
+                  <>
+                    <Sparkles className="w-4 h-4 mr-2" />
+                    Generate Blog Post
+                  </>
+                )}
+              </Button>
+            </div>
           </div>
         </form>
       </DialogContent>

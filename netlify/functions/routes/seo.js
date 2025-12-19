@@ -912,7 +912,7 @@ async function getJobStatus(ctx, jobId) {
     .single()
   
   if (error) return response(error.code === 'PGRST116' ? 404 : 500, { error: error.message })
-  return response(200, { job: data })
+  return response(200, data) // Return job directly, not wrapped
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════

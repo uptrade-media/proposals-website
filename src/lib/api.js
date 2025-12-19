@@ -9,7 +9,7 @@ const api = axios.create({
   }
 })
 
-// Add request interceptor to attach Supabase session token
+// Add request interceptor to attach Supabase session token and org context
 api.interceptors.request.use(
   async (config) => {
     console.log('[API Request]', config.method?.toUpperCase(), config.url)
@@ -18,6 +18,19 @@ api.interceptors.request.use(
     const { data: { session } } = await supabase.auth.getSession()
     if (session?.access_token) {
       config.headers.Authorization = `Bearer ${session.access_token}`
+    }
+    
+    // Add organization context from localStorage (set by auth-store when switching orgs)
+    const storedTenantProject = localStorage.getItem('currentTenantProject')
+    if (storedTenantProject) {
+      try {
+        const project = JSON.parse(storedTenantProject)
+        // Use the project's org_id for filtering (contacts, etc.)
+        // This allows tenant-specific data to be filtered properly
+        config.headers['X-Organization-Id'] = project.org_id || project.id
+      } catch (e) {
+        // Ignore parse errors
+      }
     }
     
     return config

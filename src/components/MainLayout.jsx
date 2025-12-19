@@ -16,6 +16,7 @@ const FilesDrive = lazy(() => import('./FilesDrive'))
 const Messages = lazy(() => import('./MessagesNew'))
 const Billing = lazy(() => import('./Billing'))
 const ClientManagement = lazy(() => import('./ClientManagement'))
+const TenantClients = lazy(() => import('./TenantClients'))
 const TeamTab = lazy(() => import('./crm/TeamTab'))
 const EmailManager = lazy(() => import('@/pages/EmailManager'))
 const BlogManagement = lazy(() => import('./BlogManagement'))
@@ -26,7 +27,9 @@ const ChatBubble = lazy(() => import('./ChatBubble'))
 const FormsManager = lazy(() => import('./forms/FormsManager'))
 const TenantSales = lazy(() => import('./tenant/TenantSales'))
 // SEO Module sections
-const SEODashboard = lazy(() => import('./seo/SEODashboard'))
+const SEOModuleWrapper = lazy(() => import('./seo/SEOModuleWrapper'))
+// Ecommerce Module
+const EcommerceModuleWrapper = lazy(() => import('./ecommerce/EcommerceModuleWrapper'))
 const Settings = lazy(() => import('./Settings'))
 // Tenants management moved to Projects.jsx
 
@@ -72,6 +75,8 @@ const MainLayout = () => {
         return <Billing />
       case 'clients':
         return <ClientManagement />
+      case 'tenant-clients':
+        return <TenantClients />
       case 'team':
         return <TeamTab />
       case 'team-metrics':
@@ -87,7 +92,9 @@ const MainLayout = () => {
       case 'my-sales':
         return <TenantSales />
       case 'seo':
-        return <SEODashboard onNavigate={navigateTo} />
+        return <SEOModuleWrapper onNavigate={navigateTo} />
+      case 'ecommerce':
+        return <EcommerceModuleWrapper onNavigate={navigateTo} />
       case 'settings':
         return <Settings />
       case 'proposal-editor':

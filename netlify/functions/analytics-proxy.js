@@ -51,9 +51,36 @@ export async function handler(event) {
       }
     }
 
+    // Support custom domain for tenant analytics
+    // Default to uptrademedia.com if no domain specified
+    const { domain, ...otherParams } = queryParams
+    const targetDomain = domain || 'uptrademedia.com'
+    
+    // Validate domain to prevent arbitrary URL fetching
+    const allowedDomains = [
+      'uptrademedia.com',
+      'godsworkoutapparel.com',
+      'localhost:3000' // For development
+    ]
+    
+    // Check if domain is allowed (exact match or subdomain)
+    const isDomainAllowed = allowedDomains.some(allowed => 
+      targetDomain === allowed || targetDomain.endsWith('.' + allowed)
+    )
+    
+    if (!isDomainAllowed) {
+      console.warn('[Analytics Proxy] Blocked domain:', targetDomain)
+      return {
+        statusCode: 400,
+        headers,
+        body: JSON.stringify({ error: 'Domain not allowed' })
+      }
+    }
+
     // Build the target URL
-    const queryString = new URLSearchParams(queryParams).toString()
-    const targetUrl = `https://uptrademedia.com/api/analytics/${endpoint}${queryString ? '?' + queryString : ''}`
+    const queryString = new URLSearchParams(otherParams).toString()
+    const protocol = targetDomain.includes('localhost') ? 'http' : 'https'
+    const targetUrl = `${protocol}://${targetDomain}/api/analytics/${endpoint}${queryString ? '?' + queryString : ''}`
 
     console.log('[Analytics Proxy] Fetching:', targetUrl)
 

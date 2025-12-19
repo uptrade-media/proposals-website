@@ -38,6 +38,13 @@ const AVAILABLE_MODULES = [
     category: 'marketing'
   },
   {
+    key: 'ecommerce',
+    label: 'Ecommerce',
+    description: 'Shopify store integration - manage products, inventory, and orders',
+    icon: ShoppingCart,
+    category: 'sales'
+  },
+  {
     key: 'my_sales',
     label: 'My Sales',
     description: 'Track form submissions, leads, and customers from your website',
@@ -138,6 +145,9 @@ export default function Settings() {
   const [saving, setSaving] = useState(null) // Which module is currently saving
   const [saveStatus, setSaveStatus] = useState({}) // { moduleKey: 'success' | 'error' }
   
+  // Check if viewing a project-based tenant (e.g., GWA)
+  const isProjectTenant = currentOrg?.isProjectTenant === true
+  
   // Initialize local features from current org
   useEffect(() => {
     if (currentOrg?.features) {
@@ -218,6 +228,100 @@ export default function Settings() {
           <Info className="w-12 h-12 mx-auto text-[var(--text-tertiary)] mb-4" />
           <h2 className="text-lg font-medium text-[var(--text-primary)]">No Organization Selected</h2>
           <p className="text-[var(--text-secondary)] mt-2">Select an organization to manage settings.</p>
+        </div>
+      </div>
+    )
+  }
+
+  // For project tenants, show a simplified settings view without module toggles
+  if (isProjectTenant) {
+    // Get enabled features for display
+    const enabledFeatures = currentOrg.features || []
+    const enabledModules = AVAILABLE_MODULES.filter(m => 
+      enabledFeatures.includes(m.key)
+    )
+    
+    return (
+      <div className="max-w-4xl mx-auto">
+        {/* Header */}
+        <div className="flex items-center gap-3 mb-8">
+          <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-[var(--accent-primary)] to-[var(--accent-secondary)] flex items-center justify-center">
+            <SettingsIcon className="w-5 h-5 text-white" />
+          </div>
+          <div>
+            <h1 className="text-2xl font-bold text-[var(--text-primary)]">Settings</h1>
+            <p className="text-[var(--text-secondary)] text-sm">
+              {currentOrg.name} • Account Settings
+            </p>
+          </div>
+        </div>
+
+        {/* Organization Info */}
+        <div className="bg-[var(--glass-bg)] backdrop-blur-sm border border-[var(--glass-border)] rounded-xl p-6 mb-6">
+          <h3 className="text-lg font-semibold text-[var(--text-primary)] mb-4">Organization Details</h3>
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <p className="text-xs uppercase tracking-wider text-[var(--text-tertiary)] mb-1">Organization</p>
+              <p className="text-[var(--text-primary)] font-medium">{currentOrg.name}</p>
+            </div>
+            {currentOrg.domain && (
+              <div>
+                <p className="text-xs uppercase tracking-wider text-[var(--text-tertiary)] mb-1">Website</p>
+                <a 
+                  href={`https://${currentOrg.domain}`} 
+                  target="_blank" 
+                  rel="noopener noreferrer"
+                  className="text-[var(--accent-primary)] hover:underline font-medium"
+                >
+                  {currentOrg.domain}
+                </a>
+              </div>
+            )}
+            <div>
+              <p className="text-xs uppercase tracking-wider text-[var(--text-tertiary)] mb-1">Plan</p>
+              <p className="text-[var(--text-primary)] font-medium capitalize">{currentOrg.plan || 'Managed'}</p>
+            </div>
+            <div>
+              <p className="text-xs uppercase tracking-wider text-[var(--text-tertiary)] mb-1">Status</p>
+              <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-green-500/10 text-green-400">
+                {currentOrg.status || 'Active'}
+              </span>
+            </div>
+          </div>
+        </div>
+
+        {/* Active Modules (Read Only) */}
+        <div className="bg-[var(--glass-bg)] backdrop-blur-sm border border-[var(--glass-border)] rounded-xl p-6">
+          <h3 className="text-lg font-semibold text-[var(--text-primary)] mb-4">Active Modules</h3>
+          <p className="text-sm text-[var(--text-secondary)] mb-4">
+            These modules are included in your plan. Contact Uptrade Media to add or remove modules.
+          </p>
+          <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+            {enabledModules.map(module => {
+              const Icon = module.icon
+              return (
+                <div 
+                  key={module.key}
+                  className="flex items-center gap-3 p-3 rounded-lg bg-[var(--surface-secondary)] border border-[var(--glass-border)]"
+                >
+                  <div className="w-8 h-8 rounded-lg bg-[var(--accent-primary)]/20 flex items-center justify-center">
+                    <Icon className="w-4 h-4 text-[var(--accent-primary)]" />
+                  </div>
+                  <span className="text-sm font-medium text-[var(--text-primary)]">{module.label}</span>
+                </div>
+              )
+            })}
+          </div>
+        </div>
+
+        {/* Contact Support */}
+        <div className="mt-8 pt-6 border-t border-[var(--glass-border)] text-center">
+          <p className="text-sm text-[var(--text-secondary)]">
+            Need to change your plan or modules?{' '}
+            <a href="mailto:support@uptrademedia.com" className="text-[var(--accent-primary)] hover:underline">
+              Contact Support
+            </a>
+          </p>
         </div>
       </div>
     )

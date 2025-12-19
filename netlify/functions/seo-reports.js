@@ -130,12 +130,12 @@ export async function handler(event) {
 
     if (insertError) throw insertError
 
-    // Send email if requested
+    // Send email if requested - ONLY to explicit recipients, never auto-discover
+    // This prevents accidentally emailing prospects/leads in the org contacts
     let emailResult = null
-    if (sendEmail && process.env.RESEND_API_KEY) {
-      const emailRecipients = recipients.length > 0 
-        ? recipients 
-        : site.org?.contacts?.map(c => c.email).filter(Boolean) || []
+    if (sendEmail && process.env.RESEND_API_KEY && recipients.length > 0) {
+      // Only send to explicitly provided recipients, not all org contacts
+      const emailRecipients = recipients
 
       if (emailRecipients.length > 0) {
         const emailHtml = generateReportEmailHtml(site, reportType, reportData, periodDays)

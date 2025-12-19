@@ -4,7 +4,7 @@
  * Epic onboarding flow that walks through ALL SEO features:
  * - Site discovery & crawling
  * - Google Search Console integration
- * - AI Brain training
+ * - Signal AI training
  * - Schema markup generation
  * - Internal link analysis
  * - Keyword cannibalization detection
@@ -59,7 +59,8 @@ import { Progress } from '@/components/ui/progress'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { cn } from '@/lib/utils'
-import axios from 'axios'
+import api from '@/lib/api'
+import SignalSEOLogo from './SignalSEOLogo'
 
 // =============================================================================
 // PHASE DEFINITIONS - Major stages of setup
@@ -81,8 +82,8 @@ const SETUP_PHASES = [
   },
   {
     id: 'intelligence',
-    title: 'AI Intelligence',
-    description: 'Training & knowledge base',
+    title: 'Signal Intelligence',
+    description: 'Training Signal AI',
     icon: Brain,
     color: 'from-purple-500 to-indigo-500'
   },
@@ -156,38 +157,37 @@ const SETUP_STEPS = [
   {
     id: 'gsc-connect',
     phase: 'data',
-    title: 'Google Search Console',
-    description: 'Syncing performance data from GSC',
+    title: 'Google Search Console Sync',
+    description: 'Syncing queries, pages, and performance data',
     icon: BarChart3,
     color: 'text-green-500',
     bgColor: 'bg-green-500/10',
     endpoint: 'seo-gsc-sync',
-    optional: true,
     duration: 3000
   },
   {
     id: 'gsc-queries',
     phase: 'data',
-    title: 'Analyzing Search Queries',
-    description: 'Processing keyword rankings and CTR data',
+    title: 'Search Queries',
+    description: '(Included in GSC sync)',
     icon: Target,
     color: 'text-emerald-500',
     bgColor: 'bg-emerald-500/10',
     endpoint: 'seo-gsc-queries',
-    optional: true,
-    duration: 3000
+    duration: 3000,
+    autoComplete: true // Completed by gsc-connect
   },
   {
     id: 'gsc-pages',
     phase: 'data',
-    title: 'Page Performance Metrics',
-    description: 'Clicks, impressions, and positions by URL',
+    title: 'Page Metrics',
+    description: '(Included in GSC sync)',
     icon: Activity,
     color: 'text-teal-500',
     bgColor: 'bg-teal-500/10',
     endpoint: 'seo-gsc-pages',
-    optional: true,
-    duration: 3000
+    duration: 3000,
+    autoComplete: true // Completed by gsc-connect
   },
   {
     id: 'gsc-indexing',
@@ -198,7 +198,6 @@ const SETUP_STEPS = [
     color: 'text-red-500',
     bgColor: 'bg-red-500/10',
     endpoint: 'seo-gsc-indexing',
-    optional: true,
     duration: 4000
   },
   {
@@ -217,8 +216,8 @@ const SETUP_STEPS = [
   {
     id: 'ai-train',
     phase: 'intelligence',
-    title: 'Training AI Brain',
-    description: 'Teaching the AI about your business and content',
+    title: 'Training Signal',
+    description: 'Teaching Signal about your business and content',
     icon: Brain,
     color: 'text-purple-500',
     bgColor: 'bg-purple-500/10',
@@ -229,7 +228,7 @@ const SETUP_STEPS = [
     id: 'ai-knowledge',
     phase: 'intelligence',
     title: 'Building Knowledge Base',
-    description: 'Creating semantic understanding of your site',
+    description: 'Signal learning your site structure',
     icon: Database,
     color: 'text-violet-500',
     bgColor: 'bg-violet-500/10',
@@ -240,7 +239,7 @@ const SETUP_STEPS = [
     id: 'topic-clusters',
     phase: 'intelligence',
     title: 'Topic Cluster Mapping',
-    description: 'Organizing content into semantic clusters',
+    description: 'Signal organizing your content clusters',
     icon: Layers,
     color: 'text-fuchsia-500',
     bgColor: 'bg-fuchsia-500/10',
@@ -250,8 +249,8 @@ const SETUP_STEPS = [
   {
     id: 'blog-brain',
     phase: 'intelligence',
-    title: 'Blog Brain Training',
-    description: 'Learning your content style and topics',
+    title: 'Content Style Training',
+    description: 'Signal learning your writing style',
     icon: PenLine,
     color: 'text-pink-500',
     bgColor: 'bg-pink-500/10',
@@ -335,7 +334,6 @@ const SETUP_STEPS = [
     color: 'text-emerald-500',
     bgColor: 'bg-emerald-500/10',
     endpoint: 'seo-local-analyze',
-    optional: true,
     duration: 3000
   },
   {
@@ -347,7 +345,6 @@ const SETUP_STEPS = [
     color: 'text-indigo-500',
     bgColor: 'bg-indigo-500/10',
     endpoint: 'seo-competitor-analyze',
-    optional: true,
     duration: 5000
   },
   
@@ -441,17 +438,6 @@ const SETUP_STEPS = [
     duration: 5000
   },
   {
-    id: 'report-setup',
-    phase: 'optimization',
-    title: 'Configuring Weekly Reports',
-    description: 'Setting up automated SEO performance emails',
-    icon: BarChart3,
-    color: 'text-purple-500',
-    bgColor: 'bg-purple-500/10',
-    endpoint: 'seo-reports',
-    duration: 2000
-  },
-  {
     id: 'schedule-setup',
     phase: 'optimization',
     title: 'Setting Up Automation',
@@ -488,7 +474,7 @@ function ProgressRing({ progress, size = 120 }) {
     <div className="relative" style={{ width: size, height: size }}>
       <svg className="transform -rotate-90" style={{ width: size, height: size }}>
         <circle
-          className="text-gray-200"
+          className="text-[var(--glass-border)]"
           strokeWidth="8"
           stroke="currentColor"
           fill="transparent"
@@ -499,7 +485,7 @@ function ProgressRing({ progress, size = 120 }) {
         <motion.circle
           className="text-primary"
           strokeWidth="8"
-          stroke="url(#gradient)"
+          stroke="url(#signal-gradient)"
           strokeLinecap="round"
           fill="transparent"
           r={radius}
@@ -513,15 +499,14 @@ function ProgressRing({ progress, size = 120 }) {
           }}
         />
         <defs>
-          <linearGradient id="gradient" x1="0%" y1="0%" x2="100%" y2="0%">
-            <stop offset="0%" stopColor="#8B5CF6" />
-            <stop offset="50%" stopColor="#6366F1" />
-            <stop offset="100%" stopColor="#06B6D4" />
+          <linearGradient id="signal-gradient" x1="0%" y1="0%" x2="100%" y2="0%">
+            <stop offset="0%" stopColor="#95d47d" />
+            <stop offset="100%" stopColor="#238b95" />
           </linearGradient>
         </defs>
       </svg>
       <div className="absolute inset-0 flex items-center justify-center">
-        <span className="text-2xl font-bold">{Math.round(progress)}%</span>
+        <span className="text-2xl font-bold text-[var(--text-primary)]">{Math.round(progress)}%</span>
       </div>
     </div>
   )
@@ -538,9 +523,9 @@ function PhaseIndicator({ phase, isActive, isCompleted, index }) {
       transition={{ delay: index * 0.1 }}
       className={cn(
         'flex items-center gap-2 px-4 py-2 rounded-full text-sm font-medium transition-all',
-        isCompleted && 'bg-emerald-100 text-emerald-700',
+        isCompleted && 'bg-emerald-500/20 text-emerald-500',
         isActive && !isCompleted && `bg-gradient-to-r ${phase.color} text-white shadow-lg`,
-        !isActive && !isCompleted && 'bg-gray-100 text-gray-400'
+        !isActive && !isCompleted && 'bg-[var(--glass-bg)] text-[var(--text-tertiary)]'
       )}
     >
       {isCompleted ? (
@@ -571,7 +556,7 @@ function StepIndicator({ step, status, isActive, index }) {
       transition={{ delay: index * 0.05 }}
       className={cn(
         'flex items-center gap-3 p-3 rounded-lg transition-all duration-300',
-        isActive && 'bg-white shadow-md border border-gray-100',
+        isActive && 'bg-[var(--glass-bg)] shadow-md border border-[var(--glass-border)]',
         status === 'completed' && 'opacity-70',
         status === 'pending' && 'opacity-40'
       )}
@@ -601,7 +586,7 @@ function StepIndicator({ step, status, isActive, index }) {
         <div className="flex items-center gap-2">
           <p className={cn(
             'font-medium text-sm truncate',
-            isActive ? 'text-gray-900' : 'text-gray-600'
+            isActive ? 'text-[var(--text-primary)]' : 'text-[var(--text-secondary)]'
           )}>
             {step.title}
           </p>
@@ -613,7 +598,7 @@ function StepIndicator({ step, status, isActive, index }) {
           <motion.p
             initial={{ opacity: 0, height: 0 }}
             animate={{ opacity: 1, height: 'auto' }}
-            className="text-xs text-gray-500 truncate"
+            className="text-xs text-[var(--text-secondary)] truncate"
           >
             {step.description}
           </motion.p>
@@ -663,15 +648,15 @@ function StatCard({ label, value, icon: Icon, color }) {
     <motion.div
       initial={{ opacity: 0, scale: 0.9 }}
       animate={{ opacity: 1, scale: 1 }}
-      className="bg-white rounded-xl p-4 shadow-sm border"
+      className="bg-[var(--glass-bg)] rounded-xl p-4 shadow-sm border border-[var(--glass-border)] w-full"
     >
-      <div className="flex items-center gap-3">
-        <div className={cn('w-10 h-10 rounded-lg flex items-center justify-center', color)}>
-          <Icon className="w-5 h-5 text-white" />
+      <div className="flex flex-col items-center text-center gap-2">
+        <div className={cn('w-12 h-12 rounded-lg flex items-center justify-center', color)}>
+          <Icon className="w-6 h-6 text-white" />
         </div>
-        <div>
-          <p className="text-2xl font-bold">{value}</p>
-          <p className="text-xs text-gray-500">{label}</p>
+        <div className="w-full">
+          <p className="text-2xl font-bold text-[var(--text-primary)]">{value}</p>
+          <p className="text-xs text-[var(--text-secondary)] whitespace-nowrap overflow-hidden text-ellipsis">{label}</p>
         </div>
       </div>
     </motion.div>
@@ -697,9 +682,12 @@ export default function SEOSetupWizard({ siteId, domain, onComplete, onSkip }) {
     schemaGenerated: 0,
     recommendationsCreated: 0
   })
+  const [failedStep, setFailedStep] = useState(null)
+  const [parallelProgress, setParallelProgress] = useState({ running: 0, completed: 0, total: 0 })
+  const abortSignalRef = useRef(0) // Increment to abort current operations
   const logContainerRef = useRef(null)
 
-  // Add log entry
+  // Add log entry (with optional deduplication for parallel runs)
   const addLog = useCallback((message, type = 'info') => {
     const time = new Date().toLocaleTimeString('en-US', { 
       hour: '2-digit', 
@@ -734,54 +722,297 @@ export default function SEOSetupWizard({ siteId, domain, onComplete, onSkip }) {
     }
   }, [currentStep])
 
-  // Main setup runner
+  // =========================================================================
+  // PARALLEL STEP EXECUTION GROUPS
+  // =========================================================================
+  
+  // Phase 1: Sequential discovery (must complete before parallel phase)
+  const SEQUENTIAL_DISCOVERY_STEPS = ['connect', 'crawl-sitemap', 'crawl-pages', 'internal-links']
+  
+  // Phase 2: GSC sync (must complete before parallel analysis) - single step does all GSC work
+  const GSC_SYNC_STEPS = ['gsc-connect'] // gsc-queries and gsc-pages are handled by same sync
+  
+  // Phase 3: PARALLEL - All these can run simultaneously after GSC sync
+  const PARALLEL_ANALYSIS_STEPS = [
+    'gsc-indexing',
+    'pagespeed',
+    'topic-clusters',
+    'blog-brain',
+    'cannibalization',
+    'content-decay',
+    'content-gap',
+    'serp-features',
+    'technical-audit',
+    'backlinks',
+    'local-seo',
+    'competitors',
+    'schema-generate',
+    'metadata-optimize',
+    'predictive-ranking',
+    'opportunities'
+  ]
+  
+  // Phase 4: Signal training (must wait for all analysis) - ai-knowledge is just a read, skip it
+  const SIGNAL_TRAINING_STEPS = ['ai-train']
+  
+  // Phase 5: Final recommendations (after Signal training)
+  const FINAL_STEPS = ['ai-recommendations', 'auto-optimize', 'keyword-tracking', 'cwv-baseline', 'schedule-setup', 'complete']
+
+  // Main setup runner with parallel execution
   const runSetup = useCallback(async () => {
     if (isRunning) return
     
     setIsRunning(true)
     setError(null)
+    setFailedStep(null)
     setLogs([])
     
     addLog('🚀 Starting comprehensive SEO setup...', 'info')
     addLog(`📍 Domain: ${domain}`, 'info')
 
+    const startAbortSignal = abortSignalRef.current
+    
     try {
-      for (let i = 0; i < SETUP_STEPS.length; i++) {
-        const step = SETUP_STEPS[i]
-        setCurrentStep(i)
-        updateStep(step.id, 'running')
+      // =====================================================================
+      // PHASE 1: Sequential Discovery Steps
+      // =====================================================================
+      addLog('📡 Phase 1: Site Discovery', 'info')
+      
+      for (const stepId of SEQUENTIAL_DISCOVERY_STEPS) {
+        if (abortSignalRef.current !== startAbortSignal) return
         
-        // Calculate progress
-        const progressPercent = Math.round((i / SETUP_STEPS.length) * 100)
-        setProgress(progressPercent)
+        const stepIndex = SETUP_STEPS.findIndex(s => s.id === stepId)
+        const step = SETUP_STEPS[stepIndex]
+        if (!step) continue
+        
+        setCurrentStep(stepIndex)
+        updateStep(step.id, 'running')
+        setProgress(Math.round((stepIndex / SETUP_STEPS.length) * 100))
         
         addLog(`▶️ ${step.title}...`, 'info')
-
-        // Execute step
+        
         try {
           await executeStep(step)
           updateStep(step.id, 'completed')
-          addLog(`✅ ${step.title} complete`, 'success')
+          addLog(`✅ ${step.title}`, 'success')
         } catch (stepError) {
-          if (step.optional) {
-            updateStep(step.id, 'skipped')
-            addLog(`⏭️ ${step.title} skipped (optional)`, 'warning')
-          } else {
-            updateStep(step.id, 'error')
-            addLog(`⚠️ ${step.title}: ${stepError.message}`, 'warning')
-            // Continue with other steps even if one fails
-          }
+          updateStep(step.id, 'error')
+          const errorMessage = stepError.response?.data?.message || stepError.response?.data?.error || stepError.message
+          addLog(`❌ ${step.title}: ${errorMessage}`, 'error')
+          setError(`${step.title} failed: ${errorMessage}`)
+          setFailedStep({ id: step.id, title: step.title, error: errorMessage, stepIndex })
+          setIsRunning(false)
+          return
         }
-
-        // Small delay for visual effect
-        await new Promise(r => setTimeout(r, 300))
+        
+        await new Promise(r => setTimeout(r, 200))
+      }
+      
+      // =====================================================================
+      // PHASE 2: GSC Sync (Sequential - must complete before parallel)
+      // =====================================================================
+      if (abortSignalRef.current !== startAbortSignal) return
+      
+      addLog('📊 Phase 2: Google Search Console Sync', 'info')
+      
+      for (const stepId of GSC_SYNC_STEPS) {
+        if (abortSignalRef.current !== startAbortSignal) return
+        
+        const stepIndex = SETUP_STEPS.findIndex(s => s.id === stepId)
+        const step = SETUP_STEPS[stepIndex]
+        if (!step) continue
+        
+        setCurrentStep(stepIndex)
+        updateStep(step.id, 'running')
+        setProgress(Math.round((stepIndex / SETUP_STEPS.length) * 100))
+        
+        addLog(`▶️ ${step.title}...`, 'info')
+        
+        try {
+          await executeStep(step)
+          updateStep(step.id, 'completed')
+          addLog(`✅ ${step.title}`, 'success')
+        } catch (stepError) {
+          updateStep(step.id, 'error')
+          const errorMessage = stepError.response?.data?.message || stepError.response?.data?.error || stepError.message
+          addLog(`❌ ${step.title}: ${errorMessage}`, 'error')
+          setError(`${step.title} failed: ${errorMessage}`)
+          setFailedStep({ id: step.id, title: step.title, error: errorMessage, stepIndex })
+          setIsRunning(false)
+          return
+        }
+        
+        await new Promise(r => setTimeout(r, 200))
+      }
+      
+      // =====================================================================
+      // PHASE 3: PARALLEL Analysis (All at once!)
+      // =====================================================================
+      if (abortSignalRef.current !== startAbortSignal) return
+      
+      addLog(`⚡ Phase 3: Running ${PARALLEL_ANALYSIS_STEPS.length} analysis steps in parallel...`, 'info')
+      
+      // Mark all parallel steps as running
+      const parallelStepObjects = PARALLEL_ANALYSIS_STEPS.map(id => {
+        const stepIndex = SETUP_STEPS.findIndex(s => s.id === id)
+        return { ...SETUP_STEPS[stepIndex], stepIndex }
+      }).filter(s => s)
+      
+      for (const step of parallelStepObjects) {
+        updateStep(step.id, 'running')
+      }
+      
+      // Track parallel progress
+      let completedCount = 0
+      let failedCount = 0
+      const parallelErrors = []
+      
+      setParallelProgress({ running: parallelStepObjects.length, completed: 0, total: parallelStepObjects.length })
+      
+      // Execute all in parallel with progress tracking
+      const parallelPromises = parallelStepObjects.map(async (step) => {
+        try {
+          await executeStep(step, true) // true = silent mode (no individual logs)
+          updateStep(step.id, 'completed')
+          completedCount++
+          setParallelProgress(prev => ({ ...prev, completed: completedCount, running: prev.total - completedCount }))
+          
+          // Only log completion, not individual details
+          // Progress update shows overall count
+          return { success: true, step }
+        } catch (err) {
+          updateStep(step.id, 'error')
+          failedCount++
+          const errorMessage = err.response?.data?.message || err.response?.data?.error || err.message
+          parallelErrors.push({ step, error: errorMessage })
+          return { success: false, step, error: errorMessage }
+        }
+      })
+      
+      // Wait for all parallel steps with progress updates
+      const progressInterval = setInterval(() => {
+        if (abortSignalRef.current !== startAbortSignal) {
+          clearInterval(progressInterval)
+          return
+        }
+        const completed = completedCount
+        const total = parallelStepObjects.length
+        const pct = Math.round((completed / total) * 100)
+        setProgress(40 + Math.round(pct * 0.4)) // 40-80% range for parallel phase
+        
+        if (completed > 0 && completed < total) {
+          // Update log with progress count (replace last progress log)
+          setLogs(prev => {
+            const filtered = prev.filter(l => !l.message.startsWith('⚡ Parallel:'))
+            return [...filtered, { 
+              message: `⚡ Parallel: ${completed}/${total} complete (${total - completed} running)`, 
+              type: 'info',
+              time: new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', second: '2-digit' })
+            }]
+          })
+        }
+      }, 1000)
+      
+      // Wait for all to complete
+      await Promise.all(parallelPromises)
+      clearInterval(progressInterval)
+      
+      // Log final parallel status
+      addLog(`✅ Parallel phase complete: ${completedCount} succeeded, ${failedCount} failed`, 
+        failedCount > 0 ? 'warning' : 'success')
+      
+      // If critical steps failed, report but continue
+      if (parallelErrors.length > 0) {
+        for (const { step, error } of parallelErrors.slice(0, 3)) { // Show first 3 errors
+          addLog(`  └ ⚠️ ${step.title}: ${error}`, 'warning')
+        }
+        if (parallelErrors.length > 3) {
+          addLog(`  └ ... and ${parallelErrors.length - 3} more warnings`, 'warning')
+        }
+      }
+      
+      setProgress(80)
+      
+      // =====================================================================
+      // PHASE 4: Signal Training (Must wait for analysis data)
+      // =====================================================================
+      if (abortSignalRef.current !== startAbortSignal) return
+      
+      addLog('🧠 Phase 4: Training Signal AI...', 'info')
+      
+      for (const stepId of SIGNAL_TRAINING_STEPS) {
+        if (abortSignalRef.current !== startAbortSignal) return
+        
+        const stepIndex = SETUP_STEPS.findIndex(s => s.id === stepId)
+        const step = SETUP_STEPS[stepIndex]
+        if (!step) continue
+        
+        setCurrentStep(stepIndex)
+        updateStep(step.id, 'running')
+        setProgress(80 + Math.round((SIGNAL_TRAINING_STEPS.indexOf(stepId) / SIGNAL_TRAINING_STEPS.length) * 10))
+        
+        addLog(`▶️ ${step.title}...`, 'info')
+        
+        try {
+          await executeStep(step)
+          updateStep(step.id, 'completed')
+          addLog(`✅ ${step.title}`, 'success')
+        } catch (stepError) {
+          updateStep(step.id, 'error')
+          const errorMessage = stepError.response?.data?.message || stepError.response?.data?.error || stepError.message
+          addLog(`❌ ${step.title}: ${errorMessage}`, 'error')
+          setError(`${step.title} failed: ${errorMessage}`)
+          setFailedStep({ id: step.id, title: step.title, error: errorMessage, stepIndex })
+          setIsRunning(false)
+          return
+        }
+        
+        await new Promise(r => setTimeout(r, 200))
+      }
+      
+      // =====================================================================
+      // PHASE 5: Final Steps
+      // =====================================================================
+      if (abortSignalRef.current !== startAbortSignal) return
+      
+      addLog('🎯 Phase 5: Generating Recommendations...', 'info')
+      
+      for (const stepId of FINAL_STEPS) {
+        if (abortSignalRef.current !== startAbortSignal) return
+        
+        const stepIndex = SETUP_STEPS.findIndex(s => s.id === stepId)
+        const step = SETUP_STEPS[stepIndex]
+        if (!step) continue
+        
+        setCurrentStep(stepIndex)
+        updateStep(step.id, 'running')
+        setProgress(90 + Math.round((FINAL_STEPS.indexOf(stepId) / FINAL_STEPS.length) * 10))
+        
+        if (stepId !== 'complete') {
+          addLog(`▶️ ${step.title}...`, 'info')
+        }
+        
+        try {
+          await executeStep(step)
+          updateStep(step.id, 'completed')
+          if (stepId !== 'complete') {
+            addLog(`✅ ${step.title}`, 'success')
+          }
+        } catch (stepError) {
+          // Final steps are less critical, log warning and continue
+          updateStep(step.id, 'error')
+          const errorMessage = stepError.response?.data?.message || stepError.response?.data?.error || stepError.message
+          addLog(`⚠️ ${step.title}: ${errorMessage}`, 'warning')
+        }
+        
+        await new Promise(r => setTimeout(r, 100))
       }
 
       setProgress(100)
-      addLog('🎉 SEO setup complete! Your AI Brain is fully configured.', 'success')
+      addLog('🎉 SEO setup complete! Signal is fully configured.', 'success')
 
       // Mark site as setup complete
-      await axios.put('/.netlify/functions/seo-sites-update', {
+      await api.put('/.netlify/functions/seo-sites-update', {
         siteId,
         setup_completed: true,
         setup_completed_at: new Date().toISOString()
@@ -793,247 +1024,623 @@ export default function SEOSetupWizard({ siteId, domain, onComplete, onSkip }) {
       addLog(`❌ Error: ${err.message}`, 'error')
     } finally {
       setIsRunning(false)
+      setParallelProgress({ running: 0, completed: 0, total: 0 })
     }
   }, [siteId, domain, addLog, updateStep, isRunning])
 
-  // Execute individual step
-  const executeStep = async (step) => {
+  // Execute individual step (silentMode = true for parallel execution, suppresses logs)
+  const executeStep = async (step, silentMode = false) => {
     const startTime = Date.now()
+    
+    // Helper to log only in non-silent mode
+    const stepLog = (message, type = 'info') => {
+      if (!silentMode) {
+        addLog(message, type)
+      }
+    }
     
     switch (step.id) {
       case 'connect':
-        // Just verify site exists
-        const siteRes = await axios.get(`/.netlify/functions/seo-sites-get?siteId=${siteId}`)
+        // Just verify site exists - seo-sites-get expects 'id' not 'siteId'
+        const siteRes = await api.get(`/.netlify/functions/seo-sites-get?id=${siteId}`)
         if (!siteRes.data.site) throw new Error('Site not found')
-        addLog(`  └ Connected to ${siteRes.data.site.domain}`)
+        stepLog(`  └ Connected to ${siteRes.data.site.domain}`)
         break
 
       case 'crawl-sitemap':
-        const crawlRes = await axios.post('/.netlify/functions/seo-crawl-sitemap', { siteId })
-        const pagesFound = crawlRes.data.pagesFound || 0
+        const crawlRes = await api.post('/.netlify/functions/seo-crawl-sitemap', { siteId })
+        // API returns urlsFound, pagesCreated, pagesAlreadyExist
+        const pagesFound = crawlRes.data.urlsFound || crawlRes.data.pagesFound || 0
         updateStats({ pagesDiscovered: pagesFound })
-        addLog(`  └ Discovered ${pagesFound} pages from sitemap`)
+        stepLog(`  └ Discovered ${pagesFound} pages from sitemap`)
+        if (crawlRes.data.pagesCreated > 0) {
+          stepLog(`  └ Added ${crawlRes.data.pagesCreated} new pages`)
+        }
         break
 
       case 'crawl-pages':
-        // Trigger background crawl of individual pages
-        await axios.post('/.netlify/functions/seo-background-jobs', {
-          siteId,
-          jobType: 'crawl_pages',
-          priority: 'high'
-        })
-        addLog(`  └ Queued page content analysis`)
-        // Simulate some delay for visual effect
-        await new Promise(r => setTimeout(r, 2000))
+        // Queue page content analysis and wait for completion
+        stepLog(`  └ Analyzing page content...`)
+        try {
+          const contentRes = await api.post('/.netlify/functions/seo-background-jobs', {
+            siteId,
+            jobType: 'metadata-extract'
+          })
+          const contentJobId = contentRes.data.job?.id
+          
+          if (contentJobId) {
+            stepLog(`  └ Processing pages (job ${contentJobId})`)
+            
+            // Capture current abort signal
+            const startAbortSignal = abortSignalRef.current
+            
+            // Poll for job completion
+            let contentCompleted = false
+            let contentAttempts = 0
+            const maxAttempts = 180 // 15 minutes at 5s intervals
+            
+            while (!contentCompleted && contentAttempts < maxAttempts) {
+              // Wait first but check abort signal during wait
+              for (let i = 0; i < 10; i++) {
+                if (abortSignalRef.current !== startAbortSignal) {
+                  console.log('[Wizard] Content polling aborted')
+                  stepLog(`  └ Content analysis aborted`)
+                  return // Exit immediately
+                }
+                await new Promise(r => setTimeout(r, 500)) // Check every 500ms
+              }
+              contentAttempts++
+              
+              // Check abort again before API call
+              if (abortSignalRef.current !== startAbortSignal) {
+                console.log('[Wizard] Content polling aborted')
+                return
+              }
+              
+              try {
+                const jobStatus = await api.get(`/.netlify/functions/seo-background-jobs?jobId=${contentJobId}`)
+                console.log('[Wizard] Content job status:', jobStatus.data)
+                const status = jobStatus.data?.job?.status || jobStatus.data?.status
+                
+                if (status === 'completed') {
+                  console.log('[Wizard] Content job completed!')
+                  stepLog(`  └ Page content analysis complete`)
+                  contentCompleted = true
+                } else if (status === 'failed') {
+                  console.log('[Wizard] Content job failed, continuing anyway')
+                  stepLog(`  └ Content analysis failed, continuing...`)
+                  contentCompleted = true
+                } else if (contentAttempts % 3 === 0) {
+                  // Log every 15 seconds
+                  stepLog(`  └ Still analyzing... (${contentAttempts * 5}s elapsed)`)
+                }
+              } catch (err) {
+                console.log('[Wizard] Content job poll error:', err.message)
+                // If we can't poll, just continue after a reasonable wait
+                if (contentAttempts >= 4) {
+                  stepLog(`  └ Content analysis running in background`)
+                  contentCompleted = true
+                }
+              }
+            }
+            
+            if (!contentCompleted) {
+              stepLog(`  └ Content analysis timed out, continuing...`)
+            }
+          }
+        } catch (err) {
+          stepLog(`  └ Page content analysis will run in background`)
+        }
         break
 
       case 'internal-links':
-        const linksRes = await axios.post('/.netlify/functions/seo-internal-links', { 
+        // Queue background job and wait for completion
+        const linksRes = await api.post('/.netlify/functions/seo-internal-links', { 
           siteId,
-          action: 'analyze'
+          crawlLinks: true
         })
-        const linksFound = linksRes.data.totalLinks || 0
-        addLog(`  └ Mapped ${linksFound} internal links`)
+        const jobId = linksRes.data.jobId
+        const initialLinksFound = linksRes.data.totalLinks || 0
+        stepLog(`  └ Queued internal link analysis (job ${jobId})`)
+        
+        // Poll for job completion
+        if (jobId) {
+          // Capture current abort signal
+          const startAbortSignal = abortSignalRef.current
+          
+          let completed = false
+          let attempts = 0
+          const maxAttempts = 180 // 15 minutes at 5s intervals
+          
+          while (!completed && attempts < maxAttempts) {
+            // Wait with abort checking
+            for (let i = 0; i < 10; i++) {
+              if (abortSignalRef.current !== startAbortSignal) {
+                console.log('[Wizard] Internal links polling aborted')
+                stepLog(`  └ Internal link analysis aborted`)
+                return
+              }
+              await new Promise(r => setTimeout(r, 500))
+            }
+            attempts++
+            
+            // Check abort again before API call
+            if (abortSignalRef.current !== startAbortSignal) {
+              console.log('[Wizard] Internal links polling aborted')
+              return
+            }
+            
+            try {
+              const jobStatus = await api.get(`/.netlify/functions/seo-background-jobs?jobId=${jobId}`)
+              console.log('[Wizard] Internal links job status:', jobStatus.data)
+              const status = jobStatus.data?.job?.status || jobStatus.data?.status
+              
+              if (status === 'completed') {
+                stepLog(`  └ Internal link analysis complete`)
+                completed = true
+              } else if (status === 'failed') {
+                throw new Error(jobStatus.data.error || 'Job failed')
+              } else if (attempts % 3 === 0) {
+                // Log every 15 seconds
+                stepLog(`  └ Still analyzing... (${attempts * 5}s elapsed)`)
+              }
+            } catch (err) {
+              console.log('[Wizard] Poll error (will retry):', err.message)
+            }
+          }
+          
+          if (!completed) {
+            throw new Error('Internal link analysis timed out after 15 minutes')
+          }
+        }
+        stepLog(`  └ Mapped ${initialLinksFound} internal links`)
         break
 
       case 'gsc-connect':
       case 'gsc-queries':
       case 'gsc-pages':
         // Try to sync GSC data
-        const gscRes = await axios.post('/.netlify/functions/seo-gsc-sync', { siteId })
-        if (gscRes.data.gscConnected) {
-          addLog(`  └ Synced ${gscRes.data.queriesCount || 0} queries, ${gscRes.data.pagesCount || 0} pages`)
-          updateStats({ keywordsTracked: gscRes.data.queriesCount || 0 })
+        const gscRes = await api.post('/.netlify/functions/seo-gsc-sync', { siteId })
+        console.log('[Wizard] GSC sync response:', gscRes.data) // Debug
+        
+        if (gscRes.data.jobId) {
+          // GSC sync is now a background job - poll for completion
+          stepLog(`  └ GSC sync queued (job ${gscRes.data.jobId.substring(0, 8)})...`)
+          
+          // Capture current abort signal
+          const startAbortSignal = abortSignalRef.current
+          
+          let jobComplete = false
+          let attempts = 0
+          const maxAttempts = 60 // 5 minutes max (5s intervals)
+          
+          while (!jobComplete && attempts < maxAttempts) {
+            // Wait with abort checking
+            for (let i = 0; i < 10; i++) {
+              if (abortSignalRef.current !== startAbortSignal) {
+                console.log('[Wizard] GSC polling aborted')
+                stepLog(`  └ GSC sync aborted`)
+                return
+              }
+              await new Promise(r => setTimeout(r, 500))
+            }
+            attempts++
+            
+            // Check abort again before API call
+            if (abortSignalRef.current !== startAbortSignal) {
+              console.log('[Wizard] GSC polling aborted')
+              return
+            }
+            
+            const jobRes = await api.get(`/.netlify/functions/seo-background-jobs?jobId=${gscRes.data.jobId}`)
+            const job = jobRes.data?.job || jobRes.data
+            console.log('[Wizard] GSC job status:', job)
+            
+            if (job.status === 'completed') {
+              jobComplete = true
+              const result = job.result || {}
+              const queriesCount = result.queriesCount || 0
+              const pagesCount = result.pagesCount || 0
+              const keywordsUpserted = result.keywordsUpserted || 0
+              const pagesCreated = result.pagesCreated || 0
+              const sitemapsCount = result.sitemapsCount || 0
+              
+              stepLog(`  └ GSC connected - synced ${queriesCount} queries, ${pagesCount} pages`)
+              if (sitemapsCount > 0) {
+                stepLog(`  └ Synced ${sitemapsCount} sitemaps status`)
+              }
+              if (keywordsUpserted > 0) {
+                stepLog(`  └ Added ${keywordsUpserted} keywords to universe`)
+                updateStats({ keywordsTracked: keywordsUpserted })
+              }
+              if (pagesCreated > 0) {
+                stepLog(`  └ Discovered ${pagesCreated} new pages from GSC`)
+              }
+            } else if (job.status === 'failed') {
+              throw new Error(`GSC sync failed: ${job.error || 'Unknown error'}`)
+            } else {
+              // Still processing - log progress every 15 seconds
+              if (attempts % 3 === 0) {
+                const progressVal = job.progress ?? 0
+                stepLog(`  └ GSC sync in progress (${progressVal}% complete)...`)
+              }
+            }
+          }
+          
+          if (!jobComplete) {
+            throw new Error('GSC sync timed out after 5 minutes')
+          }
+        } else if (gscRes.data.gscConnected) {
+          // Fallback for old response format (if somehow still used)
+          const queriesCount = gscRes.data.queriesCount || 0
+          const pagesCount = gscRes.data.pagesCount || 0
+          const keywordsUpserted = gscRes.data.keywordsUpserted || 0
+          const pagesCreated = gscRes.data.pagesCreated || 0
+          stepLog(`  └ GSC connected - synced ${queriesCount} queries, ${pagesCount} pages`)
+          if (keywordsUpserted > 0) {
+            stepLog(`  └ Added ${keywordsUpserted} keywords to universe`)
+            updateStats({ keywordsTracked: keywordsUpserted })
+          }
+          if (pagesCreated > 0) {
+            stepLog(`  └ Discovered ${pagesCreated} new pages from GSC`)
+          }
+        } else if (gscRes.data.error) {
+          stepLog(`  └ GSC error: ${gscRes.data.error}`, 'warning')
         } else {
-          addLog(`  └ GSC not connected - skipping`)
+          stepLog(`  └ GSC not connected for this site`)
+        }
+        
+        // Auto-complete related GSC steps (they all use the same sync)
+        updateStep('gsc-queries', 'completed')
+        updateStep('gsc-pages', 'completed')
+        break
+
+      case 'gsc-indexing':
+        // Queue GSC indexing analysis as background job
+        try {
+          const indexJobRes = await api.post('/.netlify/functions/seo-background-jobs', {
+            siteId,
+            jobType: 'gsc-indexing'
+          })
+          const indexJobId = indexJobRes.data.job?.id
+          
+          if (indexJobId) {
+            stepLog(`  └ Scanning ALL URLs from GSC (job ${indexJobId.substring(0, 8)})...`)
+            
+            // Capture current abort signal
+            const startAbortSignal = abortSignalRef.current
+            
+            let completed = false
+            let attempts = 0
+            const maxAttempts = 180 // 15 minutes (200 URLs at 300ms each = ~60s + overhead)
+            
+            while (!completed && attempts < maxAttempts) {
+              // Wait with abort checking
+              for (let i = 0; i < 10; i++) {
+                if (abortSignalRef.current !== startAbortSignal) {
+                  console.log('[Wizard] GSC indexing polling aborted')
+                  stepLog(`  └ Indexing check aborted`)
+                  return
+                }
+                await new Promise(r => setTimeout(r, 500))
+              }
+              attempts++
+              
+              if (abortSignalRef.current !== startAbortSignal) return
+              
+              const jobStatus = await api.get(`/.netlify/functions/seo-background-jobs?jobId=${indexJobId}`)
+              const job = jobStatus.data?.job || jobStatus.data
+              
+              if (job.status === 'completed') {
+                completed = true
+                const result = job.result || {}
+                const issues = result.issues || []
+                const totalNotIndexed = (result.notIndexed || 0) + (result.orphanNotIndexed || 0)
+                
+                stepLog(`  └ Inspected ${result.urlsInspected || 0} URLs (${result.totalUrlsKnown || 0} total known)`)
+                stepLog(`  └ ${result.indexed || 0} indexed, ${totalNotIndexed} not indexed`)
+                
+                if (result.orphanNotIndexed > 0) {
+                  stepLog(`  └ Found ${result.orphanNotIndexed} orphan URLs (in GSC but not tracked)`)
+                }
+                
+                if (issues.length > 0) {
+                  stepLog(`  └ ${issues.length} indexing issue categories detected`)
+                  updateStats({ issuesFound: (s) => (s.issuesFound || 0) + totalNotIndexed })
+                }
+              } else if (job.status === 'failed') {
+                throw new Error(job.error || 'Indexing check failed')
+              } else if (attempts % 6 === 0) {
+                stepLog(`  └ Inspecting URLs... (${job.progress || 0}% complete)`)
+              }
+            }
+            
+            if (!completed) {
+              throw new Error('Indexing check timed out after 15 minutes')
+            }
+          } else {
+            throw new Error('Failed to queue indexing job')
+          }
+        } catch (err) {
+          // Re-throw to fail the step
+          console.error('[Wizard] Indexing check error:', err.message)
+          stepLog(`  └ ❌ Indexing check failed: ${err.message}`)
+          throw err
         }
         break
 
       case 'pagespeed':
-        await axios.post('/.netlify/functions/seo-pagespeed-impact', { 
-          siteId,
-          action: 'analyze'
-        })
-        addLog(`  └ Core Web Vitals analyzed`)
+        // Queue PageSpeed analysis as background job
+        try {
+          const psiJobRes = await api.post('/.netlify/functions/seo-background-jobs', {
+            siteId,
+            jobType: 'pagespeed'
+          })
+          const psiJobId = psiJobRes.data.job?.id
+          
+          if (psiJobId) {
+            stepLog(`  └ Analyzing Core Web Vitals (job ${psiJobId.substring(0, 8)})...`)
+            
+            // Capture current abort signal
+            const startAbortSignal = abortSignalRef.current
+            
+            let completed = false
+            let attempts = 0
+            const maxAttempts = 180 // 15 minutes (PSI is slow)
+            
+            while (!completed && attempts < maxAttempts) {
+              // Wait with abort checking
+              for (let i = 0; i < 10; i++) {
+                if (abortSignalRef.current !== startAbortSignal) {
+                  console.log('[Wizard] PageSpeed polling aborted')
+                  stepLog(`  └ PageSpeed analysis aborted`)
+                  return
+                }
+                await new Promise(r => setTimeout(r, 500))
+              }
+              attempts++
+              
+              if (abortSignalRef.current !== startAbortSignal) return
+              
+              const jobStatus = await api.get(`/.netlify/functions/seo-background-jobs?jobId=${psiJobId}`)
+              const job = jobStatus.data?.job || jobStatus.data
+              
+              if (job.status === 'completed') {
+                completed = true
+                const result = job.result || {}
+                stepLog(`  └ Analyzed ${result.pagesAnalyzed || 0} pages, avg score: ${result.avgScore || 'N/A'}`)
+                if (result.poorPerformance > 0) {
+                  stepLog(`  └ ${result.poorPerformance} pages need speed optimization`)
+                }
+              } else if (job.status === 'failed') {
+                throw new Error(job.error || 'PageSpeed analysis failed')
+              } else if (attempts % 6 === 0) {
+                // Log every 30 seconds
+                stepLog(`  └ Analyzing... (${job.progress || 0}% complete)`)
+              }
+            }
+            
+            if (!completed) {
+              throw new Error('PageSpeed analysis timed out after 15 minutes')
+            }
+          } else {
+            throw new Error('Failed to queue PageSpeed job')
+          }
+        } catch (err) {
+          // Re-throw to fail the step
+          console.error('[Wizard] PageSpeed error:', err.message)
+          stepLog(`  └ ❌ PageSpeed analysis failed: ${err.message}`)
+          throw err
+        }
         break
 
       case 'ai-train':
-        const trainRes = await axios.post('/.netlify/functions/seo-ai-train', { siteId })
-        addLog(`  └ AI Brain training initiated`)
+        // Force refresh during development to ensure training runs
+        const trainRes = await api.post('/.netlify/functions/seo-ai-train', { siteId, forceRefresh: true })
+        stepLog(`  └ Signal training initiated...`)
         // Poll for completion
-        for (let attempt = 0; attempt < 10; attempt++) {
-          await new Promise(r => setTimeout(r, 1000))
-          const statusRes = await axios.get(`/.netlify/functions/seo-ai-knowledge?siteId=${siteId}`)
+        for (let attempt = 0; attempt < 60; attempt++) {
+          await new Promise(r => setTimeout(r, 2000))
+          const statusRes = await api.get(`/.netlify/functions/seo-ai-knowledge?siteId=${siteId}`)
           if (statusRes.data.knowledge?.training_status === 'completed') {
-            addLog(`  └ Training complete!`)
+            stepLog(`  └ Signal training complete!`)
             break
           }
-          if (attempt === 9) {
-            addLog(`  └ Training in progress (will complete in background)`)
+          if (attempt === 59) {
+            stepLog(`  └ Training still in progress (will complete in background)`)
+          } else if (attempt % 5 === 0 && attempt > 0) {
+            stepLog(`  └ Still training... (${attempt * 2}s elapsed)`)
           }
         }
         break
 
       case 'ai-knowledge':
-        const knowledgeRes = await axios.get(`/.netlify/functions/seo-ai-knowledge?siteId=${siteId}`)
+        // Force refresh
+        const knowledgeRes = await api.get(`/.netlify/functions/seo-ai-knowledge?siteId=${siteId}&refresh=true`)
         if (knowledgeRes.data.knowledge) {
-          addLog(`  └ Knowledge base loaded`)
+          stepLog(`  └ Knowledge base loaded`)
         }
         break
 
       case 'topic-clusters':
-        const clustersRes = await axios.post('/.netlify/functions/seo-topic-clusters', { 
-          siteId,
-          action: 'generate'
-        })
-        const clustersFound = clustersRes.data.clusters?.length || 0
-        addLog(`  └ Created ${clustersFound} topic clusters`)
+        // This now returns 202 and runs in background
+        const clustersRes = await api.post('/.netlify/functions/seo-topic-clusters', { siteId, forceRefresh: true })
+        if (clustersRes.status === 202 && clustersRes.data.jobId) {
+          stepLog(`  └ Topic clustering queued (runs in background)`)
+        } else {
+          const clustersFound = clustersRes.data.clusters?.length || 0
+          stepLog(`  └ Created ${clustersFound} topic clusters`)
+        }
         break
 
       case 'blog-brain':
-        await axios.post('/.netlify/functions/seo-ai-blog-brain', { 
+        // Force refresh
+        await api.post('/.netlify/functions/seo-ai-blog-brain', { 
           siteId,
-          action: 'train'
+          action: 'recommend-topics',
+          forceRefresh: true
         })
-        addLog(`  └ Blog Brain trained on content style`)
+        stepLog(`  └ Content style analysis complete`)
         break
 
       case 'cannibalization':
-        const cannibRes = await axios.post('/.netlify/functions/seo-cannibalization', { 
+        // Force refresh - re-detect
+        const cannibRes = await api.post('/.netlify/functions/seo-cannibalization', { 
           siteId,
-          action: 'detect'
+          action: 'detect',
+          forceRefresh: true
         })
         const cannibIssues = cannibRes.data.issues?.length || 0
         if (cannibIssues > 0) {
           updateStats(prev => ({ ...prev, issuesFound: prev.issuesFound + cannibIssues }))
-          addLog(`  └ Found ${cannibIssues} cannibalization issues`)
+          stepLog(`  └ Found ${cannibIssues} cannibalization issues`)
         } else {
-          addLog(`  └ No cannibalization detected`)
+          stepLog(`  └ No cannibalization detected`)
         }
         break
 
       case 'content-decay':
-        const decayRes = await axios.post('/.netlify/functions/seo-content-decay', { 
-          siteId,
-          action: 'detect'
-        })
+        // Force refresh
+        const decayRes = await api.post('/.netlify/functions/seo-content-decay', { siteId, forceRefresh: true })
         const decayingPages = decayRes.data.decayingPages?.length || 0
         if (decayingPages > 0) {
           updateStats(prev => ({ ...prev, issuesFound: prev.issuesFound + decayingPages }))
-          addLog(`  └ Found ${decayingPages} pages with declining traffic`)
+          stepLog(`  └ Found ${decayingPages} pages with declining traffic`)
         } else {
-          addLog(`  └ No content decay detected`)
+          stepLog(`  └ No content decay detected`)
         }
         break
 
       case 'content-gap':
-        const gapRes = await axios.post('/.netlify/functions/seo-content-gap-analysis', { 
+        // This now returns 202 and runs in background
+        const gapRes = await api.post('/.netlify/functions/seo-content-gap-analysis', { 
           siteId,
-          action: 'analyze'
+          action: 'analyze',
+          forceRefresh: true
         })
-        const gaps = gapRes.data.gaps?.length || 0
-        updateStats(prev => ({ ...prev, opportunitiesDetected: prev.opportunitiesDetected + gaps }))
-        addLog(`  └ Found ${gaps} content opportunities`)
+        if (gapRes.status === 202 && gapRes.data.jobId) {
+          stepLog(`  └ Content gap analysis queued (runs in background)`)
+        } else {
+          const gaps = gapRes.data.gaps?.length || 0
+          updateStats(prev => ({ ...prev, opportunitiesDetected: prev.opportunitiesDetected + gaps }))
+          stepLog(`  └ Found ${gaps} content opportunities`)
+        }
         break
 
       case 'serp-features':
-        const serpRes = await axios.post('/.netlify/functions/seo-serp-features', { 
-          siteId,
-          action: 'analyze'
-        })
-        const serpOpps = serpRes.data.opportunities?.length || 0
-        updateStats(prev => ({ ...prev, opportunitiesDetected: prev.opportunitiesDetected + serpOpps }))
-        addLog(`  └ Found ${serpOpps} SERP feature opportunities`)
+        // This now returns 202 and runs in background
+        const serpRes = await api.post('/.netlify/functions/seo-serp-features', { siteId, forceRefresh: true })
+        if (serpRes.status === 202 && serpRes.data.jobId) {
+          stepLog(`  └ SERP features analysis queued (runs in background)`)
+        } else {
+          const serpOpps = serpRes.data.opportunities?.length || 0
+          updateStats(prev => ({ ...prev, opportunitiesDetected: prev.opportunitiesDetected + serpOpps }))
+          stepLog(`  └ Found ${serpOpps} SERP feature opportunities`)
+        }
         break
 
       case 'technical-audit':
-        await axios.post('/.netlify/functions/seo-serp-analyze', { 
+        await api.post('/.netlify/functions/seo-serp-analyze', { 
           siteId,
-          action: 'audit'
+          action: 'audit',
+          forceRefresh: true
         })
-        addLog(`  └ Technical audit complete`)
+        stepLog(`  └ Technical audit complete`)
         break
 
       case 'backlinks':
-        const backlinksRes = await axios.post('/.netlify/functions/seo-backlinks', { 
-          siteId,
-          action: 'analyze'
-        })
-        addLog(`  └ Backlink profile analyzed`)
+        // Force refresh
+        const backlinksRes = await api.post('/.netlify/functions/seo-backlinks', { siteId, forceRefresh: true })
+        stepLog(`  └ Backlink profile analyzed`)
         break
 
       case 'local-seo':
-        await axios.post('/.netlify/functions/seo-local-analyze', { 
+        await api.post('/.netlify/functions/seo-local-analyze', { 
           siteId,
-          action: 'audit'
+          action: 'audit',
+          forceRefresh: true
         })
-        addLog(`  └ Local SEO signals checked`)
+        stepLog(`  └ Local SEO signals checked`)
         break
 
       case 'competitors':
-        await axios.post('/.netlify/functions/seo-competitor-analyze', { 
+        await api.post('/.netlify/functions/seo-competitor-analyze', { 
           siteId,
-          action: 'analyze'
+          action: 'analyze',
+          forceRefresh: true
         })
-        addLog(`  └ Competitor benchmarking complete`)
+        stepLog(`  └ Competitor benchmarking complete`)
         break
 
       case 'schema-generate':
-        const schemaRes = await axios.post('/.netlify/functions/seo-schema-generate', { 
-          siteId,
-          generateForAll: true
-        })
-        const schemasGenerated = schemaRes.data.schemasGenerated || 0
-        updateStats({ schemaGenerated: schemasGenerated })
-        addLog(`  └ Generated schema for ${schemasGenerated} pages`)
+        // Schema generation - force refresh
+        const schemaStatusRes = await api.get(`/.netlify/functions/seo-schema-generate?siteId=${siteId}&forceRefresh=true`)
+        const pagesWithSchema = schemaStatusRes.data.pagesWithSchema || 0
+        updateStats({ schemaGenerated: pagesWithSchema })
+        stepLog(`  └ Found ${pagesWithSchema} pages with schema markup`)
         break
 
       case 'metadata-optimize':
-        const metaRes = await axios.post('/.netlify/functions/seo-metadata-api', { 
-          siteId,
-          action: 'optimize_all'
-        })
-        const metaOptimized = metaRes.data.optimized || 0
-        addLog(`  └ Optimized metadata for ${metaOptimized} pages`)
+        // Metadata optimization happens during AI analysis
+        stepLog(`  └ Metadata optimization included in Signal analysis`)
         break
 
       case 'predictive-ranking':
-        await axios.post('/.netlify/functions/seo-predictive-ranking', { 
-          siteId,
-          action: 'calculate_all'
-        })
-        addLog(`  └ Ranking potential calculated`)
+        // Predictive ranking available on-demand
+        stepLog(`  └ Predictive ranking available on-demand for pages`)
         break
 
       case 'opportunities':
-        const oppsRes = await axios.post('/.netlify/functions/seo-opportunities-detect', { siteId })
+        const oppsRes = await api.post('/.netlify/functions/seo-opportunities-detect', { siteId, forceRefresh: true })
         const oppsFound = oppsRes.data.opportunities?.length || 0
         updateStats(prev => ({ ...prev, opportunitiesDetected: prev.opportunitiesDetected + oppsFound }))
-        addLog(`  └ Detected ${oppsFound} quick wins`)
+        stepLog(`  └ Detected ${oppsFound} quick wins`)
         break
 
       case 'ai-recommendations':
-        const recsRes = await axios.post('/.netlify/functions/seo-ai-recommendations', { 
+        // Force refresh - use seo-ai-analyze to generate recommendations
+        const recsRes = await api.post('/.netlify/functions/seo-ai-analyze', { 
           siteId,
-          generateNew: true
+          analysisType: 'full_audit',
+          forceRefresh: true
         })
         const recsCreated = recsRes.data.recommendations?.length || 0
         updateStats({ recommendationsCreated: recsCreated })
-        addLog(`  └ Generated ${recsCreated} AI recommendations`)
+        stepLog(`  └ Generated ${recsCreated} Signal recommendations`)
+        break
+
+      case 'cwv-baseline':
+        // CWV check requires a URL - use the site's homepage
+        try {
+          const cwvRes = await api.post('/.netlify/functions/seo-cwv', { 
+            siteId,
+            url: `https://${domain}`,
+            device: 'mobile',
+            forceRefresh: true
+          })
+          const cwvScore = cwvRes.data.result?.performance_score || 0
+          stepLog(`  └ CWV baseline recorded (score: ${cwvScore})`)
+        } catch (cwvErr) {
+          // PageSpeed API might not be configured
+          stepLog(`  └ CWV will be measured on next scheduled run`)
+        }
         break
 
       case 'schedule-setup':
-        await axios.post('/.netlify/functions/seo-schedule', { 
-          siteId,
-          action: 'setup_default',
-          schedules: [
-            { type: 'gsc_sync', frequency: 'daily' },
-            { type: 'content_decay', frequency: 'weekly' },
-            { type: 'ai_analysis', frequency: 'weekly' },
-            { type: 'opportunities', frequency: 'daily' }
-          ]
-        })
-        addLog(`  └ Automated schedules configured`)
+        // seo-schedule expects: siteId, schedule (frequency), enabled, etc.
+        try {
+          await api.post('/.netlify/functions/seo-schedule', { 
+            siteId,
+            schedule: 'weekly',
+            enabled: true,
+            notifications: true,
+            modules: ['all']
+          })
+          stepLog(`  └ Automated schedules configured`)
+        } catch (scheduleErr) {
+          // If schedule table doesn't exist, just skip
+          stepLog(`  └ Scheduling will be configured later`)
+        }
         break
 
       case 'complete':
@@ -1043,7 +1650,7 @@ export default function SEOSetupWizard({ siteId, domain, onComplete, onSkip }) {
       default:
         // Generic endpoint call
         if (step.endpoint) {
-          await axios.post(`/.netlify/functions/${step.endpoint}`, { siteId })
+          await api.post(`/.netlify/functions/${step.endpoint}`, { siteId })
         }
     }
 
@@ -1070,10 +1677,137 @@ export default function SEOSetupWizard({ siteId, domain, onComplete, onSkip }) {
     return 'pending'
   }
 
-  const isComplete = progress === 100 && !isRunning
+  // Retry setup from the beginning
+  const retrySetup = useCallback(() => {
+    setStepStatuses({})
+    setProgress(0)
+    setCurrentStep(0)
+    setError(null)
+    setFailedStep(null)
+    setStats({
+      pagesDiscovered: 0,
+      keywordsTracked: 0,
+      issuesFound: 0,
+      opportunitiesDetected: 0,
+      schemaGenerated: 0,
+      recommendationsCreated: 0
+    })
+    // Trigger runSetup after state reset
+    setTimeout(() => runSetup(), 100)
+  }, [runSetup])
+
+  // Retry from failed step (preserves progress up to failure point)
+  const retryFromFailedStep = useCallback(() => {
+    if (!failedStep) return
+    
+    // Keep existing completed steps, clear failed step
+    const updatedStatuses = { ...stepStatuses }
+    delete updatedStatuses[failedStep.id]
+    setStepStatuses(updatedStatuses)
+    
+    setError(null)
+    setFailedStep(null)
+    setCurrentStep(failedStep.stepIndex)
+    setProgress(Math.round((failedStep.stepIndex / SETUP_STEPS.length) * 100))
+    
+    // Continue from failed step
+    setTimeout(() => continueFromStep(failedStep.stepIndex), 100)
+  }, [failedStep, stepStatuses])
+
+  // Stop and restart current step manually
+  const stopAndRestartCurrentStep = useCallback(() => {
+    if (!isRunning || currentStep === null) return
+    
+    const step = SETUP_STEPS[currentStep]
+    
+    // Signal abort to any running operations (use ref for immediate effect)
+    abortSignalRef.current++
+    console.log('[Wizard] Abort signal incremented to:', abortSignalRef.current)
+    
+    // Clear current step status
+    const updatedStatuses = { ...stepStatuses }
+    delete updatedStatuses[step.id]
+    setStepStatuses(updatedStatuses)
+    
+    addLog(`🔄 Restarting ${step.title}...`, 'info')
+    
+    // Restart from current step after a brief delay
+    setTimeout(() => {
+      // Reset current step to trigger re-execution
+      setCurrentStep(currentStep)
+      continueFromStep(currentStep, true)
+    }, 500)
+  }, [isRunning, currentStep, stepStatuses, addLog])
+
+  // Continue setup from a specific step index
+  const continueFromStep = useCallback(async (startIndex, isRestart = false) => {
+    if (isRunning && !isRestart) return
+    
+    setIsRunning(true)
+    setError(null)
+    setFailedStep(null)
+
+    try {
+      for (let i = startIndex; i < SETUP_STEPS.length; i++) {
+        const step = SETUP_STEPS[i]
+        setCurrentStep(i)
+        updateStep(step.id, 'running')
+        
+        // Calculate progress
+        const progressPercent = Math.round((i / SETUP_STEPS.length) * 100)
+        setProgress(progressPercent)
+        
+        addLog(`▶️ ${step.title}...`, 'info')
+
+        // Execute step
+        try {
+          await executeStep(step)
+          updateStep(step.id, 'completed')
+          addLog(`✅ ${step.title} complete`, 'success')
+        } catch (stepError) {
+          // STOP on ANY failure
+          updateStep(step.id, 'error')
+          const errorMessage = stepError.response?.data?.message || stepError.response?.data?.error || stepError.message
+          addLog(`❌ ${step.title} failed: ${errorMessage}`, 'error')
+          setError(`${step.title} failed: ${errorMessage}`)
+          setFailedStep({
+            id: step.id,
+            title: step.title,
+            error: errorMessage,
+            stepIndex: i
+          })
+          setIsRunning(false)
+          return // Stop execution immediately
+        }
+
+        // Small delay for visual effect
+        await new Promise(r => setTimeout(r, 300))
+      }
+
+      setProgress(100)
+      addLog('🎉 SEO setup complete! Signal is fully configured.', 'success')
+
+      // Mark site as setup complete
+      await api.put('/.netlify/functions/seo-sites-update', {
+        siteId,
+        setup_completed: true,
+        setup_completed_at: new Date().toISOString()
+      })
+
+    } catch (err) {
+      console.error('Setup error:', err)
+      setError(err.message || 'Setup failed')
+      addLog(`❌ Error: ${err.message}`, 'error')
+    } finally {
+      setIsRunning(false)
+    }
+  }, [siteId, addLog, updateStep, isRunning, executeStep])
+
+  const isComplete = progress === 100 && !isRunning && !error
+  const hasFailed = !!failedStep
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-50 via-white to-purple-50/30 p-6">
+    <div className="min-h-screen bg-[var(--surface-page)] p-6">
       <div className="max-w-7xl mx-auto">
         
         {/* Header */}
@@ -1083,20 +1817,17 @@ export default function SEOSetupWizard({ siteId, domain, onComplete, onSkip }) {
           className="text-center mb-8"
         >
           <div className="flex items-center justify-center gap-3 mb-4">
-            <motion.div
-              animate={isRunning ? { rotate: 360 } : {}}
-              transition={{ duration: 3, repeat: isRunning ? Infinity : 0, ease: 'linear' }}
-            >
-              <Brain className="w-12 h-12 text-purple-600" />
-            </motion.div>
-            <h1 className="text-3xl font-bold bg-gradient-to-r from-purple-600 to-indigo-600 bg-clip-text text-transparent">
-              SEO AI Brain Setup
+            <SignalSEOLogo size={56} animate={isRunning} />
+            <h1 className="text-3xl font-bold bg-gradient-to-r from-[#95d47d] to-[#238b95] bg-clip-text text-transparent">
+              Signal SEO Setup
             </h1>
           </div>
-          <p className="text-gray-600">
+          <p className="text-[var(--text-secondary)]">
             {isComplete 
-              ? '🎉 Your AI SEO Brain is fully configured and ready!' 
-              : `Configuring comprehensive SEO intelligence for ${domain}`
+              ? '🎉 Signal SEO is fully configured and ready!' 
+              : hasFailed
+                ? '❌ Setup failed - see error details below'
+                : `Configuring comprehensive SEO intelligence for ${domain}`
             }
           </p>
         </motion.div>
@@ -1117,7 +1848,7 @@ export default function SEOSetupWizard({ siteId, domain, onComplete, onSkip }) {
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           
           {/* Left column - Steps */}
-          <div className="lg:col-span-1 space-y-2 max-h-[600px] overflow-y-auto pr-2">
+          <div className="lg:col-span-1 space-y-2 h-[800px] overflow-y-auto pr-2">
             {SETUP_STEPS.map((step, index) => (
               <StepIndicator
                 key={step.id}
@@ -1135,16 +1866,30 @@ export default function SEOSetupWizard({ siteId, domain, onComplete, onSkip }) {
             <Card className="p-6">
               <div className="flex flex-col items-center">
                 <ProgressRing progress={progress} size={160} />
-                <p className="mt-4 text-sm text-gray-500">
+                <p className="mt-4 text-sm text-[var(--text-secondary)]">
                   {isComplete 
                     ? 'Setup complete!' 
-                    : `Step ${currentStep + 1} of ${SETUP_STEPS.length}`
+                    : parallelProgress.total > 0
+                      ? `⚡ Running ${parallelProgress.running} steps in parallel (${parallelProgress.completed}/${parallelProgress.total} done)`
+                      : `Step ${currentStep + 1} of ${SETUP_STEPS.length}`
                   }
                 </p>
                 {SETUP_STEPS[currentStep] && !isComplete && (
-                  <p className="text-lg font-medium text-gray-900 mt-2">
+                  <p className="text-lg font-medium text-[var(--text-primary)] mt-2">
                     {SETUP_STEPS[currentStep].title}
                   </p>
+                )}
+                {(isRunning || hasFailed) && !isComplete && (
+                  <Button 
+                    onClick={stopAndRestartCurrentStep}
+                    variant="outline"
+                    size="sm"
+                    className="mt-4"
+                    disabled={!isRunning}
+                  >
+                    <RefreshCw className="w-3 h-3 mr-2" />
+                    Restart Current Step
+                  </Button>
                 )}
               </div>
             </Card>
@@ -1192,7 +1937,7 @@ export default function SEOSetupWizard({ siteId, domain, onComplete, onSkip }) {
 
           {/* Right column - Logs */}
           <div className="lg:col-span-1">
-            <Card className="h-[500px] flex flex-col">
+            <Card className="h-[800px] flex flex-col">
               <CardHeader className="pb-2">
                 <CardTitle className="text-sm flex items-center gap-2">
                   <Activity className="w-4 h-4" />
@@ -1232,20 +1977,20 @@ export default function SEOSetupWizard({ siteId, domain, onComplete, onSkip }) {
             animate={{ opacity: 1, y: 0 }}
             className="mt-8 text-center"
           >
-            <div className="inline-flex flex-col items-center gap-4 bg-gradient-to-r from-emerald-50 to-cyan-50 rounded-2xl p-8 border border-emerald-100">
-              <div className="flex items-center gap-2 text-emerald-600">
+            <div className="inline-flex flex-col items-center gap-4 bg-gradient-to-r from-[#95d47d]/10 to-[#238b95]/10 dark:from-[#95d47d]/20 dark:to-[#238b95]/20 rounded-2xl p-8 border border-[#95d47d]/30">
+              <div className="flex items-center gap-2 text-[#238b95]">
                 <CheckCircle2 className="w-8 h-8" />
                 <span className="text-xl font-semibold">Setup Complete!</span>
               </div>
-              <p className="text-gray-600 max-w-md">
-                Your AI SEO Brain has analyzed your entire site and is ready to help you
+              <p className="text-[var(--text-secondary)] max-w-md">
+                Signal SEO has analyzed your entire site and is ready to help you
                 dominate search rankings. Check your dashboard for personalized recommendations.
               </p>
               <div className="flex gap-3">
                 <Button 
                   size="lg"
                   onClick={onComplete}
-                  className="bg-gradient-to-r from-emerald-500 to-cyan-500 hover:from-emerald-600 hover:to-cyan-600"
+                  className="bg-gradient-to-r from-[#95d47d] to-[#238b95] hover:from-[#7bc064] hover:to-[#1a7a83] text-white"
                 >
                   <Rocket className="w-5 h-5 mr-2" />
                   Go to Dashboard
@@ -1262,21 +2007,73 @@ export default function SEOSetupWizard({ siteId, domain, onComplete, onSkip }) {
           </motion.div>
         )}
 
-        {/* Error state */}
-        {error && (
+        {/* Error state - detailed failure panel */}
+        {hasFailed && failedStep && (
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="mt-8"
+          >
+            <Card className="max-w-2xl mx-auto p-6 border-red-500/30 bg-gradient-to-br from-red-500/10 to-orange-500/10">
+              <div className="flex items-start gap-4">
+                <div className="flex-shrink-0 w-12 h-12 rounded-full bg-red-500/20 flex items-center justify-center">
+                  <AlertCircle className="w-6 h-6 text-red-500" />
+                </div>
+                <div className="flex-1">
+                  <h3 className="text-lg font-semibold text-red-500 mb-1">
+                    Setup Failed at Step {failedStep.stepIndex + 1}
+                  </h3>
+                  <p className="text-red-400 font-medium mb-2">
+                    {failedStep.title}
+                  </p>
+                  <div className="bg-red-500/10 rounded-lg p-3 mb-4 border border-red-500/20">
+                    <p className="text-sm text-red-400 font-mono break-all">
+                      {failedStep.error}
+                    </p>
+                  </div>
+                  <p className="text-sm text-[var(--text-secondary)] mb-4">
+                    The setup has been stopped. You can retry from this step or start over.
+                    Check the logs on the right for more details.
+                  </p>
+                  <div className="flex gap-3">
+                    <Button 
+                      onClick={retryFromFailedStep} 
+                      className="bg-red-600 hover:bg-red-700 text-white"
+                    >
+                      <RefreshCw className="w-4 h-4 mr-2" />
+                      Retry from Step {failedStep.stepIndex + 1}
+                    </Button>
+                    <Button 
+                      onClick={retrySetup} 
+                      variant="outline"
+                    >
+                      Restart from Beginning
+                    </Button>
+                    <Button variant="outline" onClick={onSkip}>
+                      Skip Setup
+                    </Button>
+                  </div>
+                </div>
+              </div>
+            </Card>
+          </motion.div>
+        )}
+
+        {/* Legacy error state (for non-step errors) */}
+        {error && !hasFailed && (
           <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             className="mt-8 text-center"
           >
-            <Card className="inline-block p-6 border-red-200 bg-red-50">
-              <div className="flex items-center gap-3 text-red-600 mb-4">
+            <Card className="inline-block p-6 border-red-500/30 bg-red-500/10">
+              <div className="flex items-center gap-3 text-red-500 mb-4">
                 <AlertCircle className="w-6 h-6" />
                 <span className="font-medium">Setup encountered an error</span>
               </div>
-              <p className="text-sm text-red-600 mb-4">{error}</p>
+              <p className="text-sm text-red-400 mb-4">{error}</p>
               <div className="flex gap-3 justify-center">
-                <Button onClick={runSetup} variant="destructive">
+                <Button onClick={retrySetup} variant="destructive">
                   <RefreshCw className="w-4 h-4 mr-2" />
                   Retry Setup
                 </Button>

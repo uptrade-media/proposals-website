@@ -14,6 +14,7 @@ import Dashboard from './pages/Dashboard'
 // Lazy load less critical routes for code splitting
 const MagicLogin = lazy(() => import('./pages/MagicLogin'))
 const ResetPassword = lazy(() => import('./pages/ResetPassword'))
+const AccountSetup = lazy(() => import('./pages/AccountSetup'))
 const ProposalGate = lazy(() => import('./components/ProposalGate'))
 const AuditGate = lazy(() => import('./components/AuditGate'))
 const Audits = lazy(() => import('./pages/Audits'))
@@ -24,6 +25,9 @@ const InvoicePayment = lazy(() => import('./pages/InvoicePayment'))
 
 // SEO Module
 const SEOModule = lazy(() => import('./pages/seo/SEOModule'))
+
+// Ecommerce Module
+const EcommerceModule = lazy(() => import('./pages/ecommerce/EcommerceModule'))
 
 // Client SEO Dashboard (tenant-facing, read-only)
 const ClientSEODashboard = lazy(() => import('./pages/client/ClientSEODashboard'))
@@ -86,6 +90,7 @@ export default function App() {
               <Route path="/login" element={<LoginPage />} />
               <Route path="/auth/callback" element={<AuthCallback />} />
               <Route path="/auth/magic" element={<MagicLogin />} />
+              <Route path="/setup" element={<AccountSetup />} />
               <Route path="/reset-password" element={<ResetPassword />} />
               <Route path="/p/:slug" element={<ProposalGate />} />
               <Route path="/audit/:id" element={<AuditGate />} />
@@ -129,6 +134,16 @@ export default function App() {
                 element={
                   <Protected>
                     <SEOModule />
+                  </Protected>
+                }
+              />
+              
+              {/* Ecommerce Module - Shopify store management */}
+              <Route
+                path="/ecommerce/*"
+                element={
+                  <Protected>
+                    <EcommerceModule />
                   </Protected>
                 }
               />

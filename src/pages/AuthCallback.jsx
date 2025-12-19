@@ -2,6 +2,8 @@ import { useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Loader2 } from 'lucide-react'
 import useAuthStore from '../lib/auth-store'
+import axios from 'axios'
+import { supabase } from '../lib/supabase-auth'
 
 export default function AuthCallback() {
   const navigate = useNavigate()
@@ -11,8 +13,52 @@ export default function AuthCallback() {
     const handleCallback = async () => {
       console.log('[AuthCallback] Processing OAuth callback...')
       
-      // Supabase has already set the session in localStorage
-      // Just verify and fetch user data
+      // Get the current authenticated user
+      const { data: { user } } = await supabase.auth.getUser()
+      
+      if (user) {
+        console.log('[AuthCallback] User authenticated:', user.email)
+        
+        // Check if this is a new account setup (from AccountSetup page with JWT token)
+        const pendingSetupToken = localStorage.getItem('pendingSetupToken')
+        
+        if (pendingSetupToken) {
+          console.log('[AuthCallback] Completing account setup after OAuth...')
+          localStorage.removeItem('pendingSetupToken')
+          
+          try {
+            // Get the current user's Google ID
+            const googleId = user?.user_metadata?.provider_id || user?.id
+            
+            // Complete the setup on the backend
+            await axios.post('/.netlify/functions/auth-complete-setup', {
+              token: pendingSetupToken,
+              method: 'google',
+              googleId
+            })
+            
+            console.log('[AuthCallback] Account setup completed via Google OAuth')
+          } catch (setupError) {
+            console.error('[AuthCallback] Failed to complete setup:', setupError)
+            // Continue anyway - the user is authenticated
+          }
+        } else {
+          // This might be from a Supabase magic link/invite - link contact by email
+          console.log('[AuthCallback] Linking contact for:', user.email)
+          try {
+            await axios.post('/.netlify/functions/auth-link-contact', {
+              email: user.email,
+              authUserId: user.id,
+              name: user.user_metadata?.name || user.user_metadata?.full_name
+            })
+          } catch (linkError) {
+            // Non-fatal - contact might already be linked
+            console.log('[AuthCallback] Contact link result:', linkError?.response?.data || 'ok')
+          }
+        }
+      }
+      
+      // Verify and fetch user data
       const result = await checkAuth()
       
       if (result.success && result.user) {

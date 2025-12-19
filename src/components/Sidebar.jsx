@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
+import { Separator } from '@/components/ui/separator'
 import { 
   Home, 
   FileText, 
@@ -53,8 +54,56 @@ const Sidebar = ({
   const { invoices } = useBillingStore()
   const { newLeadsCount, fetchNewLeadsCount } = useNotificationStore()
   
-  // Use raw feature check so super admins can also toggle modules on/off
-  const hasFeature = hasFeatureRaw
+  // Check user roles - super admins get full access to everything
+  const isAdmin = user?.role === 'admin' || isSuperAdmin
+  const isSalesRep = user?.teamRole === 'sales_rep' && !isSuperAdmin
+  const isManager = user?.teamRole === 'manager' || isSuperAdmin
+  
+  // Check if viewing as a project-based tenant (e.g., GWA)
+  const isProjectTenant = currentOrg?.isProjectTenant === true
+  const tenantName = currentOrg?.name || 'Tenant'
+  const tenantFeatures = currentOrg?.features || []
+  
+  // Debug: Log tenant features when viewing as project tenant
+  if (isProjectTenant && tenantFeatures) {
+    console.log('[Sidebar] Project Tenant Features:', tenantFeatures, 'Type:', Array.isArray(tenantFeatures) ? 'array' : typeof tenantFeatures)
+  }
+  
+  // Helper to check if tenant has a specific feature
+  const tenantHasFeature = (feature) => {
+    const has = Array.isArray(tenantFeatures) ? tenantFeatures.includes(feature) : tenantFeatures?.[feature] === true
+    if (isProjectTenant) {
+      console.log('[Sidebar] tenantHasFeature:', feature, '=', has)
+    }
+    return has
+  }
+  
+  // Check if viewing as a different tenant
+  // If user.org_id exists and differs from current org, they're viewing a tenant
+  // If user.org_id doesn't exist (admin in main portal), they're NOT viewing a tenant
+  const isViewingTenant = currentOrg && user?.org_id && currentOrg.id !== user.org_id
+  
+  // Feature check: For admin portal (not viewing tenant), show admin tools by default
+  // But respect if they're explicitly disabled (feature flag set to false)
+  const hasFeature = (featureKey) => {
+    const rawValue = hasFeatureRaw(featureKey)
+    
+    // If viewing a tenant, use their feature flags
+    if (isViewingTenant) {
+      return rawValue
+    }
+    
+    // For admin portal: admin tools default to true unless explicitly set to false
+    const adminTools = ['seo', 'ecommerce', 'blog', 'portfolio', 'email', 'team', 'team_metrics', 'forms']
+    if (isAdmin && adminTools.includes(featureKey)) {
+      // If feature is undefined (not set), default to true for admin tools
+      // If feature is explicitly false, respect that
+      return rawValue !== false
+    }
+    
+    // All other features use normal checking
+    return rawValue
+  }
 
   // Fetch notification counts on mount
   useEffect(() => {
@@ -71,15 +120,11 @@ const Sidebar = ({
     inv.status === 'pending' || inv.status === 'overdue'
   ).length
 
-  // Check user roles - super admins get full access to everything
-  const isAdmin = user?.role === 'admin' || isSuperAdmin
-  const isSalesRep = user?.teamRole === 'sales_rep' && !isSuperAdmin
-  const isManager = user?.teamRole === 'manager' || isSuperAdmin
-
   // Base navigation items available to everyone
   const baseNavigationItems = [
     { id: 'dashboard', label: 'Dashboard', icon: Home, badge: null, route: null },
-    { id: 'audits', label: 'Audits', icon: LineChart, badge: unreadAudits > 0 ? unreadAudits.toString() : null, route: null },
+    // Only show Audits if NOT viewing a project tenant
+    ...(!isProjectTenant ? [{ id: 'audits', label: 'Audits', icon: LineChart, badge: unreadAudits > 0 ? unreadAudits.toString() : null, route: null }] : []),
     { id: 'proposals', label: 'Proposals', icon: Send, badge: null, route: null },
   ]
 
@@ -90,24 +135,29 @@ const Sidebar = ({
 
   // Full navigation for admins and managers (not sales reps)
   // Respects feature flags - items only show if feature is enabled (or user is super admin)
+  // For project tenants: show core Uptrade services (Files, Messages, Billing)
   const fullNavigationItems = !isSalesRep ? [
-    { id: 'projects', label: 'Projects', icon: FileText, badge: null, route: null },
-    ...(hasFeature('files') ? [{ id: 'files', label: 'Files', icon: FolderOpen, badge: null, route: null }] : []),
-    ...(hasFeature('messages') ? [{ id: 'messages', label: 'Messages', icon: MessageSquare, badge: unreadMessages > 0 ? unreadMessages.toString() : null, route: null }] : []),
-    ...(hasFeature('billing') ? [{ id: 'billing', label: 'Billing', icon: DollarSign, badge: unpaidInvoicesCount > 0 ? unpaidInvoicesCount.toString() : null, route: null }] : []),
-    ...(hasFeature('analytics') ? [{ id: 'analytics', label: 'Analytics', icon: BarChart3, badge: null, route: null }] : []),
+    // Projects: Only show for admin, or when NOT a project tenant
+    ...(isAdmin || !isProjectTenant ? [{ id: 'projects', label: 'Projects', icon: FileText, badge: null, route: null }] : []),
+    // For project tenants, always show Files, Messages, Billing (Uptrade services to them)
+    ...(isProjectTenant || hasFeature('files') ? [{ id: 'files', label: 'Files', icon: FolderOpen, badge: null, route: null }] : []),
+    ...(isProjectTenant || hasFeature('messages') ? [{ id: 'messages', label: 'Messages', icon: MessageSquare, badge: unreadMessages > 0 ? unreadMessages.toString() : null, route: null }] : []),
+    ...(isProjectTenant || hasFeature('billing') ? [{ id: 'billing', label: 'Billing', icon: DollarSign, badge: unpaidInvoicesCount > 0 ? unpaidInvoicesCount.toString() : null, route: null }] : []),
   ] : []
 
-  // Admin-only navigation items - all respect feature flags
-  const adminItems = isAdmin ? [
+  // Admin-only navigation items when NOT in tenant context
+  // These are Uptrade's internal admin tools
+  const adminItems = (isAdmin && !isProjectTenant) ? [
     { id: 'clients', label: 'Clients', icon: Users, badge: newLeadsCount > 0 ? newLeadsCount.toString() : null, route: null },
     ...(hasFeature('seo') ? [{ id: 'seo', label: 'SEO', icon: Search, badge: null, route: null }] : []),
+    ...(hasFeature('ecommerce') ? [{ id: 'ecommerce', label: 'Ecommerce', icon: ShoppingCart, badge: null, route: null }] : []),
     ...(hasFeature('team') ? [{ id: 'team', label: 'Team', icon: Shield, badge: null, route: null }] : []),
     ...(hasFeature('team_metrics') ? [{ id: 'team-metrics', label: 'Team Metrics', icon: Trophy, badge: null, route: null }] : []),
     ...(hasFeature('forms') ? [{ id: 'forms', label: 'Forms', icon: ClipboardList, badge: null, route: null }] : []),
     ...(hasFeature('blog') ? [{ id: 'blog', label: 'Blog', icon: BookOpen, badge: null, route: null }] : []),
     ...(hasFeature('portfolio') ? [{ id: 'portfolio', label: 'Portfolio', icon: Briefcase, badge: null, route: null }] : []),
     ...(hasFeature('email') ? [{ id: 'email', label: 'Email Manager', icon: Mail, badge: null, route: null }] : []),
+    ...(hasFeature('analytics') ? [{ id: 'analytics', label: 'Analytics', icon: BarChart3, badge: null, route: null }] : []),
   ] : []
   
   // Super admin items (tenant management is now in Projects tab)
@@ -116,16 +166,25 @@ const Sidebar = ({
   ] : []
 
   // Manager gets team access but not blog/portfolio/email - respects feature flags
-  const managerItems = (isManager && !isAdmin) ? [
+  const managerItems = (isManager && !isAdmin && !isProjectTenant) ? [
     { id: 'clients', label: 'Clients', icon: Users, badge: newLeadsCount > 0 ? newLeadsCount.toString() : null, route: null },
     ...(hasFeature('team') ? [{ id: 'team', label: 'Team', icon: Shield, badge: null, route: null }] : []),
     ...(hasFeature('team_metrics') ? [{ id: 'team-metrics', label: 'Team Metrics', icon: Trophy, badge: null, route: null }] : []),
   ] : []
 
-  // Tenant-specific items (when viewing as a tenant/client organization)
-  // This shows "My Sales" for clients who have their own websites with forms/customers
-  const tenantItems = currentOrg ? [
-    ...(hasFeature('my_sales') ? [{ id: 'my-sales', label: 'My Sales', icon: ShoppingCart, badge: null, route: null, divider: true }] : []),
+  // Tenant-specific items (when viewing a project tenant like GWA)
+  // These are the modules that the TENANT manages for their own business
+  const tenantModuleItems = isProjectTenant ? [
+    // Separator marker - handled in render
+    { id: 'tenant-divider', label: `${tenantName}'s Modules`, isDivider: true },
+    // Core tenant modules - always show Clients for their CRM
+    ...(tenantHasFeature('clients') || true ? [{ id: 'tenant-clients', label: 'Clients', icon: Users, badge: null, route: null }] : []),
+    ...(tenantHasFeature('seo') ? [{ id: 'seo', label: 'SEO', icon: Search, badge: null, route: null }] : []),
+    ...(tenantHasFeature('ecommerce') ? [{ id: 'ecommerce', label: 'Ecommerce', icon: ShoppingCart, badge: null, route: null }] : []),
+    ...(tenantHasFeature('forms') ? [{ id: 'forms', label: 'Forms', icon: ClipboardList, badge: null, route: null }] : []),
+    ...(tenantHasFeature('email') ? [{ id: 'email', label: 'Email Manager', icon: Mail, badge: null, route: null }] : []),
+    ...(tenantHasFeature('blog') ? [{ id: 'blog', label: 'Blog', icon: BookOpen, badge: null, route: null }] : []),
+    ...(tenantHasFeature('analytics') ? [{ id: 'analytics', label: 'Analytics', icon: BarChart3, badge: null, route: null }] : []),
   ] : []
 
   // Combine navigation items based on role
@@ -136,7 +195,7 @@ const Sidebar = ({
     ...managerItems,
     ...adminItems,
     ...superAdminItems,
-    ...tenantItems,
+    ...tenantModuleItems,
   ]
 
   const handleNavigation = (item) => {
@@ -222,8 +281,27 @@ const Sidebar = ({
       )}
 
       {/* Navigation */}
-      <nav className="flex-1 p-4 space-y-1">
+      <nav className="flex-1 p-4 space-y-1 overflow-y-auto">
         {allNavigationItems.map((item) => {
+          // Handle divider items (tenant module separator)
+          if (item.isDivider) {
+            if (isCollapsed) {
+              return (
+                <div key={item.id} className="py-2">
+                  <Separator className="bg-[var(--glass-border)]" />
+                </div>
+              )
+            }
+            return (
+              <div key={item.id} className="pt-4 pb-2">
+                <Separator className="bg-[var(--glass-border)] mb-2" />
+                <span className="text-[10px] font-medium uppercase tracking-wider text-[var(--text-tertiary)] px-3">
+                  {item.label}
+                </span>
+              </div>
+            )
+          }
+          
           const Icon = item.icon
           const isActive = activeSection === item.id
           

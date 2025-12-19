@@ -11,22 +11,22 @@ import { createClient } from '@supabase/supabase-js'
 const supabaseUrl = process.env.SUPABASE_URL
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY
 
-// Opportunity type definitions
+// Opportunity type definitions - use correct DB column names
 const OPPORTUNITY_TYPES = {
-  'title-missing': { priority: 'critical', impact: 'high', effort: 'quick-win', title: 'Missing title tag' },
-  'title-too-short': { priority: 'medium', impact: 'medium', effort: 'quick-win', title: 'Title too short' },
-  'title-too-long': { priority: 'low', impact: 'low', effort: 'quick-win', title: 'Title too long' },
-  'meta-missing': { priority: 'high', impact: 'high', effort: 'quick-win', title: 'Missing meta description' },
-  'meta-too-short': { priority: 'medium', impact: 'medium', effort: 'quick-win', title: 'Meta description too short' },
-  'meta-too-long': { priority: 'low', impact: 'low', effort: 'quick-win', title: 'Meta description too long' },
-  'h1-missing': { priority: 'high', impact: 'medium', effort: 'quick-win', title: 'Missing H1 tag' },
-  'h1-multiple': { priority: 'medium', impact: 'low', effort: 'quick-win', title: 'Multiple H1 tags' },
-  'thin-content': { priority: 'high', impact: 'high', effort: 'significant', title: 'Thin content' },
-  'images-no-alt': { priority: 'medium', impact: 'low', effort: 'moderate', title: 'Images missing alt text' },
-  'schema-missing': { priority: 'medium', impact: 'medium', effort: 'moderate', title: 'No structured data' },
-  'low-performance': { priority: 'high', impact: 'high', effort: 'significant', title: 'Poor PageSpeed score' },
-  'striking-distance': { priority: 'high', impact: 'high', effort: 'moderate', title: 'Striking distance keyword' },
-  'low-ctr': { priority: 'high', impact: 'high', effort: 'moderate', title: 'Low CTR despite impressions' }
+  'title-missing': { priority: 'critical', estimated_impact: 'high', estimated_effort: 'quick-win', title: 'Missing title tag' },
+  'title-too-short': { priority: 'medium', estimated_impact: 'medium', estimated_effort: 'quick-win', title: 'Title too short' },
+  'title-too-long': { priority: 'low', estimated_impact: 'low', estimated_effort: 'quick-win', title: 'Title too long' },
+  'meta-missing': { priority: 'high', estimated_impact: 'high', estimated_effort: 'quick-win', title: 'Missing meta description' },
+  'meta-too-short': { priority: 'medium', estimated_impact: 'medium', estimated_effort: 'quick-win', title: 'Meta description too short' },
+  'meta-too-long': { priority: 'low', estimated_impact: 'low', estimated_effort: 'quick-win', title: 'Meta description too long' },
+  'h1-missing': { priority: 'high', estimated_impact: 'medium', estimated_effort: 'quick-win', title: 'Missing H1 tag' },
+  'h1-multiple': { priority: 'medium', estimated_impact: 'low', estimated_effort: 'quick-win', title: 'Multiple H1 tags' },
+  'thin-content': { priority: 'high', estimated_impact: 'high', estimated_effort: 'significant', title: 'Thin content' },
+  'images-no-alt': { priority: 'medium', estimated_impact: 'low', estimated_effort: 'moderate', title: 'Images missing alt text' },
+  'schema-missing': { priority: 'medium', estimated_impact: 'medium', estimated_effort: 'moderate', title: 'No structured data' },
+  'low-performance': { priority: 'high', estimated_impact: 'high', estimated_effort: 'significant', title: 'Poor PageSpeed score' },
+  'striking-distance': { priority: 'high', estimated_impact: 'high', estimated_effort: 'moderate', title: 'Striking distance keyword' },
+  'low-ctr': { priority: 'high', estimated_impact: 'high', estimated_effort: 'moderate', title: 'Low CTR despite impressions' }
 }
 
 export default async function handler(req) {
@@ -131,13 +131,17 @@ export default async function handler(req) {
         if (page) {
           const key = `${page.id}:striking-distance`
           if (!existingKeys.has(key)) {
+            const typeDef = OPPORTUNITY_TYPES['striking-distance']
             newOpportunities.push({
               site_id: siteId,
               page_id: page.id,
               type: 'striking-distance',
-              ...OPPORTUNITY_TYPES['striking-distance'],
+              title: typeDef.title,
+              priority: typeDef.priority,
+              estimated_impact: typeDef.estimated_impact,
+              estimated_effort: typeDef.estimated_effort,
               description: `"${query.query}" ranks at position ${query.avg_position.toFixed(1)}. Optimize to reach page 1.`,
-              data: { query: query.query, position: query.avg_position, impressions: query.impressions_28d },
+              supporting_data: { query: query.query, position: query.avg_position, impressions: query.impressions_28d },
               status: 'open'
             })
             existingKeys.add(key)
@@ -159,13 +163,17 @@ export default async function handler(req) {
         if (page) {
           const key = `${page.id}:low-ctr`
           if (!existingKeys.has(key)) {
+            const typeDef = OPPORTUNITY_TYPES['low-ctr']
             newOpportunities.push({
               site_id: siteId,
               page_id: page.id,
               type: 'low-ctr',
-              ...OPPORTUNITY_TYPES['low-ctr'],
+              title: typeDef.title,
+              priority: typeDef.priority,
+              estimated_impact: typeDef.estimated_impact,
+              estimated_effort: typeDef.estimated_effort,
               description: `"${query.query}" has ${query.impressions_28d} impressions but only ${(query.ctr_28d * 100).toFixed(1)}% CTR. Improve title/description.`,
-              data: { query: query.query, impressions: query.impressions_28d, ctr: query.ctr_28d },
+              supporting_data: { query: query.query, impressions: query.impressions_28d, ctr: query.ctr_28d },
               status: 'open'
             })
             existingKeys.add(key)
@@ -230,8 +238,8 @@ function addOpportunity(opportunities, siteId, page, type, existingKeys) {
       type,
       title: typeDef.title,
       priority: typeDef.priority,
-      impact: typeDef.impact,
-      effort: typeDef.effort,
+      estimated_impact: typeDef.estimated_impact,
+      estimated_effort: typeDef.estimated_effort,
       description: `${typeDef.title} on ${page.path || page.url}`,
       status: 'open'
     })

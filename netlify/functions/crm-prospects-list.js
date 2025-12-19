@@ -43,6 +43,9 @@ export async function handler(event) {
     const supabase = createSupabaseAdmin()
     const params = event.queryStringParameters || {}
     
+    // Check for org filtering (for multi-tenant - e.g., GWA viewing their clients)
+    const orgId = event.headers['x-organization-id'] || event.headers['X-Organization-Id']
+    
     const {
       stage,          // Pipeline stage filter
       source,         // 'openphone_call' | 'website' | 'referral' etc.
@@ -73,6 +76,11 @@ export async function handler(event) {
       .is('auth_user_id', null) // Not a portal user yet
       .eq('role', 'client')
       .neq('pipeline_stage', 'closed_won') // Exclude won deals (they're now clients)
+    
+    // Filter by org if provided (multi-tenant support)
+    if (orgId) {
+      query = query.eq('org_id', orgId)
+    }
 
     // Apply filters
     if (stage) {
@@ -132,12 +140,18 @@ export async function handler(event) {
       }
     }) || []
 
-    // Get pipeline stats
-    const { data: allProspects } = await supabase
+    // Get pipeline stats (filtered by org if applicable)
+    let statsQuery = supabase
       .from('contacts')
       .select('pipeline_stage, source')
       .is('auth_user_id', null)
       .eq('role', 'client')
+    
+    if (orgId) {
+      statsQuery = statsQuery.eq('org_id', orgId)
+    }
+    
+    const { data: allProspects } = await statsQuery
     
     const pipelineStats = Object.keys(PIPELINE_STAGES).reduce((acc, stage) => {
       acc[stage] = allProspects?.filter(p => p.pipeline_stage === stage).length || 0

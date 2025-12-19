@@ -17,7 +17,9 @@ export function AnalyticsHeader({
   onDateRangeChange, 
   onRefresh, 
   isRefreshing = false,
-  lastUpdated = null 
+  lastUpdated = null,
+  siteName = null,
+  siteDomain = null
 }) {
   return (
     <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
@@ -27,9 +29,18 @@ export function AnalyticsHeader({
             <TrendingUp className="h-6 w-6 text-[#39bfb0]" />
           </div>
           Analytics
+          {siteName && (
+            <span className="text-lg font-normal text-[var(--text-secondary)]">
+              — {siteName}
+            </span>
+          )}
         </h1>
         <p className="text-[var(--text-secondary)] mt-1">
-          Website traffic and engagement insights
+          {siteDomain ? (
+            <>Traffic and engagement for <span className="text-[var(--text-primary)]">{siteDomain}</span></>
+          ) : (
+            'Website traffic and engagement insights'
+          )}
           {lastUpdated && (
             <span className="text-[var(--text-tertiary)] ml-2">
               · Updated {new Date(lastUpdated).toLocaleTimeString()}

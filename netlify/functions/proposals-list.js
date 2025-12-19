@@ -61,6 +61,10 @@ export async function handler(event) {
     const queryParams = event.queryStringParameters || {}
     const { projectId, status, contactId, createdBy } = queryParams
     const isAdmin = contact.team_role === 'admin' || contact.team_role === 'manager'
+    
+    // Check for project tenant context (org header overrides normal flow)
+    const orgId = event.headers['x-organization-id']
+    const isProjectTenantContext = !!orgId
 
     // Build query (note: proposal_line_items table doesn't exist in schema)
     let query = supabase
@@ -82,20 +86,28 @@ export async function handler(event) {
       `)
       .order('created_at', { ascending: false })
 
-    // Apply ownership filter (reps only see their proposals, admins see all)
-    query = applyOwnershipFilter(query, contact, 'created_by')
+    // For project tenants, show proposals linked to THEIR project
+    if (isProjectTenantContext) {
+      // Filter by project_id matching the org header (which is the project ID for tenants)
+      query = query.eq('project_id', orgId)
+      console.log('[proposals-list] Project tenant context, filtering by project_id:', orgId)
+    } else {
+      // Apply ownership filter (reps only see their proposals, admins see all)
+      query = applyOwnershipFilter(query, contact, 'created_by')
+    }
 
     // Apply optional filters
     if (contactId) {
       query = query.eq('contact_id', contactId)
     }
     
-    if (createdBy && isAdmin) {
-      // Only admins can filter by creator
+    if (createdBy && isAdmin && !isProjectTenantContext) {
+      // Only admins can filter by creator (not in tenant context)
       query = query.eq('created_by', createdBy)
     }
 
-    if (projectId) {
+    if (projectId && !isProjectTenantContext) {
+      // Only apply projectId filter if not already in tenant context
       query = query.eq('project_id', projectId)
     }
 

@@ -3,9 +3,13 @@ import { create } from 'zustand'
 // Use proxy to avoid CORS issues with main site API
 const ANALYTICS_PROXY = '/.netlify/functions/analytics-proxy'
 
-// Helper to build proxy URL
-const buildProxyUrl = (endpoint, params = {}) => {
-  const searchParams = new URLSearchParams({ endpoint, ...params })
+// Helper to build proxy URL with optional domain
+const buildProxyUrl = (endpoint, params = {}, domain = null) => {
+  const allParams = { endpoint, ...params }
+  if (domain) {
+    allParams.domain = domain
+  }
+  const searchParams = new URLSearchParams(allParams)
   return `${ANALYTICS_PROXY}?${searchParams.toString()}`
 }
 
@@ -25,9 +29,11 @@ const useSiteAnalyticsStore = create((set, get) => ({
   
   // Settings
   dateRange: 30, // days
+  domain: null, // Target domain for tenant analytics
 
   // Actions
   setDateRange: (days) => set({ dateRange: days }),
+  setDomain: (domain) => set({ domain }),
   clearError: () => set({ error: null }),
 
   // Fetch overview dashboard data
@@ -223,19 +229,20 @@ const useSiteAnalyticsStore = create((set, get) => ({
   // Fetch all analytics data at once
   fetchAllAnalytics: async (days = null) => {
     const period = days || get().dateRange
+    const domain = get().domain
     set({ isLoading: true, error: null })
     
     try {
       // Fetch all data in parallel via proxy
       const [overviewRes, topPagesRes, dailyRes, hourlyRes, webVitalsRes, sessionsRes, scrollDepthRes, heatmapRes] = await Promise.all([
-        fetch(buildProxyUrl('overview', { days: period })),
-        fetch(buildProxyUrl('page-views', { days: period, groupBy: 'path', limit: 20 })),
-        fetch(buildProxyUrl('page-views', { days: period, groupBy: 'day' })),
-        fetch(buildProxyUrl('page-views', { days: period, groupBy: 'hour' })),
-        fetch(buildProxyUrl('web-vitals', { days: period })),
-        fetch(buildProxyUrl('sessions', { days: period })),
-        fetch(buildProxyUrl('scroll-depth', { days: period })),
-        fetch(buildProxyUrl('heatmap', { days: period }))
+        fetch(buildProxyUrl('overview', { days: period }, domain)),
+        fetch(buildProxyUrl('page-views', { days: period, groupBy: 'path', limit: 20 }, domain)),
+        fetch(buildProxyUrl('page-views', { days: period, groupBy: 'day' }, domain)),
+        fetch(buildProxyUrl('page-views', { days: period, groupBy: 'hour' }, domain)),
+        fetch(buildProxyUrl('web-vitals', { days: period }, domain)),
+        fetch(buildProxyUrl('sessions', { days: period }, domain)),
+        fetch(buildProxyUrl('scroll-depth', { days: period }, domain)),
+        fetch(buildProxyUrl('heatmap', { days: period }, domain))
       ])
 
       // Check for errors

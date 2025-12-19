@@ -51,36 +51,34 @@ export async function handler(event) {
 
     const url = `${GSC_API_BASE}/sites/${encodeURIComponent(siteUrl)}/searchAnalytics/query`
 
-    // Fetch current period totals
-    const currentData = await googleApiRequest(url, {
-      method: 'POST',
-      body: JSON.stringify({
-        startDate: currentStart.toISOString().split('T')[0],
-        endDate: endDate.toISOString().split('T')[0],
-        dimensions: [], // No dimensions = totals only
+    // PARALLEL: Fetch current, previous, and trend data simultaneously
+    const [currentData, previousData, trendData] = await Promise.all([
+      googleApiRequest(url, {
+        method: 'POST',
+        body: JSON.stringify({
+          startDate: currentStart.toISOString().split('T')[0],
+          endDate: endDate.toISOString().split('T')[0],
+          dimensions: [], // No dimensions = totals only
+        }),
       }),
-    })
-
-    // Fetch previous period for comparison
-    const previousData = await googleApiRequest(url, {
-      method: 'POST',
-      body: JSON.stringify({
-        startDate: previousStart.toISOString().split('T')[0],
-        endDate: previousEnd.toISOString().split('T')[0],
-        dimensions: [],
+      googleApiRequest(url, {
+        method: 'POST',
+        body: JSON.stringify({
+          startDate: previousStart.toISOString().split('T')[0],
+          endDate: previousEnd.toISOString().split('T')[0],
+          dimensions: [],
+        }),
       }),
-    })
-
-    // Fetch daily trend for sparklines
-    const trendData = await googleApiRequest(url, {
-      method: 'POST',
-      body: JSON.stringify({
-        startDate: currentStart.toISOString().split('T')[0],
-        endDate: endDate.toISOString().split('T')[0],
-        dimensions: ['date'],
-        rowLimit: 30,
-      }),
-    })
+      googleApiRequest(url, {
+        method: 'POST',
+        body: JSON.stringify({
+          startDate: currentStart.toISOString().split('T')[0],
+          endDate: endDate.toISOString().split('T')[0],
+          dimensions: ['date'],
+          rowLimit: 30,
+        }),
+      })
+    ])
 
     // Extract metrics
     const current = currentData.rows?.[0] || { clicks: 0, impressions: 0, ctr: 0, position: 0 }

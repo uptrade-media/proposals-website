@@ -17,7 +17,7 @@
  */
 
 import { createSupabaseAdmin, getAuthenticatedUser } from './utils/supabase.js'
-import fetch from 'node-fetch'
+// Note: fetch is built-in to Node.js 18+ (Netlify Functions runtime)
 
 export async function handler(event) {
   const headers = {
@@ -119,6 +119,18 @@ export async function handler(event) {
           function: 'seo-ai-brain-background',
           action: 'full-analysis',
           requiresSiteId: true
+        },
+        'gsc-indexing': {
+          function: 'seo-gsc-indexing-background',
+          requiresSiteId: true
+        },
+        'pagespeed': {
+          function: 'seo-pagespeed-background',
+          requiresSiteId: true
+        },
+        'gsc-sync': {
+          function: 'seo-gsc-sync-background',
+          requiresSiteId: true
         }
       }
 
@@ -146,7 +158,6 @@ export async function handler(event) {
       const { data: job, error: insertError } = await supabase
         .from('seo_background_jobs')
         .insert({
-          contact_id: contact.id,
           job_type: jobType,
           site_id: siteId || null,
           status: 'pending',

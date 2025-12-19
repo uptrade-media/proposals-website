@@ -3,7 +3,13 @@
 import { createSupabaseAdmin, getAuthenticatedUser } from './utils/supabase.js'
 
 // PageSpeed Insights API
-const PSI_API_KEY = process.env.GOOGLE_PSI_API_KEY
+const PSI_API_KEY = process.env.PAGESPEED_API_KEY
+
+// Rate limiting settings - PSI API is very restrictive
+const PSI_REQUEST_DELAY_MS = 10000 // 10 seconds between requests
+const PSI_MAX_RETRIES = 3
+const PSI_RETRY_DELAY_MS = 30000 // 30 seconds base for retry (exponential backoff)
+const PSI_MAX_PAGES_PER_RUN = 10 // Limit pages per run to avoid timeouts
 
 export async function handler(event) {
   const headers = {
@@ -114,11 +120,18 @@ async function analyzeSpeedImpact(event, supabase, headers) {
     return { statusCode: 400, headers, body: JSON.stringify({ error: 'No pages to analyze' }) }
   }
 
+  // Limit pages to avoid rate limiting and timeouts
+  const pagesToAnalyze = pages.slice(0, PSI_MAX_PAGES_PER_RUN)
+  console.log(`[PageSpeed Impact] Analyzing ${pagesToAnalyze.length} of ${pages.length} pages (limited to ${PSI_MAX_PAGES_PER_RUN} per run)`)
+
   const results = []
 
-  for (const page of pages) {
+  for (let i = 0; i < pagesToAnalyze.length; i++) {
+    const page = pagesToAnalyze[i]
     try {
-      // Fetch PageSpeed Insights
+      console.log(`[PageSpeed Impact] Analyzing page ${i + 1}/${pagesToAnalyze.length}: ${page.url}`)
+      
+      // Fetch PageSpeed Insights with retry logic
       const psiData = await fetchPageSpeedInsights(page.url, strategy)
 
       if (!psiData) continue
@@ -148,8 +161,11 @@ async function analyzeSpeedImpact(event, supabase, headers) {
       console.error(`[PageSpeed Impact] Error analyzing ${page.url}:`, error)
     }
 
-    // Small delay to avoid rate limiting
-    await new Promise(resolve => setTimeout(resolve, 1000))
+    // Longer delay between requests to avoid rate limiting
+    if (i < pagesToAnalyze.length - 1) {
+      console.log(`[PageSpeed Impact] Waiting ${PSI_REQUEST_DELAY_MS / 1000}s before next request...`)
+      await new Promise(resolve => setTimeout(resolve, PSI_REQUEST_DELAY_MS))
+    }
   }
 
   // Save to database
@@ -167,7 +183,9 @@ async function analyzeSpeedImpact(event, supabase, headers) {
     body: JSON.stringify({
       success: true,
       pagesAnalyzed: results.length,
-      avgScore: Math.round(results.reduce((sum, r) => sum + r.performance_score, 0) / results.length),
+      totalPages: pages.length,
+      remainingPages: pages.length - pagesToAnalyze.length,
+      avgScore: results.length > 0 ? Math.round(results.reduce((sum, r) => sum + r.performance_score, 0) / results.length) : null,
       poorPerformance: results.filter(r => r.performance_score < 50).length,
       totalPotentialGain: results.reduce((sum, r) => sum + (r.potential_traffic_gain || 0), 0),
       topPriorities: results
@@ -184,7 +202,7 @@ async function analyzeSpeedImpact(event, supabase, headers) {
   }
 }
 
-async function fetchPageSpeedInsights(url, strategy) {
+async function fetchPageSpeedInsights(url, strategy, retryCount = 0) {
   try {
     const apiUrl = new URL('https://www.googleapis.com/pagespeedonline/v5/runPagespeed')
     apiUrl.searchParams.set('url', url)
@@ -196,6 +214,18 @@ async function fetchPageSpeedInsights(url, strategy) {
     }
 
     const response = await fetch(apiUrl.toString())
+    
+    if (response.status === 429) {
+      // Rate limited - retry with exponential backoff
+      if (retryCount < PSI_MAX_RETRIES) {
+        const delay = PSI_RETRY_DELAY_MS * Math.pow(2, retryCount)
+        console.log(`[PageSpeed] Rate limited for ${url}, retrying in ${delay / 1000}s (attempt ${retryCount + 1}/${PSI_MAX_RETRIES})`)
+        await new Promise(resolve => setTimeout(resolve, delay))
+        return fetchPageSpeedInsights(url, strategy, retryCount + 1)
+      }
+      console.error(`[PageSpeed] Rate limit exceeded for ${url} after ${PSI_MAX_RETRIES} retries`)
+      return null
+    }
     
     if (!response.ok) {
       console.error(`[PageSpeed] API error for ${url}: ${response.status}`)

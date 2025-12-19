@@ -21,6 +21,52 @@ import useAuthStore from '../lib/auth-store'
 import api from '../lib/api'
 import BlogAIDialog from './BlogAIDialog'
 
+// Tenant-specific category configurations
+const CATEGORY_CONFIGS = {
+  // Default (Uptrade Media)
+  default: {
+    categories: [
+      { value: 'insights', label: 'Insights' },
+      { value: 'news', label: 'News' },
+      { value: 'guides', label: 'Guides' },
+      { value: 'case-studies', label: 'Case Studies' },
+      { value: 'seo', label: 'SEO' },
+      { value: 'web-design', label: 'Web Design' },
+      { value: 'marketing', label: 'Digital Marketing' },
+    ],
+    defaultCategory: 'insights',
+    defaultAuthor: 'Uptrade Media',
+  },
+  // God's Workout Apparel
+  'gods-workout-apparel': {
+    categories: [
+      { value: 'faith', label: 'Faith & Devotion' },
+      { value: 'training', label: 'Training & Fitness' },
+      { value: 'discipline', label: 'Discipline' },
+      { value: 'lifestyle', label: 'Lifestyle' },
+      { value: 'scripture', label: 'Scripture Study' },
+      { value: 'motivation', label: 'Motivation' },
+      { value: 'nutrition', label: 'Nutrition' },
+    ],
+    defaultCategory: 'discipline',
+    defaultAuthor: "God's Workout Apparel",
+  }
+}
+
+// Helper to get config based on org
+function getTenantConfig(org) {
+  if (!org) return CATEGORY_CONFIGS.default
+  
+  const slug = org.slug?.toLowerCase() || ''
+  const name = org.name?.toLowerCase() || ''
+  
+  if (slug.includes('gods-workout') || slug.includes('gwa') || name.includes("god's workout")) {
+    return CATEGORY_CONFIGS['gods-workout-apparel']
+  }
+  
+  return CATEGORY_CONFIGS.default
+}
+
 // Status colors
 const statusColors = {
   published: 'bg-emerald-100 text-emerald-700 border-emerald-200',
@@ -267,8 +313,9 @@ function StatsCard({ icon: Icon, label, value, color = 'emerald' }) {
 }
 
 export default function BlogManagement() {
-  const { user } = useAuthStore()
+  const { user, currentOrg } = useAuthStore()
   const isAdmin = user?.role === 'admin'
+  const tenantConfig = getTenantConfig(currentOrg)
   
   const [blogs, setBlogs] = useState([])
   const [isLoading, setIsLoading] = useState(false)
@@ -297,12 +344,12 @@ export default function BlogManagement() {
   const [formData, setFormData] = useState({
     title: '',
     slug: '',
-    category: 'news',
+    category: getTenantConfig(null).defaultCategory,
     excerpt: '',
     content: '',
     featuredImage: '',
     featuredImageAlt: '',
-    author: 'Uptrade Media',
+    author: getTenantConfig(null).defaultAuthor,
     keywords: '',
     readingTime: 5,
     status: 'draft'
@@ -380,14 +427,14 @@ export default function BlogManagement() {
     setFormData({
       title: '',
       slug: '',
-      category: 'news',
+      category: tenantConfig.defaultCategory,
       excerpt: '',
       content: '',
       featuredImage: '',
       featuredImageAlt: '',
       featuredImageWidth: 1200,
       featuredImageHeight: 630,
-      author: 'Uptrade Media',
+      author: tenantConfig.defaultAuthor,
       keywords: '',
       metaTitle: '',
       metaDescription: '',
@@ -510,7 +557,7 @@ export default function BlogManagement() {
     }
   }
 
-  const categories = ['news', 'design', 'marketing', 'media', 'insights', 'guides', 'seo', 'web-design', 'case-studies']
+  const categories = tenantConfig.categories
 
   return (
     <TooltipProvider>
@@ -607,7 +654,7 @@ export default function BlogManagement() {
                 <SelectContent>
                   <SelectItem value="all">All Categories</SelectItem>
                   {categories.map(cat => (
-                    <SelectItem key={cat} value={cat} className="capitalize">{cat}</SelectItem>
+                    <SelectItem key={cat.value} value={cat.value}>{cat.label}</SelectItem>
                   ))}
                 </SelectContent>
               </Select>
@@ -746,7 +793,7 @@ export default function BlogManagement() {
                     </SelectTrigger>
                     <SelectContent>
                       {categories.map(cat => (
-                        <SelectItem key={cat} value={cat} className="capitalize">{cat}</SelectItem>
+                        <SelectItem key={cat.value} value={cat.value}>{cat.label}</SelectItem>
                       ))}
                     </SelectContent>
                   </Select>

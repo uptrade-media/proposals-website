@@ -2,11 +2,22 @@
 import { createSupabaseAdmin } from './utils/supabase.js'
 
 export async function handler(event) {
-  // CORS headers
-  const origin = event.headers.origin || 'http://localhost:8888'
+  // CORS headers - allow trusted origins
+  const origin = event.headers.origin || '*'
+  const allowedOrigins = [
+    'http://localhost:8888',
+    'http://localhost:3000',
+    'http://localhost:5173',
+    'https://portal.uptrademedia.com',
+    'https://godsworkoutapparel.com',
+    'https://www.godsworkoutapparel.com',
+  ]
+  
+  const corsOrigin = allowedOrigins.includes(origin) ? origin : allowedOrigins[0]
+  
   const headers = {
-    'Access-Control-Allow-Origin': origin,
-    'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+    'Access-Control-Allow-Origin': corsOrigin,
+    'Access-Control-Allow-Headers': 'Content-Type, Authorization, X-Organization-Id, X-Tenant-ID',
     'Access-Control-Allow-Methods': 'GET, OPTIONS',
     'Access-Control-Allow-Credentials': 'true',
     'Content-Type': 'application/json',
@@ -34,6 +45,19 @@ export async function handler(event) {
     const category = url.searchParams.get('category')
     const limit = Math.min(parseInt(url.searchParams.get('limit') || '50'), 100)
     const offset = parseInt(url.searchParams.get('offset') || '0')
+    
+    // Check for tenant/org context
+    const orgId = event.headers['x-organization-id']
+    
+    // Debug logging
+    console.log('[Blog List] Headers received:', {
+      'x-organization-id': event.headers['x-organization-id'],
+      'x-tenant-id': event.headers['x-tenant-id'],
+      allHeaders: Object.keys(event.headers)
+    })
+    
+    // Default org for Uptrade Media (used when no header is sent)
+    const UPTRADE_MEDIA_ORG_ID = '434c6396-9f79-46f4-9889-59caeb231677'
 
     let query = supabase
       .from('blog_posts')
@@ -41,6 +65,11 @@ export async function handler(event) {
       .eq('status', status)
       .order('published_at', { ascending: false })
       .range(offset, offset + limit - 1)
+
+    // Filter by org_id - use header value or default to Uptrade Media
+    const effectiveOrgId = orgId || UPTRADE_MEDIA_ORG_ID
+    query = query.eq('org_id', effectiveOrgId)
+    console.log('[Blog API] Filtering by org_id:', effectiveOrgId)
 
     if (category) {
       query = query.eq('category', category)

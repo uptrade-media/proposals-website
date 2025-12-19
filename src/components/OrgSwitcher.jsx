@@ -28,6 +28,7 @@ const OrgSwitcher = ({ onManageTenants, collapsed = false }) => {
 
   // Super admins can see all organizations
   useEffect(() => {
+    console.log('[OrgSwitcher] isSuperAdmin changed:', isSuperAdmin)
     if (isSuperAdmin) {
       loadAllOrgs()
     }
@@ -35,14 +36,33 @@ const OrgSwitcher = ({ onManageTenants, collapsed = false }) => {
 
   const loadAllOrgs = async () => {
     setLoadingOrgs(true)
+    console.log('[OrgSwitcher] Loading all organizations...')
     const orgs = await fetchAllOrganizations()
+    console.log('[OrgSwitcher] Loaded orgs:', orgs?.length, orgs?.map(o => ({ name: o.name, isProjectTenant: o.isProjectTenant })))
     setAllOrgs(orgs)
     setLoadingOrgs(false)
   }
 
   const handleSwitch = async (org) => {
-    if (org.id === currentOrg?.id) return
-    await switchOrganization(org.id)
+    console.log('[OrgSwitcher] Switching to org:', org.name, 'isProjectTenant:', org.isProjectTenant, 'id:', org.id, 'projectId:', org.projectId)
+    
+    // Don't skip if clicking on the same org - user might want to refresh/navigate
+    // if (org.id === currentOrg?.id) {
+    //   console.log('[OrgSwitcher] Already on this org, skipping')
+    //   return
+    // }
+    
+    // For project-based tenants, pass projectId instead of organizationId
+    if (org.isProjectTenant) {
+      const targetProjectId = org.projectId || org.id
+      console.log('[OrgSwitcher] Switching to project tenant with projectId:', targetProjectId)
+      const result = await switchOrganization(null, { projectId: targetProjectId })
+      console.log('[OrgSwitcher] Switch result:', result)
+    } else {
+      console.log('[OrgSwitcher] Switching to regular org with id:', org.id)
+      const result = await switchOrganization(org.id)
+      console.log('[OrgSwitcher] Switch result:', result)
+    }
   }
 
   // If no org context yet (before migration), show nothing
@@ -52,6 +72,7 @@ const OrgSwitcher = ({ onManageTenants, collapsed = false }) => {
 
   // Determine which orgs to show
   const displayOrgs = isSuperAdmin ? allOrgs : availableOrgs
+  console.log('[OrgSwitcher] Render - isSuperAdmin:', isSuperAdmin, 'allOrgs:', allOrgs?.length, 'displayOrgs:', displayOrgs?.length, 'currentOrg:', currentOrg?.name)
 
   // Collapsed mode - just show icon
   if (collapsed) {
@@ -177,12 +198,17 @@ const OrgDropdownContent = ({
               </div>
             </div>
             <div className="flex items-center gap-1 shrink-0">
+              {org.isProjectTenant && (
+                <Badge variant="outline" className="text-[9px] px-1 py-0 bg-blue-50 text-blue-700 border-blue-200">
+                  Web App
+                </Badge>
+              )}
               {org.status === 'suspended' && (
                 <Badge variant="destructive" className="text-[9px] px-1 py-0">
                   Suspended
                 </Badge>
               )}
-              {org.plan !== 'free' && (
+              {org.plan !== 'free' && !org.isProjectTenant && (
                 <Badge variant="outline" className="text-[9px] px-1 py-0 capitalize">
                   {org.plan}
                 </Badge>

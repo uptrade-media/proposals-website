@@ -66,7 +66,10 @@ export async function handler(event) {
       status,
       budget,
       startDate,
-      endDate
+      endDate,
+      contactId,
+      start_date,
+      end_date
     } = body
 
     // Check if project exists
@@ -93,8 +96,13 @@ export async function handler(event) {
     if (description !== undefined) updates.description = description
     if (status !== undefined) updates.status = status
     if (budget !== undefined) updates.budget = budget ? String(budget) : null
-    if (startDate !== undefined) updates.start_date = startDate ? new Date(startDate).toISOString() : null
-    if (endDate !== undefined) updates.end_date = endDate ? new Date(endDate).toISOString() : null
+    // Support both camelCase and snake_case for dates
+    const startDateValue = startDate || start_date
+    const endDateValue = endDate || end_date
+    if (startDateValue !== undefined) updates.start_date = startDateValue ? new Date(startDateValue).toISOString() : null
+    if (endDateValue !== undefined) updates.end_date = endDateValue ? new Date(endDateValue).toISOString() : null
+    // Handle contact assignment
+    if (contactId !== undefined) updates.contact_id = contactId || null
 
     // Update project
     const { data: updatedProject, error: updateError } = await supabase

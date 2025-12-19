@@ -33,6 +33,7 @@ export default function SEOHealthScore({
   opportunities = [], 
   gscMetrics = {},
   cwvSummary = null,
+  detailed = false,
   onViewDetails,
   onFixIssues 
 }) {
@@ -161,11 +162,12 @@ export default function SEOHealthScore({
   const criticalIssues = allIssues.filter(i => i.severity === 'critical')
 
   return (
-    <Card className={cn('border-2', grade.border)}>
+    <>
+    <Card className={cn('border-2 overflow-hidden', grade.border)}>
       <CardContent className="pt-6">
-        <div className="flex flex-col md:flex-row gap-6">
-          {/* Main Grade */}
-          <div className="flex flex-col items-center justify-center px-6">
+        <div className="flex flex-col lg:flex-row gap-6">
+          {/* Main Grade - Fixed width, centered */}
+          <div className="flex flex-col items-center justify-center px-6 shrink-0">
             <div className={cn(
               'w-24 h-24 rounded-full flex items-center justify-center text-5xl font-bold',
               grade.bg, grade.color
@@ -176,8 +178,8 @@ export default function SEOHealthScore({
             <p className="text-2xl font-bold text-[var(--text-primary)]">{scores.overall}/100</p>
           </div>
 
-          {/* Score Breakdown */}
-          <div className="flex-1 grid grid-cols-2 gap-4">
+          {/* Score Breakdown - Flexible, minimum width for content */}
+          <div className="flex-1 grid grid-cols-1 sm:grid-cols-2 gap-4 min-w-0">
             <ScoreBar 
               icon={Shield} 
               label="Technical" 
@@ -204,8 +206,8 @@ export default function SEOHealthScore({
             />
           </div>
 
-          {/* Quick Actions */}
-          <div className="flex flex-col gap-2 min-w-[180px]">
+          {/* Quick Actions - Fixed width on large screens, full width on mobile */}
+          <div className="flex flex-col gap-2 w-full lg:w-[180px] shrink-0">
             {criticalIssues.length > 0 && (
               <div className="p-3 rounded-lg bg-red-500/10 border border-red-500/30">
                 <p className="text-sm font-medium text-red-400 flex items-center gap-2">
@@ -237,7 +239,7 @@ export default function SEOHealthScore({
         </div>
 
         {/* Top Issues Preview */}
-        {allIssues.length > 0 && (
+        {allIssues.length > 0 && !detailed && (
           <div className="mt-4 pt-4 border-t border-[var(--glass-border)]">
             <p className="text-sm font-medium text-[var(--text-secondary)] mb-2">Top Issues to Fix:</p>
             <div className="flex flex-wrap gap-2">
@@ -266,6 +268,140 @@ export default function SEOHealthScore({
         )}
       </CardContent>
     </Card>
+    
+    {/* Detailed Breakdown - Only shown when detailed={true} */}
+    {detailed && (
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-6">
+        {/* Technical Issues */}
+        {scores.technical.issues.length > 0 && (
+          <Card className="bg-[var(--bg-secondary)]">
+            <CardHeader>
+              <CardTitle className="text-lg flex items-center gap-2">
+                <Shield className="h-5 w-5 text-[var(--accent-primary)]" />
+                Technical Issues ({scores.technical.issues.length})
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-2">
+              {scores.technical.issues.map((issue, i) => (
+                <div key={i} className="flex items-start gap-3 p-3 rounded-lg bg-[var(--bg-primary)] hover:bg-[var(--bg-tertiary)] transition-colors">
+                  {issue.severity === 'critical' ? (
+                    <XCircle className="h-4 w-4 text-red-400 mt-0.5 shrink-0" />
+                  ) : (
+                    <AlertTriangle className="h-4 w-4 text-yellow-400 mt-0.5 shrink-0" />
+                  )}
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm text-[var(--text-primary)]">{issue.label}</p>
+                    {issue.fixable && (
+                      <Badge variant="outline" className="mt-1 text-xs bg-green-500/10 border-green-500/30 text-green-400">
+                        <Zap className="h-3 w-3 mr-1" />
+                        Auto-fixable
+                      </Badge>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </CardContent>
+          </Card>
+        )}
+        
+        {/* Content Issues */}
+        {scores.content.issues.length > 0 && (
+          <Card className="bg-[var(--bg-secondary)]">
+            <CardHeader>
+              <CardTitle className="text-lg flex items-center gap-2">
+                <FileText className="h-5 w-5 text-[var(--accent-primary)]" />
+                Content Issues ({scores.content.issues.length})
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-2">
+              {scores.content.issues.map((issue, i) => (
+                <div key={i} className="flex items-start gap-3 p-3 rounded-lg bg-[var(--bg-primary)] hover:bg-[var(--bg-tertiary)] transition-colors">
+                  {issue.severity === 'critical' ? (
+                    <XCircle className="h-4 w-4 text-red-400 mt-0.5 shrink-0" />
+                  ) : (
+                    <AlertTriangle className="h-4 w-4 text-yellow-400 mt-0.5 shrink-0" />
+                  )}
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm text-[var(--text-primary)]">{issue.label}</p>
+                    {issue.fixable && (
+                      <Badge variant="outline" className="mt-1 text-xs bg-green-500/10 border-green-500/30 text-green-400">
+                        <Zap className="h-3 w-3 mr-1" />
+                        Auto-fixable
+                      </Badge>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </CardContent>
+          </Card>
+        )}
+        
+        {/* Performance Issues */}
+        {scores.performance.issues.length > 0 && (
+          <Card className="bg-[var(--bg-secondary)]">
+            <CardHeader>
+              <CardTitle className="text-lg flex items-center gap-2">
+                <Target className="h-5 w-5 text-[var(--accent-primary)]" />
+                Performance Issues ({scores.performance.issues.length})
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-2">
+              {scores.performance.issues.map((issue, i) => (
+                <div key={i} className="flex items-start gap-3 p-3 rounded-lg bg-[var(--bg-primary)] hover:bg-[var(--bg-tertiary)] transition-colors">
+                  {issue.severity === 'critical' ? (
+                    <XCircle className="h-4 w-4 text-red-400 mt-0.5 shrink-0" />
+                  ) : (
+                    <AlertTriangle className="h-4 w-4 text-yellow-400 mt-0.5 shrink-0" />
+                  )}
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm text-[var(--text-primary)]">{issue.label}</p>
+                    {issue.fixable && (
+                      <Badge variant="outline" className="mt-1 text-xs bg-green-500/10 border-green-500/30 text-green-400">
+                        <Zap className="h-3 w-3 mr-1" />
+                        Auto-fixable
+                      </Badge>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </CardContent>
+          </Card>
+        )}
+        
+        {/* Authority Issues */}
+        {scores.authority.issues.length > 0 && (
+          <Card className="bg-[var(--bg-secondary)]">
+            <CardHeader>
+              <CardTitle className="text-lg flex items-center gap-2">
+                <Link2 className="h-5 w-5 text-[var(--accent-primary)]" />
+                Authority Issues ({scores.authority.issues.length})
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-2">
+              {scores.authority.issues.map((issue, i) => (
+                <div key={i} className="flex items-start gap-3 p-3 rounded-lg bg-[var(--bg-primary)] hover:bg-[var(--bg-tertiary)] transition-colors">
+                  {issue.severity === 'critical' ? (
+                    <XCircle className="h-4 w-4 text-red-400 mt-0.5 shrink-0" />
+                  ) : (
+                    <AlertTriangle className="h-4 w-4 text-yellow-400 mt-0.5 shrink-0" />
+                  )}
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm text-[var(--text-primary)]">{issue.label}</p>
+                    {issue.fixable && (
+                      <Badge variant="outline" className="mt-1 text-xs bg-green-500/10 border-green-500/30 text-green-400">
+                        <Zap className="h-3 w-3 mr-1" />
+                        Auto-fixable
+                      </Badge>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </CardContent>
+          </Card>
+        )}
+      </div>
+    )}
+  </>
   )
 }
 

@@ -100,6 +100,10 @@ export async function handler(event) {
       }
 
       // Return project as organization context
+      // For project tenants, use the project ID as the org_id for filtering
+      // This allows contacts captured by the tenant's forms to be associated with this project
+      const tenantOrgId = project.org_id || project.id
+      
       return {
         statusCode: 200,
         headers,
@@ -107,6 +111,7 @@ export async function handler(event) {
           success: true,
           organization: {
             id: project.id,
+            org_id: tenantOrgId, // The org_id to use for filtering contacts, etc.
             slug: project.tenant_tracking_id || project.id,
             name: project.title,
             domain: project.tenant_domain,
@@ -122,6 +127,7 @@ export async function handler(event) {
           isSuperAdmin,
           project: {
             id: project.id,
+            org_id: tenantOrgId,
             title: project.title,
             description: project.description,
             domain: project.tenant_domain,

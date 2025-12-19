@@ -1,7 +1,7 @@
 // src/components/seo/SEODashboard.jsx
 // SEO Command Center - Shows SEO data for the current tenant's domain
 // No "add site" - each org with SEO feature enabled automatically tracks their domain
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -46,6 +46,7 @@ import SEOHealthScore from './SEOHealthScore'
 import SEOQuickWins from './SEOQuickWins'
 import SEONavigation from './SEONavigation'
 import SEOTrends from './SEOTrends'
+import SEOQuickActionsBar from './SEOQuickActionsBar'
 
 export default function SEODashboard({ onNavigate }) {
   const { currentOrg } = useAuthStore()
@@ -86,29 +87,42 @@ export default function SEODashboard({ onNavigate }) {
   const [detecting, setDetecting] = useState(false)
   const [syncing, setSyncing] = useState(false)
   const [lastScan, setLastScan] = useState(null)
+  
+  // Track if initial data has been fetched to prevent loops
+  const hasFetchedRef = useRef(false)
+  const lastOrgIdRef = useRef(null)
+  const lastSiteIdRef = useRef(null)
 
-  // Fetch site data for current org on mount
+  // Fetch site data for current org on mount (only once per org)
   useEffect(() => {
-    if (currentOrg?.id) {
-      fetchSiteForOrg(currentOrg.id)
+    if (currentOrg?.id && currentOrg.id !== lastOrgIdRef.current) {
+      lastOrgIdRef.current = currentOrg.id
+      // Only fetch if we don't already have a site for this org
+      if (!currentSite?.id || currentSite.org_id !== currentOrg.id) {
+        fetchSiteForOrg(currentOrg.id)
+      }
     }
   }, [currentOrg?.id])
 
-  // Fetch pages, opportunities, and GSC data when site is loaded
+  // Fetch pages, opportunities, and GSC data when site is loaded (only once per site)
   useEffect(() => {
-    if (currentSite?.id) {
+    if (currentSite?.id && currentSite.id !== lastSiteIdRef.current) {
+      lastSiteIdRef.current = currentSite.id
+      hasFetchedRef.current = true
+      
       fetchPages(currentSite.id, { limit: 50 })
       fetchOpportunities(currentSite.id, { limit: 20, status: 'open' })
       fetchAiRecommendations(currentSite.id)
       fetchCwvSummary(currentSite.id)
       setLastScan(currentSite.gsc_last_sync_at || currentSite.updated_at)
+      
+      // Also fetch GSC data using the org domain
+      if (currentOrg?.domain) {
+        fetchGscOverview(currentOrg.domain)
+        fetchGscQueries(currentOrg.domain, { limit: 20 })
+      }
     }
-    // Also fetch GSC data using the org domain
-    if (currentOrg?.domain) {
-      fetchGscOverview(currentOrg.domain)
-      fetchGscQueries(currentOrg.domain, { limit: 20 })
-    }
-  }, [currentSite?.id, currentOrg?.domain])
+  }, [currentSite?.id])
 
   const handleCrawlSitemap = async () => {
     if (!currentSite?.id) return
@@ -182,6 +196,22 @@ export default function SEODashboard({ onNavigate }) {
     return `${num.toFixed(1)}%`
   }
 
+  const formatRelativeTime = (dateStr) => {
+    if (!dateStr) return 'Never'
+    const date = new Date(dateStr)
+    const now = new Date()
+    const diffMs = now - date
+    const diffMins = Math.floor(diffMs / 60000)
+    const diffHours = Math.floor(diffMs / 3600000)
+    const diffDays = Math.floor(diffMs / 86400000)
+    
+    if (diffMins < 1) return 'Just now'
+    if (diffMins < 60) return `${diffMins}m ago`
+    if (diffHours < 24) return `${diffHours}h ago`
+    if (diffDays < 7) return `${diffDays}d ago`
+    return date.toLocaleDateString()
+  }
+
   const getChangeIndicator = (current, previous, inverse = false) => {
     if (!previous || current === previous) return null
     const isPositive = inverse ? current < previous : current > previous
@@ -210,6 +240,15 @@ export default function SEODashboard({ onNavigate }) {
     if (score >= 60) return <Badge className="bg-yellow-500/20 text-yellow-400">{score}</Badge>
     return <Badge className="bg-red-500/20 text-red-400">{score}</Badge>
   }
+
+  // Prepare derived data that's used across multiple views (must be before any returns)
+  const opportunityCounts = {
+    technical: opportunities.filter(o => o.type === 'technical').length,
+    content: opportunities.filter(o => o.type === 'content').length
+  }
+  const gscMetrics = gscOverview?.metrics || {}
+  const gscTrend = gscOverview?.trend || []
+  const hasGscData = gscOverview && !gscError
 
   // Loading state
   if (sitesLoading) {
@@ -277,12 +316,6 @@ export default function SEODashboard({ onNavigate }) {
     )
   }
 
-  // Page counts for navigation badges
-  const opportunityCounts = {
-    technical: opportunities.filter(o => o.type === 'technical').length,
-    content: opportunities.filter(o => o.type === 'content').length
-  }
-
   // Render sub-views (detail views)
   if (subView === 'page-detail' && currentPage) {
     return (
@@ -310,7 +343,7 @@ export default function SEODashboard({ onNavigate }) {
     return (
       <div className="p-6 space-y-6">
         <SEONavigation activeView={view} onViewChange={handleViewChange} alerts={opportunityCounts.technical} opportunities={opportunityCounts.content} />
-        <SEOKeywordTracking site={currentSite} gscQueries={gscQueries} />
+        <SEOKeywordTracking siteId={currentSite?.id} gscQueries={gscQueries} />
       </div>
     )
   }
@@ -319,7 +352,27 @@ export default function SEODashboard({ onNavigate }) {
     return (
       <div className="p-6 space-y-6">
         <SEONavigation activeView={view} onViewChange={handleViewChange} alerts={opportunityCounts.technical} opportunities={opportunityCounts.content} />
-        <SEOContentDecay site={currentSite} />
+        <SEOContentDecay siteId={currentSite?.id} />
+      </div>
+    )
+  }
+
+  if (view === 'health-report') {
+    return (
+      <div className="p-6 space-y-6">
+        <Button variant="ghost" size="sm" onClick={handleBack} className="mb-4 -ml-2">
+          <ArrowLeft className="h-4 w-4 mr-2" />
+          Back to Dashboard
+        </Button>
+        <SEOHealthScore 
+          site={currentSite}
+          pages={pages}
+          opportunities={opportunities}
+          gscMetrics={gscMetrics}
+          cwvSummary={cwvSummary}
+          detailed={true}
+          onFixIssues={handleFixIssues}
+        />
       </div>
     )
   }
@@ -328,7 +381,11 @@ export default function SEODashboard({ onNavigate }) {
     return (
       <div className="p-6 space-y-6">
         <SEONavigation activeView={view} onViewChange={handleViewChange} alerts={opportunityCounts.technical} opportunities={opportunityCounts.content} />
-        <SEOTechnicalAudit site={currentSite} />
+        <SEOTechnicalAudit 
+          siteId={currentSite?.id} 
+          pages={pages}
+          cwvSummary={cwvSummary}
+        />
       </div>
     )
   }
@@ -351,18 +408,6 @@ export default function SEODashboard({ onNavigate }) {
           Back to Overview
         </Button>
         <SEOOpportunities site={currentSite} onSelectPage={handleSelectPage} />
-      </div>
-    )
-  }
-
-  if (view === 'ai-insights') {
-    return (
-      <div className="p-6">
-        <Button variant="ghost" size="sm" onClick={handleBack} className="mb-4 -ml-2">
-          <ArrowLeft className="h-4 w-4 mr-2" />
-          Back
-        </Button>
-        <SEOPageDetail page={currentPage} site={currentSite} />
       </div>
     )
   }
@@ -394,11 +439,6 @@ export default function SEODashboard({ onNavigate }) {
   // Main overview
   const topPages = pages.slice(0, 5)
   const openOpportunities = opportunities.filter(o => o.status === 'open').slice(0, 5)
-  
-  // GSC metrics from overview (fallback to site data)
-  const gscMetrics = gscOverview?.metrics || {}
-  const gscTrend = gscOverview?.trend || []
-  const hasGscData = gscOverview && !gscError
 
   return (
     <div className="p-6 space-y-6">
@@ -406,26 +446,42 @@ export default function SEODashboard({ onNavigate }) {
       <SEONavigation activeView={view} onViewChange={handleViewChange} alerts={opportunityCounts.technical} opportunities={opportunityCounts.content} />
 
       {/* Header with Status */}
-      <div className="flex items-start justify-between">
+      <div className="flex items-start justify-between flex-wrap gap-4">
         <div>
           <h1 className="text-2xl font-bold text-[var(--text-primary)]">SEO Command Center</h1>
-          <div className="flex items-center gap-2 mt-1">
-            <Globe className="h-4 w-4 text-[var(--accent-primary)]" />
+          <div className="flex items-center gap-3 mt-1 flex-wrap">
             <a 
               href={`https://${currentOrg.domain}`} 
               target="_blank" 
               rel="noopener noreferrer"
               className="text-[var(--text-secondary)] hover:text-[var(--accent-primary)] flex items-center gap-1"
             >
+              <Globe className="h-4 w-4 text-[var(--accent-primary)]" />
               {currentOrg.domain}
               <ExternalLink className="h-3 w-3" />
             </a>
-            {lastScan && (
-              <span className="text-xs text-[var(--text-tertiary)] ml-2 flex items-center gap-1">
-                <Clock className="h-3 w-3" />
-                Last scan: {new Date(lastScan).toLocaleDateString()}
+            
+            {/* GSC Sync Status Indicator */}
+            <div className="flex items-center gap-2 px-3 py-1 rounded-full bg-[var(--glass-bg)] border border-[var(--glass-border)]">
+              <div className={`w-2 h-2 rounded-full ${syncing ? 'bg-yellow-400 animate-pulse' : hasGscData ? 'bg-green-400' : 'bg-gray-400'}`} />
+              <span className="text-xs text-[var(--text-tertiary)]">
+                {syncing ? 'Syncing...' : hasGscData ? 'GSC Connected' : 'GSC Not Connected'}
               </span>
-            )}
+              {currentSite?.gsc_last_sync_at && !syncing && (
+                <span className="text-xs text-[var(--text-tertiary)] border-l border-[var(--glass-border)] pl-2 ml-1">
+                  {formatRelativeTime(currentSite.gsc_last_sync_at)}
+                </span>
+              )}
+              <Button 
+                variant="ghost" 
+                size="sm"
+                className="h-5 w-5 p-0 ml-1"
+                onClick={handleSyncGsc}
+                disabled={syncing}
+              >
+                <RefreshCw className={`h-3 w-3 ${syncing ? 'animate-spin' : ''}`} />
+              </Button>
+            </div>
           </div>
         </div>
         <div className="flex items-center gap-2">
@@ -484,22 +540,29 @@ export default function SEODashboard({ onNavigate }) {
         </Card>
       )}
 
-      {/* Health Score + Quick Wins Row */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <SEOHealthScore 
-          site={currentSite}
-          pages={pages}
-          opportunities={opportunities}
-          gscMetrics={gscMetrics}
-          cwvSummary={cwvSummary}
-          onViewDetails={() => handleViewChange('technical')}
-          onFixIssues={handleFixIssues}
-        />
-        <SEOQuickWins 
-          site={currentSite}
-          onViewAll={() => setView('ai-insights')}
-        />
-      </div>
+      {/* Quick Actions Bar */}
+      <SEOQuickActionsBar 
+        siteId={currentSite?.id}
+        domain={currentOrg?.domain}
+        onActionComplete={(action, msg) => console.log('[SEO] Action complete:', action, msg)}
+      />
+
+      {/* Health Score - Full Width */}
+      <SEOHealthScore 
+        site={currentSite}
+        pages={pages}
+        opportunities={opportunities}
+        gscMetrics={gscMetrics}
+        cwvSummary={cwvSummary}
+        onViewDetails={() => handleViewChange('health-report')}
+        onFixIssues={handleFixIssues}
+      />
+      
+      {/* Quick Wins */}
+      <SEOQuickWins 
+        site={currentSite}
+        onViewAll={() => setView('ai-insights')}
+      />
 
       {/* Quick Stats from GSC */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">

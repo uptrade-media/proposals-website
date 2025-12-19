@@ -11,7 +11,7 @@ export async function handler(event) {
   // CORS headers
   const headers = {
     'Access-Control-Allow-Origin': '*',
-    'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+    'Access-Control-Allow-Headers': 'Content-Type, Authorization, X-Organization-Id',
     'Access-Control-Allow-Methods': 'GET, OPTIONS',
     'Content-Type': 'application/json'
   }
@@ -52,6 +52,9 @@ export async function handler(event) {
     // Parse query parameters
     const queryParams = event.queryStringParameters || {}
     const { projectId, unreadOnly } = queryParams
+    
+    // Check for project tenant context
+    const orgId = event.headers['x-organization-id']
 
     // Build query for root messages (not replies)
     let query = supabase
@@ -65,13 +68,19 @@ export async function handler(event) {
       .is('parent_id', null)
       .order('created_at', { ascending: false })
 
-    // Filter by user role
-    if (contact.role !== 'admin') {
+    // Filter based on context
+    if (orgId) {
+      // Project tenant context: show messages for this project
+      query = query.eq('project_id', orgId)
+      console.log('[messages-list] Project tenant context, filtering by project_id:', orgId)
+    } else if (contact.role !== 'admin') {
       // Clients see messages where they are sender or recipient
       query = query.or(`sender_id.eq.${contact.id},recipient_id.eq.${contact.id}`)
     }
+    // Admins see all messages (when not in tenant context)
     
-    if (projectId) {
+    if (projectId && !orgId) {
+      // Only apply projectId filter if not already filtered by org context
       query = query.eq('project_id', projectId)
     }
     

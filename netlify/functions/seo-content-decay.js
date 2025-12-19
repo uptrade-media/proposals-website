@@ -145,10 +145,10 @@ async function runDecayDetection(event, headers) {
       .select(`
         *,
         history:seo_page_history(
-          date,
+          snapshot_date,
           clicks,
           impressions,
-          position
+          avg_position
         )
       `)
       .eq('site_id', siteId)
@@ -168,8 +168,8 @@ async function runDecayDetection(event, headers) {
       const history = page.history || []
       if (history.length < 2) continue
 
-      // Sort history by date
-      const sortedHistory = [...history].sort((a, b) => new Date(a.date) - new Date(b.date))
+      // Sort history by date (using snapshot_date)
+      const sortedHistory = [...history].sort((a, b) => new Date(a.snapshot_date) - new Date(b.snapshot_date))
 
       // Get earlier period (first half) and recent period (second half)
       const midpoint = Math.floor(sortedHistory.length / 2)
@@ -185,8 +185,8 @@ async function runDecayDetection(event, headers) {
       const earlierImpressions = earlierPeriod.reduce((sum, h) => sum + (h.impressions || 0), 0) / earlierPeriod.length
       const recentImpressions = recentPeriod.reduce((sum, h) => sum + (h.impressions || 0), 0) / recentPeriod.length
 
-      const earlierPosition = earlierPeriod.filter(h => h.position).reduce((sum, h) => sum + h.position, 0) / earlierPeriod.filter(h => h.position).length
-      const recentPosition = recentPeriod.filter(h => h.position).reduce((sum, h) => sum + h.position, 0) / recentPeriod.filter(h => h.position).length
+      const earlierPosition = earlierPeriod.filter(h => h.avg_position).reduce((sum, h) => sum + h.avg_position, 0) / earlierPeriod.filter(h => h.avg_position).length
+      const recentPosition = recentPeriod.filter(h => h.avg_position).reduce((sum, h) => sum + h.avg_position, 0) / recentPeriod.filter(h => h.avg_position).length
 
       // Skip pages with minimal previous traffic
       if (earlierClicks < config.minPreviousClicks) continue
