@@ -78,23 +78,50 @@ export default function ProposalPreview({
         proposalId: proposal.id,
         message: userMessage,
         currentContent: proposal.mdxContent,
-        conversationHistory: chatMessages
+        conversationHistory: chatMessages,
+        proposalData: {
+          paymentTerms: proposal.paymentTerms || proposal.payment_terms,
+          timeline: proposal.timeline,
+          totalAmount: proposal.totalAmount || proposal.total_amount,
+          validUntil: proposal.validUntil || proposal.valid_until
+        }
       })
 
-      if (response.data.updatedContent) {
+      // Check if any changes were made
+      const hasChanges = response.data.updatedContent || response.data.updatedPrice || 
+                         response.data.updatedPaymentTerms || response.data.updatedTimeline ||
+                         response.data.updatedValidUntil
+
+      if (hasChanges) {
         // AI made changes
         setChatMessages(prev => [...prev, {
           role: 'assistant',
           content: response.data.message || "I've made those changes. Here's the updated proposal."
         }])
         
+        // Build updated proposal object
+        const updatedProposal = { ...proposal }
+        if (response.data.updatedContent) {
+          updatedProposal.mdxContent = response.data.updatedContent
+        }
+        if (response.data.updatedPrice) {
+          updatedProposal.totalAmount = response.data.updatedPrice
+        }
+        if (response.data.updatedPaymentTerms) {
+          updatedProposal.paymentTerms = response.data.updatedPaymentTerms
+          updatedProposal.payment_terms = response.data.updatedPaymentTerms
+        }
+        if (response.data.updatedTimeline) {
+          updatedProposal.timeline = response.data.updatedTimeline
+        }
+        if (response.data.updatedValidUntil) {
+          updatedProposal.validUntil = response.data.updatedValidUntil
+          updatedProposal.valid_until = response.data.updatedValidUntil
+        }
+        
         // Trigger preview refresh
         if (onEdit) {
-          onEdit({
-            ...proposal,
-            mdxContent: response.data.updatedContent,
-            totalAmount: response.data.updatedPrice || proposal.totalAmount
-          })
+          onEdit(updatedProposal)
         }
       } else if (response.data.message) {
         setChatMessages(prev => [...prev, {
@@ -123,6 +150,7 @@ export default function ProposalPreview({
   // Quick action buttons for common edits
   const quickActions = [
     { label: 'Adjust price', prompt: 'Change the price to ' },
+    { label: 'Change payment terms', prompt: 'Change the payment terms to 50% upfront and 50% on completion' },
     { label: 'Shorten timeline', prompt: 'Reduce the timeline to ' },
     { label: 'Add urgency', prompt: 'Add more urgency triggers and a limited-time offer' },
     { label: 'Simplify language', prompt: 'Simplify the language and make it more concise' },

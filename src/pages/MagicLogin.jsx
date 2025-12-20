@@ -1,25 +1,36 @@
 // src/pages/MagicLogin.jsx
-// Handles Supabase magic link authentication
-// Supabase redirects here with tokens in the URL hash after user clicks email link
+// Handles magic link authentication (both Supabase and custom database tokens)
 import { useEffect, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 import { Card, CardContent } from '../components/ui/card'
 import { Loader2, CheckCircle2, XCircle } from 'lucide-react'
 import { Button } from '../components/ui/button'
 import { supabase, getCurrentUser } from '../lib/supabase-auth'
 import useAuthStore from '../lib/auth-store'
+import axios from 'axios'
 
 export default function MagicLogin() {
   const navigate = useNavigate()
+  const [searchParams] = useSearchParams()
   const { setUser } = useAuthStore()
   
   const [status, setStatus] = useState('validating') // validating, success, error
   const [error, setError] = useState('')
 
   useEffect(() => {
-    handleMagicLinkAuth()
+    // Check if this is a custom database token or Supabase magic link
+    const token = searchParams.get('token')
+    const redirect = searchParams.get('redirect')
     
-    // Listen for auth state change
+    if (token) {
+      // Custom database token flow
+      handleDatabaseTokenAuth(token, redirect)
+    } else {
+      // Supabase magic link flow (token in URL hash)
+      handleSupabaseMagicLinkAuth()
+    }
+    
+    // Listen for auth state change (for Supabase magic links)
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
       console.log('[MagicLogin] Auth event:', event)
       if (event === 'SIGNED_IN' && session) {
@@ -30,7 +41,55 @@ export default function MagicLogin() {
     return () => subscription.unsubscribe()
   }, [])
 
-  const handleMagicLinkAuth = async () => {
+  const handleDatabaseTokenAuth = async (token, redirect) => {
+    try {
+      console.log('[MagicLogin] Validating database token...')
+      
+      // Validate the token against the database (withCredentials to accept session cookie)
+      const response = await axios.post('/.netlify/functions/auth-magic-validate', { token }, {
+        withCredentials: true
+      })
+      
+      if (response.data.valid && response.data.contact) {
+        const contact = response.data.contact
+        
+        // Check if user needs account setup
+        if (contact.account_setup === 'false' || contact.account_setup === false) {
+          // Redirect to account setup with the token
+          setStatus('success')
+          setTimeout(() => {
+            navigate(`/account-setup?token=${token}`, { replace: true })
+          }, 1000)
+          return
+        }
+        
+        // User has account set up - try to sign them in
+        // For now, redirect to the intended page or dashboard
+        setUser({
+          id: contact.id,
+          email: contact.email,
+          name: contact.name,
+          role: contact.role,
+          avatar: contact.avatar
+        })
+        setStatus('success')
+        
+        setTimeout(() => {
+          const targetPath = redirect || (contact.role === 'admin' ? '/admin' : '/dashboard')
+          navigate(targetPath, { replace: true })
+        }, 1500)
+      } else {
+        setStatus('error')
+        setError(response.data.error || 'Invalid or expired link')
+      }
+    } catch (err) {
+      console.error('[MagicLogin] Database token auth error:', err)
+      setStatus('error')
+      setError(err.response?.data?.error || 'Authentication failed')
+    }
+  }
+
+  const handleSupabaseMagicLinkAuth = async () => {
     try {
       // Check if there's already a session (from magic link in URL hash)
       const { data: { session }, error: sessionError } = await supabase.auth.getSession()

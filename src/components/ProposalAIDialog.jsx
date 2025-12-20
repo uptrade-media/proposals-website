@@ -88,11 +88,18 @@ const TYPE_ICONS = {
 
 // Timeline options
 const TIMELINE_OPTIONS = [
+  { value: '1-week', label: '1 Week', description: 'Quick turnaround' },
   { value: '2-weeks', label: '2 Weeks', description: 'Rush project' },
-  { value: '4-weeks', label: '4 Weeks', description: 'Fast turnaround' },
+  { value: '3-weeks', label: '3 Weeks', description: 'Fast project' },
+  { value: '4-weeks', label: '4 Weeks', description: 'Quick turnaround' },
+  { value: '5-weeks', label: '5 Weeks', description: 'Standard small' },
   { value: '6-weeks', label: '6 Weeks', description: 'Standard' },
-  { value: '8-weeks', label: '8 Weeks', description: 'Complex project' },
+  { value: '8-weeks', label: '8 Weeks', description: 'Medium project' },
+  { value: '10-weeks', label: '10 Weeks', description: 'Complex project' },
   { value: '12-weeks', label: '12 Weeks', description: 'Large project' },
+  { value: '16-weeks', label: '16 Weeks', description: 'Major project' },
+  { value: '3-months', label: '3 Months', description: 'Quarter project' },
+  { value: '6-months', label: '6 Months', description: 'Half-year project' },
   { value: 'ongoing', label: 'Ongoing', description: 'Monthly retainer' }
 ]
 

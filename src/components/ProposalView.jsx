@@ -138,12 +138,20 @@ export default function ProposalView({
   // Parse timeline into readable format
   const formatTimeline = (value) => {
     if (!value) return '6 weeks'
-    // Handle formats like "6-weeks", "12-weeks", etc.
+    // Handle formats like "1-week", "6-weeks", "12-weeks", etc.
     const match = value.match(/^(\d+)-?weeks?$/i)
-    if (match) return `${match[1]} weeks`
+    if (match) {
+      const num = parseInt(match[1])
+      return num === 1 ? '1 week' : `${num} weeks`
+    }
     // Handle formats like "3-months", etc.
     const monthMatch = value.match(/^(\d+)-?months?$/i)
-    if (monthMatch) return `${monthMatch[1]} months`
+    if (monthMatch) {
+      const num = parseInt(monthMatch[1])
+      return num === 1 ? '1 month' : `${num} months`
+    }
+    // Handle "ongoing"
+    if (value.toLowerCase() === 'ongoing') return 'Ongoing'
     // Already formatted or custom
     return value.replace(/-/g, ' ')
   }

@@ -56,11 +56,18 @@ const PAYMENT_TERMS = [
 
 // Timeline options
 const TIMELINE_OPTIONS = [
+  { value: '1-week', label: '1 Week' },
   { value: '2-weeks', label: '2 Weeks' },
+  { value: '3-weeks', label: '3 Weeks' },
   { value: '4-weeks', label: '4 Weeks' },
+  { value: '5-weeks', label: '5 Weeks' },
   { value: '6-weeks', label: '6 Weeks' },
   { value: '8-weeks', label: '8 Weeks' },
+  { value: '10-weeks', label: '10 Weeks' },
   { value: '12-weeks', label: '12 Weeks' },
+  { value: '16-weeks', label: '16 Weeks' },
+  { value: '3-months', label: '3 Months' },
+  { value: '6-months', label: '6 Months' },
   { value: 'ongoing', label: 'Ongoing' }
 ]
 

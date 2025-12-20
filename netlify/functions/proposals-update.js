@@ -71,7 +71,13 @@ export async function handler(event) {
       validUntil,
       projectId,
       contactId,
-      lineItems
+      lineItems,
+      // Additional fields for proposal editing
+      timeline,
+      paymentTerms,
+      customTerms,
+      heroImageUrl,
+      addOns
     } = body
 
     // Check if proposal exists
@@ -101,6 +107,13 @@ export async function handler(event) {
     if (totalAmount !== undefined) updates.total_amount = totalAmount ? String(totalAmount) : null
     if (validUntil !== undefined) updates.valid_until = validUntil || null
     if (projectId !== undefined) updates.project_id = projectId || null
+    
+    // Additional proposal fields
+    if (timeline !== undefined) updates.timeline = timeline
+    if (paymentTerms !== undefined) updates.payment_terms = paymentTerms
+    if (customTerms !== undefined) updates.custom_terms = customTerms
+    if (heroImageUrl !== undefined) updates.hero_image_url = heroImageUrl
+    if (addOns !== undefined) updates.add_ons = addOns
     
     // Only allow changing contact if proposal is still a draft
     if (contactId !== undefined && existingProposal.status === 'draft') {

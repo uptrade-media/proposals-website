@@ -17,27 +17,43 @@ const EDIT_PROMPT = `You are a proposal editor for Uptrade Media. The user wants
 Current proposal content (MDX format):
 {{currentContent}}
 
+Current proposal DATABASE settings (THESE ARE WHAT DISPLAY IN THE UI HEADER):
+- Payment Terms: {{paymentTerms}}
+- Timeline: {{timeline}}
+- Total Price: ${{totalAmount}}
+
 User's edit request: {{userMessage}}
 
-INSTRUCTIONS:
-1. If the user is asking a question about the proposal, answer it helpfully
-2. If the user wants changes, make them and return the updated MDX content
-3. Keep the same MDX structure and formatting
-4. Maintain the professional, conversion-focused tone
-5. If changing pricing, update the total appropriately
+CRITICAL: The "Payment Terms", "Timeline", and "Total Price" shown above are the DATABASE values that display in the proposal header. If the user asks to change these, you MUST return the corresponding structured field.
 
-RESPONSE FORMAT:
-If you made changes, respond with JSON:
+INSTRUCTIONS:
+1. If the user wants changes, make them and return ALL updated values
+2. Keep the same MDX structure and formatting
+3. ALWAYS include the structured field when changing settings:
+   - Changing payment terms → MUST include "updatedPaymentTerms" with exact value
+   - Changing timeline → MUST include "updatedTimeline" with exact value
+   - Changing price → MUST include "updatedPrice"
+
+PAYMENT TERMS VALUES (use exact string):
+- "50-50" = 50% upfront, 50% on completion
+- "100-upfront" = 100% upfront
+- "25-25-25-25" = 25% quarterly milestones  
+- "monthly" = Monthly billing
+
+TIMELINE VALUES (use exact format):
+- "6-weeks", "8-weeks", "12-weeks", "3-months", "ongoing", etc.
+
+RESPONSE FORMAT - JSON only:
 {
   "message": "Brief description of what you changed",
-  "updatedContent": "Full updated MDX content here",
-  "updatedPrice": 5000
+  "updatedContent": "Full updated MDX content (if content changed)",
+  "updatedPrice": 5000,
+  "updatedPaymentTerms": "50-50",
+  "updatedTimeline": "8-weeks"
 }
 
-If just answering a question (no changes needed):
-{
-  "message": "Your helpful response here"
-}
+IMPORTANT: If user asks to change payment terms to 50/50, you MUST include:
+"updatedPaymentTerms": "50-50"
 
 Respond with valid JSON only.`
 
@@ -57,10 +73,31 @@ exports.handler = async function(event) {
   console.log(`[proposals-edit-ai-background] Starting edit for proposal: ${proposalId}, editId: ${editId}`)
 
   try {
-    // Build the prompt
+    // Fetch current proposal settings from database
+    const { data: currentProposal } = await supabase
+      .from('proposals')
+      .select('payment_terms, timeline, total_amount')
+      .eq('id', proposalId)
+      .single()
+
+    const paymentTermsMap = {
+      '50-50': '50% upfront, 50% on completion',
+      '100-upfront': '100% upfront',
+      '25-25-25-25': '25% quarterly milestones',
+      'monthly': 'Monthly billing'
+    }
+    
+    const currentPaymentTerms = currentProposal?.payment_terms || '50-50'
+    const currentTimeline = currentProposal?.timeline || '6-weeks'
+    const currentAmount = currentProposal?.total_amount || '0'
+
+    // Build the prompt with current settings
     const systemPrompt = EDIT_PROMPT
       .replace('{{currentContent}}', currentContent || 'No content provided')
       .replace('{{userMessage}}', instruction)
+      .replace('{{paymentTerms}}', paymentTermsMap[currentPaymentTerms] || currentPaymentTerms)
+      .replace('{{timeline}}', currentTimeline.replace('-', ' '))
+      .replace('{{totalAmount}}', currentAmount)
 
     const messages = [
       { role: 'system', content: systemPrompt },
@@ -88,18 +125,41 @@ exports.handler = async function(event) {
       aiResponse = { message: aiResponseText }
     }
 
-    // Update the proposal if content was changed
-    if (aiResponse.updatedContent) {
+    // Check if any updates were made
+    const hasUpdates = aiResponse.updatedContent || aiResponse.updatedPrice || 
+                       aiResponse.updatedPaymentTerms || aiResponse.updatedTimeline
+
+    console.log('[proposals-edit-ai-background] AI response fields:', {
+      hasUpdatedContent: !!aiResponse.updatedContent,
+      updatedPaymentTerms: aiResponse.updatedPaymentTerms || 'NOT INCLUDED',
+      updatedTimeline: aiResponse.updatedTimeline || 'NOT INCLUDED',
+      updatedPrice: aiResponse.updatedPrice || 'NOT INCLUDED'
+    })
+
+    // Update the proposal if any changes were made
+    if (hasUpdates) {
       console.log('[proposals-edit-ai-background] Updating proposal in database...')
       
       const updateData = {
-        mdx_content: aiResponse.updatedContent,
         updated_at: new Date().toISOString()
       }
       
-      if (aiResponse.updatedPrice) {
-        updateData.total_amount = aiResponse.updatedPrice
+      if (aiResponse.updatedContent) {
+        updateData.mdx_content = aiResponse.updatedContent
       }
+      if (aiResponse.updatedPrice) {
+        updateData.total_amount = String(aiResponse.updatedPrice)
+      }
+      if (aiResponse.updatedPaymentTerms) {
+        updateData.payment_terms = aiResponse.updatedPaymentTerms
+        console.log('[proposals-edit-ai-background] Setting payment_terms to:', aiResponse.updatedPaymentTerms)
+      }
+      if (aiResponse.updatedTimeline) {
+        updateData.timeline = aiResponse.updatedTimeline
+        console.log('[proposals-edit-ai-background] Setting timeline to:', aiResponse.updatedTimeline)
+      }
+
+      console.log('[proposals-edit-ai-background] Update data:', updateData)
 
       const { error: updateError } = await supabase
         .from('proposals')

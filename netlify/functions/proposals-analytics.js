@@ -128,11 +128,18 @@ export async function handler(event) {
       proposalId,
       summary: {
         totalViews: viewEvents.length,
+        uniqueViews: [...new Set(viewEvents.map(v => 
+          v.metadata?.visitorId || v.ip_address || 'unknown'
+        ))].length,
         uniqueViewDays: [...new Set(viewEvents.map(v => 
           new Date(v.created_at).toDateString()
         ))].length,
         totalTimeSpent, // in seconds
+        avgTimeOnPage: viewEvents.length > 0 ? Math.round(totalTimeSpent / viewEvents.length) : 0, // in seconds
         maxScrollDepth, // percentage
+        avgScrollDepth: scrollEvents.length > 0 
+          ? Math.round(scrollEvents.reduce((sum, e) => sum + (e.metadata?.scrollDepth || 0), 0) / scrollEvents.length)
+          : 0,
         sectionsViewed,
         totalClicks: clickEvents.length,
         signatureStarted: signatureEvents.length > 0,

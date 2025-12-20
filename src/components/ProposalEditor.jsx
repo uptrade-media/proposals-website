@@ -53,6 +53,7 @@ import { cn } from '@/lib/utils'
 import api from '@/lib/api'
 import SendProposalDialog from './SendProposalDialog'
 import ProposalView from './ProposalView'
+import EditProposalDialog from './EditProposalDialog'
 import jsPDF from 'jspdf'
 import html2canvas from 'html2canvas'
 
@@ -328,6 +329,7 @@ export default function ProposalEditor({ proposalId, onBack }) {
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState(null)
   const [showSendDialog, setShowSendDialog] = useState(false)
+  const [showEditDialog, setShowEditDialog] = useState(false)
   const [isExporting, setIsExporting] = useState(false)
   const [showAssignDialog, setShowAssignDialog] = useState(false)
   const [clients, setClients] = useState([])
@@ -666,6 +668,10 @@ export default function ProposalEditor({ proposalId, onBack }) {
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end">
+                <DropdownMenuItem onClick={() => setShowEditDialog(true)}>
+                  <Edit3 className="w-4 h-4 mr-2" />
+                  Edit Settings
+                </DropdownMenuItem>
                 <DropdownMenuItem onClick={() => window.open(`/p/${proposal?.slug}`, '_blank')}>
                   <ExternalLink className="w-4 h-4 mr-2" />
                   Preview as Client
@@ -774,6 +780,17 @@ export default function ProposalEditor({ proposalId, onBack }) {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Edit Proposal Dialog */}
+      <EditProposalDialog
+        proposal={proposal}
+        open={showEditDialog}
+        onOpenChange={setShowEditDialog}
+        onSuccess={(updatedProposal) => {
+          setProposal(updatedProposal)
+          setShowEditDialog(false)
+        }}
+      />
     </div>
   )
 }

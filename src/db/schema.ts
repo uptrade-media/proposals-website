@@ -70,6 +70,8 @@ export const proposals = pgTable('proposals', {
   totalAmount: decimal('total_amount', { precision: 10, scale: 2 }),
   timeline: text('timeline'), // Project timeline (e.g., "6 weeks")
   paymentTerms: text('payment_terms'), // Payment terms (e.g., "100% upfront", "50/50")
+  customTerms: text('custom_terms'), // Custom payment terms text when paymentTerms is "custom"
+  addOns: jsonb('add_ons').default([]), // Array of add-on items: [{name, price, description}]
   version: integer('version').default(1),
   validUntil: timestamp('valid_until'),
   sentAt: timestamp('sent_at'),
