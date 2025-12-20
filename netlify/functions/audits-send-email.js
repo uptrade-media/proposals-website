@@ -256,10 +256,18 @@ export async function handler(event) {
               <td align="center" style="padding: 40px 20px;">
                 <table role="presentation" style="width: 600px; max-width: 100%; background-color: #ffffff; border-radius: 16px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); overflow: hidden;">
                   
-                  <!-- Header with Logo -->
+                  <!-- Header with CSS Logo -->
                   <tr>
                     <td style="background: linear-gradient(135deg, #54b948 0%, #39bfb0 100%); padding: 30px; text-align: center;">
-                      <img src="https://uptrademedia.com/logo-all-white.png" alt="Uptrade Media" style="height: 40px; width: auto; margin-bottom: 20px;" />
+                      <!-- CSS-based logo - no image blocking, dark mode compatible -->
+                      <div style="margin-bottom: 20px;">
+                        <span style="font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; font-size: 28px; font-weight: 800; color: #ffffff; letter-spacing: -0.5px;">
+                          UPTRADE
+                        </span>
+                        <span style="font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; font-size: 28px; font-weight: 300; color: #ffffff; letter-spacing: -0.5px;">
+                          MEDIA
+                        </span>
+                      </div>
                       <h1 style="color: #ffffff; margin: 0 0 10px 0; font-size: 28px; font-weight: bold;">
                         Your Website Audit is Ready! 🎉
                       </h1>

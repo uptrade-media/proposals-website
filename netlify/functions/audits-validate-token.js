@@ -39,11 +39,12 @@ export async function handler(event) {
     const supabase = createSupabaseAdmin()
     
     // Look up the audit by ID and verify the token matches
+    // Use explicit foreign key hint since there are multiple relationships between audits and contacts
     const { data: audit, error } = await supabase
       .from('audits')
       .select(`
         *,
-        contact:contacts(id, name, email, company)
+        contact:contacts!audits_contact_id_fkey(id, name, email, company)
       `)
       .eq('id', auditId)
       .single()

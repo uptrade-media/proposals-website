@@ -364,7 +364,9 @@ const useReportsStore = create((set, get) => ({
       'pending': { text: 'Queued', color: 'gray' },
       'running': { text: 'Processing', color: 'blue' },
       'completed': { text: 'Complete', color: 'green' },
-      'failed': { text: 'Failed', color: 'red' }
+      'complete': { text: 'Complete', color: 'green' },  // Main site uses 'complete'
+      'failed': { text: 'Failed', color: 'red' },
+      'error': { text: 'Failed', color: 'red' }  // Alias for error status
     }
     return badges[status] || { text: 'Unknown', color: 'gray' }
   },
