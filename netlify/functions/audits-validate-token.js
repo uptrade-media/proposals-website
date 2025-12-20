@@ -1,6 +1,8 @@
 // netlify/functions/audits-validate-token.js
-// Proxy function to validate audit magic tokens against main site
-// This avoids CORS issues by making the request server-to-server
+// Validates audit magic tokens directly against Supabase
+// Used for magic link access to audit reports
+
+import { createSupabaseAdmin } from './utils/supabase.js'
 
 export async function handler(event) {
   // CORS headers
@@ -34,21 +36,57 @@ export async function handler(event) {
       }
     }
 
-    // Call main site API server-to-server (no CORS issues)
-    const mainSiteUrl = 'https://www.uptrademedia.com/api/audit-validate-token'
+    const supabase = createSupabaseAdmin()
     
-    const response = await fetch(mainSiteUrl, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ auditId, token })
-    })
-
-    const data = await response.json()
-
+    // Look up the audit by ID and verify the token matches
+    const { data: audit, error } = await supabase
+      .from('audits')
+      .select('id, magic_token, magic_token_expires_at, target_url, status')
+      .eq('id', auditId)
+      .single()
+    
+    if (error || !audit) {
+      console.error('[validate-token] Audit not found:', auditId, error)
+      return {
+        statusCode: 404,
+        headers,
+        body: JSON.stringify({ valid: false, error: 'Audit not found' })
+      }
+    }
+    
+    // Check if token matches
+    if (audit.magic_token !== token) {
+      console.error('[validate-token] Token mismatch for audit:', auditId)
+      return {
+        statusCode: 401,
+        headers,
+        body: JSON.stringify({ valid: false, error: 'Invalid token' })
+      }
+    }
+    
+    // Check if token is expired (if expiry is set)
+    if (audit.magic_token_expires_at) {
+      const expiresAt = new Date(audit.magic_token_expires_at)
+      if (expiresAt < new Date()) {
+        console.error('[validate-token] Token expired for audit:', auditId)
+        return {
+          statusCode: 401,
+          headers,
+          body: JSON.stringify({ valid: false, error: 'Token expired' })
+        }
+      }
+    }
+    
+    console.log('[validate-token] Token valid for audit:', auditId)
     return {
-      statusCode: response.status,
+      statusCode: 200,
       headers,
-      body: JSON.stringify(data)
+      body: JSON.stringify({ 
+        valid: true, 
+        auditId: audit.id,
+        targetUrl: audit.target_url,
+        status: audit.status
+      })
     }
 
   } catch (error) {
