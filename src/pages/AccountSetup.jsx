@@ -30,10 +30,36 @@ export default function AccountSetup() {
 
   useEffect(() => {
     if (token) {
+      // Custom JWT token flow (from database magic links)
       validateToken()
     } else {
-      setStatus('error')
-      setError('No setup token provided')
+      // Supabase magic link flow - user is already authenticated
+      // Check if we have a session from Supabase magic link
+      supabase.auth.getSession().then(({ data: { session } }) => {
+        if (session?.user?.email) {
+          // Get contact info from database
+          axios.post('/.netlify/functions/auth-validate-supabase-session').then(response => {
+            if (response.data.valid) {
+              setTokenData({
+                email: response.data.email,
+                name: response.data.name,
+                contactId: response.data.contactId,
+                isAlreadySetup: response.data.isAlreadySetup
+              })
+              setStatus('ready')
+            } else {
+              setStatus('error')
+              setError(response.data.error || 'Account not found')
+            }
+          }).catch(err => {
+            setStatus('error')
+            setError(err.response?.data?.error || 'Failed to load account information')
+          })
+        } else {
+          setStatus('error')
+          setError('No setup token provided')
+        }
+      })
     }
   }, [token])
 
@@ -59,8 +85,12 @@ export default function AccountSetup() {
     try {
       setIsSubmitting(true)
       
-      // Store the setup token in localStorage so we can complete setup after OAuth redirect
-      localStorage.setItem('pendingSetupToken', token)
+      // Store the setup token and contact ID in localStorage for use after OAuth redirect
+      if (token) {
+        localStorage.setItem('pendingSetupToken', token)
+      } else {
+        localStorage.setItem('pendingSetupContactId', tokenData.contactId)
+      }
       
       // Initiate Google OAuth - Supabase will handle the popup/redirect
       await signInWithGoogle()
@@ -103,10 +133,18 @@ export default function AccountSetup() {
       }
       
       // Complete setup on the backend
-      await axios.post('/.netlify/functions/auth-complete-setup', {
-        token,
-        method: 'password'
-      })
+      if (token) {
+        // Custom JWT token flow
+        await axios.post('/.netlify/functions/auth-complete-setup', {
+          token,
+          method: 'password'
+        })
+      } else {
+        // Supabase magic link flow - just mark account as setup
+        await axios.post('/.netlify/functions/auth-mark-setup-complete', {
+          contactId: tokenData.contactId
+        }, { withCredentials: true })
+      }
       
       setStatus('success')
       

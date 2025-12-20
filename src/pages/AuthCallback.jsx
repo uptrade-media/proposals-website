@@ -19,11 +19,12 @@ export default function AuthCallback() {
       if (user) {
         console.log('[AuthCallback] User authenticated:', user.email)
         
-        // Check if this is a new account setup (from AccountSetup page with JWT token)
+        // Check if this is a new account setup (from AccountSetup page with JWT token or contact ID)
         const pendingSetupToken = localStorage.getItem('pendingSetupToken')
+        const pendingSetupContactId = localStorage.getItem('pendingSetupContactId')
         
         if (pendingSetupToken) {
-          console.log('[AuthCallback] Completing account setup after OAuth...')
+          console.log('[AuthCallback] Completing account setup after OAuth with JWT...')
           localStorage.removeItem('pendingSetupToken')
           
           try {
@@ -38,6 +39,21 @@ export default function AuthCallback() {
             })
             
             console.log('[AuthCallback] Account setup completed via Google OAuth')
+          } catch (setupError) {
+            console.error('[AuthCallback] Failed to complete setup:', setupError)
+            // Continue anyway - the user is authenticated
+          }
+        } else if (pendingSetupContactId) {
+          console.log('[AuthCallback] Completing account setup after OAuth (Supabase magic link)...')
+          localStorage.removeItem('pendingSetupContactId')
+          
+          try {
+            // Mark setup as complete for Supabase magic link user
+            await axios.post('/.netlify/functions/auth-mark-setup-complete', {
+              contactId: pendingSetupContactId
+            }, { withCredentials: true })
+            
+            console.log('[AuthCallback] Account setup completed via Google OAuth (magic link)')
           } catch (setupError) {
             console.error('[AuthCallback] Failed to complete setup:', setupError)
             // Continue anyway - the user is authenticated

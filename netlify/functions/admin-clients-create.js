@@ -146,7 +146,7 @@ export async function handler(event) {
         type: 'magiclink',
         email: newContact.email,
         options: {
-          redirectTo: `${PORTAL_URL}/account-setup`
+          redirectTo: `${PORTAL_URL}/setup`
         }
       })
 

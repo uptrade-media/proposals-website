@@ -469,27 +469,25 @@ async function sendOrgMemberInviteEmail(supabase, member, orgName, inviterName) 
       throw new Error('Email service not configured')
     }
 
-    // Generate 7-day magic link token and store in database
-    const magicToken = randomBytes(32).toString('hex')
-    const magicTokenExpiry = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000) // 7 days
-    
-    const { error: tokenError } = await supabase
-      .from('contacts')
-      .update({
-        magic_link_token: magicToken,
-        magic_link_expires: magicTokenExpiry.toISOString(),
-        updated_at: new Date().toISOString()
-      })
-      .eq('id', member.id)
+    const PORTAL_URL = process.env.URL || process.env.SITE_URL || 'https://portal.uptrademedia.com'
 
-    if (tokenError) {
-      console.error('[admin-org-members] Error storing magic link token:', tokenError)
+    // Generate Supabase magic link for account setup
+    const { data: linkData, error: linkError } = await supabase.auth.admin.generateLink({
+      type: 'magiclink',
+      email: member.email,
+      options: {
+        redirectTo: `${PORTAL_URL}/setup?org=${encodeURIComponent(orgName)}`
+      }
+    })
+
+    if (linkError) {
+      console.error('[admin-org-members] Error generating magic link:', linkError)
       throw new Error('Failed to generate setup link')
     }
 
-    const setupUrl = `${process.env.SITE_URL || 'https://portal.uptrademedia.com'}/auth/magic?token=${magicToken}&redirect=${encodeURIComponent('/account-setup?org=' + orgName)}`
+    const setupUrl = linkData?.properties?.action_link || `${PORTAL_URL}/login`
 
-    console.log(`[admin-org-members] Generated 7-day magic link for ${member.email}`)
+    console.log(`[admin-org-members] Generated Supabase magic link for ${member.email}`)
 
     // Ensure from address has proper format with display name
     let fromEmail = process.env.RESEND_FROM || 'Uptrade Media <portal@send.uptrademedia.com>'
