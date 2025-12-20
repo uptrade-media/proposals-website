@@ -98,6 +98,21 @@ export async function handler(event) {
       query = query.eq('created_by', createdByFilter)
     }
     
+    // Search by URL (for finding existing audits)
+    const urlFilter = event.queryStringParameters?.url
+    if (urlFilter) {
+      // Normalize URL for matching (strip trailing slash, www, and protocol)
+      const normalizedUrl = urlFilter
+        .replace(/^https?:\/\//, '')
+        .replace(/^www\./, '')
+        .replace(/\/$/, '')
+      
+      // Search for audits matching this URL (with status = 'completed')
+      query = query
+        .ilike('target_url', `%${normalizedUrl}%`)
+        .eq('status', 'completed')
+    }
+    
     query = query.order('created_at', { ascending: false })
 
     const { data, error } = await query

@@ -256,12 +256,12 @@ export async function handler(event) {
               <td align="center" style="padding: 40px 20px;">
                 <table role="presentation" style="width: 600px; max-width: 100%; background-color: #ffffff; border-radius: 16px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); overflow: hidden;">
                   
-                  <!-- Header with Inline SVG Logo -->
+                  <!-- Header with Logo -->
                   <tr>
                     <td style="background: linear-gradient(135deg, #54b948 0%, #39bfb0 100%); padding: 30px; text-align: center;">
-                      <!-- Inline white SVG logo -->
+                      <!-- Hosted white logo -->
                       <div style="margin-bottom: 20px;">
-                        <img src="data:image/svg+xml;base64,PD94bWwgdmVyc2lvbj0iMS4wIiBlbmNvZGluZz0iVVRGLTgiPz4KPHN2ZyBpZD0iTGF5ZXJfMSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIiB3aWR0aD0iNDk4LjkiIGhlaWdodD0iNDk4LjkiIHZlcnNpb249IjEuMSIgeG1sbnM6eGxpbms9Imh0dHA6Ly93d3cudzMub3JnLzE5OTkveGxpbmsiIHZpZXdCb3g9IjAgMCA0OTguOSA0OTguOSI+CiAgPGRlZnM+CiAgICA8c3R5bGU+CiAgICAgIC5zdDAgewogICAgICAgIGZpbGw6ICNmZmY7CiAgICAgIH0KICAgICAgLnN0MSB7CiAgICAgICAgY2xpcC1wYXRoOiB1cmwoI2NsaXBwYXRoKTsKICAgICAgfQogICAgPC9zdHlsZT4KICAgIDxjbGlwUGF0aCBpZD0iY2xpcHBhdGgiPgogICAgICA8cGF0aCBjbGFzcz0ic3QwIiBkPSJNMjUwLDBDMTEyLjYsMCwxLjEsMTExLjQsMS4xLDI0OC45czgwLjcsMjE1LjEsMTg5LjUsMjQxLjhjNS4yLDEuMSwxMC42LDEuNywxNi4xLDEuNyw0MS4zLDAsNzUuMi0zMy41LDc1LjItNzQuOHYtMTgxLjhsODUuMSw4MC43di03Mi42bC0xMTctMTEwLjUtMTE3LDExMC41djcyLjZsODUuMS04MC40djE1Ni43YzAsMTguMi0xNC44LDMzLTMzLDMzcy05LjMtMS0xMy40LTIuOWMtNjYuMy0yOS45LTExMi40LTk2LjYtMTEyLjQtMTc0UzE0NC42LDU4LjEsMjUwLDU4LjFzMTkwLjgsODUuNCwxOTAuOCwxOTAuOC02NC4yLDE2Ny43LTE0OS45LDE4Ni40Yy02LDI4LjQtMjYsNTEuNy01Mi40LDYyLjIsMy44LjIsNy42LjMsMTEuNS4zLDEzNy40LDAsMjQ4LjktMTExLjQsMjQ4LjktMjQ4LjlTMzg3LjUsMCwyNTAsMFoiLz4KICAgIDwvY2xpcFBhdGg+CiAgPC9kZWZzPgogIDxwYXRoIGNsYXNzPSJzdDAiIGQ9Ik0yNTAsMEMxMTIuNiwwLDEuMSwxMTEuNCwxLjEsMjQ4LjlzODAuNywyMTUuMSwxODkuNSwyNDEuOGM1LjIsMS4xLDEwLjYsMS43LDE2LjEsMS43LDQxLjMsMCw3NS4yLTMzLjUsNzUuMi03NC44di0xODEuOGw4NS4xLDgwLjd2LTcyLjZsLTExNy0xMTAuNS0xMTcsMTEwLjV2NzIuNmw4NS4xLTgwLjR2MTU2LjdjMCwxOC4yLTE0LjgsMzMtMzMsMzNzLTkuMy0xLTEzLjQtMi45Yy02Ni4zLTI5LjktMTEyLjQtOTYuNi0xMTIuNC0xNzRTMTQ0LjYsNTguMSwyNTAsNTguMXMxOTAuOCw4NS40LDE5MC44LDE5MC44LTY0LjIsMTY3LjctMTQ5LjksMTg2LjRjLTYsMjguNC0yNiw1MS43LTUyLjQsNjIuMiwzLjguMiw3LjYuMywxMS41LjMsMTM3LjQsMCwyNDguOS0xMTEuNCwyNDguOS0yNDguOVMzODcuNSwwLDI1MCwwWiIvPgogIDxnIGNsYXNzPSJzdDEiPgogICAgPHJlY3QgY2xhc3M9InN0MCIgd2lkdGg9IjQ5OC45IiBoZWlnaHQ9IjQ5OC45Ii8+CiAgPC9nPgo8L3N2Zz4=" alt="Uptrade Media" width="60" height="60" style="display: block; margin: 0 auto;" />
+                        <img src="https://portal.uptrademedia.com/uptrade_media_logo_white.png" alt="Uptrade Media" width="180" height="auto" style="display: block; margin: 0 auto;" />
                       </div>
                       <h1 style="color: #ffffff; margin: 0 0 10px 0; font-size: 28px; font-weight: bold;">
                         Your Website Audit is Ready! 🎉

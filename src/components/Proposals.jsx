@@ -23,7 +23,8 @@ import {
   MousePointer,
   Timer,
   TrendingUp,
-  Activity
+  Activity,
+  Copy
 } from 'lucide-react'
 import useAuthStore from '@/lib/auth-store'
 import api from '@/lib/api'
@@ -33,7 +34,7 @@ import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/component
 import { Progress } from '@/components/ui/progress'
 
 // Proposal Row component for consistent display (Admin view) with expandable analytics
-function ProposalRow({ proposal, onView, onEdit, onDelete, showSignedDate = false }) {
+function ProposalRow({ proposal, onView, onEdit, onDelete, onDuplicate, showSignedDate = false }) {
   const [isExpanded, setIsExpanded] = useState(false)
   const [analytics, setAnalytics] = useState(null)
   const [loadingAnalytics, setLoadingAnalytics] = useState(false)
@@ -163,6 +164,18 @@ function ProposalRow({ proposal, onView, onEdit, onDelete, showSignedDate = fals
               <Button variant="outline" size="sm" onClick={onEdit}>
                 <Edit className="w-3 h-3 mr-1" />
                 Edit
+              </Button>
+            )}
+            {['signed', 'accepted'].includes(proposal.status) && onDuplicate && (
+              <Button 
+                variant="outline" 
+                size="sm" 
+                onClick={onDuplicate}
+                className="text-blue-600 hover:text-blue-700 hover:bg-blue-50"
+                title="Duplicate as new draft"
+              >
+                <Copy className="w-3 h-3 mr-1" />
+                Duplicate
               </Button>
             )}
             <Button
@@ -424,6 +437,22 @@ const Proposals = ({ onNavigate }) => {
     }
   }
 
+  // Duplicate a proposal (creates new draft without signatures)
+  const handleDuplicateProposal = async (proposal) => {
+    try {
+      const response = await api.post('/.netlify/functions/proposals-duplicate', {
+        proposalId: proposal.id
+      })
+      
+      const newProposal = response.data.proposal
+      setProposals([newProposal, ...proposals])
+      toast.success(`Created draft copy: "${newProposal.title}"`)
+    } catch (err) {
+      console.error('Failed to duplicate proposal:', err)
+      toast.error('Failed to duplicate proposal')
+    }
+  }
+
   // Loading state when fetching full proposal
   if (loadingProposalView) {
     return (
@@ -646,6 +675,7 @@ const Proposals = ({ onNavigate }) => {
                     proposal={proposal}
                     onView={() => handleViewProposal(proposal)}
                     onEdit={() => handleEditProposal(proposal)}
+                    onDuplicate={() => handleDuplicateProposal(proposal)}
                     onDelete={() => setDeleteProposalDialog({
                       open: true,
                       id: proposal.id,

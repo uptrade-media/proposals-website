@@ -141,6 +141,8 @@ export default function ProposalAIDialog({
   const [isGenerating, setIsGenerating] = useState(false)
   const [isRunningAudit, setIsRunningAudit] = useState(false)
   const [auditResults, setAuditResults] = useState(null)
+  const [isSearchingAudit, setIsSearchingAudit] = useState(false)
+  const [existingAudit, setExistingAudit] = useState(null)
   
   // Generated proposal state
   const [generatedProposal, setGeneratedProposal] = useState(null)
@@ -332,6 +334,66 @@ export default function ProposalAIDialog({
     }))
   }
 
+  // Search for existing audits when URL changes
+  const searchExistingAudit = async (url) => {
+    if (!url || url.length < 5) {
+      setExistingAudit(null)
+      return
+    }
+    
+    setIsSearchingAudit(true)
+    try {
+      const response = await api.get('/.netlify/functions/audits-list', {
+        params: { url }
+      })
+      
+      const audits = response.data?.audits || []
+      if (audits.length > 0) {
+        // Use the most recent completed audit
+        const latestAudit = audits[0]
+        setExistingAudit({
+          id: latestAudit.id,
+          targetUrl: latestAudit.targetUrl,
+          createdAt: latestAudit.createdAt,
+          performance: latestAudit.scores?.performance,
+          seo: latestAudit.scores?.seo,
+          accessibility: latestAudit.scores?.accessibility,
+          bestPractices: latestAudit.scores?.bestPractices
+        })
+      } else {
+        setExistingAudit(null)
+      }
+    } catch (error) {
+      console.error('Error searching for existing audit:', error)
+      setExistingAudit(null)
+    } finally {
+      setIsSearchingAudit(false)
+    }
+  }
+
+  // Use existing audit
+  const useExistingAudit = () => {
+    if (existingAudit) {
+      setAuditResults({
+        performance: existingAudit.performance,
+        seo: existingAudit.seo,
+        accessibility: existingAudit.accessibility,
+        bestPractices: existingAudit.bestPractices
+      })
+    }
+  }
+
+  // Debounced URL search effect
+  useEffect(() => {
+    const debounceTimer = setTimeout(() => {
+      if (formData.websiteUrl && selectedType === 'website_rebuild') {
+        searchExistingAudit(formData.websiteUrl)
+      }
+    }, 500) // 500ms debounce
+    
+    return () => clearTimeout(debounceTimer)
+  }, [formData.websiteUrl, selectedType])
+
   // Run audit for website URL (internal admin-only audit with polling)
   const runAudit = async () => {
     if (!formData.websiteUrl) return
@@ -503,6 +565,7 @@ export default function ProposalAIDialog({
       setAiMessages([])
       setAiClarificationsDone(false)
       setAuditResults(null)
+      setExistingAudit(null)
       setFormData({
         contactId: preselectedClientId || '',
         clientName: '',
@@ -1153,12 +1216,62 @@ export default function ProposalAIDialog({
                     Current Website (for audit)
                   </div>
                   <div className="flex gap-2">
-                    <Input value={formData.websiteUrl} onChange={(e) => setFormData({ ...formData, websiteUrl: e.target.value })} placeholder="https://current-website.com" className="flex-1 glass-bg border-[var(--glass-border)]" />
+                    <div className="relative flex-1">
+                      <Input 
+                        value={formData.websiteUrl} 
+                        onChange={(e) => {
+                          setFormData({ ...formData, websiteUrl: e.target.value })
+                          // Clear existing results when URL changes
+                          setAuditResults(null)
+                          setExistingAudit(null)
+                        }} 
+                        placeholder="https://current-website.com" 
+                        className="flex-1 glass-bg border-[var(--glass-border)]" 
+                      />
+                      {isSearchingAudit && (
+                        <div className="absolute right-3 top-1/2 -translate-y-1/2">
+                          <Loader2 className="w-4 h-4 animate-spin text-[var(--text-tertiary)]" />
+                        </div>
+                      )}
+                    </div>
                     <Button type="button" onClick={runAudit} disabled={isRunningAudit || !formData.websiteUrl} className="gap-2">
                       {isRunningAudit ? <Loader2 className="w-4 h-4 animate-spin" /> : <RefreshCw className="w-4 h-4" />}
                       Run Audit
                     </Button>
                   </div>
+                  
+                  {/* Existing Audit Found */}
+                  {existingAudit && !auditResults && (
+                    <div className="p-3 rounded-xl bg-blue-500/10 border border-blue-500/20">
+                      <div className="flex items-center justify-between mb-2">
+                        <div className="flex items-center gap-2 text-blue-500">
+                          <Check className="w-4 h-4" />
+                          <span className="font-medium text-sm">Existing Audit Found</span>
+                        </div>
+                        <span className="text-xs text-[var(--text-tertiary)]">
+                          {new Date(existingAudit.createdAt).toLocaleDateString()}
+                        </span>
+                      </div>
+                      <div className="grid grid-cols-4 gap-2 text-center text-sm mb-3">
+                        <div><div className="font-semibold">{existingAudit.performance || '-'}</div><div className="text-xs text-[var(--text-tertiary)]">Performance</div></div>
+                        <div><div className="font-semibold">{existingAudit.seo || '-'}</div><div className="text-xs text-[var(--text-tertiary)]">SEO</div></div>
+                        <div><div className="font-semibold">{existingAudit.accessibility || '-'}</div><div className="text-xs text-[var(--text-tertiary)]">A11y</div></div>
+                        <div><div className="font-semibold">{existingAudit.bestPractices || '-'}</div><div className="text-xs text-[var(--text-tertiary)]">Best Practices</div></div>
+                      </div>
+                      <div className="flex gap-2">
+                        <Button type="button" onClick={useExistingAudit} size="sm" className="flex-1 gap-2">
+                          <Check className="w-3 h-3" />
+                          Use This Audit
+                        </Button>
+                        <Button type="button" onClick={runAudit} variant="outline" size="sm" className="gap-2" disabled={isRunningAudit}>
+                          {isRunningAudit ? <Loader2 className="w-3 h-3 animate-spin" /> : <RefreshCw className="w-3 h-3" />}
+                          Run New
+                        </Button>
+                      </div>
+                    </div>
+                  )}
+                  
+                  {/* Audit Results (either from existing or newly run) */}
                   {auditResults && (
                     <div className="p-3 rounded-xl bg-green-500/10 border border-green-500/20">
                       <div className="flex items-center gap-2 text-green-600 mb-2">

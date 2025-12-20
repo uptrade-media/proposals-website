@@ -9,7 +9,23 @@ import { useState, useEffect, useRef } from 'react'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Textarea } from '@/components/ui/textarea'
+import { Input } from '@/components/ui/input'
 import { Card, CardContent } from '@/components/ui/card'
+import { 
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
 import { 
   ArrowLeft, 
   Send, 
@@ -23,7 +39,8 @@ import {
   FileText,
   MoreHorizontal,
   Copy,
-  ExternalLink
+  ExternalLink,
+  User
 } from 'lucide-react'
 import {
   DropdownMenu,
@@ -162,37 +179,63 @@ function AIChatBubble({ proposal, onProposalUpdate }) {
     }
   }
 
+  // Closed state - rounded bubble button
   if (!isOpen) {
     return (
       <button
         onClick={() => setIsOpen(true)}
-        className="fixed bottom-6 right-6 z-50 flex items-center gap-2 px-4 py-3 bg-[var(--brand-primary)] hover:bg-[var(--brand-primary-hover)] text-white rounded-full shadow-lg transition-all hover:scale-105"
+        className={cn(
+          "fixed bottom-6 right-6 z-50",
+          "w-14 h-14 rounded-full",
+          "bg-[var(--brand-primary)] hover:bg-[var(--brand-primary-hover)]",
+          "text-white shadow-lg hover:shadow-xl",
+          "flex items-center justify-center",
+          "transition-all duration-200 hover:scale-105",
+          "focus:outline-none focus:ring-2 focus:ring-[var(--brand-primary)] focus:ring-offset-2"
+        )}
       >
-        <Sparkles className="w-5 h-5" />
-        <span className="font-medium">Edit with AI</span>
+        <Sparkles className="h-6 w-6" />
       </button>
     )
   }
 
+  // Open state - chat panel
   return (
-    <div className="fixed bottom-6 right-6 z-50 w-96 bg-[var(--surface-primary)] border border-[var(--border-primary)] rounded-2xl shadow-2xl overflow-hidden">
+    <div className={cn(
+      "fixed bottom-4 right-4 z-50",
+      "w-[380px] h-[500px] rounded-2xl",
+      "bg-[var(--surface-primary)] backdrop-blur-xl",
+      "border border-[var(--glass-border)] shadow-2xl",
+      "flex flex-col overflow-hidden",
+      "transition-all duration-300 ease-out"
+    )}>
       {/* Header */}
-      <div className="flex items-center justify-between p-4 bg-[var(--brand-primary)] text-white">
-        <div className="flex items-center gap-2">
-          <Sparkles className="w-5 h-5" />
-          <span className="font-semibold">AI Proposal Editor</span>
+      <div className="flex items-center justify-between p-4 border-b border-[var(--glass-border)] bg-[var(--glass-bg)]">
+        <div className="flex items-center gap-3">
+          <div className="w-10 h-10 rounded-xl bg-[var(--brand-primary)]/10 flex items-center justify-center">
+            <Sparkles className="h-5 w-5 text-[var(--brand-primary)]" />
+          </div>
+          <div>
+            <h2 className="font-semibold text-[var(--text-primary)]">AI Editor</h2>
+            <p className="text-xs text-[var(--text-tertiary)]">Edit proposal with AI</p>
+          </div>
         </div>
-        <button onClick={() => setIsOpen(false)} className="hover:bg-white/20 rounded p-1">
-          <X className="w-5 h-5" />
-        </button>
+        <Button 
+          variant="ghost" 
+          size="sm" 
+          className="p-2 text-[var(--text-tertiary)]"
+          onClick={() => setIsOpen(false)}
+        >
+          <X className="h-4 w-4" />
+        </Button>
       </div>
 
       {/* Messages */}
-      <div className="h-80 overflow-y-auto p-4 space-y-3 bg-[var(--surface-secondary)]">
+      <div className="flex-1 overflow-y-auto p-4 space-y-3">
         {messages.length === 0 && (
-          <div className="text-center text-[var(--text-tertiary)] py-8">
-            <Sparkles className="w-8 h-8 mx-auto mb-2 opacity-50" />
-            <p className="text-sm">Ask me to edit the proposal.</p>
+          <div className="text-center text-[var(--text-tertiary)] py-12">
+            <Sparkles className="w-12 h-12 mx-auto mb-3 opacity-30" />
+            <p className="text-sm">Ask me to edit the proposal</p>
             <p className="text-xs mt-1">e.g., "Make the pricing section more urgent"</p>
           </div>
         )}
@@ -200,18 +243,28 @@ function AIChatBubble({ proposal, onProposalUpdate }) {
           <div
             key={i}
             className={cn(
-              'max-w-[85%] rounded-lg px-3 py-2 text-sm',
-              msg.role === 'user'
-                ? 'ml-auto bg-[var(--brand-primary)] text-white'
-                : 'bg-[var(--surface-primary)] border border-[var(--border-primary)]'
+              "flex gap-2 max-w-[85%]",
+              msg.role === 'user' ? "ml-auto flex-row-reverse" : ""
             )}
           >
-            {msg.content}
+            <div className={cn(
+              "flex flex-col gap-1",
+              msg.role === 'user' ? "items-end" : "items-start"
+            )}>
+              <div className={cn(
+                "px-3 py-2 rounded-2xl text-sm",
+                msg.role === 'user'
+                  ? "bg-[var(--brand-primary)] text-white rounded-br-md"
+                  : "bg-[var(--glass-bg)] text-[var(--text-primary)] rounded-bl-md border border-[var(--glass-border)]"
+              )}>
+                {msg.content}
+              </div>
+            </div>
           </div>
         ))}
         {isLoading && (
           <div className="flex items-center gap-2 text-[var(--text-tertiary)]">
-            <Loader2 className="w-4 h-4 animate-spin" />
+            <Loader2 className="w-4 h-4 animate-spin text-[var(--brand-primary)]" />
             <span className="text-sm">Updating proposal...</span>
           </div>
         )}
@@ -219,13 +272,13 @@ function AIChatBubble({ proposal, onProposalUpdate }) {
       </div>
 
       {/* Input */}
-      <div className="p-3 border-t border-[var(--border-primary)] bg-[var(--surface-primary)]">
+      <div className="p-3 border-t border-[var(--glass-border)] bg-[var(--glass-bg)]/50">
         <div className="flex gap-2">
           <Textarea
             value={input}
             onChange={(e) => setInput(e.target.value)}
             placeholder="Tell me what to change..."
-            className="min-h-[40px] max-h-[100px] resize-none text-sm"
+            className="min-h-[40px] max-h-[100px] resize-none text-sm bg-[var(--glass-bg-inset)] border-[var(--glass-border)]"
             onKeyDown={(e) => {
               if (e.key === 'Enter' && !e.shiftKey) {
                 e.preventDefault()
@@ -237,7 +290,7 @@ function AIChatBubble({ proposal, onProposalUpdate }) {
             onClick={handleSend}
             disabled={!input.trim() || isLoading}
             size="icon"
-            className="shrink-0"
+            className="shrink-0 bg-[var(--brand-primary)] hover:bg-[var(--brand-primary-hover)]"
           >
             <Send className="w-4 h-4" />
           </Button>
@@ -276,6 +329,112 @@ export default function ProposalEditor({ proposalId, onBack }) {
   const [error, setError] = useState(null)
   const [showSendDialog, setShowSendDialog] = useState(false)
   const [isExporting, setIsExporting] = useState(false)
+  const [showAssignDialog, setShowAssignDialog] = useState(false)
+  const [clients, setClients] = useState([])
+  const [isLoadingClients, setIsLoadingClients] = useState(false)
+  const [isSavingClient, setIsSavingClient] = useState(false)
+  const [selectedClientId, setSelectedClientId] = useState('')
+  const [isEditingTitle, setIsEditingTitle] = useState(false)
+  const [editedTitle, setEditedTitle] = useState('')
+  const [isSavingTitle, setIsSavingTitle] = useState(false)
+  const titleInputRef = useRef(null)
+
+  // Focus title input when editing starts
+  useEffect(() => {
+    if (isEditingTitle && titleInputRef.current) {
+      titleInputRef.current.focus()
+      titleInputRef.current.select()
+    }
+  }, [isEditingTitle])
+
+  const handleStartEditTitle = () => {
+    if (proposal?.status !== 'draft') return
+    setEditedTitle(proposal?.title || '')
+    setIsEditingTitle(true)
+  }
+
+  const handleSaveTitle = async () => {
+    if (!editedTitle.trim() || !proposal) return
+    
+    setIsSavingTitle(true)
+    try {
+      const response = await api.put(`/.netlify/functions/proposals-update?id=${proposal.id}`, {
+        title: editedTitle.trim()
+      })
+      
+      if (response.data.proposal) {
+        setProposal(prev => ({ ...prev, title: editedTitle.trim() }))
+      }
+      setIsEditingTitle(false)
+    } catch (err) {
+      console.error('Failed to save title:', err)
+      alert('Failed to save title: ' + (err.response?.data?.error || err.message))
+    } finally {
+      setIsSavingTitle(false)
+    }
+  }
+
+  const handleCancelEditTitle = () => {
+    setIsEditingTitle(false)
+    setEditedTitle('')
+  }
+
+  const handleTitleKeyDown = (e) => {
+    if (e.key === 'Enter') {
+      e.preventDefault()
+      handleSaveTitle()
+    } else if (e.key === 'Escape') {
+      handleCancelEditTitle()
+    }
+  }
+
+  // Fetch clients when assign dialog opens
+  useEffect(() => {
+    const fetchClients = async () => {
+      if (!showAssignDialog) return
+      
+      setIsLoadingClients(true)
+      try {
+        const response = await api.get('/.netlify/functions/admin-clients-list')
+        setClients(response.data.clients || [])
+        // Set current client as selected
+        if (proposal?.contact_id || proposal?.contactId) {
+          setSelectedClientId(proposal.contact_id || proposal.contactId)
+        }
+      } catch (err) {
+        console.error('Failed to fetch clients:', err)
+      } finally {
+        setIsLoadingClients(false)
+      }
+    }
+    
+    fetchClients()
+  }, [showAssignDialog, proposal])
+
+  const handleAssignClient = async () => {
+    if (!selectedClientId || !proposal) return
+    
+    setIsSavingClient(true)
+    try {
+      const response = await api.put(`/.netlify/functions/proposals-update?id=${proposal.id}`, {
+        contactId: selectedClientId
+      })
+      
+      if (response.data.proposal) {
+        // Fetch fresh data to get client details
+        const refreshResponse = await api.get(`/.netlify/functions/proposals-get?id=${proposal.id}`)
+        if (refreshResponse.data.proposal) {
+          setProposal(refreshResponse.data.proposal)
+        }
+      }
+      setShowAssignDialog(false)
+    } catch (err) {
+      console.error('Failed to assign client:', err)
+      alert('Failed to assign client: ' + (err.response?.data?.error || err.message))
+    } finally {
+      setIsSavingClient(false)
+    }
+  }
 
   // Fetch proposal data
   useEffect(() => {
@@ -417,9 +576,36 @@ export default function ProposalEditor({ proposalId, onBack }) {
             </Button>
             <div className="h-6 w-px bg-[var(--border-primary)]" />
             <div>
-              <h1 className="text-lg font-semibold text-[var(--text-primary)] line-clamp-1">
-                {proposal?.title || 'Untitled Proposal'}
-              </h1>
+              {isEditingTitle ? (
+                <div className="flex items-center gap-2">
+                  <Input
+                    ref={titleInputRef}
+                    value={editedTitle}
+                    onChange={(e) => setEditedTitle(e.target.value)}
+                    onKeyDown={handleTitleKeyDown}
+                    onBlur={handleSaveTitle}
+                    className="text-lg font-semibold h-8 w-64"
+                    disabled={isSavingTitle}
+                  />
+                  {isSavingTitle && (
+                    <Loader2 className="w-4 h-4 animate-spin text-[var(--brand-primary)]" />
+                  )}
+                </div>
+              ) : (
+                <h1 
+                  className={cn(
+                    "text-lg font-semibold text-[var(--text-primary)] line-clamp-1",
+                    proposal?.status === 'draft' && "cursor-pointer hover:text-[var(--brand-primary)] transition-colors"
+                  )}
+                  onClick={handleStartEditTitle}
+                  title={proposal?.status === 'draft' ? "Click to edit title" : undefined}
+                >
+                  {proposal?.title || 'Untitled Proposal'}
+                  {proposal?.status === 'draft' && (
+                    <Edit3 className="w-3.5 h-3.5 inline-block ml-2 opacity-0 group-hover:opacity-100" />
+                  )}
+                </h1>
+              )}
               <div className="flex items-center gap-2 text-sm text-[var(--text-tertiary)]">
                 {proposal?.contact?.company && (
                   <span>{proposal.contact.company}</span>
@@ -484,6 +670,12 @@ export default function ProposalEditor({ proposalId, onBack }) {
                   <ExternalLink className="w-4 h-4 mr-2" />
                   Preview as Client
                 </DropdownMenuItem>
+                {proposal?.status === 'draft' && (
+                  <DropdownMenuItem onClick={() => setShowAssignDialog(true)}>
+                    <User className="w-4 h-4 mr-2" />
+                    Assign to Client
+                  </DropdownMenuItem>
+                )}
                 <DropdownMenuItem>
                   <FileText className="w-4 h-4 mr-2" />
                   View History
@@ -526,6 +718,62 @@ export default function ProposalEditor({ proposalId, onBack }) {
             .then(res => setProposal(res.data.proposal))
         }}
       />
+
+      {/* Assign Client Dialog */}
+      <Dialog open={showAssignDialog} onOpenChange={setShowAssignDialog}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <User className="w-5 h-5 text-[var(--brand-primary)]" />
+              Assign to Client
+            </DialogTitle>
+            <DialogDescription>
+              Reassign this proposal to a different client or prospect.
+            </DialogDescription>
+          </DialogHeader>
+          
+          <div className="py-4">
+            <Select
+              value={selectedClientId}
+              onValueChange={setSelectedClientId}
+              disabled={isLoadingClients}
+            >
+              <SelectTrigger className="w-full">
+                <SelectValue placeholder={isLoadingClients ? "Loading..." : "Select a client or prospect"} />
+              </SelectTrigger>
+              <SelectContent>
+                {clients.map(client => (
+                  <SelectItem key={client.id} value={client.id}>
+                    <div className="flex flex-col">
+                      <span className="font-medium">{client.name || client.email}</span>
+                      {client.name && client.email && (
+                        <span className="text-xs text-[var(--text-tertiary)]">{client.email}</span>
+                      )}
+                      {client.company && (
+                        <span className="text-xs text-[var(--text-tertiary)]">{client.company}</span>
+                      )}
+                    </div>
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
+          <DialogFooter>
+            <Button variant="ghost" onClick={() => setShowAssignDialog(false)}>
+              Cancel
+            </Button>
+            <Button 
+              onClick={handleAssignClient}
+              disabled={!selectedClientId || isSavingClient}
+              className="bg-[var(--brand-primary)] hover:bg-[var(--brand-primary-hover)]"
+            >
+              {isSavingClient && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
+              Assign
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }

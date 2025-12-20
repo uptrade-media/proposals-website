@@ -39,7 +39,8 @@ import {
   Clock,
   Eye,
   Send,
-  AlertTriangle
+  AlertTriangle,
+  User
 } from 'lucide-react'
 import api from '../lib/api'
 import { cn } from '../lib/utils'
@@ -75,13 +76,17 @@ const STATUS_OPTIONS = [
 
 export default function EditProposalDialog({ 
   proposal, 
-  isOpen, 
-  onClose, 
-  onSuccess 
+  clients: clientsProp = [],
+  open, 
+  onOpenChange, 
+  onSuccess,
+  onNavigate
 }) {
   const [isSaving, setIsSaving] = useState(false)
   const [isSending, setIsSending] = useState(false)
   const [activeTab, setActiveTab] = useState('pricing')
+  const [clients, setClients] = useState([])
+  const [isLoadingClients, setIsLoadingClients] = useState(false)
   
   // Form state
   const [formData, setFormData] = useState({
@@ -94,7 +99,8 @@ export default function EditProposalDialog({
     timeline: '6-weeks',
     validUntil: '',
     heroImageUrl: '',
-    addOns: []
+    addOns: [],
+    contactId: ''
   })
 
   // Initialize form data from proposal
@@ -110,10 +116,36 @@ export default function EditProposalDialog({
         timeline: proposal.timeline || '6-weeks',
         validUntil: proposal.valid_until || proposal.validUntil || '',
         heroImageUrl: proposal.hero_image_url || proposal.heroImageUrl || '',
-        addOns: proposal.add_ons || proposal.addOns || []
+        addOns: proposal.add_ons || proposal.addOns || [],
+        contactId: proposal.contact_id || proposal.contactId || ''
       })
     }
   }, [proposal])
+
+  // Use clients from props if available, otherwise fetch
+  useEffect(() => {
+    const fetchClients = async () => {
+      // Use prop clients if available
+      if (clientsProp && clientsProp.length > 0) {
+        setClients(clientsProp)
+        return
+      }
+      
+      if (!open || formData.status !== 'draft') return
+      
+      setIsLoadingClients(true)
+      try {
+        const response = await api.get('/.netlify/functions/admin-clients-list')
+        setClients(response.data.clients || [])
+      } catch (error) {
+        console.error('Failed to fetch clients:', error)
+      } finally {
+        setIsLoadingClients(false)
+      }
+    }
+    
+    fetchClients()
+  }, [open, formData.status, clientsProp])
 
   // Handle hero image upload
   const handleHeroImageChange = async (e) => {
@@ -144,7 +176,7 @@ export default function EditProposalDialog({
     setIsSaving(true)
     
     try {
-      const response = await api.put(`/.netlify/functions/proposals-update?id=${proposal.id}`, {
+      const updatePayload = {
         title: formData.title,
         description: formData.description,
         status: formData.status,
@@ -155,7 +187,14 @@ export default function EditProposalDialog({
         validUntil: formData.validUntil,
         heroImageUrl: formData.heroImageUrl,
         addOns: formData.addOns
-      })
+      }
+      
+      // Only include contactId for draft proposals
+      if (proposal.status === 'draft' && formData.contactId) {
+        updatePayload.contactId = formData.contactId
+      }
+      
+      const response = await api.put(`/.netlify/functions/proposals-update?id=${proposal.id}`, updatePayload)
 
       if (response.data.proposal || response.data.success) {
         onSuccess(response.data.proposal || { ...proposal, ...formData })
@@ -203,7 +242,7 @@ export default function EditProposalDialog({
   if (!proposal) return null
 
   return (
-    <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
+    <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-3xl max-h-[90vh] overflow-hidden flex flex-col glass-bg border-[var(--glass-border)]">
         <DialogHeader className="pb-4 border-b border-[var(--glass-border)]">
           <DialogTitle className="flex items-center gap-3 text-xl">
@@ -437,6 +476,40 @@ export default function EditProposalDialog({
                   </SelectContent>
                 </Select>
               </div>
+
+              {/* Client Assignment - Only for draft proposals */}
+              {proposal.status === 'draft' && (
+                <div className="space-y-2">
+                  <Label className="flex items-center gap-2 text-[var(--text-secondary)]">
+                    <User className="w-4 h-4 text-blue-500" />
+                    Assign to Client
+                  </Label>
+                  <Select
+                    value={formData.contactId || ''}
+                    onValueChange={(v) => setFormData({ ...formData, contactId: v })}
+                    disabled={isLoadingClients}
+                  >
+                    <SelectTrigger className="glass-bg border-[var(--glass-border)]">
+                      <SelectValue placeholder={isLoadingClients ? "Loading clients..." : "Select a client"} />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {clients.map(client => (
+                        <SelectItem key={client.id} value={client.id}>
+                          <div className="flex flex-col">
+                            <span>{client.name || client.email}</span>
+                            {client.name && client.email && (
+                              <span className="text-xs text-[var(--text-tertiary)]">{client.email}</span>
+                            )}
+                          </div>
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <p className="text-xs text-[var(--text-tertiary)]">
+                    You can reassign this proposal to a different client while it's still a draft.
+                  </p>
+                </div>
+              )}
             </TabsContent>
 
             {/* Media Tab */}
@@ -518,7 +591,7 @@ export default function EditProposalDialog({
           <div className="flex items-center gap-2">
             <Button
               variant="ghost"
-              onClick={onClose}
+              onClick={() => onOpenChange(false)}
               disabled={isSaving || isSending}
             >
               Cancel

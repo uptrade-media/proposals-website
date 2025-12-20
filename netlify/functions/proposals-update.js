@@ -28,9 +28,10 @@ export async function handler(event) {
     }
   }
 
-  // Get proposal ID from path
-  const proposalId = event.path.split('/').pop()
-  if (!proposalId) {
+  // Get proposal ID from query params or path
+  const params = new URLSearchParams(event.queryStringParameters || {})
+  const proposalId = params.get('id') || event.path.split('/').pop()
+  if (!proposalId || proposalId === 'proposals-update') {
     return {
       statusCode: 400,
       headers,
@@ -69,6 +70,7 @@ export async function handler(event) {
       totalAmount,
       validUntil,
       projectId,
+      contactId,
       lineItems
     } = body
 
@@ -98,6 +100,12 @@ export async function handler(event) {
     if (status !== undefined) updates.status = status
     if (totalAmount !== undefined) updates.total_amount = totalAmount ? String(totalAmount) : null
     if (validUntil !== undefined) updates.valid_until = validUntil || null
+    if (projectId !== undefined) updates.project_id = projectId || null
+    
+    // Only allow changing contact if proposal is still a draft
+    if (contactId !== undefined && existingProposal.status === 'draft') {
+      updates.contact_id = contactId || null
+    }
     if (projectId !== undefined) updates.project_id = projectId || null
 
     // Update proposal
