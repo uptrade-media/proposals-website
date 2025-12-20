@@ -11,7 +11,7 @@ const SEO_AI_MODEL = process.env.SEO_AI_MODEL || 'gpt-4o'
 export async function handler(event) {
   const headers = {
     'Access-Control-Allow-Origin': '*',
-    'Access-Control-Allow-Headers': 'Content-Type, Authorization, X-Organization-Id',
+    'Access-Control-Allow-Headers': 'Content-Type, Authorization, X-Organization-Id, X-Project-Id',
     'Access-Control-Allow-Methods': 'POST, GET, OPTIONS',
     'Content-Type': 'application/json'
   }

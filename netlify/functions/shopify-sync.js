@@ -13,24 +13,72 @@ export async function handler(event) {
     return { statusCode: 401, body: JSON.stringify({ error: 'Unauthorized' }) }
   }
   
-  const orgId = contact.org_id
+  // Get project_id from header (project-level filtering for Ecommerce)
+  // Falls back to org_id for backwards compatibility
+  const projectId = event.headers['x-project-id'] || event.headers['X-Project-Id']
+  const orgIdHeader = event.headers['x-organization-id'] || event.headers['X-Organization-Id']
+  const orgId = orgIdHeader || contact.org_id
+  
+  console.log('[shopify-sync] Context resolution:', {
+    projectId,
+    orgIdHeader,
+    contactOrgId: contact.org_id,
+    resolvedOrgId: orgId
+  })
+  
   if (!orgId) {
     return { statusCode: 400, body: JSON.stringify({ error: 'No organization associated with user' }) }
   }
   
   const supabase = createSupabaseAdmin()
 
+  // Project-level filtering (preferred) - resolve project to org
+  let resolvedOrgId = orgId
+  if (projectId) {
+    const { data: project, error: projectError } = await supabase
+      .from('projects')
+      .select('organization_id')
+      .eq('id', projectId)
+      .maybeSingle()
+    
+    if (projectError) {
+      console.error('[shopify-sync] Error looking up project:', projectError)
+    } else if (project?.organization_id) {
+      console.log('[shopify-sync] Resolved project to org:', project.organization_id)
+      resolvedOrgId = project.organization_id
+    }
+  } else if (orgId) {
+    // Legacy: check if orgId is actually a project
+    const { data: project, error: projectError } = await supabase
+      .from('projects')
+      .select('org_id')
+      .eq('id', orgId)
+      .maybeSingle()
+    
+    if (!projectError && project?.org_id) {
+      console.log('[shopify-sync] Resolved project tenant to org:', project.org_id)
+      resolvedOrgId = project.org_id
+    }
+  }
+
   // Get store for this org
   const { data: store, error: storeError } = await supabase
     .from('shopify_stores')
     .select('*')
-    .eq('org_id', orgId)
+    .eq('org_id', resolvedOrgId)
     .eq('is_active', true)
     .single()
   
   if (storeError || !store) {
+    console.error('[shopify-sync] Store lookup failed:', {
+      resolvedOrgId,
+      storeError: storeError?.message,
+      storeErrorCode: storeError?.code
+    })
     return { statusCode: 404, body: JSON.stringify({ error: 'No connected store found' }) }
   }
+  
+  console.log('[shopify-sync] Found store:', store.shop_domain)
 
   // =========================================================================
   // GET - Get sync status

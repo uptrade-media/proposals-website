@@ -13,7 +13,7 @@ import { createSupabaseAdmin, getAuthenticatedUser } from './utils/supabase.js'
 const headers = {
   'Content-Type': 'application/json',
   'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+  'Access-Control-Allow-Headers': 'Content-Type, Authorization, X-Organization-Id, X-Project-Id',
   'Access-Control-Allow-Methods': 'POST, GET, OPTIONS'
 }
 

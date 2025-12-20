@@ -2,7 +2,7 @@
 // Zustand store for Ecommerce (Shopify) module
 
 import { create } from 'zustand'
-import axios from 'axios'
+import api from './api'
 
 export const useEcommerceStore = create((set, get) => ({
   // =========================================================================
@@ -44,7 +44,7 @@ export const useEcommerceStore = create((set, get) => ({
   fetchStore: async () => {
     set({ storeLoading: true, storeError: null })
     try {
-      const res = await axios.get('/.netlify/functions/shopify-stores')
+      const res = await api.get('/.netlify/functions/shopify-stores')
       const stores = res.data.stores || []
       // We support single store per org for now
       set({ store: stores[0] || null, storeLoading: false })
@@ -59,7 +59,7 @@ export const useEcommerceStore = create((set, get) => ({
   connectStore: async (shopDomain, accessToken) => {
     set({ storeLoading: true, storeError: null })
     try {
-      const res = await axios.post('/.netlify/functions/shopify-stores', {
+      const res = await api.post('/.netlify/functions/shopify-stores', {
         shopDomain,
         accessToken
       })
@@ -78,7 +78,7 @@ export const useEcommerceStore = create((set, get) => ({
     
     set({ storeLoading: true, storeError: null })
     try {
-      await axios.delete('/.netlify/functions/shopify-stores', {
+      await api.delete('/.netlify/functions/shopify-stores', {
         data: { storeId: store.id }
       })
       set({ 
@@ -102,8 +102,8 @@ export const useEcommerceStore = create((set, get) => ({
   fetchProducts: async (params = {}) => {
     set({ productsLoading: true, productsError: null })
     try {
-      // Note: axios interceptor will add X-Organization-Id header from auth store
-      const res = await axios.get('/.netlify/functions/shopify-products', { params })
+      // api module automatically adds X-Organization-Id and X-Project-Id headers
+      const res = await api.get('/.netlify/functions/shopify-products', { params })
       set({ 
         products: res.data.products || [],
         productsTotal: res.data.total || 0,
@@ -121,7 +121,7 @@ export const useEcommerceStore = create((set, get) => ({
   fetchProduct: async (productId) => {
     set({ selectedProductLoading: true })
     try {
-      const res = await axios.get(`/.netlify/functions/shopify-products?id=${productId}`)
+      const res = await api.get(`/.netlify/functions/shopify-products?id=${productId}`)
       set({ selectedProduct: res.data.product, selectedProductLoading: false })
       return res.data.product
     } catch (error) {
@@ -132,7 +132,7 @@ export const useEcommerceStore = create((set, get) => ({
   
   updateProduct: async (productId, data) => {
     try {
-      const res = await axios.put('/.netlify/functions/shopify-products', {
+      const res = await api.put('/.netlify/functions/shopify-products', {
         productId,
         ...data
       })
@@ -158,7 +158,7 @@ export const useEcommerceStore = create((set, get) => ({
   updateInventory: async (variantId, locationId, quantity) => {
     set({ inventoryLoading: true })
     try {
-      const res = await axios.post('/.netlify/functions/shopify-inventory', {
+      const res = await api.post('/.netlify/functions/shopify-inventory', {
         variantId,
         locationId,
         quantity
@@ -181,7 +181,7 @@ export const useEcommerceStore = create((set, get) => ({
   adjustInventory: async (variantId, locationId, adjustment) => {
     set({ inventoryLoading: true })
     try {
-      const res = await axios.post('/.netlify/functions/shopify-inventory', {
+      const res = await api.post('/.netlify/functions/shopify-inventory', {
         variantId,
         locationId,
         adjustment
@@ -208,7 +208,7 @@ export const useEcommerceStore = create((set, get) => ({
   fetchOrders: async (params = {}) => {
     set({ ordersLoading: true, ordersError: null })
     try {
-      const res = await axios.get('/.netlify/functions/shopify-orders', { params })
+      const res = await api.get('/.netlify/functions/shopify-orders', { params })
       set({ 
         orders: res.data.orders || [],
         ordersTotal: res.data.total || 0,
@@ -221,6 +221,39 @@ export const useEcommerceStore = create((set, get) => ({
       return []
     }
   },
+  
+  fetchOrder: async (orderId) => {
+    try {
+      const res = await api.get(`/.netlify/functions/shopify-orders?id=${orderId}`)
+      return res.data.order
+    } catch (error) {
+      console.error('[ecommerce-store] fetchOrder error:', error)
+      return null
+    }
+  },
+  
+  // =========================================================================
+  // VARIANT / PRICING
+  // =========================================================================
+  
+  updateVariant: async (variantId, data) => {
+    try {
+      const res = await api.put('/.netlify/functions/shopify-variants', {
+        variantId,
+        ...data
+      })
+      
+      // Refresh selected product to reflect changes
+      const { selectedProduct } = get()
+      if (selectedProduct) {
+        get().fetchProduct(selectedProduct.id)
+      }
+      
+      return { success: true, variant: res.data.variant }
+    } catch (error) {
+      return { success: false, error: error.response?.data?.error || error.message }
+    }
+  },
 
   // =========================================================================
   // SYNC
@@ -229,7 +262,7 @@ export const useEcommerceStore = create((set, get) => ({
   triggerSync: async (syncType = 'full') => {
     set({ isSyncing: true })
     try {
-      const res = await axios.post('/.netlify/functions/shopify-sync', { syncType })
+      const res = await api.post('/.netlify/functions/shopify-sync', { syncType })
       set({ 
         syncStatus: res.data.status,
         isSyncing: res.data.status === 'syncing'
@@ -243,7 +276,7 @@ export const useEcommerceStore = create((set, get) => ({
   
   fetchSyncStatus: async () => {
     try {
-      const res = await axios.get('/.netlify/functions/shopify-sync')
+      const res = await api.get('/.netlify/functions/shopify-sync')
       set({ 
         syncStatus: res.data.status,
         isSyncing: res.data.status === 'syncing'

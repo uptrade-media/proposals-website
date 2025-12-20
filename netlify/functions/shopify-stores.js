@@ -23,36 +23,49 @@ export async function handler(event) {
   
   console.log('[shopify-stores] Auth success:', { email: contact.email })
   
-  // Get org_id from header (set by axios interceptor from auth store)
-  // For admins, this will be their admin org; for clients, their assigned org
-  const orgId = event.headers['x-organization-id'] || event.headers['X-Organization-Id']
+  // Get project_id from header (project-level filtering for Ecommerce)
+  // Falls back to org_id for backwards compatibility
+  const projectId = event.headers['x-project-id'] || event.headers['X-Project-Id']
+  const orgIdHeader = event.headers['x-organization-id'] || event.headers['X-Organization-Id']
   
-  if (!orgId) {
-    console.log('[shopify-stores] No org ID in header')
-    return { statusCode: 400, body: JSON.stringify({ error: 'No organization ID provided' }) }
+  if (!projectId && !orgIdHeader) {
+    console.log('[shopify-stores] No project or org ID in header')
+    return { statusCode: 400, body: JSON.stringify({ error: 'No organization or project ID provided' }) }
   }
   
-  console.log('[shopify-stores] Using org ID:', orgId)
+  console.log('[shopify-stores] Using context:', { projectId, orgIdHeader })
   
   const supabase = createSupabaseAdmin()
   
-  // Resolve project tenant ID to organization ID
-  // If orgId is a project tenant, look up its parent organization
-  let resolvedOrgId = orgId
-  const { data: project, error: projectError } = await supabase
-    .from('projects')
-    .select('org_id')
-    .eq('id', orgId)
-    .maybeSingle()
+  // Project-level filtering (preferred) or resolve org from project
+  let resolvedOrgId = orgIdHeader
   
-  if (projectError) {
-    console.error('[shopify-stores] Error looking up project:', projectError)
-  } else if (project) {
-    console.log('[shopify-stores] Resolved project tenant to org:', project.org_id)
-    resolvedOrgId = project.org_id
-  } else {
-    // Not a project tenant, assume orgId is already an organization ID
-    console.log('[shopify-stores] No project found, treating orgId as organization ID')
+  if (projectId) {
+    // Get org from project
+    const { data: project, error: projectError } = await supabase
+      .from('projects')
+      .select('organization_id')
+      .eq('id', projectId)
+      .maybeSingle()
+    
+    if (projectError) {
+      console.error('[shopify-stores] Error looking up project:', projectError)
+    } else if (project?.organization_id) {
+      console.log('[shopify-stores] Resolved project to org:', project.organization_id)
+      resolvedOrgId = project.organization_id
+    }
+  } else if (orgIdHeader) {
+    // Legacy: resolve if orgIdHeader is actually a project ID
+    const { data: project, error: projectError } = await supabase
+      .from('projects')
+      .select('org_id')
+      .eq('id', orgIdHeader)
+      .maybeSingle()
+    
+    if (!projectError && project) {
+      console.log('[shopify-stores] Resolved legacy project tenant to org:', project.org_id)
+      resolvedOrgId = project.org_id
+    }
   }
   
   if (!resolvedOrgId) {

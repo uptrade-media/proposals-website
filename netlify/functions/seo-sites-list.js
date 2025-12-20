@@ -5,7 +5,7 @@ import { createSupabaseAdmin, getAuthenticatedUser } from './utils/supabase.js'
 export async function handler(event) {
   const headers = {
     'Access-Control-Allow-Origin': '*',
-    'Access-Control-Allow-Headers': 'Content-Type, Authorization, X-Organization-Id',
+    'Access-Control-Allow-Headers': 'Content-Type, Authorization, X-Organization-Id, X-Project-Id',
     'Access-Control-Allow-Methods': 'GET, OPTIONS',
     'Content-Type': 'application/json'
   }
@@ -27,7 +27,9 @@ export async function handler(event) {
     const supabase = createSupabaseAdmin()
     const { contactId } = event.queryStringParameters || {}
     
-    // Get org_id from header (set by axios interceptor from auth store)
+    // Project-level filtering (SEO data is per-project, not per-org)
+    // Example: Big Corp has 11 projects, each with their own SEO sites
+    const projectId = event.headers['x-project-id'] || event.headers['X-Project-Id']
     const orgId = event.headers['x-organization-id'] || event.headers['X-Organization-Id']
 
     // Admin can view any contact's sites, clients can only view their own
@@ -41,8 +43,10 @@ export async function handler(event) {
       `)
       .order('created_at', { ascending: false })
 
-    // Filter by organization if provided
-    if (orgId) {
+    // Project-level filtering (preferred) or org-level fallback
+    if (projectId) {
+      query = query.eq('project_id', projectId)
+    } else if (orgId) {
       query = query.eq('org_id', orgId)
     }
     

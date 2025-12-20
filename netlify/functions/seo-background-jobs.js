@@ -22,7 +22,7 @@ import { createSupabaseAdmin, getAuthenticatedUser } from './utils/supabase.js'
 export async function handler(event) {
   const headers = {
     'Access-Control-Allow-Origin': event.headers.origin || '*',
-    'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+    'Access-Control-Allow-Headers': 'Content-Type, Authorization, X-Organization-Id, X-Project-Id',
     'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
     'Access-Control-Allow-Credentials': 'true',
     'Content-Type': 'application/json'

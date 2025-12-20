@@ -1,11 +1,11 @@
 // netlify/functions/auth-me.js
 // Returns the current user's authentication context including organization info
-import { getAuthenticatedUser } from './utils/supabase.js'
+import { createSupabaseAdmin, getAuthenticatedUser } from './utils/supabase.js'
 
 export async function handler(event) {
   const headers = {
     'Access-Control-Allow-Origin': '*',
-    'Access-Control-Allow-Headers': 'Content-Type, Authorization, X-Organization-Id',
+    'Access-Control-Allow-Headers': 'Content-Type, Authorization, X-Organization-Id, X-Project-Id',
     'Access-Control-Allow-Methods': 'GET, OPTIONS',
     'Content-Type': 'application/json'
   }
@@ -33,6 +33,30 @@ export async function handler(event) {
     }
   }
 
+  const supabase = createSupabaseAdmin()
+  
+  // Get user's access level for the current organization
+  let accessLevel = null
+  const orgId = event.headers['x-organization-id']
+  
+  if (orgId && contact?.id) {
+    const { data: membership } = await supabase
+      .from('organization_members')
+      .select('access_level, role')
+      .eq('organization_id', orgId)
+      .eq('contact_id', contact.id)
+      .single()
+    
+    if (membership) {
+      accessLevel = membership.access_level || 'organization'
+    }
+  }
+  
+  // If user is Uptrade admin, they always have org-level access
+  if (contact?.role === 'admin') {
+    accessLevel = 'organization'
+  }
+
   return {
     statusCode: 200,
     headers,
@@ -50,7 +74,8 @@ export async function handler(event) {
         isTeamMember: contact.is_team_member,
         teamRole: contact.team_role,
         canViewAllClients: contact.canViewAllClients,
-        canManageTeam: contact.canManageTeam
+        canManageTeam: contact.canManageTeam,
+        accessLevel // 'organization' or 'project'
       } : null,
       organization: organization ? {
         id: organization.id,
@@ -61,10 +86,12 @@ export async function handler(event) {
         theme: organization.theme,
         plan: organization.plan,
         status: organization.status,
+        org_type: organization.org_type,
         userRole: organization.userRole
       } : null,
       availableOrgs: organization?.availableOrgs || [],
-      isSuperAdmin
+      isSuperAdmin,
+      accessLevel
     })
   }
 }

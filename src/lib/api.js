@@ -1,5 +1,6 @@
 import axios from 'axios'
 import { supabase } from './supabase-auth'
+import useAuthStore from './auth-store'
 
 // Create axios instance with default config
 const api = axios.create({
@@ -20,16 +21,38 @@ api.interceptors.request.use(
       config.headers.Authorization = `Bearer ${session.access_token}`
     }
     
-    // Add organization context from localStorage (set by auth-store when switching orgs)
-    const storedTenantProject = localStorage.getItem('currentTenantProject')
-    if (storedTenantProject) {
-      try {
-        const project = JSON.parse(storedTenantProject)
-        // Use the project's org_id for filtering (contacts, etc.)
-        // This allows tenant-specific data to be filtered properly
-        config.headers['X-Organization-Id'] = project.org_id || project.id
-      } catch (e) {
-        // Ignore parse errors
+    // Get organization and project context from Zustand store (primary source)
+    const state = useAuthStore.getState()
+    
+    // Check if this is an agency org (Uptrade Media) - agency orgs should NOT filter by org
+    const isAgencyOrg = state.currentOrg?.org_type === 'agency'
+    
+    // X-Organization-Id: The business entity (GWA LLC) - for org-level services (billing, proposals)
+    // Only send for CLIENT orgs, not agency org (Uptrade Media sees all data)
+    if (state.currentOrg?.id && !isAgencyOrg) {
+      config.headers['X-Organization-Id'] = state.currentOrg.id
+    }
+    
+    // X-Project-Id: The specific project (GWA NextJS Site) - for project-level tools (CRM, SEO, Blog)
+    if (state.currentProject?.id) {
+      config.headers['X-Project-Id'] = state.currentProject.id
+      // Also set the project's organization_id for tables that use org_id
+      if (state.currentProject.organization_id) {
+        config.headers['X-Tenant-Org-Id'] = state.currentProject.organization_id
+      }
+    }
+    
+    // Fallback: Check localStorage for backward compatibility
+    if (!config.headers['X-Organization-Id'] && !config.headers['X-Project-Id']) {
+      const storedTenantProject = localStorage.getItem('currentTenantProject')
+      if (storedTenantProject) {
+        try {
+          const project = JSON.parse(storedTenantProject)
+          config.headers['X-Organization-Id'] = project.org_id || project.organization_id || project.id
+          config.headers['X-Project-Id'] = project.id
+        } catch (e) {
+          // Ignore parse errors
+        }
       }
     }
     

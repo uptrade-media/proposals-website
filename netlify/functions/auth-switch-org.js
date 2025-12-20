@@ -199,6 +199,14 @@ export async function handler(event) {
         user_agent: event.headers['user-agent']
       })
 
+    // Fetch projects associated with this organization (for auto-entering first project)
+    const { data: orgProjects } = await supabase
+      .from('projects')
+      .select('id, title, tenant_domain, tenant_features, tenant_theme_color, tenant_logo_url, tenant_favicon_url, is_tenant')
+      .eq('organization_id', organization.id)
+      .eq('is_tenant', true)
+      .order('created_at', { ascending: true })
+
     // Return the organization context
     // Note: The frontend stores this and sends it as X-Organization-Id header
     return {
@@ -215,10 +223,12 @@ export async function handler(event) {
           features: organization.features,
           theme: organization.theme,
           plan: organization.plan,
-          status: organization.status
+          status: organization.status,
+          org_type: organization.org_type
         },
         role: userOrgRole?.role || (isSuperAdmin ? 'admin' : 'member'),
-        isSuperAdmin
+        isSuperAdmin,
+        projects: orgProjects || []
       })
     }
   } catch (error) {

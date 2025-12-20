@@ -2,9 +2,6 @@
 import crypto from 'crypto'
 import { createSupabaseAdmin, getAuthenticatedUser } from './utils/supabase.js'
 
-// Use www subdomain to avoid CORS redirect issues
-const MAIN_SITE_AUDIT_ENDPOINT = process.env.MAIN_SITE_AUDIT_ENDPOINT || 'https://www.uptrademedia.com/api/audit-request'
-
 export async function handler(event) {
   // CORS headers
   const headers = {
@@ -60,13 +57,7 @@ export async function handler(event) {
       }
     }
 
-    if (isAdmin && !recipientEmail && !projectId) {
-      return {
-        statusCode: 400,
-        headers,
-        body: JSON.stringify({ error: 'Recipient email or project is required' })
-      }
-    }
+    // Admin can create audits without email or project - email is sent separately after review
 
     // Validate URL format
     let targetUrl
@@ -159,66 +150,27 @@ export async function handler(event) {
       }
     }
 
-    // Trigger audit on main website using Portal Mode
-    // Main site will run the analysis and update the record
-    console.log('[audits-request] Triggering main site audit:', MAIN_SITE_AUDIT_ENDPOINT)
+    // Trigger audit using portal's own background function
+    // This keeps everything in the portal and avoids RLS issues with the main site
+    const baseUrl = process.env.URL || 'https://portal.uptrademedia.com'
+    const backgroundUrl = `${baseUrl}/.netlify/functions/audits-internal-background`
+    
+    console.log('[audits-request] Triggering portal background audit:', backgroundUrl)
     console.log('[audits-request] Audit ID:', newAudit.id)
     
     try {
-      const triggerResponse = await fetch(MAIN_SITE_AUDIT_ENDPOINT, {
+      // Fire and forget - don't wait for response
+      fetch(backgroundUrl, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
-          auditId: newAudit.id,
-          source: 'portal',
-          skipEmail: true  // Portal audits don't auto-send emails
-        })
-      })
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ auditId: newAudit.id })
+      }).catch(err => console.error('[audits-request] Background trigger error:', err))
       
-      console.log('[audits-request] Main site response status:', triggerResponse.status)
-      
-      if (!triggerResponse.ok) {
-        const errorText = await triggerResponse.text()
-        console.error('[audits-request] Main site error:', errorText)
-        
-        // Update audit status to failed if main site rejects
-        await supabase
-          .from('audits')
-          .update({ status: 'failed' })
-          .eq('id', newAudit.id)
-        
-        return {
-          statusCode: 500,
-          headers,
-          body: JSON.stringify({ 
-            error: 'Failed to start audit analysis',
-            details: errorText
-          })
-        }
-      }
-      
-      const result = await triggerResponse.json()
-      console.log('[audits-request] Main site success:', result)
+      console.log('[audits-request] Background function triggered successfully')
       
     } catch (err) {
-      console.error('[audits-request] Failed to trigger audit on main site:', err)
-      
-      // Update audit status to failed
-      await supabase
-        .from('audits')
-        .update({ status: 'failed' })
-        .eq('id', newAudit.id)
-      
-      return {
-        statusCode: 500,
-        headers,
-        body: JSON.stringify({ 
-          error: 'Failed to connect to audit service',
-          details: err.message
-        })
-      }
+      console.error('[audits-request] Failed to trigger background function:', err)
+      // Don't fail the request - the audit record was created, background might still pick it up
     }
 
     return {

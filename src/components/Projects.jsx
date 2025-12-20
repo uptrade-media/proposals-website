@@ -195,6 +195,9 @@ const Projects = ({ onNavigate }) => {
   })
   
   const [copied, setCopied] = useState(false)
+  
+  // Module toggle state
+  const [togglingModule, setTogglingModule] = useState(null)
 
   // Clients for dropdown
   const [clients, setClients] = useState([])
@@ -353,6 +356,42 @@ const Projects = ({ onNavigate }) => {
   const openDetailsDialog = (project) => {
     setSelectedProject(project)
     setDetailsDialogOpen(true)
+  }
+  
+  // Toggle a module for a tenant project
+  const toggleModule = async (moduleKey) => {
+    if (!selectedProject?.id || togglingModule) return
+    
+    setTogglingModule(moduleKey)
+    
+    const currentModules = selectedProject.tenant_modules || {}
+    const newValue = !currentModules[moduleKey]
+    
+    try {
+      const response = await api.put(`/.netlify/functions/projects-update/${selectedProject.id}`, {
+        tenant_features: { [moduleKey]: newValue }
+      })
+      
+      // Update local state
+      const updatedProject = {
+        ...selectedProject,
+        tenant_modules: {
+          ...currentModules,
+          [moduleKey]: newValue
+        }
+      }
+      setSelectedProject(updatedProject)
+      
+      // Refresh projects list to keep in sync
+      fetchProjects()
+      
+      toast.success(`${TENANT_MODULES.find(m => m.key === moduleKey)?.label} ${newValue ? 'enabled' : 'disabled'}`)
+    } catch (error) {
+      console.error('Failed to toggle module:', error)
+      toast.error('Failed to update module settings')
+    } finally {
+      setTogglingModule(null)
+    }
   }
 
   // Tenant conversion - now uses wizard
@@ -1067,22 +1106,37 @@ const Projects = ({ onNavigate }) => {
                       </div>
                     )}
 
-                    {/* Enabled Modules */}
-                    <div className="flex flex-wrap gap-2">
-                      {selectedProject.tenant_modules && Object.entries(selectedProject.tenant_modules)
-                        .filter(([_, enabled]) => enabled)
-                        .map(([key]) => {
-                          const module = TENANT_MODULES.find(m => m.key === key)
-                          if (!module) return null
+                    {/* Module Toggles */}
+                    <div className="space-y-3">
+                      <Label className="text-sm font-medium">Enabled Modules</Label>
+                      <div className="grid grid-cols-1 gap-2">
+                        {TENANT_MODULES.map((module) => {
                           const ModuleIcon = module.icon
+                          const isEnabled = selectedProject.tenant_modules?.[module.key] || false
+                          const isToggling = togglingModule === module.key
                           return (
-                            <Badge key={key} variant="secondary">
-                              <ModuleIcon className="w-3 h-3 mr-1" />
-                              {module.label}
-                            </Badge>
+                            <div 
+                              key={module.key}
+                              className="flex items-center justify-between p-3 rounded-lg bg-[var(--surface-secondary)] border border-[var(--glass-border)]"
+                            >
+                              <div className="flex items-center gap-3">
+                                <div className={`p-2 rounded-lg ${isEnabled ? 'bg-[var(--brand-primary)]/10' : 'bg-[var(--surface-tertiary)]'}`}>
+                                  <ModuleIcon className={`w-4 h-4 ${isEnabled ? 'text-[var(--brand-primary)]' : 'text-[var(--text-tertiary)]'}`} />
+                                </div>
+                                <div>
+                                  <p className="text-sm font-medium text-[var(--text-primary)]">{module.label}</p>
+                                  <p className="text-xs text-[var(--text-tertiary)]">{module.description}</p>
+                                </div>
+                              </div>
+                              <Switch
+                                checked={isEnabled}
+                                onCheckedChange={() => toggleModule(module.key)}
+                                disabled={isToggling}
+                              />
+                            </div>
                           )
-                        })
-                      }
+                        })}
+                      </div>
                     </div>
 
                     {/* Tracking Script */}

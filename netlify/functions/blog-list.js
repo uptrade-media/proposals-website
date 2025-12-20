@@ -46,19 +46,18 @@ export async function handler(event) {
     const limit = Math.min(parseInt(url.searchParams.get('limit') || '50'), 100)
     const offset = parseInt(url.searchParams.get('offset') || '0')
     
-    // Check for tenant/org context
+    // Check for project/org context
+    const projectId = event.headers['x-project-id']
     const orgId = event.headers['x-organization-id']
     
     // Debug logging
     console.log('[Blog List] Headers received:', {
+      'x-project-id': event.headers['x-project-id'],
       'x-organization-id': event.headers['x-organization-id'],
       'x-tenant-id': event.headers['x-tenant-id'],
       allHeaders: Object.keys(event.headers)
     })
     
-    // Default org for Uptrade Media (used when no header is sent)
-    const UPTRADE_MEDIA_ORG_ID = '434c6396-9f79-46f4-9889-59caeb231677'
-
     let query = supabase
       .from('blog_posts')
       .select('*')
@@ -70,10 +69,19 @@ export async function handler(event) {
       query = query.eq('status', status)
     }
 
-    // Filter by org_id - use header value or default to Uptrade Media
-    const effectiveOrgId = orgId || UPTRADE_MEDIA_ORG_ID
-    query = query.eq('org_id', effectiveOrgId)
-    console.log('[Blog API] Filtering by org_id:', effectiveOrgId)
+    // Project-level filtering (preferred) or org-level fallback
+    if (projectId) {
+      query = query.eq('project_id', projectId)
+      console.log('[Blog API] Filtering by project_id:', projectId)
+    } else if (orgId) {
+      query = query.eq('org_id', orgId)
+      console.log('[Blog API] Filtering by org_id:', orgId)
+    } else {
+      // Default to Uptrade Media for backwards compatibility
+      const UPTRADE_MEDIA_ORG_ID = '434c6396-9f79-46f4-9889-59caeb231677'
+      query = query.eq('org_id', UPTRADE_MEDIA_ORG_ID)
+      console.log('[Blog API] No context, defaulting to Uptrade Media')
+    }
 
     if (category) {
       query = query.eq('category', category)

@@ -9,7 +9,7 @@ export async function handler(event) {
   // CORS headers - allow all origins for public API
   const headers = {
     'Access-Control-Allow-Origin': '*',
-    'Access-Control-Allow-Headers': 'Content-Type, X-Tenant-ID, X-Organization-Id',
+    'Access-Control-Allow-Headers': 'Content-Type, X-Tenant-ID, X-Organization-Id, X-Project-Id',
     'Access-Control-Allow-Methods': 'GET, OPTIONS',
     'Content-Type': 'application/json',
     'Cache-Control': 'public, max-age=60, stale-while-revalidate=300'

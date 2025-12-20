@@ -18,6 +18,7 @@ const Billing = lazy(() => import('./Billing'))
 const ClientManagement = lazy(() => import('./ClientManagement'))
 const TenantClients = lazy(() => import('./TenantClients'))
 const TeamTab = lazy(() => import('./crm/TeamTab'))
+const TeamModule = lazy(() => import('./team/TeamModule'))
 const EmailManager = lazy(() => import('@/pages/EmailManager'))
 const BlogManagement = lazy(() => import('./BlogManagement'))
 const PortfolioManagement = lazy(() => import('./PortfolioManagement'))
@@ -78,7 +79,8 @@ const MainLayout = () => {
       case 'tenant-clients':
         return <TenantClients />
       case 'team':
-        return <TeamTab />
+      case 'users':
+        return <TeamModule />
       case 'team-metrics':
         return <TeamMetrics />
       case 'blog':

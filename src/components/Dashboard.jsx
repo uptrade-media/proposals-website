@@ -39,18 +39,22 @@ import TrendIndicators from './TrendIndicators'
 const Dashboard = ({ onNavigate }) => {
   console.log('[Dashboard] Component mounting')
   
-  const { user, currentOrg, switchOrganization } = useAuthStore()
+  const { user, currentOrg, currentProject, switchOrganization } = useAuthStore()
   const isAdmin = user?.role === 'admin'
   const lastUserIdRef = useRef(null)
   const [isLoading, setIsLoading] = useState(false)
   const [exitingTenant, setExitingTenant] = useState(false)
   
-  // Check if we're viewing a project-based tenant (web app)
-  const isViewingTenant = currentOrg?.isProjectTenant === true
-  const tenantName = currentOrg?.name
+  // Check if we're viewing an org or project context (not Uptrade admin)
+  // Use TenantDashboard when:
+  // 1. In a specific project (currentProject exists)
+  // 2. In a CLIENT org context (not agency org like Uptrade Media)
+  const isAgencyOrg = currentOrg?.org_type === 'agency'
+  const isInTenantContext = !!currentProject || (!!currentOrg && !isAgencyOrg)
+  const tenantName = currentProject?.name || currentOrg?.name
   
-  // Use dedicated TenantDashboard for project tenants
-  if (isViewingTenant) {
+  // Use dedicated TenantDashboard for org/project context
+  if (isInTenantContext) {
     return <TenantDashboard onNavigate={onNavigate} />
   }
   
@@ -337,60 +341,23 @@ const Dashboard = ({ onNavigate }) => {
 
   return (
     <div className="space-y-6">
-      {/* Tenant Context Banner - shown when viewing a web app dashboard */}
-      {isViewingTenant && (
-        <div className="bg-gradient-to-r from-emerald-500/10 via-emerald-500/5 to-transparent border border-emerald-500/20 rounded-xl p-4 flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <div className="p-2 bg-emerald-500/20 rounded-lg">
-              <Building2 className="w-5 h-5 text-emerald-600" />
-            </div>
-            <div>
-              <p className="text-sm text-[var(--text-secondary)]">Viewing Web App</p>
-              <h3 className="font-semibold text-[var(--text-primary)]">{tenantName || 'Unknown Tenant'}</h3>
-            </div>
-          </div>
-          <Button 
-            variant="outline" 
-            size="sm"
-            onClick={exitTenantDashboard}
-            disabled={exitingTenant}
-            className="border-emerald-500/30 hover:bg-emerald-500/10"
-          >
-            {exitingTenant ? (
-              <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-            ) : (
-              <ArrowLeft className="w-4 h-4 mr-2" />
-            )}
-            Back to Uptrade Media
-          </Button>
-        </div>
-      )}
-      
       {/* Welcome Section */}
       <div className="bg-[var(--glass-bg)] backdrop-blur-xl rounded-2xl p-6 border border-[var(--glass-border)] shadow-[var(--shadow-md)]">
         <div className="flex items-center justify-between">
           <div>
             <h1 className="text-2xl font-bold mb-2 text-[var(--text-primary)]">
-              {isViewingTenant ? tenantName : `Welcome back${user?.name ? `, ${user.name.split(' ')[0]}` : ''}!`}
+              {`Welcome back${user?.name ? `, ${user.name.split(' ')[0]}` : ''}!`}
             </h1>
             <p className="text-[var(--text-secondary)]">
-              {isViewingTenant 
-                ? "Manage analytics, content, and tools for this web app."
-                : isAdmin 
-                  ? "Manage clients, proposals, and invoices from your admin dashboard." 
-                  : "Here's what's happening with your projects today."}
+              {isAdmin 
+                ? "Manage clients, proposals, and invoices from your admin dashboard." 
+                : "Here's what's happening with your projects today."}
             </p>
           </div>
-          {isAdmin && !isViewingTenant && (
+          {isAdmin && (
             <Badge variant="secondary" className="bg-[var(--brand-primary)]/20 text-[var(--brand-primary)] border-[var(--brand-primary)]/30">
               <Shield className="w-3 h-3 mr-1" />
               Admin
-            </Badge>
-          )}
-          {isViewingTenant && (
-            <Badge variant="secondary" className="bg-emerald-500/20 text-emerald-600 border-emerald-500/30">
-              <Building2 className="w-3 h-3 mr-1" />
-              Web App
             </Badge>
           )}
         </div>

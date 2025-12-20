@@ -6,7 +6,7 @@ import { createSupabaseAdmin, getAuthenticatedUser } from './utils/supabase.js'
 export async function handler(event) {
   const headers = {
     'Access-Control-Allow-Origin': '*',
-    'Access-Control-Allow-Headers': 'Content-Type, Authorization, X-Organization-Id',
+    'Access-Control-Allow-Headers': 'Content-Type, Authorization, X-Organization-Id, X-Project-Id',
     'Access-Control-Allow-Methods': 'GET, OPTIONS',
     'Content-Type': 'application/json'
   }
@@ -24,15 +24,18 @@ export async function handler(event) {
   }
 
   // Verify authentication
-  const { user, contact, error: authError } = await getAuthenticatedUser(event)
+  const { user, contact, isSuperAdmin, error: authError } = await getAuthenticatedUser(event)
   
   if (authError || !user) {
+    console.log('[analytics-query] Auth failed:', authError?.message || 'No user')
     return {
       statusCode: 401,
       headers,
       body: JSON.stringify({ error: 'Not authenticated' })
     }
   }
+  
+  console.log('[analytics-query] Auth success:', { email: user.email, isSuperAdmin })
 
   try {
     const params = event.queryStringParameters || {}
@@ -221,11 +224,150 @@ export async function handler(event) {
         }
       }
 
+      case 'web-vitals': {
+        let query = supabase
+          .from('analytics_web_vitals')
+          .select('*')
+          .gte('created_at', startDateStr)
+        
+        if (orgId) {
+          query = query.eq('org_id', orgId)
+        }
+
+        const { data: vitals, error } = await query
+
+        if (error) throw error
+
+        // Calculate averages for each metric
+        const metrics = { lcp: [], fid: [], cls: [], inp: [], ttfb: [], fcp: [] }
+        vitals?.forEach(v => {
+          if (v.metric_name && metrics[v.metric_name.toLowerCase()]) {
+            metrics[v.metric_name.toLowerCase()].push(v.value)
+          }
+        })
+
+        const calcAvg = (arr) => arr.length ? Math.round(arr.reduce((a, b) => a + b, 0) / arr.length) : null
+        const calcP75 = (arr) => {
+          if (!arr.length) return null
+          const sorted = [...arr].sort((a, b) => a - b)
+          return sorted[Math.floor(sorted.length * 0.75)]
+        }
+
+        return {
+          statusCode: 200,
+          headers,
+          body: JSON.stringify({
+            lcp: { avg: calcAvg(metrics.lcp), p75: calcP75(metrics.lcp), samples: metrics.lcp.length },
+            fid: { avg: calcAvg(metrics.fid), p75: calcP75(metrics.fid), samples: metrics.fid.length },
+            cls: { avg: calcAvg(metrics.cls), p75: calcP75(metrics.cls), samples: metrics.cls.length },
+            inp: { avg: calcAvg(metrics.inp), p75: calcP75(metrics.inp), samples: metrics.inp.length },
+            ttfb: { avg: calcAvg(metrics.ttfb), p75: calcP75(metrics.ttfb), samples: metrics.ttfb.length },
+            fcp: { avg: calcAvg(metrics.fcp), p75: calcP75(metrics.fcp), samples: metrics.fcp.length }
+          })
+        }
+      }
+
+      case 'sessions': {
+        let query = supabase
+          .from('analytics_page_views')
+          .select('visitor_id, session_id, created_at, path, referrer, device_type, browser')
+          .gte('created_at', startDateStr)
+        
+        if (orgId) {
+          query = query.eq('org_id', orgId)
+        }
+
+        const { data: pageViews, error } = await query
+          .order('created_at', { ascending: false })
+
+        if (error) throw error
+
+        // Group by session
+        const sessions = {}
+        pageViews?.forEach(pv => {
+          const sessionKey = pv.session_id || pv.visitor_id
+          if (!sessions[sessionKey]) {
+            sessions[sessionKey] = {
+              sessionId: sessionKey,
+              visitorId: pv.visitor_id,
+              pages: [],
+              startTime: pv.created_at,
+              endTime: pv.created_at,
+              deviceType: pv.device_type,
+              browser: pv.browser,
+              referrer: pv.referrer
+            }
+          }
+          sessions[sessionKey].pages.push(pv.path)
+          if (new Date(pv.created_at) < new Date(sessions[sessionKey].startTime)) {
+            sessions[sessionKey].startTime = pv.created_at
+          }
+          if (new Date(pv.created_at) > new Date(sessions[sessionKey].endTime)) {
+            sessions[sessionKey].endTime = pv.created_at
+          }
+        })
+
+        const sessionList = Object.values(sessions)
+          .map(s => ({
+            ...s,
+            pageCount: s.pages.length,
+            duration: (new Date(s.endTime) - new Date(s.startTime)) / 1000
+          }))
+          .sort((a, b) => new Date(b.startTime) - new Date(a.startTime))
+          .slice(0, 100)
+
+        return {
+          statusCode: 200,
+          headers,
+          body: JSON.stringify({ 
+            sessions: sessionList,
+            totalSessions: Object.keys(sessions).length,
+            avgPagesPerSession: sessionList.length ? 
+              Math.round(sessionList.reduce((a, b) => a + b.pageCount, 0) / sessionList.length * 10) / 10 : 0
+          })
+        }
+      }
+
+      case 'heatmap': {
+        // Heatmap data from click events
+        let query = supabase
+          .from('analytics_events')
+          .select('*')
+          .eq('event_name', 'click')
+          .gte('created_at', startDateStr)
+        
+        if (orgId) {
+          query = query.eq('org_id', orgId)
+        }
+
+        const { data: clicks, error } = await query
+
+        if (error) throw error
+
+        // Group clicks by element/path
+        const clickMap = {}
+        clicks?.forEach(c => {
+          const key = `${c.path}:${c.properties?.element || 'unknown'}`
+          if (!clickMap[key]) {
+            clickMap[key] = { path: c.path, element: c.properties?.element, count: 0 }
+          }
+          clickMap[key].count++
+        })
+
+        return {
+          statusCode: 200,
+          headers,
+          body: JSON.stringify({ 
+            data: Object.values(clickMap).sort((a, b) => b.count - a.count).slice(0, 50)
+          })
+        }
+      }
+
       default:
         return {
           statusCode: 400,
           headers,
-          body: JSON.stringify({ error: 'Invalid endpoint. Use: overview, page-views, events, scroll-depth' })
+          body: JSON.stringify({ error: 'Invalid endpoint. Use: overview, page-views, events, scroll-depth, web-vitals, sessions, heatmap' })
         }
     }
 

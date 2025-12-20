@@ -11,7 +11,7 @@ export async function handler(event) {
   // CORS headers
   const headers = {
     'Access-Control-Allow-Origin': '*',
-    'Access-Control-Allow-Headers': 'Content-Type, Authorization, X-Organization-Id',
+    'Access-Control-Allow-Headers': 'Content-Type, Authorization, X-Organization-Id, X-Project-Id',
     'Access-Control-Allow-Methods': 'GET, OPTIONS',
     'Content-Type': 'application/json'
   }
@@ -53,78 +53,108 @@ export async function handler(event) {
 
     let contacts = []
     
-    // Check if in project tenant context
+    // Check if in organization context
     if (orgId) {
-      console.log('[messages-contacts] Project tenant context, org_id:', orgId)
+      console.log('[messages-contacts] Organization context, org_id:', orgId)
       
-      // For project tenants, fetch:
-      // 1. Uptrade Media team members assigned to their project
-      // 2. Other members of their own organization
+      // For organization members, fetch:
+      // 1. Uptrade Media team members assigned to their project(s) via project_members
+      // 2. Other members of their organization via organization_members
       // 3. Echo (future - when Signal is enabled)
       
-      // Get the project to find assigned team members
-      const { data: project } = await supabase
-        .from('projects')
-        .select('id, contact_id, assigned_to')
-        .eq('id', orgId)
-        .single()
+      // Get the user's project context (from header or their membership)
+      const projectId = event.headers['x-project-id']
       
-      // Build list of team members to show
-      const teamMemberIds = []
+      // 1. Get Uptrade team members assigned to user's projects
+      let uptradeTeamQuery = supabase
+        .from('project_members')
+        .select(`
+          contact:contacts!project_members_contact_id_fkey(id, name, email, company, role, avatar)
+        `)
+        .eq('role', 'uptrade_assigned')
       
-      if (project?.assigned_to) {
-        // assigned_to is the Uptrade team member assigned to this project
-        teamMemberIds.push(project.assigned_to)
-      }
-      
-      // Also get Uptrade admin contacts who have messaged this project's contacts
-      const { data: existingConversations } = await supabase
-        .from('messages')
-        .select('sender_id, recipient_id')
-        .eq('project_id', orgId)
-      
-      // Extract unique Uptrade team member IDs from conversations
-      const conversationParticipants = new Set()
-      existingConversations?.forEach(msg => {
-        conversationParticipants.add(msg.sender_id)
-        conversationParticipants.add(msg.recipient_id)
-      })
-      
-      // Fetch Uptrade team members (admins) who are assigned or have conversed
-      const allTeamIds = [...new Set([...teamMemberIds, ...conversationParticipants])]
-      
-      if (allTeamIds.length > 0) {
-        const { data: teamContacts } = await supabase
-          .from('contacts')
-          .select('id, name, email, company, role, avatar')
-          .in('id', allTeamIds)
-          .eq('role', 'admin')
-          .order('name')
+      // If project-specific, filter to that project
+      if (projectId) {
+        uptradeTeamQuery = uptradeTeamQuery.eq('project_id', projectId)
+      } else {
+        // Get all projects in this organization
+        const { data: orgProjects } = await supabase
+          .from('projects')
+          .select('id')
+          .eq('organization_id', orgId)
         
-        if (teamContacts) {
-          contacts.push(...teamContacts.map(c => ({ ...c, contactType: 'uptrade_team' })))
+        if (orgProjects?.length > 0) {
+          uptradeTeamQuery = uptradeTeamQuery.in('project_id', orgProjects.map(p => p.id))
         }
       }
       
-      // Also fetch contacts in the same organization (org_id matches the project)
-      const { data: orgContacts } = await supabase
-        .from('contacts')
-        .select('id, name, email, company, role, avatar')
-        .eq('org_id', orgId)
-        .neq('id', userId) // Exclude self
-        .order('name')
+      const { data: uptradeMembers } = await uptradeTeamQuery
       
-      if (orgContacts) {
-        contacts.push(...orgContacts.map(c => ({ ...c, contactType: 'organization' })))
+      if (uptradeMembers) {
+        contacts.push(...uptradeMembers
+          .filter(m => m.contact)
+          .map(m => ({ ...m.contact, contactType: 'uptrade_team' }))
+        )
+      }
+      
+      // 2. Get all organization members (excluding self)
+      const { data: orgMembers } = await supabase
+        .from('organization_members')
+        .select(`
+          access_level,
+          contact:contacts!organization_members_contact_id_fkey(id, name, email, company, role, avatar)
+        `)
+        .eq('organization_id', orgId)
+        .neq('contact_id', userId)
+      
+      if (orgMembers) {
+        contacts.push(...orgMembers
+          .filter(m => m.contact)
+          .map(m => ({ 
+            ...m.contact, 
+            contactType: 'organization',
+            accessLevel: m.access_level 
+          }))
+        )
+      }
+      
+      // 3. Get project-level members for shared projects (if user is project-level)
+      const { data: userOrgMembership } = await supabase
+        .from('organization_members')
+        .select('access_level')
+        .eq('organization_id', orgId)
+        .eq('contact_id', userId)
+        .single()
+      
+      if (userOrgMembership?.access_level === 'project') {
+        // User is project-level, get other members of shared projects
+        const { data: userProjects } = await supabase
+          .from('project_members')
+          .select('project_id')
+          .eq('contact_id', userId)
+        
+        if (userProjects?.length > 0) {
+          const { data: sharedProjectMembers } = await supabase
+            .from('project_members')
+            .select(`
+              contact:contacts!project_members_contact_id_fkey(id, name, email, company, role, avatar)
+            `)
+            .in('project_id', userProjects.map(p => p.project_id))
+            .neq('contact_id', userId)
+            .neq('role', 'uptrade_assigned') // Already fetched above
+          
+          if (sharedProjectMembers) {
+            contacts.push(...sharedProjectMembers
+              .filter(m => m.contact)
+              .map(m => ({ ...m.contact, contactType: 'project' }))
+            )
+          }
+        }
       }
       
       // TODO: Add Echo contact when Signal is enabled for this tenant
-      // const tenantFeatures = project?.tenant_features || []
-      // if (tenantFeatures.includes('signal')) {
-      //   contacts.push({ id: 'echo', name: 'Echo (AI Assistant)', contactType: 'ai' })
-      // }
       
-      // Remove duplicates
+      // Remove duplicates (keep first occurrence which has correct contactType)
       const uniqueContacts = Array.from(
         new Map(contacts.map(c => [c.id, c])).values()
       )

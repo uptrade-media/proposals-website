@@ -5,7 +5,7 @@ export async function handler(event) {
   // CORS headers
   const headers = {
     'Access-Control-Allow-Origin': '*',
-    'Access-Control-Allow-Headers': 'Content-Type, Authorization, X-Organization-Id',
+    'Access-Control-Allow-Headers': 'Content-Type, Authorization, X-Organization-Id, X-Project-Id',
     'Access-Control-Allow-Methods': 'GET, OPTIONS',
     'Content-Type': 'application/json'
   }
@@ -38,10 +38,31 @@ export async function handler(event) {
     const queryParams = event.queryStringParameters || {}
     const { projectId, status, contactId } = queryParams
     
-    // Check for project tenant context
+    // Organization-level filtering (invoices are billed to the organization)
+    // X-Organization-Id is the business entity (GWA LLC)
     const orgId = event.headers['x-organization-id']
 
     const supabase = createSupabaseAdmin()
+
+    // Check if user has org-level access for billing
+    // Project-level users cannot access billing
+    if (orgId && contact.role !== 'admin') {
+      const { data: hasOrgAccess } = await supabase.rpc('user_has_org_access', {
+        user_id: contact.id,
+        org_id: orgId
+      })
+      
+      if (!hasOrgAccess) {
+        return {
+          statusCode: 403,
+          headers,
+          body: JSON.stringify({ 
+            error: 'ACCESS_DENIED',
+            message: 'Billing access requires organization-level permissions' 
+          })
+        }
+      }
+    }
 
     // Build query - use simple select first, then join relations if they exist
     let query = supabase
@@ -51,9 +72,10 @@ export async function handler(event) {
 
     // Apply filters based on context
     if (orgId) {
-      // Project tenant context: show invoices for this project
-      query = query.eq('project_id', orgId)
-      console.log('[invoices-list] Project tenant context, filtering by project_id:', orgId)
+      // Organization context: show all invoices for this org
+      // First check if it's a project_id (legacy) or organization_id
+      query = query.or(`organization_id.eq.${orgId},project_id.eq.${orgId}`)
+      console.log('[invoices-list] Organization context, filtering by organization_id or project_id:', orgId)
     } else if (contact.role !== 'admin') {
       // Clients can only see their own invoices
       query = query.eq('contact_id', contact.id)

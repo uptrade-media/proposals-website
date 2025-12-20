@@ -124,7 +124,7 @@ const UPTRADE_SERVICES = [
 ]
 
 export default function TenantDashboard({ onNavigate }) {
-  const { currentOrg } = useAuthStore()
+  const { currentOrg, currentProject, exitProjectView } = useAuthStore()
   const [isLoading, setIsLoading] = useState(true)
   const [exitingTenant, setExitingTenant] = useState(false)
   const [stats, setStats] = useState({
@@ -136,20 +136,31 @@ export default function TenantDashboard({ onNavigate }) {
     blogPosts: 0
   })
   
-  const tenantName = currentOrg?.name || 'Your Organization'
-  const tenantDomain = currentOrg?.domain
-  const enabledFeatures = currentOrg?.features || []
+  // Two-tier: Check if we're in a specific project or just the organization
+  const isInProject = !!currentProject
+  const tenantName = isInProject ? currentProject.name : (currentOrg?.name || 'Your Organization')
+  const tenantDomain = isInProject ? currentProject.domain : currentOrg?.domain
+  
+  // Get enabled features - handle both array format (projects) and object format (orgs)
+  const rawFeatures = isInProject ? (currentProject.features || []) : (currentOrg?.features || [])
+  const enabledFeatures = Array.isArray(rawFeatures) 
+    ? rawFeatures 
+    : Object.entries(rawFeatures).filter(([_, v]) => v).map(([k]) => k)
   
   // Filter to only enabled modules
   const enabledModules = Object.values(TENANT_MODULES).filter(m => 
     enabledFeatures.includes(m.feature) || m.feature === 'clients' // Always show clients
   )
   
-  // Exit tenant context
+  // Exit tenant/project context
   const exitTenantDashboard = async () => {
     setExitingTenant(true)
-    localStorage.removeItem('currentTenantProject')
-    window.location.reload()
+    if (isInProject && exitProjectView) {
+      await exitProjectView()
+    } else {
+      localStorage.removeItem('currentTenantProject')
+      window.location.reload()
+    }
   }
   
   // Load tenant stats
@@ -175,10 +186,10 @@ export default function TenantDashboard({ onNavigate }) {
     }
     
     loadStats()
-  }, [currentOrg?.id])
+  }, [currentProject?.id, currentOrg?.id])
 
   return (
-    <div className="space-y-6 max-w-7xl mx-auto">
+    <div className="space-y-6">
       {/* Tenant Header with Exit Button */}
       <div className="bg-gradient-to-br from-[var(--glass-bg)] to-[var(--surface-secondary)] backdrop-blur-xl rounded-2xl p-6 border border-[var(--glass-border)] shadow-[var(--shadow-lg)]">
         <div className="flex items-center justify-between mb-4">
@@ -194,7 +205,7 @@ export default function TenantDashboard({ onNavigate }) {
             ) : (
               <ArrowLeft className="w-4 h-4 mr-2" />
             )}
-            Back to Uptrade Media
+            {isInProject ? `Back to ${currentOrg?.name || 'Organization'}` : 'Back to Uptrade Media'}
           </Button>
           
           {tenantDomain && (

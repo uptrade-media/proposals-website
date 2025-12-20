@@ -619,6 +619,34 @@ export default function Messages() {
   const [searchTerm, setSearchTerm] = useState('')
   const [filterType, setFilterType] = useState('all') // 'all' | 'unread' | 'starred'
   const hasFetchedRef = useRef(false)
+  const hasHandledContactParam = useRef(false)
+
+  // Handle ?contact= query parameter from Team module integration
+  useEffect(() => {
+    if (hasHandledContactParam.current) return
+    
+    const urlParams = new URLSearchParams(window.location.search)
+    const contactId = urlParams.get('contact')
+    
+    if (contactId && contacts.length > 0) {
+      hasHandledContactParam.current = true
+      const targetContact = contacts.find(c => c.id === contactId)
+      if (targetContact) {
+        // Start a new conversation with this contact
+        setShowNewConversation(true)
+        setActiveConversation({
+          id: null,
+          contact: targetContact,
+          recipient: targetContact,
+          lastMessage: null,
+          isNew: true
+        })
+        setChatMessages([])
+        // Clear the URL param
+        window.history.replaceState({}, '', window.location.pathname)
+      }
+    }
+  }, [contacts])
 
   // Fetch initial data
   useEffect(() => {

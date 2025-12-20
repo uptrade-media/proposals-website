@@ -1,16 +1,17 @@
 import { create } from 'zustand'
+import api from './api'
 
-// Use proxy to avoid CORS issues with main site API
-const ANALYTICS_PROXY = '/.netlify/functions/analytics-proxy'
+// Use analytics-query to fetch from Portal's own database
+const ANALYTICS_QUERY = '/.netlify/functions/analytics-query'
 
-// Helper to build proxy URL with optional domain
-const buildProxyUrl = (endpoint, params = {}, domain = null) => {
+// Helper to build query URL with tenant ID
+const buildQueryUrl = (endpoint, params = {}, tenantId = null) => {
   const allParams = { endpoint, ...params }
-  if (domain) {
-    allParams.domain = domain
+  if (tenantId) {
+    allParams.tenantId = tenantId
   }
   const searchParams = new URLSearchParams(allParams)
-  return `${ANALYTICS_PROXY}?${searchParams.toString()}`
+  return `${ANALYTICS_QUERY}?${searchParams.toString()}`
 }
 
 const useSiteAnalyticsStore = create((set, get) => ({
@@ -29,28 +30,24 @@ const useSiteAnalyticsStore = create((set, get) => ({
   
   // Settings
   dateRange: 30, // days
-  domain: null, // Target domain for tenant analytics
+  tenantId: null, // Tenant ID for filtering analytics
 
   // Actions
   setDateRange: (days) => set({ dateRange: days }),
-  setDomain: (domain) => set({ domain }),
+  setTenantId: (tenantId) => set({ tenantId }),
   clearError: () => set({ error: null }),
 
   // Fetch overview dashboard data
   fetchOverview: async (days = null) => {
     const period = days || get().dateRange
+    const tenantId = get().tenantId
     set({ isLoading: true, error: null })
     
     try {
-      const response = await fetch(buildProxyUrl('overview', { days: period }))
+      const response = await api.get(buildQueryUrl('overview', { days: period }, tenantId))
       
-      if (!response.ok) {
-        throw new Error(`API returned ${response.status}`)
-      }
-      
-      const data = await response.json()
-      set({ overview: data, isLoading: false })
-      return { success: true, data }
+      set({ overview: response.data, isLoading: false })
+      return { success: true, data: response.data }
     } catch (error) {
       console.error('[SiteAnalytics] Error fetching overview:', error)
       set({ 
@@ -64,20 +61,16 @@ const useSiteAnalyticsStore = create((set, get) => ({
   // Fetch page views grouped by path (top pages)
   fetchTopPages: async (days = null, limit = 20) => {
     const period = days || get().dateRange
+    const tenantId = get().tenantId
     set({ isLoading: true, error: null })
     
     try {
-      const response = await fetch(
-        buildProxyUrl('page-views', { days: period, groupBy: 'path', limit })
+      const response = await api.get(
+        buildQueryUrl('page-views', { days: period, groupBy: 'path', limit }, tenantId)
       )
       
-      if (!response.ok) {
-        throw new Error(`API returned ${response.status}`)
-      }
-      
-      const data = await response.json()
-      set({ topPages: data.data, isLoading: false })
-      return { success: true, data: data.data }
+      set({ topPages: response.data.data, isLoading: false })
+      return { success: true, data: response.data.data }
     } catch (error) {
       console.error('[SiteAnalytics] Error fetching top pages:', error)
       set({ 
@@ -91,20 +84,16 @@ const useSiteAnalyticsStore = create((set, get) => ({
   // Fetch page views grouped by day (for trend chart)
   fetchPageViewsByDay: async (days = null) => {
     const period = days || get().dateRange
+    const tenantId = get().tenantId
     set({ isLoading: true, error: null })
     
     try {
-      const response = await fetch(
-        buildProxyUrl('page-views', { days: period, groupBy: 'day' })
+      const response = await api.get(
+        buildQueryUrl('page-views', { days: period, groupBy: 'day' }, tenantId)
       )
       
-      if (!response.ok) {
-        throw new Error(`API returned ${response.status}`)
-      }
-      
-      const data = await response.json()
-      set({ pageViewsByDay: data.data, isLoading: false })
-      return { success: true, data: data.data }
+      set({ pageViewsByDay: response.data.data, isLoading: false })
+      return { success: true, data: response.data.data }
     } catch (error) {
       console.error('[SiteAnalytics] Error fetching daily page views:', error)
       set({ 
@@ -118,20 +107,16 @@ const useSiteAnalyticsStore = create((set, get) => ({
   // Fetch page views grouped by hour (for time distribution)
   fetchPageViewsByHour: async (days = null) => {
     const period = days || get().dateRange
+    const tenantId = get().tenantId
     set({ isLoading: true, error: null })
     
     try {
-      const response = await fetch(
-        buildProxyUrl('page-views', { days: period, groupBy: 'hour' })
+      const response = await api.get(
+        buildQueryUrl('page-views', { days: period, groupBy: 'hour' }, tenantId)
       )
       
-      if (!response.ok) {
-        throw new Error(`API returned ${response.status}`)
-      }
-      
-      const data = await response.json()
-      set({ pageViewsByHour: data.data, isLoading: false })
-      return { success: true, data: data.data }
+      set({ pageViewsByHour: response.data.data, isLoading: false })
+      return { success: true, data: response.data.data }
     } catch (error) {
       console.error('[SiteAnalytics] Error fetching hourly page views:', error)
       set({ 
@@ -145,117 +130,95 @@ const useSiteAnalyticsStore = create((set, get) => ({
   // Fetch Web Vitals summary
   fetchWebVitals: async (days = null) => {
     const period = days || get().dateRange
+    const tenantId = get().tenantId
     
     try {
-      const response = await fetch(buildProxyUrl('web-vitals', { days: period }))
+      const response = await api.get(buildQueryUrl('web-vitals', { days: period }, tenantId))
       
-      if (!response.ok) {
-        console.warn('[SiteAnalytics] Web Vitals API returned', response.status)
-        return { success: false, data: null }
-      }
-      
-      const data = await response.json()
-      set({ webVitals: data })
-      return { success: true, data }
+      set({ webVitals: response.data })
+      return { success: true, data: response.data }
     } catch (error) {
-      console.error('[SiteAnalytics] Error fetching web vitals:', error)
-      return { success: false, error: error.message }
+      console.warn('[SiteAnalytics] Error fetching web vitals:', error)
+      return { success: false, data: null }
     }
   },
 
   // Fetch session breakdown (browser, OS, UTM, etc.)
   fetchSessions: async (days = null) => {
     const period = days || get().dateRange
+    const tenantId = get().tenantId
     
     try {
-      const response = await fetch(buildProxyUrl('sessions', { days: period }))
+      const response = await api.get(buildQueryUrl('sessions', { days: period }, tenantId))
       
-      if (!response.ok) {
-        console.warn('[SiteAnalytics] Sessions API returned', response.status)
-        return { success: false, data: null }
-      }
-      
-      const data = await response.json()
-      set({ sessions: data })
-      return { success: true, data }
+      set({ sessions: response.data })
+      return { success: true, data: response.data }
     } catch (error) {
-      console.error('[SiteAnalytics] Error fetching sessions:', error)
-      return { success: false, error: error.message }
+      console.warn('[SiteAnalytics] Error fetching sessions:', error)
+      return { success: false, data: null }
     }
   },
 
   // Fetch scroll depth data
   fetchScrollDepth: async (days = null) => {
     const period = days || get().dateRange
+    const tenantId = get().tenantId
     
     try {
-      const response = await fetch(buildProxyUrl('scroll-depth', { days: period }))
+      const response = await api.get(buildQueryUrl('scroll-depth', { days: period }, tenantId))
       
-      if (!response.ok) {
-        console.warn('[SiteAnalytics] Scroll Depth API returned', response.status)
-        return { success: false, data: null }
-      }
-      
-      const data = await response.json()
-      set({ scrollDepth: data })
-      return { success: true, data }
+      set({ scrollDepth: response.data })
+      return { success: true, data: response.data }
     } catch (error) {
-      console.error('[SiteAnalytics] Error fetching scroll depth:', error)
-      return { success: false, error: error.message }
+      console.warn('[SiteAnalytics] Error fetching scroll depth:', error)
+      return { success: false, data: null }
     }
   },
 
   // Fetch heatmap click data
   fetchHeatmap: async (days = null) => {
     const period = days || get().dateRange
+    const tenantId = get().tenantId
     
     try {
-      const response = await fetch(buildProxyUrl('heatmap', { days: period }))
+      const response = await api.get(buildQueryUrl('heatmap', { days: period }, tenantId))
       
-      if (!response.ok) {
-        console.warn('[SiteAnalytics] Heatmap API returned', response.status)
-        return { success: false, data: null }
-      }
-      
-      const data = await response.json()
-      set({ heatmap: data })
-      return { success: true, data }
+      set({ heatmap: response.data })
+      return { success: true, data: response.data }
     } catch (error) {
-      console.error('[SiteAnalytics] Error fetching heatmap:', error)
-      return { success: false, error: error.message }
+      console.warn('[SiteAnalytics] Error fetching heatmap:', error)
+      return { success: false, data: null }
     }
   },
 
   // Fetch all analytics data at once
   fetchAllAnalytics: async (days = null) => {
     const period = days || get().dateRange
-    const domain = get().domain
+    const tenantId = get().tenantId
     set({ isLoading: true, error: null })
     
     try {
-      // Fetch all data in parallel via proxy
-      const [overviewRes, topPagesRes, dailyRes, hourlyRes, webVitalsRes, sessionsRes, scrollDepthRes, heatmapRes] = await Promise.all([
-        fetch(buildProxyUrl('overview', { days: period }, domain)),
-        fetch(buildProxyUrl('page-views', { days: period, groupBy: 'path', limit: 20 }, domain)),
-        fetch(buildProxyUrl('page-views', { days: period, groupBy: 'day' }, domain)),
-        fetch(buildProxyUrl('page-views', { days: period, groupBy: 'hour' }, domain)),
-        fetch(buildProxyUrl('web-vitals', { days: period }, domain)),
-        fetch(buildProxyUrl('sessions', { days: period }, domain)),
-        fetch(buildProxyUrl('scroll-depth', { days: period }, domain)),
-        fetch(buildProxyUrl('heatmap', { days: period }, domain))
+      // Fetch all data in parallel from Portal database using api module
+      const [overviewRes, topPagesRes, dailyRes, hourlyRes, webVitalsRes, sessionsRes, scrollDepthRes, heatmapRes] = await Promise.allSettled([
+        api.get(buildQueryUrl('overview', { days: period }, tenantId)),
+        api.get(buildQueryUrl('page-views', { days: period, groupBy: 'path', limit: 20 }, tenantId)),
+        api.get(buildQueryUrl('page-views', { days: period, groupBy: 'day' }, tenantId)),
+        api.get(buildQueryUrl('page-views', { days: period, groupBy: 'hour' }, tenantId)),
+        api.get(buildQueryUrl('web-vitals', { days: period }, tenantId)),
+        api.get(buildQueryUrl('sessions', { days: period }, tenantId)),
+        api.get(buildQueryUrl('scroll-depth', { days: period }, tenantId)),
+        api.get(buildQueryUrl('heatmap', { days: period }, tenantId))
       ])
 
-      // Check for errors
-      if (!overviewRes.ok) throw new Error(`Overview API returned ${overviewRes.status}`)
-      
-      const overview = await overviewRes.json()
-      const topPages = topPagesRes.ok ? (await topPagesRes.json()).data : []
-      const pageViewsByDay = dailyRes.ok ? (await dailyRes.json()).data : []
-      const pageViewsByHour = hourlyRes.ok ? (await hourlyRes.json()).data : []
-      const webVitals = webVitalsRes.ok ? await webVitalsRes.json() : null
-      const sessions = sessionsRes.ok ? await sessionsRes.json() : null
-      const scrollDepth = scrollDepthRes.ok ? await scrollDepthRes.json() : null
-      const heatmap = heatmapRes.ok ? await heatmapRes.json() : null
+      // Extract data from settled promises
+      const overview = overviewRes.status === 'fulfilled' ? overviewRes.value.data : null
+      const topPages = topPagesRes.status === 'fulfilled' ? topPagesRes.value.data?.data || [] : []
+      const pageViewsByDay = dailyRes.status === 'fulfilled' ? dailyRes.value.data?.data || [] : []
+      const pageViewsByHour = hourlyRes.status === 'fulfilled' ? hourlyRes.value.data?.data || [] : []
+      const webVitals = webVitalsRes.status === 'fulfilled' ? webVitalsRes.value.data : null
+      const sessions = sessionsRes.status === 'fulfilled' ? sessionsRes.value.data : null
+      const scrollDepth = scrollDepthRes.status === 'fulfilled' ? scrollDepthRes.value.data : null
+      const heatmap = heatmapRes.status === 'fulfilled' ? heatmapRes.value.data : null
       
       set({ 
         overview,

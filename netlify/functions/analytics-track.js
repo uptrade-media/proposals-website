@@ -25,7 +25,7 @@ export async function handler(event) {
   try {
     // Parse the event data
     const data = JSON.parse(event.body || '{}')
-    const { event: eventName, properties, tenantId, timestamp, url, referrer, visitorId, sessionId } = data
+    const { event: eventName, properties, tenantId, orgId: providedOrgId, timestamp, url, referrer, visitorId, sessionId } = data
 
     if (!eventName) {
       return {
@@ -38,35 +38,46 @@ export async function handler(event) {
     // Get tenant ID from header or body
     const tenant = event.headers['x-tenant-id'] || tenantId
     
-    if (!tenant) {
+    // Get org ID from header or body (prioritize explicit org_id)
+    const orgIdFromHeader = event.headers['x-organization-id'] || providedOrgId
+    
+    if (!tenant && !orgIdFromHeader) {
       return {
         statusCode: 400,
         headers,
-        body: JSON.stringify({ error: 'Tenant ID is required' })
+        body: JSON.stringify({ error: 'Tenant ID or Organization ID is required' })
       }
     }
 
     const supabase = createSupabaseAdmin()
+    
+    // Use provided org_id if available, otherwise try to look it up
+    let orgId = orgIdFromHeader
 
-    // Look up the project/tenant to get the org_id
-    const { data: project, error: projectError } = await supabase
-      .from('projects')
-      .select('id, org_id, tenant_tracking_id')
-      .or(`tenant_tracking_id.eq.${tenant},id.eq.${tenant}`)
-      .eq('is_tenant', true)
-      .single()
-
-    if (projectError || !project) {
-      // Try organizations table as fallback
-      const { data: org } = await supabase
-        .from('organizations')
-        .select('id, slug')
-        .or(`slug.eq.${tenant},id.eq.${tenant}`)
+    if (!orgId && tenant) {
+      // Look up the project/tenant to get the org_id
+      const { data: project, error: projectError } = await supabase
+        .from('projects')
+        .select('id, org_id, tenant_tracking_id')
+        .or(`tenant_tracking_id.eq.${tenant},id.eq.${tenant}`)
+        .eq('is_tenant', true)
         .single()
 
-      if (!org) {
-        console.warn('[analytics-track] Unknown tenant:', tenant)
-        // Still accept the event but store in general analytics
+      if (!projectError && project) {
+        orgId = project.org_id || project.id
+      } else {
+        // Try organizations table as fallback
+        const { data: org } = await supabase
+          .from('organizations')
+          .select('id, slug')
+          .or(`slug.eq.${tenant},id.eq.${tenant}`)
+          .single()
+
+        if (org) {
+          orgId = org.id
+        } else {
+          console.warn('[analytics-track] Unknown tenant:', tenant, '- storing with tenant_id only')
+        }
       }
     }
 
@@ -79,14 +90,14 @@ export async function handler(event) {
       // Keep default path
     }
 
-    // Store the event based on type
-    const orgId = project?.org_id || project?.id
+    // Use tenant as fallback for org_id if still not found
+    const effectiveOrgId = orgId || tenant
 
     if (eventName === 'page_view') {
       // Store page view in analytics_page_views
       await supabase.from('analytics_page_views').insert({
         tenant_id: tenant,
-        org_id: orgId,
+        org_id: effectiveOrgId,
         session_id: sessionId,
         visitor_id: visitorId,
         path,
@@ -98,7 +109,7 @@ export async function handler(event) {
       // Store scroll depth
       await supabase.from('analytics_scroll_depth').insert({
         tenant_id: tenant,
-        org_id: orgId,
+        org_id: effectiveOrgId,
         session_id: sessionId,
         path,
         depth: properties?.depth || 0,
@@ -108,7 +119,7 @@ export async function handler(event) {
       // Store general event
       await supabase.from('analytics_events').insert({
         tenant_id: tenant,
-        org_id: orgId,
+        org_id: effectiveOrgId,
         session_id: sessionId,
         visitor_id: visitorId,
         event_name: eventName,

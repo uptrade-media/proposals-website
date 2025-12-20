@@ -8,6 +8,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
+import { RichTextEditor } from '@/components/ui/RichTextEditor'
 import { Badge } from '@/components/ui/badge'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
@@ -54,7 +55,8 @@ import {
   Tag,
   Search,
   FileText,
-  Layers
+  Layers,
+  DollarSign
 } from 'lucide-react'
 import axios from 'axios'
 
@@ -75,7 +77,7 @@ export default function ProductDetail({ embedded = false, onNavigate, productId:
     }
   }
   
-  const { store, fetchStore, selectedProduct, selectedProductLoading, fetchProduct } = useEcommerceStore()
+  const { store, fetchStore, selectedProduct, selectedProductLoading, fetchProduct, updateVariant } = useEcommerceStore()
   
   const [product, setProduct] = useState(null)
   const [isDirty, setIsDirty] = useState(false)
@@ -90,6 +92,12 @@ export default function ProductDetail({ embedded = false, onNavigate, productId:
   const [editingImageAlt, setEditingImageAlt] = useState(null)
   const [previewImage, setPreviewImage] = useState(null)
   const [draggedImage, setDraggedImage] = useState(null)
+  
+  // Pricing state
+  const [editingPrice, setEditingPrice] = useState(false)
+  const [priceValue, setPriceValue] = useState('')
+  const [compareAtPrice, setCompareAtPrice] = useState('')
+  const [savingPrice, setSavingPrice] = useState(false)
   
   const fileInputRef = useRef(null)
   
@@ -110,12 +118,56 @@ export default function ProductDetail({ embedded = false, onNavigate, productId:
       setProduct({ ...selectedProduct })
       setImages(selectedProduct.images || [])
       setIsDirty(false)
+      // Initialize pricing
+      setPriceValue(selectedProduct.price || '')
+      setCompareAtPrice(selectedProduct.compare_at_price || '')
     }
   }, [selectedProduct])
   
   const handleChange = (field, value) => {
     setProduct(prev => ({ ...prev, [field]: value }))
     setIsDirty(true)
+  }
+  
+  // Save pricing to Shopify via variant update
+  const handleSavePrice = async () => {
+    if (!product || !product.variants?.length) return
+    
+    // Get the first variant (for single-variant products)
+    // For multi-variant products, this updates the main variant
+    const variantId = product.variants[0]?.id
+    if (!variantId) {
+      setSaveError('No variant found to update pricing')
+      return
+    }
+    
+    setSavingPrice(true)
+    setSaveError('')
+    
+    try {
+      const result = await updateVariant(variantId, {
+        price: priceValue,
+        compare_at_price: compareAtPrice || null
+      })
+      
+      if (result.success) {
+        // Update local product state
+        setProduct(prev => ({
+          ...prev,
+          price: priceValue,
+          compare_at_price: compareAtPrice
+        }))
+        setEditingPrice(false)
+        setSaveSuccess(true)
+        setTimeout(() => setSaveSuccess(false), 3000)
+      } else {
+        setSaveError(result.error)
+      }
+    } catch (error) {
+      setSaveError(error.message)
+    } finally {
+      setSavingPrice(false)
+    }
   }
   
   const handleSave = async () => {
@@ -261,7 +313,7 @@ export default function ProductDetail({ embedded = false, onNavigate, productId:
   }
 
   return (
-    <div className="container py-6 max-w-6xl">
+    <div className="py-6">
       {/* Header */}
       <div className="flex items-center justify-between mb-6">
         <div className="flex items-center gap-4">
@@ -441,12 +493,11 @@ export default function ProductDetail({ embedded = false, onNavigate, productId:
               
               <div className="space-y-2">
                 <Label htmlFor="body">Description</Label>
-                <Textarea
-                  id="body"
+                <RichTextEditor
                   value={product.body_html || ''}
-                  onChange={(e) => handleChange('body_html', e.target.value)}
-                  rows={6}
-                  placeholder="Product description (HTML supported)"
+                  onChange={(html) => handleChange('body_html', html)}
+                  placeholder="Product description"
+                  minHeight="180px"
                 />
               </div>
               
@@ -590,26 +641,104 @@ export default function ProductDetail({ embedded = false, onNavigate, productId:
           {/* Pricing */}
           <Card>
             <CardHeader>
-              <CardTitle>Pricing</CardTitle>
+              <CardTitle className="flex items-center gap-2">
+                <DollarSign className="h-5 w-5" />
+                Pricing
+              </CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="space-y-3">
-                <div className="flex justify-between">
-                  <span className="text-muted-foreground">Price</span>
-                  <span className="font-medium">${parseFloat(product.price || 0).toFixed(2)}</span>
-                </div>
-                {product.compare_at_price && (
-                  <div className="flex justify-between">
-                    <span className="text-muted-foreground">Compare at</span>
-                    <span className="text-muted-foreground line-through">
-                      ${parseFloat(product.compare_at_price).toFixed(2)}
-                    </span>
+              {editingPrice ? (
+                <div className="space-y-4">
+                  <div>
+                    <Label htmlFor="price">Price</Label>
+                    <div className="relative mt-1">
+                      <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground">$</span>
+                      <Input
+                        id="price"
+                        type="number"
+                        step="0.01"
+                        min="0"
+                        value={priceValue}
+                        onChange={(e) => setPriceValue(e.target.value)}
+                        className="pl-7"
+                        placeholder="0.00"
+                      />
+                    </div>
                   </div>
-                )}
-              </div>
-              <p className="text-xs text-muted-foreground mt-4">
-                Edit pricing in Shopify admin for full control
-              </p>
+                  <div>
+                    <Label htmlFor="compare_at_price">Compare at price</Label>
+                    <div className="relative mt-1">
+                      <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground">$</span>
+                      <Input
+                        id="compare_at_price"
+                        type="number"
+                        step="0.01"
+                        min="0"
+                        value={compareAtPrice}
+                        onChange={(e) => setCompareAtPrice(e.target.value)}
+                        className="pl-7"
+                        placeholder="0.00"
+                      />
+                    </div>
+                    <p className="text-xs text-muted-foreground mt-1">
+                      Original price for showing discount
+                    </p>
+                  </div>
+                  <div className="flex gap-2">
+                    <Button 
+                      size="sm" 
+                      onClick={handleSavePrice}
+                      disabled={savingPrice}
+                    >
+                      {savingPrice ? (
+                        <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                      ) : (
+                        <Check className="h-4 w-4 mr-2" />
+                      )}
+                      Save
+                    </Button>
+                    <Button 
+                      size="sm" 
+                      variant="outline"
+                      onClick={() => {
+                        setEditingPrice(false)
+                        setPriceValue(product.price || '')
+                        setCompareAtPrice(product.compare_at_price || '')
+                      }}
+                    >
+                      Cancel
+                    </Button>
+                  </div>
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  <div className="flex justify-between items-center">
+                    <span className="text-muted-foreground">Price</span>
+                    <span className="font-medium text-lg">${parseFloat(product.price || 0).toFixed(2)}</span>
+                  </div>
+                  {product.compare_at_price && parseFloat(product.compare_at_price) > 0 && (
+                    <div className="flex justify-between items-center">
+                      <span className="text-muted-foreground">Compare at</span>
+                      <span className="text-muted-foreground line-through">
+                        ${parseFloat(product.compare_at_price).toFixed(2)}
+                      </span>
+                    </div>
+                  )}
+                  <Button 
+                    variant="outline" 
+                    size="sm"
+                    className="w-full mt-2"
+                    onClick={() => setEditingPrice(true)}
+                  >
+                    Edit Pricing
+                  </Button>
+                  {product.variants_count > 1 && (
+                    <p className="text-xs text-muted-foreground">
+                      This updates the default variant. Edit individual variants in Shopify for advanced pricing.
+                    </p>
+                  )}
+                </div>
+              )}
             </CardContent>
           </Card>
         </div>

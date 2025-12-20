@@ -101,7 +101,7 @@ export default function EcommerceDashboard({ embedded = false, onNavigate }) {
   // No store connected - show connection UI
   if (!store) {
     return (
-      <div className="container max-w-4xl py-8">
+      <div className="py-8">
         <div className="mb-8">
           <h1 className="text-3xl font-bold">Ecommerce</h1>
           <p className="text-muted-foreground mt-1">
@@ -221,7 +221,7 @@ export default function EcommerceDashboard({ embedded = false, onNavigate }) {
 
   // Store connected - show dashboard
   return (
-    <div className="container py-8">
+    <div className="py-8">
       <div className="flex items-start justify-between mb-8">
         <div>
           <h1 className="text-3xl font-bold">Ecommerce</h1>

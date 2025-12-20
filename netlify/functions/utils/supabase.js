@@ -143,7 +143,8 @@ export async function getAuthenticatedUser(event) {
           features,
           theme,
           plan,
-          status
+          status,
+          org_type
         )
       `)
       .eq('user_email', user.email)

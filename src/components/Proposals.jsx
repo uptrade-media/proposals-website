@@ -336,11 +336,12 @@ function ClientProposalRow({ proposal, onView, showSignedDate = false }) {
 }
 
 const Proposals = ({ onNavigate }) => {
-  const { user, currentOrg } = useAuthStore()
+  const { user, currentOrg, currentProject } = useAuthStore()
   const isAdmin = user?.role === 'admin'
-  // Project tenants should see proposals sent TO them, but not create/edit/delete
-  const isProjectTenant = currentOrg?.isProjectTenant === true
-  const canManageProposals = isAdmin && !isProjectTenant
+  // Agency org (Uptrade Media) should show admin view, client orgs show tenant view
+  const isAgencyOrg = currentOrg?.org_type === 'agency'
+  const isInTenantContext = !!currentProject || (!!currentOrg && !isAgencyOrg)
+  const canManageProposals = isAdmin && !isInTenantContext
   
   const hasFetchedRef = useRef(false)
   const [proposals, setProposals] = useState([])
@@ -465,8 +466,8 @@ const Proposals = ({ onNavigate }) => {
     )
   }
 
-  // Client view OR project tenant view (they view proposals sent TO them)
-  if (!isAdmin || isProjectTenant) {
+  // Client view OR org/project context view (they view proposals sent TO them)
+  if (!isAdmin || isInTenantContext) {
     const activeProposals = proposals.filter(p => !['signed', 'accepted', 'declined'].includes(p.status))
     const signedProposals = proposals.filter(p => ['signed', 'accepted'].includes(p.status))
 

@@ -47,7 +47,7 @@ const Sidebar = ({
   const isCollapsed = propIsCollapsed !== undefined ? propIsCollapsed : internalCollapsed
   const toggleCollapse = onToggleCollapse || (() => setInternalCollapsed(!internalCollapsed))
   const navigate = useNavigate()
-  const { user, logout, isSuperAdmin, currentOrg } = useAuthStore()
+  const { user, logout, isSuperAdmin, currentOrg, currentProject, accessLevel } = useAuthStore()
   const { hasFeatureRaw } = useOrgFeatures()
   const { getUnreadAuditsCount } = useReportsStore()
   const { unreadCount: unreadMessages, fetchUnreadCount: fetchUnreadMessages } = useMessagesStore()
@@ -59,20 +59,43 @@ const Sidebar = ({
   const isSalesRep = user?.teamRole === 'sales_rep' && !isSuperAdmin
   const isManager = user?.teamRole === 'manager' || isSuperAdmin
   
-  // Check if viewing as a project-based tenant (e.g., GWA)
-  const isProjectTenant = currentOrg?.isProjectTenant === true
-  const tenantName = currentOrg?.name || 'Tenant'
-  const tenantFeatures = currentOrg?.features || []
+  // Check access level for organization features (billing, proposals)
+  // Organization-level users have full access, project-level users have limited access
+  const hasOrgLevelAccess = isAdmin || isSuperAdmin || accessLevel === 'organization'
   
-  // Debug: Log tenant features when viewing as project tenant
-  if (isProjectTenant && tenantFeatures) {
-    console.log('[Sidebar] Project Tenant Features:', tenantFeatures, 'Type:', Array.isArray(tenantFeatures) ? 'array' : typeof tenantFeatures)
+  // Check if viewing a specific project (two-tier system)
+  // currentProject = viewing a specific web app/project
+  // currentOrg = the organization that owns the project
+  const isInProject = !!currentProject
+  const isInOrg = !!currentOrg
+  const isInOrgContext = isInProject || isInOrg // Are we viewing any org/project?
+  const projectName = currentProject?.name || 'Project'
+  const projectFeatures = currentProject?.features || []
+  const orgName = currentOrg?.name || 'Organization'
+  
+  // Check for org context or project context (when to show org/project view vs admin view)
+  // Agency org (Uptrade Media) should show admin view, client orgs show tenant view
+  const isAgencyOrg = currentOrg?.org_type === 'agency'
+  const isClientOrg = isInOrg && !isAgencyOrg
+  const isInTenantContext = isInProject || isClientOrg
+  const tenantName = isInProject ? projectName : (currentOrg?.name || 'Tenant')
+  const tenantFeatures = isInProject ? projectFeatures : (currentOrg?.features || [])
+  
+  // DEBUG: Log org context and type
+  console.log('[Sidebar] DEBUG - currentOrg:', currentOrg?.name, 'org_type:', currentOrg?.org_type, 'isAgencyOrg:', isAgencyOrg, 'isInTenantContext:', isInTenantContext)
+  
+  // Debug: Log context when viewing project
+  if (isInProject && projectFeatures) {
+    console.log('[Sidebar] Project Context:', projectName, 'Features:', projectFeatures)
+  }
+  if (isInOrg && !isInProject) {
+    console.log('[Sidebar] Org Context:', orgName, 'Features:', currentOrg?.features)
   }
   
   // Helper to check if tenant has a specific feature
   const tenantHasFeature = (feature) => {
     const has = Array.isArray(tenantFeatures) ? tenantFeatures.includes(feature) : tenantFeatures?.[feature] === true
-    if (isProjectTenant) {
+    if (isInTenantContext) {
       console.log('[Sidebar] tenantHasFeature:', feature, '=', has)
     }
     return has
@@ -89,7 +112,7 @@ const Sidebar = ({
     const rawValue = hasFeatureRaw(featureKey)
     
     // If viewing a tenant, use their feature flags
-    if (isViewingTenant) {
+    if (isViewingTenant || isInTenantContext) {
       return rawValue
     }
     
@@ -120,34 +143,63 @@ const Sidebar = ({
     inv.status === 'pending' || inv.status === 'overdue'
   ).length
 
-  // Base navigation items available to everyone
-  const baseNavigationItems = [
+  // ============================================================================
+  // NAVIGATION STRUCTURE (Two-tier: Organization > Project)
+  // ============================================================================
+  
+  // When in a PROJECT context: Show project modules first, then org modules
+  // When in ORG context only: Show org dashboard with project overview
+  // When admin (no context): Show admin tools
+  
+  // --- PROJECT MODULES (when viewing a specific project like GWA) ---
+  const projectModuleItems = isInProject ? [
+    // Project name header
+    { id: 'project-divider', label: `${projectName}`, isDivider: true },
+    // Dashboard for this specific project
     { id: 'dashboard', label: 'Dashboard', icon: Home, badge: null, route: null },
-    // Only show Audits if NOT viewing a project tenant
-    ...(!isProjectTenant ? [{ id: 'audits', label: 'Audits', icon: LineChart, badge: unreadAudits > 0 ? unreadAudits.toString() : null, route: null }] : []),
+    // Core project modules - CRM is always available
+    { id: 'tenant-clients', label: 'Clients', icon: Users, badge: null, route: null },
+    // Note: Team is in org modules (org-wide, not per project)
+    ...(tenantHasFeature('seo') ? [{ id: 'seo', label: 'SEO', icon: Search, badge: null, route: null }] : []),
+    ...(tenantHasFeature('ecommerce') ? [{ id: 'ecommerce', label: 'Ecommerce', icon: ShoppingCart, badge: null, route: null }] : []),
+    ...(tenantHasFeature('forms') ? [{ id: 'forms', label: 'Forms', icon: ClipboardList, badge: null, route: null }] : []),
+    ...(tenantHasFeature('email') ? [{ id: 'email', label: 'Email Manager', icon: Mail, badge: null, route: null }] : []),
+    ...(tenantHasFeature('blog') ? [{ id: 'blog', label: 'Blog', icon: BookOpen, badge: null, route: null }] : []),
+    ...(tenantHasFeature('analytics') ? [{ id: 'analytics', label: 'Analytics', icon: BarChart3, badge: null, route: null }] : []),
+  ] : []
+  
+  // --- ORGANIZATION MODULES (shown when in org/project context, even for admins) ---
+  // These are services from Uptrade Media to the organization
+  // Note: Billing and Proposals are only for organization-level users (not project-level)
+  const orgModuleItems = isInTenantContext ? [
+    // Organization header
+    { id: 'org-divider', label: `${orgName} Services`, isDivider: true },
+    // When in project, show org dashboard link; when in org-only, show dashboard
+    ...(isInProject ? [] : [{ id: 'dashboard', label: 'Dashboard', icon: Home, badge: null, route: null }]),
+    // Team - all org members can view, org-level users can manage
+    { id: 'team', label: 'Team', icon: Shield, badge: null, route: null },
+    { id: 'messages', label: 'Messages', icon: MessageSquare, badge: unreadMessages > 0 ? unreadMessages.toString() : null, route: null },
+    // Proposals - organization-level users only
+    ...(hasOrgLevelAccess ? [{ id: 'proposals', label: 'Proposals', icon: Send, badge: null, route: null }] : []),
+    { id: 'files', label: 'Files', icon: FolderOpen, badge: null, route: null },
+    // Billing - organization-level users only
+    ...(hasOrgLevelAccess ? [{ id: 'billing', label: 'Billing', icon: DollarSign, badge: unpaidInvoicesCount > 0 ? unpaidInvoicesCount.toString() : null, route: null }] : []),
+  ] : []
+
+  // --- ADMIN PORTAL ITEMS (when NOT in any tenant/org context) ---
+  const adminPortalItems = (isAdmin && !isInTenantContext) ? [
+    { id: 'dashboard', label: 'Dashboard', icon: Home, badge: null, route: null },
+    { id: 'audits', label: 'Audits', icon: LineChart, badge: unreadAudits > 0 ? unreadAudits.toString() : null, route: null },
     { id: 'proposals', label: 'Proposals', icon: Send, badge: null, route: null },
-  ]
-
-  // Sales rep sees a simplified navigation (their assigned clients only)
-  const salesRepItems = isSalesRep ? [
-    { id: 'clients', label: 'My Clients', icon: Users, badge: null, route: null },
+    { id: 'projects', label: 'Projects', icon: FileText, badge: null, route: null },
+    { id: 'files', label: 'Files', icon: FolderOpen, badge: null, route: null },
+    { id: 'messages', label: 'Messages', icon: MessageSquare, badge: unreadMessages > 0 ? unreadMessages.toString() : null, route: null },
+    { id: 'billing', label: 'Billing', icon: DollarSign, badge: unpaidInvoicesCount > 0 ? unpaidInvoicesCount.toString() : null, route: null },
   ] : []
-
-  // Full navigation for admins and managers (not sales reps)
-  // Respects feature flags - items only show if feature is enabled (or user is super admin)
-  // For project tenants: show core Uptrade services (Files, Messages, Billing)
-  const fullNavigationItems = !isSalesRep ? [
-    // Projects: Only show for admin, or when NOT a project tenant
-    ...(isAdmin || !isProjectTenant ? [{ id: 'projects', label: 'Projects', icon: FileText, badge: null, route: null }] : []),
-    // For project tenants, always show Files, Messages, Billing (Uptrade services to them)
-    ...(isProjectTenant || hasFeature('files') ? [{ id: 'files', label: 'Files', icon: FolderOpen, badge: null, route: null }] : []),
-    ...(isProjectTenant || hasFeature('messages') ? [{ id: 'messages', label: 'Messages', icon: MessageSquare, badge: unreadMessages > 0 ? unreadMessages.toString() : null, route: null }] : []),
-    ...(isProjectTenant || hasFeature('billing') ? [{ id: 'billing', label: 'Billing', icon: DollarSign, badge: unpaidInvoicesCount > 0 ? unpaidInvoicesCount.toString() : null, route: null }] : []),
-  ] : []
-
-  // Admin-only navigation items when NOT in tenant context
-  // These are Uptrade's internal admin tools
-  const adminItems = (isAdmin && !isProjectTenant) ? [
+  
+  // Admin tools section (only when not in org/project context)
+  const adminToolItems = (isAdmin && !isInTenantContext) ? [
+    { id: 'admin-divider', label: 'Admin Tools', isDivider: true },
     { id: 'clients', label: 'Clients', icon: Users, badge: newLeadsCount > 0 ? newLeadsCount.toString() : null, route: null },
     ...(hasFeature('seo') ? [{ id: 'seo', label: 'SEO', icon: Search, badge: null, route: null }] : []),
     ...(hasFeature('ecommerce') ? [{ id: 'ecommerce', label: 'Ecommerce', icon: ShoppingCart, badge: null, route: null }] : []),
@@ -159,43 +211,35 @@ const Sidebar = ({
     ...(hasFeature('email') ? [{ id: 'email', label: 'Email Manager', icon: Mail, badge: null, route: null }] : []),
     ...(hasFeature('analytics') ? [{ id: 'analytics', label: 'Analytics', icon: BarChart3, badge: null, route: null }] : []),
   ] : []
-  
-  // Super admin items (tenant management is now in Projects tab)
-  const superAdminItems = isSuperAdmin ? [
-    // Tenants management moved to Projects tab - completed projects convert to tenants
+
+  // Sales rep sees simplified navigation
+  const salesRepItems = isSalesRep ? [
+    { id: 'dashboard', label: 'Dashboard', icon: Home, badge: null, route: null },
+    { id: 'clients', label: 'My Clients', icon: Users, badge: null, route: null },
   ] : []
 
-  // Manager gets team access but not blog/portfolio/email - respects feature flags
-  const managerItems = (isManager && !isAdmin && !isProjectTenant) ? [
+  // Manager items (when not in tenant context)
+  const managerItems = (isManager && !isAdmin && !isInTenantContext) ? [
+    { id: 'dashboard', label: 'Dashboard', icon: Home, badge: null, route: null },
     { id: 'clients', label: 'Clients', icon: Users, badge: newLeadsCount > 0 ? newLeadsCount.toString() : null, route: null },
     ...(hasFeature('team') ? [{ id: 'team', label: 'Team', icon: Shield, badge: null, route: null }] : []),
     ...(hasFeature('team_metrics') ? [{ id: 'team-metrics', label: 'Team Metrics', icon: Trophy, badge: null, route: null }] : []),
   ] : []
 
-  // Tenant-specific items (when viewing a project tenant like GWA)
-  // These are the modules that the TENANT manages for their own business
-  const tenantModuleItems = isProjectTenant ? [
-    // Separator marker - handled in render
-    { id: 'tenant-divider', label: `${tenantName}'s Modules`, isDivider: true },
-    // Core tenant modules - always show Clients for their CRM
-    ...(tenantHasFeature('clients') || true ? [{ id: 'tenant-clients', label: 'Clients', icon: Users, badge: null, route: null }] : []),
-    ...(tenantHasFeature('seo') ? [{ id: 'seo', label: 'SEO', icon: Search, badge: null, route: null }] : []),
-    ...(tenantHasFeature('ecommerce') ? [{ id: 'ecommerce', label: 'Ecommerce', icon: ShoppingCart, badge: null, route: null }] : []),
-    ...(tenantHasFeature('forms') ? [{ id: 'forms', label: 'Forms', icon: ClipboardList, badge: null, route: null }] : []),
-    ...(tenantHasFeature('email') ? [{ id: 'email', label: 'Email Manager', icon: Mail, badge: null, route: null }] : []),
-    ...(tenantHasFeature('blog') ? [{ id: 'blog', label: 'Blog', icon: BookOpen, badge: null, route: null }] : []),
-    ...(tenantHasFeature('analytics') ? [{ id: 'analytics', label: 'Analytics', icon: BarChart3, badge: null, route: null }] : []),
-  ] : []
-
-  // Combine navigation items based on role
+  // Combine navigation items based on context
   const allNavigationItems = [
-    ...baseNavigationItems,
+    // Sales reps have their own simplified nav
     ...salesRepItems,
-    ...fullNavigationItems,
+    // Project modules first (when in a project)
+    ...projectModuleItems,
+    // Organization services (when in project or viewing org)
+    ...orgModuleItems,
+    // Admin portal items (when no tenant context)
+    ...adminPortalItems,
+    // Admin tools section
+    ...adminToolItems,
+    // Manager items
     ...managerItems,
-    ...adminItems,
-    ...superAdminItems,
-    ...tenantModuleItems,
   ]
 
   const handleNavigation = (item) => {

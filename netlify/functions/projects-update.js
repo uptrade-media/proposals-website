@@ -69,13 +69,15 @@ export async function handler(event) {
       endDate,
       contactId,
       start_date,
-      end_date
+      end_date,
+      tenant_features,
+      tenantFeatures // alias
     } = body
 
-    // Check if project exists
+    // Check if project exists (and get current tenant_features for merge)
     const { data: existingProject, error: fetchError } = await supabase
       .from('projects')
-      .select('id')
+      .select('id, tenant_features')
       .eq('id', projectId)
       .single()
 
@@ -103,6 +105,28 @@ export async function handler(event) {
     if (endDateValue !== undefined) updates.end_date = endDateValue ? new Date(endDateValue).toISOString() : null
     // Handle contact assignment
     if (contactId !== undefined) updates.contact_id = contactId || null
+    
+    // Handle tenant_features update (merge with existing)
+    const tenantFeaturesValue = tenant_features || tenantFeatures
+    if (tenantFeaturesValue !== undefined) {
+      // Merge with existing tenant_features (array format) 
+      const currentFeatures = existingProject.tenant_features || []
+      if (Array.isArray(tenantFeaturesValue)) {
+        // If passed as array, use directly
+        updates.tenant_features = tenantFeaturesValue
+      } else if (typeof tenantFeaturesValue === 'object') {
+        // If passed as object { key: boolean }, convert to array
+        const newFeatures = new Set(currentFeatures)
+        for (const [key, enabled] of Object.entries(tenantFeaturesValue)) {
+          if (enabled) {
+            newFeatures.add(key)
+          } else {
+            newFeatures.delete(key)
+          }
+        }
+        updates.tenant_features = Array.from(newFeatures)
+      }
+    }
 
     // Update project
     const { data: updatedProject, error: updateError } = await supabase
@@ -127,7 +151,11 @@ export async function handler(event) {
       startDate: updatedProject.start_date,
       endDate: updatedProject.end_date,
       createdAt: updatedProject.created_at,
-      updatedAt: updatedProject.updated_at
+      updatedAt: updatedProject.updated_at,
+      is_tenant: updatedProject.is_tenant,
+      tenant_features: updatedProject.tenant_features,
+      tenant_domain: updatedProject.tenant_domain,
+      tenant_modules: (updatedProject.tenant_features || []).reduce((acc, f) => ({ ...acc, [f]: true }), {})
     }
 
     return {

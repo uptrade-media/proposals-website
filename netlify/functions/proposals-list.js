@@ -6,7 +6,7 @@ import { requireTeamMember, applyOwnershipFilter } from './utils/permissions.js'
 export async function handler(event) {
   const headers = {
     'Access-Control-Allow-Origin': '*',
-    'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+    'Access-Control-Allow-Headers': 'Content-Type, Authorization, X-Organization-Id, X-Project-Id',
     'Access-Control-Allow-Methods': 'GET, OPTIONS',
     'Content-Type': 'application/json'
   }
@@ -65,6 +65,26 @@ export async function handler(event) {
     // Check for project tenant context (org header overrides normal flow)
     const orgId = event.headers['x-organization-id']
     const isProjectTenantContext = !!orgId
+
+    // Check if user has org-level access for proposals
+    // Project-level users cannot access proposals
+    if (isProjectTenantContext && contact.role !== 'admin') {
+      const { data: hasOrgAccess } = await supabase.rpc('user_has_org_access', {
+        user_id: contact.id,
+        org_id: orgId
+      })
+      
+      if (!hasOrgAccess) {
+        return {
+          statusCode: 403,
+          headers,
+          body: JSON.stringify({ 
+            error: 'ACCESS_DENIED',
+            message: 'Proposals access requires organization-level permissions' 
+          })
+        }
+      }
+    }
 
     // Build query (note: proposal_line_items table doesn't exist in schema)
     let query = supabase

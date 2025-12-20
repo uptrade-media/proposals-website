@@ -47,6 +47,17 @@ import AuditPublicView from '../components/AuditPublicView'
 // Helper: Check if audit is completed (handles both 'complete' and 'completed' statuses)
 const isAuditCompleted = (status) => status === 'completed' || status === 'complete'
 
+// Helper: Normalize URL input to ensure it has a protocol
+const normalizeUrl = (input) => {
+  if (!input) return ''
+  let url = input.trim()
+  // If no protocol, add https://
+  if (!url.match(/^https?:\/\//i)) {
+    url = 'https://' + url
+  }
+  return url
+}
+
 // Admin-only audit row component with magic link and analytics
 function AdminAuditRow({ audit, navigate, getStatusIcon, getScoreColor, getAuditStatusBadge, onDelete }) {
   const [isOpen, setIsOpen] = useState(false)
@@ -57,6 +68,12 @@ function AdminAuditRow({ audit, navigate, getStatusIcon, getScoreColor, getAudit
   const [showFullAudit, setShowFullAudit] = useState(false)
   const [fullAuditData, setFullAuditData] = useState(null)
   const [loadingFullAudit, setLoadingFullAudit] = useState(false)
+  
+  // Email sending state
+  const [showEmailModal, setShowEmailModal] = useState(false)
+  const [emailRecipient, setEmailRecipient] = useState('')
+  const [emailRecipientName, setEmailRecipientName] = useState('')
+  const [isSendingEmail, setIsSendingEmail] = useState(false)
   const [magicLink, setMagicLink] = useState(audit.magicToken ? 
     `${window.location.origin}/audit/${audit.id}?token=${audit.magicToken}` : null
   )
@@ -64,6 +81,42 @@ function AdminAuditRow({ audit, navigate, getStatusIcon, getScoreColor, getAudit
   const [loadingAnalytics, setLoadingAnalytics] = useState(false)
 
   const statusBadge = getAuditStatusBadge(audit.status)
+
+  // Handle sending audit email
+  const handleSendEmail = async (e) => {
+    e?.preventDefault()
+    if (!emailRecipient) {
+      toast.error('Please enter recipient email')
+      return
+    }
+    
+    setIsSendingEmail(true)
+    try {
+      const res = await api.post('/.netlify/functions/audits-send-email', {
+        auditId: audit.id,
+        recipientEmail: emailRecipient,
+        recipientName: emailRecipientName || null
+      })
+      
+      if (res.data.success) {
+        toast.success('Audit email sent successfully!')
+        setShowEmailModal(false)
+        setEmailRecipient('')
+        setEmailRecipientName('')
+        // Update magic link if returned
+        if (res.data.magicLink) {
+          setMagicLink(res.data.magicLink)
+        }
+      } else {
+        toast.error(res.data.error || 'Failed to send email')
+      }
+    } catch (err) {
+      console.error('Failed to send audit email:', err)
+      toast.error(err.response?.data?.error || 'Failed to send email')
+    } finally {
+      setIsSendingEmail(false)
+    }
+  }
 
   // Handle delete
   const handleDelete = async (e) => {
@@ -257,6 +310,26 @@ function AdminAuditRow({ audit, navigate, getStatusIcon, getScoreColor, getAudit
                   }}
                 >
                   View Report
+                </Button>
+              )}
+
+              {/* Send Email Button - only for completed audits */}
+              {isAuditCompleted(audit.status) && (
+                <Button
+                  variant="glass"
+                  size="sm"
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    // Pre-fill email if contact exists
+                    if (audit.contact?.email) {
+                      setEmailRecipient(audit.contact.email)
+                      setEmailRecipientName(audit.contact.name || '')
+                    }
+                    setShowEmailModal(true)
+                  }}
+                  title="Send audit email"
+                >
+                  <Mail className="w-4 h-4" />
                 </Button>
               )}
 
@@ -642,6 +715,80 @@ function AdminAuditRow({ audit, navigate, getStatusIcon, getScoreColor, getAudit
           </div>
         </DialogContent>
       </Dialog>
+
+      {/* Send Email Modal */}
+      <Dialog open={showEmailModal} onOpenChange={setShowEmailModal}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="text-[var(--text-primary)]">
+              Send Audit Email
+            </DialogTitle>
+          </DialogHeader>
+          <form onSubmit={handleSendEmail} className="space-y-4 mt-4">
+            <div>
+              <label className="block text-sm font-medium text-[var(--text-primary)] mb-2">
+                Recipient Email <span className="text-[var(--accent-error)]">*</span>
+              </label>
+              <Input
+                type="email"
+                placeholder="prospect@company.com"
+                value={emailRecipient}
+                onChange={(e) => setEmailRecipient(e.target.value)}
+                required
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-[var(--text-primary)] mb-2">
+                Recipient Name <span className="text-[var(--text-tertiary)]">(optional, for personalization)</span>
+              </label>
+              <Input
+                type="text"
+                placeholder="John Smith"
+                value={emailRecipientName}
+                onChange={(e) => setEmailRecipientName(e.target.value)}
+              />
+            </div>
+            <div className="bg-[var(--glass-bg)] p-3 rounded-lg border border-[var(--glass-border)]">
+              <p className="text-sm text-[var(--text-secondary)]">
+                <strong>Audit:</strong> {audit.targetUrl}
+              </p>
+              <p className="text-sm text-[var(--text-secondary)]">
+                <strong>Grade:</strong> {audit.summary?.grade || audit.summary?.metrics?.grade || 'N/A'}
+              </p>
+              <p className="text-xs text-[var(--text-tertiary)] mt-2">
+                An AI-personalized email will be generated based on the audit results.
+              </p>
+            </div>
+            <div className="flex gap-2 pt-2">
+              <Button
+                type="submit"
+                disabled={isSendingEmail}
+                variant="glass-primary"
+                className="flex-1"
+              >
+                {isSendingEmail ? (
+                  <>
+                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                    Sending...
+                  </>
+                ) : (
+                  <>
+                    <Mail className="w-4 h-4 mr-2" />
+                    Send Email
+                  </>
+                )}
+              </Button>
+              <Button
+                type="button"
+                variant="glass"
+                onClick={() => setShowEmailModal(false)}
+              >
+                Cancel
+              </Button>
+            </div>
+          </form>
+        </DialogContent>
+      </Dialog>
     </Collapsible>
   )
 }
@@ -796,18 +943,31 @@ export default function Audits() {
   
   const [showRequestForm, setShowRequestForm] = useState(false)
   const [requestUrl, setRequestUrl] = useState('')
-  const [recipientEmail, setRecipientEmail] = useState('')
-  const [recipientName, setRecipientName] = useState('')
   const [selectedProjectId, setSelectedProjectId] = useState('')
   const [requestError, setRequestError] = useState('')
   const [isRequesting, setIsRequesting] = useState(false)
 
   const isAdmin = user?.role === 'admin'
 
+  // Initial fetch
   useEffect(() => {
     fetchAudits()
     fetchProjects()
   }, [])
+
+  // Poll for audit completion when any audits are pending/running
+  useEffect(() => {
+    const hasRunningAudits = audits.some(a => a.status === 'pending' || a.status === 'running')
+    
+    if (!hasRunningAudits) return
+    
+    console.log('[Audits] Polling for audit completion...')
+    const pollInterval = setInterval(() => {
+      fetchAudits()
+    }, 5000) // Poll every 5 seconds
+    
+    return () => clearInterval(pollInterval)
+  }, [audits, fetchAudits])
 
   const handleRequestAudit = async (e) => {
     e.preventDefault()
@@ -818,29 +978,25 @@ export default function Audits() {
       return
     }
     
-    // Admins must provide email, clients must select project
-    if (isAdmin && !recipientEmail) {
-      setRequestError('Please enter recipient email')
-      return
-    }
-    
+    // Clients must select project
     if (!isAdmin && !selectedProjectId) {
       setRequestError('Please select a project')
       return
     }
 
+    // Normalize URL for admin requests
+    const normalizedUrl = isAdmin ? normalizeUrl(requestUrl) : requestUrl
+
     setIsRequesting(true)
-    const result = await requestAudit(requestUrl, selectedProjectId, {
-      email: recipientEmail,
-      name: recipientName
+    const result = await requestAudit(normalizedUrl, selectedProjectId, {
+      email: null, // Email is sent separately after review
+      name: null
     })
     setIsRequesting(false)
 
     if (result.success) {
       setShowRequestForm(false)
       setRequestUrl('')
-      setRecipientEmail('')
-      setRecipientName('')
       setSelectedProjectId('')
       toast.success('Audit requested! Results will be ready in 2-3 minutes.')
       fetchAudits() // Refresh list
@@ -909,58 +1065,32 @@ export default function Audits() {
         <Card className="bg-[var(--glass-bg)] backdrop-blur-xl border-[var(--glass-border)]">
           <CardHeader>
             <CardTitle className="text-[var(--text-primary)]">
-              {isAdmin ? 'Create Prospect Audit' : 'Request New Audit'}
+              {isAdmin ? 'Run Website Audit' : 'Request New Audit'}
             </CardTitle>
             <CardDescription className="text-[var(--text-secondary)]">
               {isAdmin 
-                ? 'Run a website audit and send the results to a prospect'
+                ? 'Enter a website URL to analyze. You can send the results via email after reviewing.'
                 : 'Enter a website URL to analyze its performance, SEO, and accessibility'}
             </CardDescription>
           </CardHeader>
           <CardContent>
             <form onSubmit={handleRequestAudit} className="space-y-4">
-              {/* Admin: Email and Name fields */}
-              {isAdmin && (
-                <>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div>
-                      <label className="block text-sm font-medium text-[var(--text-primary)] mb-2">
-                        Recipient Email <span className="text-[var(--accent-error)]">*</span>
-                      </label>
-                      <Input
-                        type="email"
-                        placeholder="prospect@company.com"
-                        value={recipientEmail}
-                        onChange={(e) => setRecipientEmail(e.target.value)}
-                        required
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-[var(--text-primary)] mb-2">
-                        Recipient Name <span className="text-[var(--text-tertiary)]">(optional)</span>
-                      </label>
-                      <Input
-                        type="text"
-                        placeholder="John Smith"
-                        value={recipientName}
-                        onChange={(e) => setRecipientName(e.target.value)}
-                      />
-                    </div>
-                  </div>
-                </>
-              )}
-
               <div>
                 <label className="block text-sm font-medium text-[var(--text-primary)] mb-2">
                   Website URL <span className="text-[var(--accent-error)]">*</span>
                 </label>
                 <Input
-                  type="url"
-                  placeholder="https://example.com"
+                  type={isAdmin ? "text" : "url"}
+                  placeholder={isAdmin ? "example.com or https://example.com" : "https://example.com"}
                   value={requestUrl}
                   onChange={(e) => setRequestUrl(e.target.value)}
                   required
                 />
+                {isAdmin && (
+                  <p className="text-xs text-[var(--text-tertiary)] mt-1">
+                    You can enter just the domain (e.g., "uptrademedia.com") - https:// will be added automatically
+                  </p>
+                )}
               </div>
 
               {/* Client: Project selector (required) */}

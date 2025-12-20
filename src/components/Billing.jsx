@@ -161,6 +161,20 @@ const Billing = () => {
       fetchClients()
     }
   }, [])
+  
+  // Set default tab based on user type
+  const { currentOrg, currentProject } = useAuthStore()
+  // Agency org (Uptrade Media) should show admin view, client orgs show tenant view
+  const isAgencyOrg = currentOrg?.org_type === 'agency'
+  const isInTenantContext = !!currentProject || (!!currentOrg && !isAgencyOrg)
+  const computedIsAdmin = user?.role === 'admin' && !isInTenantContext
+  
+  useEffect(() => {
+    // Set appropriate default tab when component mounts or user type changes
+    if (!computedIsAdmin && activeTab === 'overview') {
+      setActiveTab('unpaid')
+    }
+  }, [computedIsAdmin])
 
   const fetchClients = async () => {
     try {
@@ -481,9 +495,8 @@ const Billing = () => {
     }
   }
 
-  const { currentOrg } = useAuthStore()
-  const isProjectTenant = currentOrg?.isProjectTenant === true
-  const isAdmin = user?.role === 'admin' && !isProjectTenant
+  // Use already-computed isAdmin from above (computedIsAdmin), and derive tenantName
+  const isAdmin = computedIsAdmin
   const tenantName = currentOrg?.name || 'Your Account'
 
   return (
@@ -493,7 +506,7 @@ const Billing = () => {
         <div>
           <h1 className="text-2xl font-bold text-[var(--text-primary)]">Billing</h1>
           <p className="text-[var(--text-secondary)]">
-            {isProjectTenant 
+            {isInTenantContext 
               ? `Invoices and payments for ${tenantName}` 
               : 'Manage invoices and billing information'}
           </p>
@@ -921,13 +934,24 @@ const Billing = () => {
       </div>
 
       <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-        <TabsList className="grid w-full grid-cols-4">
-          <TabsTrigger value="overview">Overview</TabsTrigger>
-          <TabsTrigger value="invoices">All Invoices</TabsTrigger>
-          <TabsTrigger value="overdue">Overdue</TabsTrigger>
-          <TabsTrigger value="reports">Reports</TabsTrigger>
-        </TabsList>
+        {/* Admin gets full tabs, Tenants get simplified view */}
+        {isAdmin ? (
+          <TabsList className="grid w-full grid-cols-4">
+            <TabsTrigger value="overview">Overview</TabsTrigger>
+            <TabsTrigger value="invoices">All Invoices</TabsTrigger>
+            <TabsTrigger value="overdue">Overdue</TabsTrigger>
+            <TabsTrigger value="reports">Reports</TabsTrigger>
+          </TabsList>
+        ) : (
+          <TabsList className="grid w-full grid-cols-2">
+            <TabsTrigger value="unpaid">Unpaid</TabsTrigger>
+            <TabsTrigger value="paid">Paid</TabsTrigger>
+          </TabsList>
+        )}
 
+        {/* ===== ADMIN TABS ===== */}
+        {isAdmin && (
+          <>
         <TabsContent value="overview" className="space-y-6">
           {/* Summary Cards */}
           {summary && (
@@ -1562,6 +1586,138 @@ const Billing = () => {
             </>
           )}
         </TabsContent>
+          </>
+        )}
+        
+        {/* ===== TENANT TABS - Simplified Invoice View ===== */}
+        {!isAdmin && (
+          <>
+            {/* Unpaid Invoices Tab */}
+            <TabsContent value="unpaid" className="space-y-4">
+              {isLoading && invoices.length === 0 ? (
+                <div className="flex items-center justify-center py-12">
+                  <Loader2 className="h-8 w-8 animate-spin text-[var(--brand-primary)]" />
+                </div>
+              ) : invoices.filter(inv => inv.status !== 'paid' && inv.status !== 'cancelled').length === 0 ? (
+                <Card>
+                  <CardContent className="flex flex-col items-center justify-center py-12">
+                    <CheckCircle className="h-12 w-12 text-green-400 mb-4" />
+                    <h3 className="text-lg font-medium text-[var(--text-primary)] mb-2">All caught up!</h3>
+                    <p className="text-[var(--text-secondary)] text-center">
+                      You have no unpaid invoices.
+                    </p>
+                  </CardContent>
+                </Card>
+              ) : (
+                <div className="space-y-3">
+                  {invoices
+                    .filter(inv => inv.status !== 'paid' && inv.status !== 'cancelled')
+                    .sort((a, b) => new Date(a.dueDate) - new Date(b.dueDate))
+                    .map((invoice) => (
+                      <Card key={invoice.id} className={`${isOverdue(invoice) ? 'border-red-300 bg-red-50/50' : ''}`}>
+                        <CardContent className="p-5">
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center space-x-4">
+                              <div className={`w-12 h-12 rounded-xl flex items-center justify-center ${isOverdue(invoice) ? 'bg-red-100' : 'bg-[var(--brand-primary)]/10'}`}>
+                                {isOverdue(invoice) ? (
+                                  <AlertTriangle className="w-6 h-6 text-red-600" />
+                                ) : (
+                                  <Receipt className="w-6 h-6 text-[var(--brand-primary)]" />
+                                )}
+                              </div>
+                              <div>
+                                <h4 className="font-semibold text-lg">{invoice.invoiceNumber}</h4>
+                                <p className="text-sm text-[var(--text-secondary)]">
+                                  {invoice.description || invoice.projectName || 'Invoice'}
+                                </p>
+                                <p className={`text-sm ${isOverdue(invoice) ? 'text-red-600 font-medium' : 'text-[var(--text-tertiary)]'}`}>
+                                  {isOverdue(invoice) 
+                                    ? `${getDaysOverdue(invoice)} days overdue`
+                                    : `Due: ${formatDate(invoice.dueDate)}`
+                                  }
+                                </p>
+                              </div>
+                            </div>
+                            
+                            <div className="text-right">
+                              <p className={`text-2xl font-bold ${isOverdue(invoice) ? 'text-red-600' : 'text-[var(--text-primary)]'}`}>
+                                {formatCurrency(invoice.totalAmount)}
+                              </p>
+                              <Button 
+                                onClick={() => openPaymentDialog(invoice)}
+                                className={`mt-2 ${isOverdue(invoice) ? 'bg-red-600 hover:bg-red-700' : ''}`}
+                                size="sm"
+                              >
+                                <CreditCard className="w-4 h-4 mr-2" />
+                                Pay Now
+                              </Button>
+                            </div>
+                          </div>
+                        </CardContent>
+                      </Card>
+                    ))}
+                </div>
+              )}
+            </TabsContent>
+
+            {/* Paid Invoices Tab */}
+            <TabsContent value="paid" className="space-y-4">
+              {isLoading && invoices.length === 0 ? (
+                <div className="flex items-center justify-center py-12">
+                  <Loader2 className="h-8 w-8 animate-spin text-[var(--brand-primary)]" />
+                </div>
+              ) : invoices.filter(inv => inv.status === 'paid').length === 0 ? (
+                <Card>
+                  <CardContent className="flex flex-col items-center justify-center py-12">
+                    <Receipt className="h-12 w-12 text-[var(--text-tertiary)] mb-4" />
+                    <h3 className="text-lg font-medium text-[var(--text-primary)] mb-2">No paid invoices</h3>
+                    <p className="text-[var(--text-secondary)] text-center">
+                      Your payment history will appear here.
+                    </p>
+                  </CardContent>
+                </Card>
+              ) : (
+                <div className="space-y-3">
+                  {invoices
+                    .filter(inv => inv.status === 'paid')
+                    .sort((a, b) => new Date(b.paidAt || b.updatedAt) - new Date(a.paidAt || a.updatedAt))
+                    .map((invoice) => (
+                      <Card key={invoice.id}>
+                        <CardContent className="p-5">
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center space-x-4">
+                              <div className="w-12 h-12 bg-green-100 rounded-xl flex items-center justify-center">
+                                <CheckCircle className="w-6 h-6 text-green-600" />
+                              </div>
+                              <div>
+                                <h4 className="font-semibold text-lg">{invoice.invoiceNumber}</h4>
+                                <p className="text-sm text-[var(--text-secondary)]">
+                                  {invoice.description || invoice.projectName || 'Invoice'}
+                                </p>
+                                <p className="text-sm text-[var(--text-tertiary)]">
+                                  Paid: {formatDate(invoice.paidAt || invoice.updatedAt)}
+                                </p>
+                              </div>
+                            </div>
+                            
+                            <div className="text-right">
+                              <p className="text-2xl font-bold text-green-600">
+                                {formatCurrency(invoice.totalAmount)}
+                              </p>
+                              <Badge className="bg-green-100 text-green-800 mt-1">
+                                <CheckCircle className="w-3 h-3 mr-1" />
+                                Paid
+                              </Badge>
+                            </div>
+                          </div>
+                        </CardContent>
+                      </Card>
+                    ))}
+                </div>
+              )}
+            </TabsContent>
+          </>
+        )}
       </Tabs>
 
       {/* Edit Invoice Dialog */}

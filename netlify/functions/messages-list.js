@@ -53,7 +53,7 @@ export async function handler(event) {
     const queryParams = event.queryStringParameters || {}
     const { projectId, unreadOnly } = queryParams
     
-    // Check for project tenant context
+    // Organization-level filtering (messages are between Uptrade and the org)
     const orgId = event.headers['x-organization-id']
 
     // Build query for root messages (not replies)
@@ -70,9 +70,10 @@ export async function handler(event) {
 
     // Filter based on context
     if (orgId) {
-      // Project tenant context: show messages for this project
-      query = query.eq('project_id', orgId)
-      console.log('[messages-list] Project tenant context, filtering by project_id:', orgId)
+      // Organization context: show messages for this org
+      // Check both organization_id (new) and project_id (legacy)
+      query = query.or(`organization_id.eq.${orgId},project_id.eq.${orgId}`)
+      console.log('[messages-list] Organization context, filtering by organization_id:', orgId)
     } else if (contact.role !== 'admin') {
       // Clients see messages where they are sender or recipient
       query = query.or(`sender_id.eq.${contact.id},recipient_id.eq.${contact.id}`)

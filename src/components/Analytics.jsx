@@ -58,7 +58,7 @@ export default function Analytics() {
     dateRange,
     setDateRange,
     fetchAllAnalytics,
-    setDomain,
+    setTenantId,
     formatNumber,
     formatDuration,
     formatPercent,
@@ -69,14 +69,14 @@ export default function Analytics() {
   const [isRefreshing, setIsRefreshing] = useState(false)
   const [showComparison, setShowComparison] = useState(false)
 
-  // Set domain for tenant analytics
+  // Set tenant ID for analytics filtering
   useEffect(() => {
-    if (isProjectTenant && tenantDomain && setDomain) {
-      setDomain(tenantDomain)
-    } else if (!isProjectTenant && setDomain) {
-      setDomain(null) // Reset to default (uptrademedia.com)
+    if (isProjectTenant && currentOrg?.id && setTenantId) {
+      setTenantId(currentOrg.id)
+    } else if (!isProjectTenant && setTenantId) {
+      setTenantId(null) // Reset to default (all data)
     }
-  }, [isProjectTenant, tenantDomain, setDomain])
+  }, [isProjectTenant, currentOrg?.id, setTenantId])
 
   // Initial data fetch
   useEffect(() => {

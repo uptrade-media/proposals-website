@@ -13,11 +13,14 @@ export async function handler(event) {
     return { statusCode: 401, body: JSON.stringify({ error: 'Unauthorized' }) }
   }
   
-  // Get org from header (current dashboard org) or fall back to contact's org
+  // Get project_id from header (project-level filtering for Ecommerce)
+  // Falls back to org_id for backwards compatibility
+  const projectId = event.headers['x-project-id'] || event.headers['X-Project-Id']
   const orgIdHeader = event.headers['x-organization-id'] || event.headers['X-Organization-Id']
   const orgId = orgIdHeader || contact.org_id
   
-  console.log('[shopify-products] Org resolution:', {
+  console.log('[shopify-products] Context resolution:', {
+    projectId,
     orgIdHeader,
     contactOrgId: contact.org_id,
     resolvedOrgId: orgId
@@ -29,19 +32,30 @@ export async function handler(event) {
   
   const supabase = createSupabaseAdmin()
   
-  // Resolve project tenant ID to organization ID if needed
-  // If orgId is a project tenant, look up its parent organization
+  // Project-level filtering (preferred) - resolve project to org
   let resolvedOrgId = orgId
-  if (orgId) {
+  if (projectId) {
+    const { data: project, error: projectError } = await supabase
+      .from('projects')
+      .select('organization_id')
+      .eq('id', projectId)
+      .maybeSingle()
+    
+    if (projectError) {
+      console.error('[shopify-products] Error looking up project:', projectError)
+    } else if (project?.organization_id) {
+      console.log('[shopify-products] Resolved project to org:', project.organization_id)
+      resolvedOrgId = project.organization_id
+    }
+  } else if (orgId) {
+    // Legacy: check if orgId is actually a project
     const { data: project, error: projectError } = await supabase
       .from('projects')
       .select('org_id')
       .eq('id', orgId)
       .maybeSingle()
     
-    if (projectError) {
-      console.error('[shopify-products] Error looking up project:', projectError)
-    } else if (project?.org_id) {
+    if (!projectError && project?.org_id) {
       console.log('[shopify-products] Resolved project tenant to org:', project.org_id)
       resolvedOrgId = project.org_id
     }

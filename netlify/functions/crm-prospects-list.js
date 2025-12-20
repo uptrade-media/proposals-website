@@ -21,7 +21,7 @@ const PIPELINE_STAGES = {
 export async function handler(event) {
   const headers = {
     'Access-Control-Allow-Origin': event.headers.origin || '*',
-    'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+    'Access-Control-Allow-Headers': 'Content-Type, Authorization, X-Organization-Id, X-Project-Id',
     'Access-Control-Allow-Methods': 'GET, OPTIONS',
     'Access-Control-Allow-Credentials': 'true',
     'Content-Type': 'application/json'
@@ -43,7 +43,9 @@ export async function handler(event) {
     const supabase = createSupabaseAdmin()
     const params = event.queryStringParameters || {}
     
-    // Check for org filtering (for multi-tenant - e.g., GWA viewing their clients)
+    // Project-level filtering (CRM data is per-project, not per-org)
+    // Example: Big Corp has 11 projects, each with their own leads
+    const projectId = event.headers['x-project-id'] || event.headers['X-Project-Id']
     const orgId = event.headers['x-organization-id'] || event.headers['X-Organization-Id']
     
     const {
@@ -77,8 +79,10 @@ export async function handler(event) {
       .eq('role', 'client')
       .neq('pipeline_stage', 'closed_won') // Exclude won deals (they're now clients)
     
-    // Filter by org if provided (multi-tenant support)
-    if (orgId) {
+    // Project-level filtering (preferred) or org-level fallback
+    if (projectId) {
+      query = query.eq('project_id', projectId)
+    } else if (orgId) {
       query = query.eq('org_id', orgId)
     }
 
@@ -140,14 +144,16 @@ export async function handler(event) {
       }
     }) || []
 
-    // Get pipeline stats (filtered by org if applicable)
+    // Get pipeline stats (filtered by project or org)
     let statsQuery = supabase
       .from('contacts')
       .select('pipeline_stage, source')
       .is('auth_user_id', null)
       .eq('role', 'client')
     
-    if (orgId) {
+    if (projectId) {
+      statsQuery = statsQuery.eq('project_id', projectId)
+    } else if (orgId) {
       statsQuery = statsQuery.eq('org_id', orgId)
     }
     

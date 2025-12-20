@@ -34,13 +34,62 @@ let schemaData = []
 // Sample each known table to infer schema
 async function sampleAllTables() {
   const knownTables = [
+    // Core CRM tables
     'contacts', 'projects', 'proposals', 'proposal_line_items',
-    'audits', 'files', 'messages', 'invoices', 'invoice_items',
-    'notifications', 'activities', 'blog_posts', 'portfolio_items',
-    'campaigns', 'campaign_leads', 'app_secrets', 'email_tracking',
-    'call_logs', 'call_tasks', 'call_topics', 'call_follow_ups',
-    'call_contact_extractions', 'email_templates', 'crm_activities',
-    'known_visitors', 'known_visitor_activity', 'lead_scores', 'smart_notifications'
+    'audits', 'files', 'messages', 'invoices', 'blog_posts', 'portfolio_items',
+    'campaigns', 'app_secrets',
+    
+    // Organization hierarchy
+    'organizations', 'organization_members', 'user_organizations', 'super_admins',
+    'organization_secrets', 'org_access_logs', 'project_members',
+    
+    // Project management
+    'project_activities', 'project_milestones', 'project_checklist_items',
+    
+    // Call tracking
+    'call_logs', 'call_tasks', 'call_topics', 'call_follow_ups', 'call_contact_extractions',
+    
+    // Email marketing
+    'email_tracking', 'email_templates', 'email_campaigns', 'email_campaign_sends',
+    'email_campaign_lists', 'email_lists', 'email_list_subscribers', 'email_subscribers',
+    'email_automations', 'email_automation_steps', 'email_automation_enrollments',
+    'email_forms', 'email_unsubscribes', 'tenant_email_settings',
+    
+    // Lead management
+    'known_visitors', 'known_visitor_activity', 'lead_scores', 'lead_assignments',
+    'contact_activities', 'scheduled_followups',
+    
+    // Signal AI
+    'signal_actions', 'signal_audit_log', 'signal_conversations', 'signal_memory',
+    'signal_messages', 'signal_patterns', 'signal_skills',
+    
+    // SEO module - core
+    'seo_sites', 'seo_pages', 'seo_queries', 'seo_competitors', 'seo_tasks',
+    'seo_crawl_log', 'seo_opportunities', 'seo_page_history',
+    
+    // SEO module - AI
+    'seo_ai_runs', 'seo_ai_recommendations', 'seo_ai_recommendation_outcomes',
+    'seo_ai_assistants', 'seo_ai_threads', 'seo_ai_thread_messages',
+    'seo_ai_analysis_runs', 'seo_ai_learning_patterns', 'seo_ai_wins_knowledge',
+    
+    // SEO module - features
+    'seo_keyword_universe', 'seo_topic_clusters', 'seo_content_briefs',
+    'seo_content_gaps', 'seo_content_decay', 'seo_cannibalization',
+    'seo_backlink_opportunities', 'seo_competitor_analysis', 'seo_internal_links',
+    'seo_local_analysis', 'seo_schema_markup', 'seo_serp_features',
+    'seo_technical_audits', 'seo_title_tests', 'seo_pagespeed_impact',
+    'seo_predictive_scores', 'seo_not_indexed_urls', 'seo_alerts',
+    'seo_knowledge_base', 'seo_schedules', 'seo_scheduled_runs', 'seo_background_jobs',
+    
+    // Shopify / Ecommerce
+    'shopify_stores', 'shopify_products', 'shopify_variants', 'shopify_orders',
+    'shopify_locations', 'shopify_inventory_levels', 'shopify_sync_log',
+    
+    // Analytics
+    'analytics_events', 'analytics_page_views', 'analytics_sessions', 'analytics_scroll_depth',
+    
+    // Misc
+    'smart_notifications', 'team_metrics', 'blog_generation_jobs'
   ]
   
   for (const tableName of knownTables) {

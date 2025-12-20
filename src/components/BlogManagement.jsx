@@ -5,6 +5,7 @@ import { Input } from './ui/input'
 import { Label } from './ui/label'
 import { Card, CardContent } from './ui/card'
 import { Textarea } from './ui/textarea'
+import { MarkdownEditor } from './ui/MarkdownEditor'
 import { Badge } from './ui/badge'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select'
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from './ui/dialog'
@@ -767,12 +768,12 @@ export default function BlogManagement() {
 
         {/* Editor Dialog */}
         <Dialog open={isEditorOpen} onOpenChange={(open) => { if (!open) resetForm(); setIsEditorOpen(open) }}>
-          <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto p-0">
-            <DialogHeader className="px-6 pt-6 pb-4 border-b sticky top-0 bg-white z-10">
-              <DialogTitle className="text-xl">
+          <DialogContent className="!max-w-5xl !w-[80vw] max-h-[90vh] overflow-y-auto p-0">
+            <DialogHeader className="px-6 pt-6 pb-4 border-b border-[var(--border-primary)] sticky top-0 bg-[var(--bg-primary)] z-10">
+              <DialogTitle className="text-xl text-[var(--text-primary)]">
                 {editingBlog ? 'Edit Blog Post' : 'Create New Blog Post'}
               </DialogTitle>
-              <DialogDescription>
+              <DialogDescription className="text-[var(--text-secondary)]">
                 Fill in the details below to {editingBlog ? 'update' : 'create'} your blog post
               </DialogDescription>
             </DialogHeader>
@@ -874,18 +875,13 @@ export default function BlogManagement() {
 
               {/* Content */}
               <div className="space-y-2">
-                <Label htmlFor="content">Content (Markdown) *</Label>
-                <Textarea
-                  id="content"
+                <Label htmlFor="content">Content *</Label>
+                <MarkdownEditor
                   value={formData.content}
-                  onChange={(e) => setFormData(prev => ({ ...prev, content: e.target.value }))}
-                  placeholder="Write your blog content in Markdown format..."
-                  className="h-64 font-mono text-sm resize-none"
-                  required
+                  onChange={(markdown) => setFormData(prev => ({ ...prev, content: markdown }))}
+                  placeholder="Start writing your blog content..."
+                  minHeight="280px"
                 />
-                <p className="text-xs text-[var(--text-tertiary)]">
-                  Use **bold**, *italic*, # headings, - lists, [links](url)
-                </p>
               </div>
 
               {/* Keywords */}
