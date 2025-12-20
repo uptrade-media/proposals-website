@@ -58,7 +58,7 @@ export default function MagicLogin() {
           // Redirect to account setup with the token
           setStatus('success')
           setTimeout(() => {
-            navigate(`/account-setup?token=${token}`, { replace: true })
+            navigate(`/setup?token=${token}`, { replace: true })
           }, 1000)
           return
         }
