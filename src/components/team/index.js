@@ -10,6 +10,7 @@ export { default as TeamModule } from './TeamModule'
 // Panels
 export { default as UptradeTeamPanel } from './panels/UptradeTeamPanel'
 export { default as OrganizationUsersPanel } from './panels/OrganizationUsersPanel'
+export { default as AllOrganizationsPanel } from './panels/AllOrganizationsPanel'
 export { default as ProjectTeamPanel } from './panels/ProjectTeamPanel'
 
 // Cards

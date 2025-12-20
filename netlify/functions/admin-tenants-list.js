@@ -88,7 +88,7 @@ export async function handler(event) {
       }
     }
 
-    // Get user counts per organization
+    // Get user counts per organization from user_organizations (legacy/supabase auth)
     const { data: userCounts } = await supabase
       .from('user_organizations')
       .select('organization_id')
@@ -98,15 +98,18 @@ export async function handler(event) {
       return acc
     }, {})
 
-    // Enrich organizations with user counts
-    const enrichedOrgs = organizations.map(org => ({
-      ...org,
-      userCount: countsByOrg[org.id] || 0,
-      isProjectTenant: false
-    }))
+    // Also count from organization_members (new system)
+    const { data: orgMemberCounts } = await supabase
+      .from('organization_members')
+      .select('organization_id')
     
-    // Also fetch project-based tenants (Web Apps)
-    const { data: projectTenants, error: projectError } = await supabase
+    const memberCountsByOrg = (orgMemberCounts || []).reduce((acc, om) => {
+      acc[om.organization_id] = (acc[om.organization_id] || 0) + 1
+      return acc
+    }, {})
+
+    // Fetch ALL projects grouped by organization
+    const { data: allProjects, error: projectError } = await supabase
       .from('projects')
       .select(`
         id,
@@ -116,42 +119,51 @@ export async function handler(event) {
         tenant_theme_color,
         is_tenant,
         org_id,
+        organization_id,
         status,
         created_at
       `)
-      .eq('is_tenant', true)
       .order('created_at', { ascending: false })
     
     if (projectError) {
-      console.error('[AdminTenants] Error fetching project tenants:', projectError)
+      console.error('[AdminTenants] Error fetching projects:', projectError)
     }
-    
-    // Convert project tenants to organization-like format for the switcher
-    const projectOrgs = (projectTenants || []).map(p => ({
-      id: p.id,
-      slug: p.id,
-      name: p.title,
-      domain: p.tenant_domain,
-      features: p.tenant_features || [],
-      theme: { primaryColor: p.tenant_theme_color || '#4bbf39' },
-      plan: 'managed',
-      status: p.status === 'completed' ? 'active' : 'pending',
-      created_at: p.created_at,
-      userCount: 0,
-      isProjectTenant: true,
-      projectId: p.id,
-      org_id: p.org_id || p.id
+
+    // Group projects by organization
+    const projectsByOrg = (allProjects || []).reduce((acc, project) => {
+      // Use organization_id if set, fall back to org_id
+      const orgId = project.organization_id || project.org_id
+      if (orgId) {
+        if (!acc[orgId]) acc[orgId] = []
+        acc[orgId].push({
+          id: project.id,
+          title: project.title,
+          status: project.status,
+          is_tenant: project.is_tenant,
+          tenant_domain: project.tenant_domain,
+          tenant_features: project.tenant_features,
+          tenant_theme_color: project.tenant_theme_color,
+          created_at: project.created_at
+        })
+      }
+      return acc
+    }, {})
+
+    // Enrich organizations with user counts AND nested projects
+    const enrichedOrgs = organizations.map(org => ({
+      ...org,
+      userCount: (countsByOrg[org.id] || 0) + (memberCountsByOrg[org.id] || 0),
+      projects: projectsByOrg[org.id] || [],
+      projectCount: (projectsByOrg[org.id] || []).length,
+      tenantProjectCount: (projectsByOrg[org.id] || []).filter(p => p.is_tenant).length
     }))
-    
-    // Combine both types
-    const allOrgs = [...enrichedOrgs, ...projectOrgs]
 
     return {
       statusCode: 200,
       headers,
       body: JSON.stringify({
-        organizations: allOrgs,
-        total: allOrgs.length
+        organizations: enrichedOrgs,
+        total: enrichedOrgs.length
       })
     }
   } catch (error) {

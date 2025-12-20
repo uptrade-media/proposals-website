@@ -222,16 +222,11 @@ export async function handler(event) {
           
           <!-- Header -->
           <tr>
-            <td align="center" class="mobile-padding-header" style="background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%); padding: 40px 40px 32px;">
-              <!-- Inline logo mark: centered, gradient background, fills switch by theme -->
-              <div style="display:inline-flex; align-items:center; justify-content:center; width:96px; height:96px; border-radius:24px; background: linear-gradient(135deg, #22c55e 0%, #16a34a 100%); margin-bottom: 20px;">
-                <svg width="48" height="48" viewBox="0 0 24 24" role="img" aria-label="Uptrade logo" class="logo-mark" style="display:block;">
-                  <!-- Stylized U mark -->
-                  <path d="M6 4h2v12a4 4 0 0 0 8 0V4h2v12a6 6 0 0 1-12 0V4z" />
-                </svg>
-              </div>
-              <h1 class="mobile-font-lg" style="margin: 0; color: #94a3b8; font-size: 26px; font-weight: 700; line-height: 1.3;">Your Proposal is Ready</h1>
-              <p style="margin: 10px 0 0; color: #94a3b8; font-size: 15px; line-height: 1.5;">A custom proposal prepared just for you</p>
+            <td align="center" class="mobile-padding-header" style="background: linear-gradient(135deg, #54b948 0%, #39bfb0 100%); padding: 40px 40px 32px;">
+              <!-- Inline white SVG logo -->
+              <img src="data:image/svg+xml;base64,PD94bWwgdmVyc2lvbj0iMS4wIiBlbmNvZGluZz0iVVRGLTgiPz4KPHN2ZyBpZD0iTGF5ZXJfMSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIiB3aWR0aD0iNDk4LjkiIGhlaWdodD0iNDk4LjkiIHZlcnNpb249IjEuMSIgeG1sbnM6eGxpbms9Imh0dHA6Ly93d3cudzMub3JnLzE5OTkveGxpbmsiIHZpZXdCb3g9IjAgMCA0OTguOSA0OTguOSI+CiAgPGRlZnM+CiAgICA8c3R5bGU+CiAgICAgIC5zdDAgewogICAgICAgIGZpbGw6ICNmZmY7CiAgICAgIH0KICAgICAgLnN0MSB7CiAgICAgICAgY2xpcC1wYXRoOiB1cmwoI2NsaXBwYXRoKTsKICAgICAgfQogICAgPC9zdHlsZT4KICAgIDxjbGlwUGF0aCBpZD0iY2xpcHBhdGgiPgogICAgICA8cGF0aCBjbGFzcz0ic3QwIiBkPSJNMjUwLDBDMTEyLjYsMCwxLjEsMTExLjQsMS4xLDI0OC45czgwLjcsMjE1LjEsMTg5LjUsMjQxLjhjNS4yLDEuMSwxMC42LDEuNywxNi4xLDEuNyw0MS4zLDAsNzUuMi0zMy41LDc1LjItNzQuOHYtMTgxLjhsODUuMSw4MC43di03Mi42bC0xMTctMTEwLjUtMTE3LDExMC41djcyLjZsODUuMS04MC40djE1Ni43YzAsMTguMi0xNC44LDMzLTMzLDMzcy05LjMtMS0xMy40LTIuOWMtNjYuMy0yOS45LTExMi40LTk2LjYtMTEyLjQtMTc0UzE0NC42LDU4LjEsMjUwLDU4LjFzMTkwLjgsODUuNCwxOTAuOCwxOTAuOC02NC4yLDE2Ny43LTE0OS45LDE4Ni40Yy02LDI4LjQtMjYsNTEuNy01Mi40LDYyLjIsMy44LjIsNy42LjMsMTEuNS4zLDEzNy40LDAsMjQ4LjktMTExLjQsMjQ4LjktMjQ4LjlTMzg3LjUsMCwyNTAsMFoiLz4KICAgIDwvY2xpcFBhdGg+CiAgPC9kZWZzPgogIDxwYXRoIGNsYXNzPSJzdDAiIGQ9Ik0yNTAsMEMxMTIuNiwwLDEuMSwxMTEuNCwxLjEsMjQ4LjlzODAuNywyMTUuMSwxODkuNSwyNDEuOGM1LjIsMS4xLDEwLjYsMS43LDE2LjEsMS43LDQxLjMsMCw3NS4yLTMzLjUsNzUuMi03NC44di0xODEuOGw4NS4xLDgwLjd2LTcyLjZsLTExNy0xMTAuNS0xMTcsMTEwLjV2NzIuNmw4NS4xLTgwLjR2MTU2LjdjMCwxOC4yLTE0LjgsMzMtMzMsMzNzLTkuMy0xLTEzLjQtMi45Yy02Ni4zLTI5LjktMTEyLjQtOTYuNi0xMTIuNC0xNzRTMTQ0LjYsNTguMSwyNTAsNTguMXMxOTAuOCw4NS40LDE5MC44LDE5MC44LTY0LjIsMTY3LjctMTQ5LjksMTg2LjRjLTYsMjguNC0yNiw1MS43LTUyLjQsNjIuMiwzLjguMiw3LjYuMywxMS41LjMsMTM3LjQsMCwyNDguOS0xMTEuNCwyNDguOS0yNDguOVMzODcuNSwwLDI1MCwwWiIvPgogIDxnIGNsYXNzPSJzdDEiPgogICAgPHJlY3QgY2xhc3M9InN0MCIgd2lkdGg9IjQ5OC45IiBoZWlnaHQ9IjQ5OC45Ii8+CiAgPC9nPgo8L3N2Zz4=" alt="Uptrade Media" width="72" height="72" style="display: block; margin: 0 auto 20px auto;" />
+              <h1 class="mobile-font-lg" style="margin: 0; color: #ffffff; font-size: 26px; font-weight: 700; line-height: 1.3;">Your Proposal is Ready</h1>
+              <p style="margin: 10px 0 0; color: rgba(255,255,255,0.9); font-size: 15px; line-height: 1.5;">A custom proposal prepared just for you</p>
             </td>
           </tr>
           

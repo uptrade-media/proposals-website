@@ -1,6 +1,10 @@
 // netlify/functions/admin-org-members.js
 // Manage organization members - add/update/remove users with org or project level access
 import { createSupabaseAdmin, getAuthenticatedUser } from './utils/supabase.js'
+import { Resend } from 'resend'
+import crypto from 'crypto'
+
+const resend = new Resend(process.env.RESEND_API_KEY)
 
 export async function handler(event) {
   const headers = {
@@ -159,13 +163,21 @@ export async function handler(event) {
               org_id: orgId,
               account_setup: 'false'
             })
-            .select('id')
+            .select('id, email, name')
             .single()
 
           if (createError) throw createError
           targetContactId = newContact.id
 
-          // TODO: Send account setup email
+          // Get organization name for the email
+          const { data: org } = await supabase
+            .from('organizations')
+            .select('name')
+            .eq('id', orgId)
+            .single()
+
+          // Send account setup email
+          await sendOrgMemberInviteEmail(supabase, newContact, org?.name || 'your organization', contact.name)
         }
       }
 
@@ -352,5 +364,102 @@ export async function handler(event) {
       headers,
       body: JSON.stringify({ error: 'Internal server error', details: error.message })
     }
+  }
+}
+
+/**
+ * Send invite email to new organization member with magic link for account setup
+ */
+async function sendOrgMemberInviteEmail(supabase, member, orgName, inviterName) {
+  try {
+    // Generate magic link token for easy setup
+    const token = crypto.randomBytes(32).toString('hex')
+    const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000) // 7 days
+    
+    // Store the setup token
+    await supabase
+      .from('contacts')
+      .update({ 
+        setup_token: token,
+        setup_token_expires: expiresAt.toISOString()
+      })
+      .eq('id', member.id)
+
+    const setupUrl = `${process.env.SITE_URL || 'https://portal.uptrademedia.com'}/auth/magic?token=${token}&setup=org`
+
+    await resend.emails.send({
+      from: process.env.RESEND_FROM_EMAIL || 'portal@uptrademedia.com',
+      to: member.email,
+      subject: `You've been invited to ${orgName} on Uptrade Media`,
+      html: `
+        <!DOCTYPE html>
+        <html>
+        <head>
+          <meta charset="utf-8">
+          <meta name="viewport" content="width=device-width, initial-scale=1">
+          <title>Organization Invitation</title>
+        </head>
+        <body style="margin:0;padding:0;background-color:#f5f5f5;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;">
+          <table width="100%" cellpadding="0" cellspacing="0" style="background-color:#f5f5f5;padding:40px 20px;">
+            <tr>
+              <td align="center">
+                <table width="600" cellpadding="0" cellspacing="0" style="background:#ffffff;border-radius:16px;overflow:hidden;box-shadow:0 4px 6px rgba(0,0,0,0.1);">
+                  
+                  <!-- Header -->
+                  <tr>
+                    <td style="background:linear-gradient(135deg, #54b948 0%, #39bfb0 100%);padding:32px 40px;text-align:center;">
+                      <img src="data:image/svg+xml;base64,PD94bWwgdmVyc2lvbj0iMS4wIiBlbmNvZGluZz0iVVRGLTgiPz4KPHN2ZyBpZD0iTGF5ZXJfMSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIiB3aWR0aD0iNDk4LjkiIGhlaWdodD0iNDk4LjkiIHZlcnNpb249IjEuMSIgeG1sbnM6eGxpbms9Imh0dHA6Ly93d3cudzMub3JnLzE5OTkveGxpbmsiIHZpZXdCb3g9IjAgMCA0OTguOSA0OTguOSI+CiAgPGRlZnM+CiAgICA8c3R5bGU+CiAgICAgIC5zdDAgewogICAgICAgIGZpbGw6ICNmZmY7CiAgICAgIH0KICAgICAgLnN0MSB7CiAgICAgICAgY2xpcC1wYXRoOiB1cmwoI2NsaXBwYXRoKTsKICAgICAgfQogICAgPC9zdHlsZT4KICAgIDxjbGlwUGF0aCBpZD0iY2xpcHBhdGgiPgogICAgICA8cGF0aCBjbGFzcz0ic3QwIiBkPSJNMjUwLDBDMTEyLjYsMCwxLjEsMTExLjQsMS4xLDI0OC45czgwLjcsMjE1LjEsMTg5LjUsMjQxLjhjNS4yLDEuMSwxMC42LDEuNywxNi4xLDEuNyw0MS4zLDAsNzUuMi0zMy41LDc1LjItNzQuOHYtMTgxLjhsODUuMSw4MC43di03Mi42bC0xMTctMTEwLjUtMTE3LDExMC41djcyLjZsODUuMS04MC40djE1Ni43YzAsMTguMi0xNC44LDMzLTMzLDMzcy05LjMtMS0xMy40LTIuOWMtNjYuMy0yOS45LTExMi40LTk2LjYtMTEyLjQtMTc0UzE0NC42LDU4LjEsMjUwLDU4LjFzMTkwLjgsODUuNCwxOTAuOCwxOTAuOC02NC4yLDE2Ny43LTE0OS45LDE4Ni40Yy02LDI4LjQtMjYsNTEuNy01Mi40LDYyLjIsMy44LjIsNy42LjMsMTEuNS4zLDEzNy40LDAsMjQ4LjktMTExLjQsMjQ4LjktMjQ4LjlTMzg3LjUsMCwyNTAsMFoiLz4KICAgIDwvY2xpcFBhdGg+CiAgPC9kZWZzPgogIDxwYXRoIGNsYXNzPSJzdDAiIGQ9Ik0yNTAsMEMxMTIuNiwwLDEuMSwxMTEuNCwxLjEsMjQ4LjlzODAuNywyMTUuMSwxODkuNSwyNDEuOGM1LjIsMS4xLDEwLjYsMS43LDE2LjEsMS43LDQxLjMsMCw3NS4yLTMzLjUsNzUuMi03NC44di0xODEuOGw4NS4xLDgwLjd2LTcyLjZsLTExNy0xMTAuNS0xMTcsMTEwLjV2NzIuNmw4NS4xLTgwLjR2MTU2LjdjMCwxOC4yLTE0LjgsMzMtMzMsMzNzLTkuMy0xLTEzLjQtMi45Yy02Ni4zLTI5LjktMTEyLjQtOTYuNi0xMTIuNC0xNzRTMTQ0LjYsNTguMSwyNTAsNTguMXMxOTAuOCw4NS40LDE5MC44LDE5MC44LTY0LjIsMTY3LjctMTQ5LjksMTg2LjRjLTYsMjguNC0yNiw1MS43LTUyLjQsNjIuMiwzLjguMiw3LjYuMywxMS41LjMsMTM3LjQsMCwyNDguOS0xMTEuNCwyNDguOS0yNDguOVMzODcuNSwwLDI1MCwwWiIvPgogIDxnIGNsYXNzPSJzdDEiPgogICAgPHJlY3QgY2xhc3M9InN0MCIgd2lkdGg9IjQ5OC45IiBoZWlnaHQ9IjQ5OC45Ii8+CiAgPC9nPgo8L3N2Zz4=" alt="Uptrade Media" width="48" height="48" style="display:block;margin:0 auto;">
+                      <h1 style="margin:16px 0 0;font-size:24px;font-weight:700;color:#ffffff;">Welcome to ${orgName}</h1>
+                    </td>
+                  </tr>
+                  
+                  <!-- Content -->
+                  <tr>
+                    <td style="padding:40px;">
+                      <p style="margin:0 0 16px;font-size:16px;line-height:1.6;color:#333333;">
+                        Hi${member.name ? ` ${member.name}` : ''},
+                      </p>
+                      <p style="margin:0 0 24px;font-size:16px;line-height:1.6;color:#333333;">
+                        ${inviterName} has invited you to join <strong>${orgName}</strong> on the Uptrade Media client portal.
+                      </p>
+                      
+                      <p style="margin:0 0 32px;font-size:16px;line-height:1.6;color:#333333;">
+                        Click the button below to set up your account. You can sign in with Google or create a password.
+                      </p>
+                      
+                      <!-- CTA Button -->
+                      <div style="text-align:center;">
+                        <a href="${setupUrl}" style="display:inline-block;padding:14px 32px;background:linear-gradient(135deg,#54b948,#39bfb0);color:#ffffff;text-decoration:none;font-weight:600;font-size:16px;border-radius:8px;">
+                          Set Up My Account
+                        </a>
+                      </div>
+                      
+                      <p style="margin:32px 0 0;font-size:14px;color:#666666;text-align:center;">
+                        This link expires in 7 days.
+                      </p>
+                    </td>
+                  </tr>
+                  
+                  <!-- Footer -->
+                  <tr>
+                    <td style="padding:24px 40px;border-top:1px solid #eeeeee;background:#fafafa;">
+                      <p style="margin:0;font-size:13px;color:#888888;text-align:center;">
+                        Uptrade Media • Houston, TX
+                      </p>
+                    </td>
+                  </tr>
+                </table>
+              </td>
+            </tr>
+          </table>
+        </body>
+        </html>
+      `
+    })
+
+    console.log(`[admin-org-members] Invite email sent to ${member.email} for org ${orgName}`)
+  } catch (error) {
+    console.error('[admin-org-members] Error sending invite email:', error)
+    // Don't fail the whole operation if email fails
   }
 }

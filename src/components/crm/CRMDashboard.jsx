@@ -64,8 +64,7 @@ import ConvertDialog from './ConvertDialog'
 import CallsTab from './CallsTab'
 import TasksTab from './TasksTab'
 import FollowUpsTab from './FollowUpsTab'
-import UsersTab from './UsersTab'
-import TeamTab from './TeamTab'
+// Removed UsersTab and TeamTab; Teams module provides comprehensive management
 import ProposalAIDialog from '@/components/ProposalAIDialog'
 import CallIntentDialog from './CallIntentDialog'
 import AuditViewModal from './AuditViewModal'
@@ -106,7 +105,7 @@ export default function CRMDashboard() {
   
   // Data state
   const [prospects, setProspects] = useState([])
-  const [activeUsers, setActiveUsers] = useState([])
+  // Removed Users tab: no activeUsers state
   const [calls, setCalls] = useState([])
   const [tasks, setTasks] = useState([])
   const [followUps, setFollowUps] = useState([])
@@ -119,7 +118,7 @@ export default function CRMDashboard() {
   const [isLoading, setIsLoading] = useState(true)
   const [isLoadingCalls, setIsLoadingCalls] = useState(false)
   const [isLoadingTasks, setIsLoadingTasks] = useState(false)
-  const [isLoadingUsers, setIsLoadingUsers] = useState(false)
+  // Removed Users tab: no isLoadingUsers state
   const [isRefreshing, setIsRefreshing] = useState(false)
   
   // Filters
@@ -216,29 +215,9 @@ export default function CRMDashboard() {
     fetchProspects()
   }, [debouncedSearch, stageFilter])
 
-  const fetchActiveUsers = useCallback(async () => {
-    setIsLoadingUsers(true)
-    try {
-      const response = await api.get('/.netlify/functions/crm-users-list')
-      setActiveUsers(response.data.users || [])
-    } catch (err) {
-      console.error('Failed to fetch active users:', err)
-      setActiveUsers([])
-    } finally {
-      setIsLoadingUsers(false)
-    }
-  }, [])
+  // Removed Users tab: no fetchActiveUsers
 
-  const handleResendInvite = useCallback(async (user) => {
-    try {
-      toast.info(`Sending invite to ${user.email}...`)
-      await api.post('/.netlify/functions/admin-resend-setup-email', { clientId: user.id })
-      toast.success(`Setup email sent to ${user.email}`)
-    } catch (err) {
-      console.error('Failed to resend invite:', err)
-      toast.error(err.response?.data?.error || 'Failed to send invite email')
-    }
-  }, [])
+  // Removed Users tab: no resend invite handler
 
   const fetchCalls = useCallback(async () => {
     setIsLoadingCalls(true)
@@ -288,7 +267,6 @@ export default function CRMDashboard() {
 
   // Initial fetch (prospects handled by debounced search effect)
   useEffect(() => {
-    fetchActiveUsers()
     fetchCalls()
     fetchTasks()
     fetchFollowUps()
@@ -300,7 +278,6 @@ export default function CRMDashboard() {
     setIsRefreshing(true)
     await Promise.all([
       fetchProspects(),
-      fetchActiveUsers(),
       fetchCalls(),
       fetchTasks(),
       fetchFollowUps()
@@ -718,13 +695,6 @@ export default function CRMDashboard() {
               Pipeline
             </TabsTrigger>
             <TabsTrigger 
-              value="users" 
-              className="gap-2 data-[state=active]:bg-[var(--glass-bg)] data-[state=active]:shadow-sm"
-            >
-              <Users className="h-4 w-4" />
-              Users
-            </TabsTrigger>
-            <TabsTrigger 
               value="calls" 
               className="gap-2 data-[state=active]:bg-[var(--glass-bg)] data-[state=active]:shadow-sm"
             >
@@ -744,13 +714,6 @@ export default function CRMDashboard() {
             >
               <Clock className="h-4 w-4" />
               Follow-ups
-            </TabsTrigger>
-            <TabsTrigger 
-              value="team" 
-              className="gap-2 data-[state=active]:bg-[var(--glass-bg)] data-[state=active]:shadow-sm"
-            >
-              <Users className="h-4 w-4" />
-              Team
             </TabsTrigger>
           </TabsList>
 
@@ -1033,20 +996,7 @@ export default function CRMDashboard() {
             )}
           </TabsContent>
 
-          {/* Users Tab */}
-          <TabsContent value="users" className="mt-0">
-            <UsersTab
-              users={activeUsers}
-              isLoading={isLoadingUsers}
-              onRefresh={fetchActiveUsers}
-              onResendInvite={handleResendInvite}
-              onSendEmail={handleEmailProspect}
-              onViewUser={(user) => {
-                // Open detail panel directly with the user - they share the same structure
-                openProspectDetail(user)
-              }}
-            />
-          </TabsContent>
+          {/* Users Tab removed (handled in Teams module) */}
 
           {/* Calls Tab */}
           <TabsContent value="calls" className="mt-0">
@@ -1083,10 +1033,7 @@ export default function CRMDashboard() {
             />
           </TabsContent>
 
-          {/* Team Tab */}
-          <TabsContent value="team" className="mt-0">
-            <TeamTab />
-          </TabsContent>
+          {/* Team Tab removed (use Teams module) */}
         </Tabs>
 
         {/* Prospect Detail Panel */}
@@ -1166,7 +1113,6 @@ export default function CRMDashboard() {
           prospect={convertTarget}
           onSuccess={() => {
             fetchProspects()
-            fetchActiveUsers()
           }}
         />
         
