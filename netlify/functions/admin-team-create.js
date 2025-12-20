@@ -3,7 +3,7 @@
 import { createSupabaseAdmin, getAuthenticatedUser } from './utils/supabase.js'
 import { requireAdmin } from './utils/permissions.js'
 import { Resend } from 'resend'
-import crypto from 'crypto'
+import { randomBytes } from 'crypto'
 
 const resend = new Resend(process.env.RESEND_API_KEY)
 
@@ -122,7 +122,19 @@ export async function handler(event) {
       }
 
       // Send invite email
-      await sendTeamInviteEmail(upgraded, contact.name)
+      try {
+        await sendTeamInviteEmail(upgraded, contact.name)
+      } catch (emailError) {
+        console.error('[admin-team-create] Email failed for upgraded member:', emailError)
+        return {
+          statusCode: 500,
+          headers,
+          body: JSON.stringify({ 
+            error: 'Team member upgraded but failed to send invite email',
+            details: emailError.message
+          })
+        }
+      }
 
       return {
         statusCode: 200,
@@ -163,7 +175,21 @@ export async function handler(event) {
     }
 
     // Send invite email
-    await sendTeamInviteEmail(newMember, contact.name)
+    try {
+      await sendTeamInviteEmail(newMember, contact.name)
+    } catch (emailError) {
+      console.error('[admin-team-create] Email failed for new member:', emailError)
+      // Delete the created member since email failed
+      await supabase.from('contacts').delete().eq('id', newMember.id)
+      return {
+        statusCode: 500,
+        headers,
+        body: JSON.stringify({ 
+          error: 'Failed to send invite email',
+          details: emailError.message
+        })
+      }
+    }
 
     return {
       statusCode: 201,
@@ -208,29 +234,43 @@ function formatTeamMember(member) {
 
 async function sendTeamInviteEmail(member, inviterName) {
   try {
-    // Generate magic link token for easy setup
-    const token = crypto.randomBytes(32).toString('hex')
-    const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000) // 7 days
-    
-    // Store the setup token (reuse account setup flow)
+    if (!process.env.RESEND_API_KEY) {
+      console.error('RESEND_API_KEY not configured, cannot send team invite email')
+      throw new Error('Email service not configured')
+    }
+
+    // Generate 7-day magic link token and store in database
     const supabase = createSupabaseAdmin()
-    await supabase
+    const magicToken = randomBytes(32).toString('hex')
+    const magicTokenExpiry = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000) // 7 days
+    
+    const { error: tokenError } = await supabase
       .from('contacts')
-      .update({ 
-        setup_token: token,
-        setup_token_expires: expiresAt.toISOString()
+      .update({
+        magic_link_token: magicToken,
+        magic_link_expires: magicTokenExpiry.toISOString(),
+        updated_at: new Date().toISOString()
       })
       .eq('id', member.id)
 
-    const setupUrl = `${process.env.SITE_URL || 'https://portal.uptrademedia.com'}/auth/magic?token=${token}&setup=team`
+    if (tokenError) {
+      console.error('[admin-team-create] Error storing magic link token:', tokenError)
+      throw new Error('Failed to generate setup link')
+    }
+
+    const setupUrl = `${process.env.SITE_URL || 'https://portal.uptrademedia.com'}/auth/magic?token=${magicToken}&redirect=${encodeURIComponent('/account-setup?team=true')}`
+
+    console.log(`[admin-team-create] Generated 7-day magic link for ${member.email}`)
     const roleLabel = {
       admin: 'Administrator',
       manager: 'Team Manager',
       sales_rep: 'Sales Representative'
     }[member.team_role] || 'Team Member'
 
-    await resend.emails.send({
-      from: process.env.RESEND_FROM_EMAIL || 'portal@uptrademedia.com',
+    console.log(`[admin-team-create] Sending team invite email to ${member.email}`)
+
+    const { data: result, error: emailError } = await resend.emails.send({
+      from: process.env.RESEND_FROM || 'Uptrade Media <portal@send.uptrademedia.com>',
       to: member.email,
       subject: `You've been invited to join Uptrade Media`,
       html: `
@@ -294,9 +334,25 @@ async function sendTeamInviteEmail(member, inviterName) {
       `
     })
 
-    console.log(`Team invite email sent to ${member.email}`)
+    if (emailError) {
+      console.error(`[admin-team-create] Resend error:`, emailError)
+      throw new Error(`Failed to send email: ${emailError.message || JSON.stringify(emailError)}`)
+    }
+
+    if (result?.id) {
+      console.log(`[admin-team-create] Team invite email sent successfully to ${member.email}, email ID: ${result.id}`)
+    } else {
+      console.log(`[admin-team-create] Team invite email sent to ${member.email} (no ID returned)`)
+      throw new Error('Email sent but no ID returned from Resend')
+    }
   } catch (error) {
-    console.error('Error sending team invite email:', error)
-    // Don't fail the whole operation if email fails
+    console.error(`[admin-team-create] Error sending team invite email to ${member.email}:`, error)
+    console.error('[admin-team-create] Error details:', {
+      message: error.message,
+      stack: error.stack,
+      resendApiKeyConfigured: !!process.env.RESEND_API_KEY
+    })
+    // Re-throw so caller knows email failed
+    throw error
   }
 }

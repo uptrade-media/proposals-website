@@ -165,7 +165,7 @@ import { Resend } from 'resend'
 const resend = new Resend(process.env.RESEND_API_KEY)
 
 await resend.emails.send({
-  from: process.env.RESEND_FROM_EMAIL,
+  from: process.env.RESEND_FROM,
   to: recipient.email,
   subject: 'Subject',
   html: emailTemplate
@@ -175,7 +175,7 @@ await resend.emails.send({
 **Environment Variables:**
 ```bash
 RESEND_API_KEY=re_xxx
-RESEND_FROM_EMAIL=portal@uptrademedia.com
+RESEND_FROM=Uptrade Media <portal@uptrademedia.com>
 ADMIN_EMAIL=admin@uptrademedia.com
 ```
 
@@ -259,7 +259,7 @@ AUTH_JWT_SECRET=xxx
 SESSION_COOKIE_NAME=um_session
 GOOGLE_CLIENT_ID=xxx
 RESEND_API_KEY=xxx
-RESEND_FROM_EMAIL=portal@uptrademedia.com
+RESEND_FROM=Uptrade Media <portal@uptrademedia.com>
 ADMIN_EMAIL=admin@uptrademedia.com
 ```
 
@@ -747,7 +747,7 @@ const resend = new Resend(process.env.RESEND_API_KEY)
 
 // Send email
 await resend.emails.send({
-  from: process.env.RESEND_FROM_EMAIL,
+  from: process.env.RESEND_FROM,
   to: user.email,
   subject: 'Notification Subject',
   html: emailTemplate

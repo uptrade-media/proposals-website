@@ -420,7 +420,7 @@ export async function handler(event) {
     // Send email via Resend
     console.log('[audits-send-email] Sending email to:', recipientEmail)
     
-    const fromEmail = process.env.RESEND_FROM_EMAIL || 'Uptrade Media <noreply@send.uptrademedia.com>'
+    const fromEmail = process.env.RESEND_FROM || 'Uptrade Media <noreply@send.uptrademedia.com>'
     
     const emailResult = await resend.emails.send({
       from: fromEmail,

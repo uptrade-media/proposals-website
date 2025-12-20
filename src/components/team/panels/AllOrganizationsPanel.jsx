@@ -18,7 +18,9 @@ import {
   Loader2,
   ExternalLink,
   FolderOpen,
-  Globe
+  Globe,
+  MailCheck,
+  Send
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -128,11 +130,8 @@ export default function AllOrganizationsPanel() {
       toast.success(`Invite sent to ${formData.email}`)
       setShowInviteDialog(false)
       
-      // Refresh members for this org
-      setOrgMembers(prev => ({ ...prev, [inviteOrgId]: undefined }))
-      if (expandedOrg === inviteOrgId) {
-        await fetchOrgMembers(inviteOrgId)
-      }
+      // Revalidate members list immediately
+      await fetchOrgMembers(inviteOrgId)
       
       // Refresh org list to update counts
       await fetchOrganizations()
@@ -140,6 +139,21 @@ export default function AllOrganizationsPanel() {
       toast.error(error.response?.data?.error || 'Failed to send invite')
     } finally {
       setIsInviting(false)
+    }
+  }
+
+  const handleResendInvite = async (orgId, contactId, memberEmail) => {
+    try {
+      await axios.patch('/.netlify/functions/admin-org-members', {
+        contactId,
+        action: 'resend-invite'
+      }, {
+        params: { organizationId: orgId }
+      })
+      
+      toast.success(`Invite resent to ${memberEmail}`)
+    } catch (error) {
+      toast.error(error.response?.data?.error || 'Failed to resend invite')
     }
   }
 
@@ -494,22 +508,40 @@ export default function AllOrganizationsPanel() {
                     </div>
                   ) : (
                     <div className="p-4 space-y-2">
-                      {orgMembers[org.id].map((member) => (
+                      {orgMembers[org.id].map((member) => {
+                        const isPending = member.contact?.account_setup === 'false'
+                        
+                        return (
                         <div 
                           key={member.id}
                           className="flex items-center gap-4 p-3 rounded-lg bg-[var(--glass-bg)] border border-[var(--glass-border)]"
                         >
                           {/* Avatar */}
-                          <div className="h-10 w-10 rounded-full bg-gradient-to-br from-[var(--brand-primary)] to-[var(--brand-secondary)] flex items-center justify-center text-white font-semibold">
+                          <div className={`h-10 w-10 rounded-full bg-gradient-to-br ${
+                            isPending 
+                              ? 'from-amber-500 to-orange-500' 
+                              : 'from-[var(--brand-primary)] to-[var(--brand-secondary)]'
+                          } flex items-center justify-center text-white font-semibold relative`}>
                             {member.contact?.name?.charAt(0)?.toUpperCase() || 
                              member.contact?.email?.charAt(0)?.toUpperCase() || '?'}
+                            {isPending && (
+                              <div className="absolute -top-1 -right-1 h-3 w-3 rounded-full bg-amber-400 border-2 border-[var(--glass-bg)]" />
+                            )}
                           </div>
                           
                           {/* Info */}
                           <div className="flex-1 min-w-0">
-                            <p className="font-medium text-[var(--text-primary)] truncate">
-                              {member.contact?.name || member.contact?.email || 'Unknown'}
-                            </p>
+                            <div className="flex items-center gap-2">
+                              <p className="font-medium text-[var(--text-primary)] truncate">
+                                {member.contact?.name || member.contact?.email || 'Unknown'}
+                              </p>
+                              {isPending && (
+                                <Badge variant="outline" className="bg-amber-500/20 text-amber-400 border-amber-500/30">
+                                  <MailCheck className="h-3 w-3 mr-1" />
+                                  Pending
+                                </Badge>
+                              )}
+                            </div>
                             <p className="text-sm text-[var(--text-tertiary)] truncate">
                               {member.contact?.email}
                             </p>
@@ -530,12 +562,28 @@ export default function AllOrganizationsPanel() {
                             {member.role || 'member'}
                           </Badge>
                           
-                          {/* Remove Button */}
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            className="text-red-400 hover:text-red-300 hover:bg-red-500/10"
-                            onClick={() => handleRemoveMember(
+                          {/* Actions */}
+                          <div className="flex items-center gap-2">
+                            {isPending && (
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                className="text-amber-400 hover:text-amber-300 hover:bg-amber-500/10"
+                                onClick={() => handleResendInvite(
+                                  org.id,
+                                  member.contact?.id,
+                                  member.contact?.email
+                                )}
+                              >
+                                <Send className="h-4 w-4 mr-1" />
+                                Resend
+                              </Button>
+                            )}
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="text-red-400 hover:text-red-300 hover:bg-red-500/10"
+                              onClick={() => handleRemoveMember(
                               org.id, 
                               member.contact?.id,
                               member.contact?.name || member.contact?.email
@@ -543,8 +591,10 @@ export default function AllOrganizationsPanel() {
                           >
                             Remove
                           </Button>
+                          </div>
                         </div>
-                      ))}
+                        )
+                      })}
                     </div>
                   )}
                     </TabsContent>

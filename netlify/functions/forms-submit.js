@@ -151,7 +151,7 @@ export async function handler(event) {
           .join('')
 
         await resend.emails.send({
-          from: process.env.RESEND_FROM_EMAIL || 'portal@uptrademedia.com',
+          from: process.env.RESEND_FROM || 'Uptrade Media <portal@uptrademedia.com>',
           to: form.notify_email,
           subject: `New ${form.name} Submission`,
           html: `
@@ -183,7 +183,7 @@ export async function handler(event) {
     if (form.send_confirmation && formData.email) {
       try {
         await resend.emails.send({
-          from: process.env.RESEND_FROM_EMAIL || 'portal@uptrademedia.com',
+          from: process.env.RESEND_FROM || 'Uptrade Media <portal@uptrademedia.com>',
           to: formData.email,
           subject: `Thank you for your submission`,
           html: `

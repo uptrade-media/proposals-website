@@ -4,6 +4,7 @@ import { createClient } from '@supabase/supabase-js'
 import { Resend } from 'resend'
 import { getAuthenticatedUser } from './utils/supabase.js'
 import { requireTeamMember } from './utils/permissions.js'
+import { randomBytes } from 'crypto'
 
 const RESEND_API_KEY = process.env.RESEND_API_KEY
 const RESEND_FROM_EMAIL = process.env.RESEND_FROM_EMAIL || 'portal@send.uptrademedia.com'
@@ -209,21 +210,22 @@ export async function handler(event) {
         const resend = new Resend(RESEND_API_KEY)
         const needsSetup = targetContact.account_setup === false || targetContact.account_setup === 'false'
         
-        // Generate Supabase magic link
+        // Generate 7-day magic link token and store in database
+        const magicToken = randomBytes(32).toString('hex')
+        const magicTokenExpiry = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000) // 7 days
+        
+        await supabase
+          .from('contacts')
+          .update({
+            magic_link_token: magicToken,
+            magic_link_expires: magicTokenExpiry.toISOString(),
+            updated_at: new Date().toISOString()
+          })
+          .eq('id', targetContact.id)
+        
         const redirectPath = needsSetup ? '/account-setup' : `/proposals/${proposal.slug}`
-        const { data: linkData, error: linkError } = await supabase.auth.admin.generateLink({
-          type: 'magiclink',
-          email: targetContact.email,
-          options: {
-            redirectTo: `${PORTAL_URL}${redirectPath}`
-          }
-        })
+        const magicUrl = `${PORTAL_URL}/auth/magic?token=${magicToken}&redirect=${encodeURIComponent(redirectPath)}`
         
-        if (linkError) {
-          console.error('Error generating magic link:', linkError)
-        }
-        
-        const magicUrl = linkData?.properties?.action_link || `${PORTAL_URL}/login`
         const emailSubject = needsSetup 
           ? 'New Proposal Ready - Set Up Your Account' 
           : `New Proposal: ${proposal.title}`

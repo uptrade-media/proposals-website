@@ -2,7 +2,7 @@
 // Manage organization members - add/update/remove users with org or project level access
 import { createSupabaseAdmin, getAuthenticatedUser } from './utils/supabase.js'
 import { Resend } from 'resend'
-import crypto from 'crypto'
+import { randomBytes } from 'crypto'
 
 const resend = new Resend(process.env.RESEND_API_KEY)
 
@@ -10,7 +10,7 @@ export async function handler(event) {
   const headers = {
     'Access-Control-Allow-Origin': '*',
     'Access-Control-Allow-Headers': 'Content-Type, Authorization, X-Organization-Id, X-Project-Id',
-    'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
+    'Access-Control-Allow-Methods': 'GET, POST, PUT, PATCH, DELETE, OPTIONS',
     'Content-Type': 'application/json'
   }
 
@@ -83,7 +83,8 @@ export async function handler(event) {
             email,
             company,
             avatar,
-            role
+            role,
+            account_setup
           )
         `)
         .eq('organization_id', orgId)
@@ -176,8 +177,22 @@ export async function handler(event) {
             .eq('id', orgId)
             .single()
 
-          // Send account setup email
-          await sendOrgMemberInviteEmail(supabase, newContact, org?.name || 'your organization', contact.name)
+          // Send account setup email - fail if email fails
+          try {
+            await sendOrgMemberInviteEmail(supabase, newContact, org?.name || 'your organization', contact.name)
+          } catch (emailError) {
+            console.error('[admin-org-members] Email failed for new member, rolling back:', emailError)
+            // Delete the contact we just created since email failed
+            await supabase.from('contacts').delete().eq('id', newContact.id)
+            return {
+              statusCode: 500,
+              headers,
+              body: JSON.stringify({ 
+                error: 'Failed to send invite email',
+                details: emailError.message
+              })
+            }
+          }
         }
       }
 
@@ -309,6 +324,83 @@ export async function handler(event) {
       }
     }
 
+    // PATCH - Resend invite to pending user
+    if (event.httpMethod === 'PATCH') {
+      const body = JSON.parse(event.body || '{}')
+      const { contactId, action } = body
+
+      if (!orgId || !contactId) {
+        return {
+          statusCode: 400,
+          headers,
+          body: JSON.stringify({ error: 'organizationId and contactId required' })
+        }
+      }
+
+      if (action !== 'resend-invite') {
+        return {
+          statusCode: 400,
+          headers,
+          body: JSON.stringify({ error: 'Invalid action. Use "resend-invite"' })
+        }
+      }
+
+      // Get contact and organization info
+      const { data: memberContact, error: contactError } = await supabase
+        .from('contacts')
+        .select('id, email, name, account_setup')
+        .eq('id', contactId)
+        .single()
+
+      if (contactError || !memberContact) {
+        return {
+          statusCode: 404,
+          headers,
+          body: JSON.stringify({ error: 'Contact not found' })
+        }
+      }
+
+      // Only resend if account is not set up
+      if (memberContact.account_setup !== 'false') {
+        return {
+          statusCode: 400,
+          headers,
+          body: JSON.stringify({ error: 'User has already set up their account' })
+        }
+      }
+
+      const { data: org } = await supabase
+        .from('organizations')
+        .select('name')
+        .eq('id', orgId)
+        .single()
+
+      // Resend invite email
+      try {
+        await sendOrgMemberInviteEmail(supabase, memberContact, org?.name || 'your organization', contact.name)
+        console.log(`[admin-org-members] Resent invite to ${memberContact.email}`)
+        
+        return {
+          statusCode: 200,
+          headers,
+          body: JSON.stringify({ 
+            success: true, 
+            message: `Invite resent to ${memberContact.email}` 
+          })
+        }
+      } catch (emailError) {
+        console.error('[admin-org-members] Failed to resend invite:', emailError)
+        return {
+          statusCode: 500,
+          headers,
+          body: JSON.stringify({ 
+            error: 'Failed to resend invite email',
+            details: emailError.message
+          })
+        }
+      }
+    }
+
     // DELETE - Remove user from organization
     if (event.httpMethod === 'DELETE') {
       const { contactId } = event.queryStringParameters || {}
@@ -372,23 +464,47 @@ export async function handler(event) {
  */
 async function sendOrgMemberInviteEmail(supabase, member, orgName, inviterName) {
   try {
-    // Generate magic link token for easy setup
-    const token = crypto.randomBytes(32).toString('hex')
-    const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000) // 7 days
+    if (!process.env.RESEND_API_KEY) {
+      console.error('[admin-org-members] RESEND_API_KEY not configured, cannot send invite email')
+      throw new Error('Email service not configured')
+    }
+
+    // Generate 7-day magic link token and store in database
+    const magicToken = randomBytes(32).toString('hex')
+    const magicTokenExpiry = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000) // 7 days
     
-    // Store the setup token
-    await supabase
+    const { error: tokenError } = await supabase
       .from('contacts')
-      .update({ 
-        setup_token: token,
-        setup_token_expires: expiresAt.toISOString()
+      .update({
+        magic_link_token: magicToken,
+        magic_link_expires: magicTokenExpiry.toISOString(),
+        updated_at: new Date().toISOString()
       })
       .eq('id', member.id)
 
-    const setupUrl = `${process.env.SITE_URL || 'https://portal.uptrademedia.com'}/auth/magic?token=${token}&setup=org`
+    if (tokenError) {
+      console.error('[admin-org-members] Error storing magic link token:', tokenError)
+      throw new Error('Failed to generate setup link')
+    }
 
-    await resend.emails.send({
-      from: process.env.RESEND_FROM_EMAIL || 'portal@uptrademedia.com',
+    const setupUrl = `${process.env.SITE_URL || 'https://portal.uptrademedia.com'}/auth/magic?token=${magicToken}&redirect=${encodeURIComponent('/account-setup?org=' + orgName)}`
+
+    console.log(`[admin-org-members] Generated 7-day magic link for ${member.email}`)
+
+    // Ensure from address has proper format with display name
+    let fromEmail = process.env.RESEND_FROM || 'Uptrade Media <portal@send.uptrademedia.com>'
+    // If env var is just an email address, wrap it with display name
+    if (fromEmail && !fromEmail.includes('<')) {
+      fromEmail = `Uptrade Media <${fromEmail}>`
+    }
+    
+    console.log(`[admin-org-members] Sending org invite email to ${member.email} for ${orgName}`)
+    console.log(`[admin-org-members] From: ${fromEmail}`)
+    console.log(`[admin-org-members] To: ${member.email}`)
+    console.log(`[admin-org-members] RESEND_API_KEY configured: ${!!process.env.RESEND_API_KEY}`)
+
+    const { data: result, error: emailError } = await resend.emails.send({
+      from: fromEmail,
       to: member.email,
       subject: `You've been invited to ${orgName} on Uptrade Media`,
       html: `
@@ -457,9 +573,25 @@ async function sendOrgMemberInviteEmail(supabase, member, orgName, inviterName) 
       `
     })
 
-    console.log(`[admin-org-members] Invite email sent to ${member.email} for org ${orgName}`)
+    if (emailError) {
+      console.error(`[admin-org-members] Resend error:`, emailError)
+      throw new Error(`Failed to send email: ${emailError.message || JSON.stringify(emailError)}`)
+    }
+
+    if (result?.id) {
+      console.log(`[admin-org-members] Invite email sent successfully to ${member.email}, email ID: ${result.id}`)
+    } else {
+      console.log(`[admin-org-members] Invite email sent to ${member.email} (no ID returned)`)
+      throw new Error('Email sent but no ID returned from Resend')
+    }
   } catch (error) {
-    console.error('[admin-org-members] Error sending invite email:', error)
-    // Don't fail the whole operation if email fails
+    console.error(`[admin-org-members] Error sending invite email to ${member.email}:`, error)
+    console.error('[admin-org-members] Error details:', {
+      message: error.message,
+      stack: error.stack,
+      resendApiKeyConfigured: !!process.env.RESEND_API_KEY
+    })
+    // Re-throw so caller knows email failed
+    throw error
   }
 }
