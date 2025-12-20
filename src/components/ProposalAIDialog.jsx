@@ -150,6 +150,7 @@ export default function ProposalAIDialog({
   
   // Add prospect dialog state
   const [showAddProspectDialog, setShowAddProspectDialog] = useState(false)
+  const [prospectRevalidateKey, setProspectRevalidateKey] = useState(0)
   
   // AI conversation state
   const [aiMessages, setAiMessages] = useState([])
@@ -277,6 +278,9 @@ export default function ProposalAIDialog({
   // Custom add-on state
   const [customAddOn, setCustomAddOn] = useState({ name: '', price: '' })
   
+  // Monthly retainer state
+  const [monthlyRetainer, setMonthlyRetainer] = useState({ name: '', price: '' })
+  
   // Add custom add-on
   const addCustomAddOn = () => {
     if (!customAddOn.name.trim() || !customAddOn.price) return
@@ -285,7 +289,8 @@ export default function ProposalAIDialog({
       id: `custom-${Date.now()}`,
       name: customAddOn.name.trim(),
       price: parseFloat(customAddOn.price),
-      isCustom: true
+      isCustom: true,
+      isRecurring: false
     }
     
     setFormData(prev => ({
@@ -294,6 +299,29 @@ export default function ProposalAIDialog({
     }))
     
     setCustomAddOn({ name: '', price: '' })
+  }
+  
+  // Add monthly retainer
+  const addMonthlyRetainer = () => {
+    if (!monthlyRetainer.name.trim() || !monthlyRetainer.price) return
+    
+    // Remove any existing retainer first
+    const filteredAddOns = formData.addOns.filter(a => !a.isRecurring)
+    
+    const newRetainer = {
+      id: `retainer-${Date.now()}`,
+      name: monthlyRetainer.name.trim(),
+      price: parseFloat(monthlyRetainer.price),
+      isCustom: true,
+      isRecurring: true
+    }
+    
+    setFormData(prev => ({
+      ...prev,
+      addOns: [...filteredAddOns, newRetainer]
+    }))
+    
+    setMonthlyRetainer({ name: '', price: '' })
   }
   
   // Remove add-on
@@ -520,12 +548,23 @@ export default function ProposalAIDialog({
     }
   }
 
-  // Calculate total with add-ons
+  // Calculate total with add-ons (excluding recurring/monthly retainers)
   const totalWithAddOns = useMemo(() => {
     const base = parseFloat(formData.totalPrice) || 0
-    const addOnsTotal = formData.addOns.reduce((sum, a) => sum + a.price, 0)
+    const oneTimeAddOns = formData.addOns.filter(a => !a.isRecurring)
+    const addOnsTotal = oneTimeAddOns.reduce((sum, a) => sum + a.price, 0)
     return base + addOnsTotal
   }, [formData.totalPrice, formData.addOns])
+  
+  // Get recurring add-ons (monthly retainers)
+  const recurringAddOns = useMemo(() => {
+    return formData.addOns.filter(a => a.isRecurring)
+  }, [formData.addOns])
+  
+  // One-time add-ons (for display)
+  const oneTimeAddOns = useMemo(() => {
+    return formData.addOns.filter(a => !a.isRecurring)
+  }, [formData.addOns])
 
   // Handle form submission
   const handleSubmit = async () => {
@@ -873,6 +912,7 @@ export default function ProposalAIDialog({
                     placeholder="Search by name, company, or email..."
                     showCreateNew={true}
                     onCreateNew={() => setShowAddProspectDialog(true)}
+                    revalidateKey={prospectRevalidateKey}
                   />
                   {formData.contactType && (
                     <p className="text-xs text-[var(--text-tertiary)]">
@@ -995,20 +1035,63 @@ export default function ProposalAIDialog({
                   </div>
                 </div>
                 
+                {/* Monthly Retainer / Service Fee */}
+                <div className="space-y-2">
+                  <p className="text-xs text-[var(--text-tertiary)] uppercase tracking-wider">Monthly Retainer / Service Fee</p>
+                  <p className="text-xs text-[var(--text-tertiary)]">This will be set up as a recurring invoice draft, not factored into the initial deposit.</p>
+                  <div className="flex gap-2">
+                    <Input 
+                      placeholder="e.g., Monthly SEO Retainer, Hosting & Maintenance" 
+                      value={monthlyRetainer.name}
+                      onChange={(e) => setMonthlyRetainer(prev => ({ ...prev, name: e.target.value }))}
+                      className="flex-1 glass-bg border-[var(--glass-border)]"
+                    />
+                    <div className="relative w-36">
+                      <span className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--text-tertiary)]">$</span>
+                      <Input 
+                        type="number"
+                        placeholder="/month" 
+                        value={monthlyRetainer.price}
+                        onChange={(e) => setMonthlyRetainer(prev => ({ ...prev, price: e.target.value }))}
+                        onKeyDown={(e) => e.key === 'Enter' && (e.preventDefault(), addMonthlyRetainer())}
+                        className="pl-7 glass-bg border-[var(--glass-border)]"
+                      />
+                    </div>
+                    <Button 
+                      type="button" 
+                      variant="outline" 
+                      size="icon"
+                      onClick={addMonthlyRetainer}
+                      disabled={!monthlyRetainer.name.trim() || !monthlyRetainer.price}
+                      className="border-[var(--glass-border)] hover:bg-purple-600 hover:text-white hover:border-purple-600"
+                    >
+                      <Plus className="w-4 h-4" />
+                    </Button>
+                  </div>
+                </div>
+                
                 {/* Selected Add-ons List */}
                 {formData.addOns.length > 0 && (
                   <div className="space-y-2 pt-3 border-t border-[var(--glass-border)]">
                     <p className="text-xs text-[var(--text-tertiary)] uppercase tracking-wider">Selected Add-ons</p>
                     <div className="space-y-2">
                       {formData.addOns.map(addOn => (
-                        <div key={addOn.id} className="flex items-center justify-between p-2 rounded-lg bg-[var(--brand-primary)]/10 border border-[var(--brand-primary)]/30">
+                        <div key={addOn.id} className={cn(
+                          'flex items-center justify-between p-2 rounded-lg border',
+                          addOn.isRecurring 
+                            ? 'bg-purple-500/10 border-purple-500/30' 
+                            : 'bg-[var(--brand-primary)]/10 border-[var(--brand-primary)]/30'
+                        )}>
                           <div className="flex items-center gap-2">
-                            <Check className="w-4 h-4 text-[var(--brand-primary)]" />
+                            <Check className={cn('w-4 h-4', addOn.isRecurring ? 'text-purple-500' : 'text-[var(--brand-primary)]')} />
                             <span className="text-sm font-medium text-[var(--text-primary)]">{addOn.name}</span>
-                            {addOn.isCustom && <Badge variant="secondary" className="text-[10px]">Custom</Badge>}
+                            {addOn.isRecurring && <Badge variant="secondary" className="text-[10px] bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400">Monthly</Badge>}
+                            {addOn.isCustom && !addOn.isRecurring && <Badge variant="secondary" className="text-[10px]">Custom</Badge>}
                           </div>
                           <div className="flex items-center gap-2">
-                            <span className="text-sm text-green-600 font-medium">+${addOn.price.toLocaleString()}</span>
+                            <span className={cn('text-sm font-medium', addOn.isRecurring ? 'text-purple-600' : 'text-green-600')}>
+                              {addOn.isRecurring ? `$${addOn.price.toLocaleString()}/mo` : `+$${addOn.price.toLocaleString()}`}
+                            </span>
                             <button type="button" onClick={() => removeAddOn(addOn.id)} className="p-1 rounded hover:bg-red-500/20 text-[var(--text-tertiary)] hover:text-red-500 transition-colors">
                               <X className="w-4 h-4" />
                             </button>
@@ -1016,10 +1099,18 @@ export default function ProposalAIDialog({
                         </div>
                       ))}
                     </div>
-                    <div className="flex justify-between items-center pt-2">
-                      <span className="text-sm text-[var(--text-secondary)]">Total with add-ons:</span>
-                      <span className="text-lg font-semibold text-[var(--text-primary)]">${totalWithAddOns.toLocaleString()}</span>
-                    </div>
+                    {oneTimeAddOns.length > 0 && (
+                      <div className="flex justify-between items-center pt-2">
+                        <span className="text-sm text-[var(--text-secondary)]">Total (one-time):</span>
+                        <span className="text-lg font-semibold text-[var(--text-primary)]">${totalWithAddOns.toLocaleString()}</span>
+                      </div>
+                    )}
+                    {recurringAddOns.length > 0 && (
+                      <div className="flex justify-between items-center pt-1">
+                        <span className="text-sm text-[var(--text-secondary)]">Recurring (monthly):</span>
+                        <span className="text-lg font-semibold text-purple-600">${recurringAddOns.reduce((sum, a) => sum + a.price, 0).toLocaleString()}/mo</span>
+                      </div>
+                    )}
                   </div>
                 )}
               </div>
@@ -1291,6 +1382,9 @@ export default function ProposalAIDialog({
       isOpen={showAddProspectDialog}
       onClose={() => setShowAddProspectDialog(false)}
       onSuccess={(newProspect) => {
+        // Trigger revalidation of the ProspectSelector
+        setProspectRevalidateKey(prev => prev + 1)
+        
         // Auto-select the newly created prospect
         setFormData(prev => ({
           ...prev,

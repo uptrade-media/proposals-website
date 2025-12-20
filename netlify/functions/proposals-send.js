@@ -189,6 +189,11 @@ export async function handler(event) {
   </style>
   <![endif]-->
   <style type="text/css">
+    /* Enable color scheme switching where supported */
+    :root { color-scheme: light dark; }
+    .logo-mark { fill: #0f172a; }
+    @media (prefers-color-scheme: dark) { .logo-mark { fill: #ffffff; } }
+
     /* Mobile Styles */
     @media only screen and (max-width: 600px) {
       .email-container { width: 100% !important; }
@@ -218,7 +223,13 @@ export async function handler(event) {
           <!-- Header -->
           <tr>
             <td align="center" class="mobile-padding-header" style="background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%); padding: 40px 40px 32px;">
-              <img src="https://portal.uptrademedia.com/logo.png" alt="Uptrade Media" width="140" style="display: block; margin-bottom: 20px; max-width: 140px; height: auto;" />
+              <!-- Inline logo mark: centered, gradient background, fills switch by theme -->
+              <div style="display:inline-flex; align-items:center; justify-content:center; width:96px; height:96px; border-radius:24px; background: linear-gradient(135deg, #22c55e 0%, #16a34a 100%); margin-bottom: 20px;">
+                <svg width="48" height="48" viewBox="0 0 24 24" role="img" aria-label="Uptrade logo" class="logo-mark" style="display:block;">
+                  <!-- Stylized U mark -->
+                  <path d="M6 4h2v12a4 4 0 0 0 8 0V4h2v12a6 6 0 0 1-12 0V4z" />
+                </svg>
+              </div>
               <h1 class="mobile-font-lg" style="margin: 0; color: #94a3b8; font-size: 26px; font-weight: 700; line-height: 1.3;">Your Proposal is Ready</h1>
               <p style="margin: 10px 0 0; color: #94a3b8; font-size: 15px; line-height: 1.5;">A custom proposal prepared just for you</p>
             </td>

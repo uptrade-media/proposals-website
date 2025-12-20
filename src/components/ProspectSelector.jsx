@@ -66,7 +66,8 @@ export default function ProspectSelector({
   className = '',
   showCreateNew = false,
   onCreateNew,
-  disabled = false
+  disabled = false,
+  revalidateKey // When this changes, refetch data
 }) {
   const [open, setOpen] = useState(false)
   const [search, setSearch] = useState('')
@@ -76,8 +77,8 @@ export default function ProspectSelector({
   const [hasLoaded, setHasLoaded] = useState(false)
 
   // Load prospects and clients
-  const loadData = async () => {
-    if (hasLoaded) return
+  const loadData = async (force = false) => {
+    if (hasLoaded && !force) return
     
     setIsLoading(true)
     try {
@@ -95,6 +96,13 @@ export default function ProspectSelector({
       setIsLoading(false)
     }
   }
+
+  // Revalidate when key changes (e.g., when new prospect is created)
+  useEffect(() => {
+    if (revalidateKey && hasLoaded) {
+      loadData(true)
+    }
+  }, [revalidateKey])
 
   // Load data when popover opens
   useEffect(() => {
@@ -210,13 +218,13 @@ export default function ProspectSelector({
       </PopoverTrigger>
       
       <PopoverContent className="w-[400px] p-0" align="start">
-        <Command shouldFilter={false}>
+        <Command shouldFilter={false} className="overflow-visible">
           <CommandInput 
             placeholder="Search by name, company, or email..." 
             value={search}
             onValueChange={setSearch}
           />
-          <CommandList className="max-h-[300px]">
+          <CommandList className="max-h-[300px] overflow-y-auto overscroll-contain">
             {isLoading ? (
               <div className="py-6 text-center text-sm text-[var(--text-tertiary)]">
                 Loading...

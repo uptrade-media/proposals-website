@@ -44,6 +44,11 @@ function generateInvoiceEmailHTML(invoice, contact, paymentUrl) {
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Invoice ${invoice.invoice_number}</title>
+  <style>
+    :root { color-scheme: light dark; }
+    .logo-mark { fill: #0f172a; }
+    @media (prefers-color-scheme: dark) { .logo-mark { fill: #ffffff; } }
+  </style>
 </head>
 <body style="margin: 0; padding: 0; background-color: #f5f5f5; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;">
   <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background-color: #f5f5f5;">
@@ -54,8 +59,12 @@ function generateInvoiceEmailHTML(invoice, contact, paymentUrl) {
           <!-- Header -->
           <tr>
             <td style="background: linear-gradient(135deg, #4bbf39 0%, #3a9c2d 100%); padding: 32px 40px; text-align: center;">
-              <img src="https://uptrademedia.com/logo-white.png" alt="Uptrade Media" height="40" style="max-height: 40px;">
-              <h1 style="color: #ffffff; margin: 16px 0 0; font-size: 24px; font-weight: 600;">Invoice ${invoice.invoice_number}</h1>
+              <div style="display:inline-flex; align-items:center; justify-content:center; width:96px; height:96px; border-radius:24px; background: linear-gradient(135deg, #22c55e 0%, #16a34a 100%); margin-bottom: 12px;">
+                <svg width="48" height="48" viewBox="0 0 24 24" role="img" aria-label="Uptrade logo" class="logo-mark" style="display:block;">
+                  <path d="M6 4h2v12a4 4 0 0 0 8 0V4h2v12a6 6 0 0 1-12 0V4z" />
+                </svg>
+              </div>
+              <h1 style="color: #ffffff; margin: 0; font-size: 24px; font-weight: 600;">Invoice ${invoice.invoice_number}</h1>
             </td>
           </tr>
           
@@ -197,7 +206,11 @@ function generateReminderEmailHTML(invoice, contact, paymentUrl, reminderNumber,
           <!-- Header -->
           <tr>
             <td style="background: linear-gradient(135deg, #4bbf39 0%, #3a9c2d 100%); padding: 24px 40px; text-align: center;">
-              <img src="https://uptrademedia.com/logo-white.png" alt="Uptrade Media" height="36" style="max-height: 36px;">
+              <div style="display:inline-flex; align-items:center; justify-content:center; width:80px; height:80px; border-radius:20px; background: linear-gradient(135deg, #22c55e 0%, #16a34a 100%);">
+                <svg width="40" height="40" viewBox="0 0 24 24" role="img" aria-label="Uptrade logo" class="logo-mark" style="display:block;">
+                  <path d="M6 4h2v12a4 4 0 0 0 8 0V4h2v12a6 6 0 0 1-12 0V4z" />
+                </svg>
+              </div>
             </td>
           </tr>
           

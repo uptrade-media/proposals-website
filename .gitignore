@@ -183,6 +183,9 @@ docs/
 # Drizzle migrations (run via Supabase Dashboard)
 drizzle/
 
+# Supabase migrations (managed outside this repo)
+supabase/migrations/
+
 # Keep essential docs
 !README.md
 

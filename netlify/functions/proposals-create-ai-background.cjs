@@ -226,7 +226,8 @@ PROJECT DETAILS:
 - Additional Context: ${projectInfo?.context || 'None'}
 - Notes: ${notes || 'None'}
 ${auditContext}
-${pricing?.addOns?.length ? `\nADD-ONS SELECTED:\n${pricing.addOns.map(a => `- ${a.name}: $${a.price}`).join('\n')}` : ''}
+${pricing?.addOns?.length ? `\nONE-TIME ADD-ONS SELECTED:\n${pricing.addOns.filter(a => !a.isRecurring).map(a => `- ${a.name}: $${a.price}`).join('\n')}` : ''}
+${pricing?.addOns?.some(a => a.isRecurring) ? `\nMONTHLY RETAINER/SERVICE FEES (NOT included in project price - billed separately):\n${pricing.addOns.filter(a => a.isRecurring).map(a => `- ${a.name}: $${a.price}/month`).join('\n')}\n\nNOTE: Include a section about the ongoing monthly services in the proposal.` : ''}
 ${pricing?.paymentTerms ? `\nPAYMENT TERMS: ${pricing.paymentTerms}` : ''}
 ${pricing?.customTerms ? `\nCUSTOM TERMS: ${pricing.customTerms}` : ''}
 
@@ -489,6 +490,39 @@ CRITICAL:
         }
       } catch (lineItemsError) {
         console.log('[proposal-ai-background] Line items error:', lineItemsError.message)
+      }
+    }
+
+    // Create draft recurring invoice if there are monthly retainers
+    const recurringAddOns = pricing?.addOns?.filter(a => a.isRecurring) || []
+    if (recurringAddOns.length > 0 && contactId) {
+      try {
+        const monthlyTotal = recurringAddOns.reduce((sum, a) => sum + (a.price || 0), 0)
+        const itemDescriptions = recurringAddOns.map(a => a.name).join(', ')
+        
+        const { data: invoice, error: invoiceError } = await supabase
+          .from('invoices')
+          .insert({
+            contact_id: contactId,
+            proposal_id: proposalId,
+            status: 'draft',
+            amount: monthlyTotal.toString(),
+            currency: 'USD',
+            description: `Monthly Retainer: ${itemDescriptions}`,
+            is_recurring: true,
+            recurring_interval: 'monthly',
+            notes: `Auto-generated from proposal. Monthly services: ${recurringAddOns.map(a => `${a.name} ($${a.price}/mo)`).join(', ')}`
+          })
+          .select()
+          .single()
+        
+        if (invoiceError) {
+          console.log('[proposal-ai-background] Draft invoice create error:', invoiceError.message)
+        } else {
+          console.log(`[proposal-ai-background] Draft recurring invoice created: ${invoice?.id}`)
+        }
+      } catch (invoiceError) {
+        console.log('[proposal-ai-background] Invoice error:', invoiceError.message)
       }
     }
 
