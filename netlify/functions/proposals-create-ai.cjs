@@ -1,13 +1,47 @@
-// netlify/functions/proposals-create-ai.js
+// netlify/functions/proposals-create-ai.cjs
 // Entry point for AI proposal generation - triggers background function
 const crypto = require('crypto')
 const { createClient } = require('@supabase/supabase-js')
-const { getAuthenticatedUser } = require('./utils/supabase.js')
 
 const supabase = createClient(
   process.env.SUPABASE_URL,
   process.env.SUPABASE_SERVICE_ROLE_KEY
 )
+
+// Helper to get authenticated user from Authorization header (inline to avoid ES module import)
+async function getAuthenticatedUser(event) {
+  try {
+    const authHeader = event.headers.authorization || event.headers.Authorization
+    
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      return { contact: null, error: 'No authorization header' }
+    }
+    
+    const token = authHeader.replace('Bearer ', '')
+    
+    // Verify the user with Supabase Auth
+    const { data: { user }, error: authError } = await supabase.auth.getUser(token)
+    
+    if (authError || !user) {
+      return { contact: null, error: authError?.message || 'Invalid token' }
+    }
+    
+    // Get the contact record
+    const { data: contact, error: contactError } = await supabase
+      .from('contacts')
+      .select('id, email, name, role, org_id')
+      .eq('email', user.email)
+      .single()
+    
+    if (contactError || !contact) {
+      return { contact: null, error: 'Contact not found for user' }
+    }
+    
+    return { contact, error: null }
+  } catch (err) {
+    return { contact: null, error: err.message }
+  }
+}
 
 exports.handler = async function(event) {
   const headers = {

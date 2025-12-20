@@ -85,8 +85,27 @@ export async function handler(event) {
         )
       `)
     
-    // Apply ownership filter (reps only see their audits, admins see all)
-    query = applyOwnershipFilter(query, contact, 'created_by')
+    // Search by URL (for finding existing audits) - check this first before ownership filter
+    const urlFilter = event.queryStringParameters?.url
+    if (urlFilter) {
+      // Normalize URL for matching (strip trailing slash, www, and protocol)
+      const normalizedUrl = urlFilter
+        .replace(/^https?:\/\//, '')
+        .replace(/^www\./, '')
+        .replace(/\/$/, '')
+      
+      console.log('[audits-list] Searching by URL:', urlFilter, '-> normalized:', normalizedUrl)
+      
+      // For URL searches, we want to find ANY matching audit (skip ownership filter)
+      // This is used for proposal creation to reference existing audit data
+      // Note: status can be 'completed' or 'complete' depending on source
+      query = query
+        .ilike('target_url', `%${normalizedUrl}%`)
+        .in('status', ['completed', 'complete'])
+    } else {
+      // Apply ownership filter only for regular list views (not URL searches)
+      query = applyOwnershipFilter(query, contact, 'created_by')
+    }
     
     // Apply optional filters
     if (contactIdFilter) {
@@ -98,26 +117,19 @@ export async function handler(event) {
       query = query.eq('created_by', createdByFilter)
     }
     
-    // Search by URL (for finding existing audits)
-    const urlFilter = event.queryStringParameters?.url
-    if (urlFilter) {
-      // Normalize URL for matching (strip trailing slash, www, and protocol)
-      const normalizedUrl = urlFilter
-        .replace(/^https?:\/\//, '')
-        .replace(/^www\./, '')
-        .replace(/\/$/, '')
-      
-      // Search for audits matching this URL (with status = 'completed')
-      query = query
-        .ilike('target_url', `%${normalizedUrl}%`)
-        .eq('status', 'completed')
-    }
-    
     query = query.order('created_at', { ascending: false })
 
     const { data, error } = await query
 
     if (error) throw error
+
+    // Log results for URL searches
+    if (urlFilter) {
+      console.log('[audits-list] URL search found', data?.length || 0, 'audits')
+      if (data?.length > 0) {
+        console.log('[audits-list] First result:', data[0].target_url, 'status:', data[0].status)
+      }
+    }
 
     // Transform to camelCase and flatten contact
     const audits = data.map(a => ({

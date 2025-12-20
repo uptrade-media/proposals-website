@@ -133,11 +133,12 @@ export async function handler(event) {
       if (lineItems.length > 0) {
         const lineItemsToInsert = lineItems.map((item, index) => ({
           proposal_id: proposalId,
-          service_type: item.serviceType || 'custom',
+          title: item.title || item.serviceType || 'Service',
+          item_type: item.serviceType || item.itemType || 'custom',
           description: item.description,
           quantity: item.quantity || 1,
           unit_price: item.unitPrice,
-          total: (item.quantity || 1) * item.unitPrice,
+          total_price: (item.quantity || 1) * item.unitPrice,
           sort_order: index
         }))
 

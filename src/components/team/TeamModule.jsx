@@ -29,12 +29,13 @@ export default function TeamModule() {
   const [activeView, setActiveView] = useState('organizations')
 
   // Determine context
-  // Show admin view ONLY if:
-  // 1. User is a super admin (isSuperAdmin=true) AND
-  // 2. They haven't selected a specific org/project (viewing global admin interface)
-  const isGlobalAdminView = isSuperAdmin && !currentOrg && !currentProject
+  // Show admin view only when:
+  // 1. User is a super admin AND
+  // 2. They're in the Uptrade Media org (or no org) - not viewing a client org
+  const isUptradeMediaOrg = currentOrg?.slug === 'uptrade-media' || currentOrg?.domain === 'uptrademedia.com'
   const isProjectContext = !!currentProject
-  const isOrgContext = !!currentOrg && !currentProject
+  const isGlobalAdminView = isSuperAdmin && !isProjectContext && (!currentOrg || isUptradeMediaOrg)
+  const isOrgContext = !!currentOrg && !currentProject && !isGlobalAdminView
   
   // Get IDs for non-admin views
   const organizationId = currentOrg?.id || currentProject?.organization_id

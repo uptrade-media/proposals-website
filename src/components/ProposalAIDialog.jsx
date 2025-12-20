@@ -334,7 +334,7 @@ export default function ProposalAIDialog({
     }))
   }
 
-  // Search for existing audits when URL changes
+  // Search for existing audits when URL changes (Step 3 only)
   const searchExistingAudit = async (url) => {
     if (!url || url.length < 5) {
       setExistingAudit(null)
@@ -343,14 +343,17 @@ export default function ProposalAIDialog({
     
     setIsSearchingAudit(true)
     try {
+      console.log('[ProposalAI] Calling audits-list with URL:', url)
       const response = await api.get('/.netlify/functions/audits-list', {
         params: { url }
       })
       
+      console.log('[ProposalAI] Audit search response:', response.data)
       const audits = response.data?.audits || []
       if (audits.length > 0) {
         // Use the most recent completed audit
         const latestAudit = audits[0]
+        console.log('[ProposalAI] Found existing audit:', latestAudit.id, latestAudit.targetUrl)
         setExistingAudit({
           id: latestAudit.id,
           targetUrl: latestAudit.targetUrl,
@@ -358,9 +361,11 @@ export default function ProposalAIDialog({
           performance: latestAudit.scores?.performance,
           seo: latestAudit.scores?.seo,
           accessibility: latestAudit.scores?.accessibility,
-          bestPractices: latestAudit.scores?.bestPractices
+          bestPractices: latestAudit.scores?.bestPractices,
+          fullAuditJson: latestAudit.fullAuditJson // Include full audit data for AI
         })
       } else {
+        console.log('[ProposalAI] No existing audit found for URL:', url)
         setExistingAudit(null)
       }
     } catch (error) {
@@ -378,21 +383,26 @@ export default function ProposalAIDialog({
         performance: existingAudit.performance,
         seo: existingAudit.seo,
         accessibility: existingAudit.accessibility,
-        bestPractices: existingAudit.bestPractices
+        bestPractices: existingAudit.bestPractices,
+        fullAuditJson: existingAudit.fullAuditJson // Include full audit data for AI
       })
     }
   }
 
-  // Debounced URL search effect
+  // Debounced URL search effect - only on step 3
   useEffect(() => {
+    // Only search when on step 3 and have a valid URL
+    if (step !== 3 || !formData.websiteUrl || formData.websiteUrl.length < 5) {
+      return
+    }
+    
     const debounceTimer = setTimeout(() => {
-      if (formData.websiteUrl && selectedType === 'website_rebuild') {
-        searchExistingAudit(formData.websiteUrl)
-      }
+      console.log('[ProposalAI] Searching for existing audit by URL:', formData.websiteUrl)
+      searchExistingAudit(formData.websiteUrl)
     }, 500) // 500ms debounce
     
     return () => clearTimeout(debounceTimer)
-  }, [formData.websiteUrl, selectedType])
+  }, [formData.websiteUrl, step])
 
   // Run audit for website URL (internal admin-only audit with polling)
   const runAudit = async () => {
@@ -656,6 +666,7 @@ export default function ProposalAIDialog({
         heroImageUrl = uploadResponse.data.url
       }
 
+      // Start background generation - returns immediately with proposalId
       const response = await api.post('/.netlify/functions/proposals-create-ai', {
         contactId: formData.contactId,
         proposalType: selectedType,
@@ -691,67 +702,62 @@ export default function ProposalAIDialog({
         })()
       })
 
-      const { proposalId } = response.data
+      const { proposalId, status } = response.data
       if (!proposalId) {
         throw new Error('No proposalId returned')
       }
 
-      console.log('[ProposalAI] Generation started, polling for proposal:', proposalId)
+      console.log('[ProposalAI] Background generation started:', proposalId)
 
-      // Poll for results every 5 seconds (max 3 minutes for AI generation)
-      const maxAttempts = 36
+      // Poll for completion (background function can take up to 15 min)
+      const maxAttempts = 180 // 3 minutes max (180 * 1 second)
       let attempts = 0
       
-      const pollForResults = async () => {
-        attempts++
-        console.log(`[ProposalAI] Polling attempt ${attempts}/${maxAttempts} for proposal ${proposalId}`)
-        try {
-          const statusResponse = await api.get(`/.netlify/functions/proposals-create-ai?proposalId=${proposalId}`)
-          const { status, proposal } = statusResponse.data
+      const pollForCompletion = async () => {
+        while (attempts < maxAttempts) {
+          attempts++
+          await new Promise(resolve => setTimeout(resolve, 1000)) // 1 second
           
-          if (status === 'complete' && proposal) {
-            console.log('[ProposalAI] Proposal generated:', proposal)
-            setGeneratedProposal(proposal)
-            setIsGenerating(false)
+          try {
+            const statusResponse = await api.get(`/.netlify/functions/proposals-create-ai?proposalId=${proposalId}`)
+            const { status: currentStatus, proposal, error } = statusResponse.data
             
-            // Close dialog and navigate to editor
-            setIsOpen(false)
-            if (onSuccess) {
-              onSuccess(proposal)
+            if (currentStatus === 'complete' && proposal) {
+              console.log('[ProposalAI] Proposal generated successfully:', proposalId)
+              setGeneratedProposal(proposal)
+              setIsGenerating(false)
+              
+              // Close dialog and navigate to editor
+              setIsOpen(false)
+              if (onSuccess) {
+                onSuccess(proposal)
+              }
+              if (onNavigate) {
+                onNavigate('proposal-editor', { proposalId: proposal.id })
+              }
+              return
             }
-            if (onNavigate) {
-              onNavigate('proposal-editor', { proposalId: proposal.id })
+            
+            if (currentStatus === 'failed') {
+              throw new Error(error || 'Generation failed')
             }
-            return
-          }
-          
-          if (status === 'failed') {
-            console.error('[ProposalAI] Generation failed')
-            alert('Proposal generation failed. Please try again.')
-            setIsGenerating(false)
-            return
-          }
-          
-          // Still generating, poll again
-          if (attempts < maxAttempts) {
-            setTimeout(pollForResults, 5000)
-          } else {
-            console.error('[ProposalAI] Generation timed out')
-            alert('Proposal generation timed out. Please check the Proposals page.')
-            setIsGenerating(false)
-          }
-        } catch (err) {
-          console.error('[ProposalAI] Poll error:', err)
-          if (attempts < maxAttempts) {
-            setTimeout(pollForResults, 5000)
-          } else {
-            setIsGenerating(false)
+            
+            // Still generating, continue polling
+            console.log(`[ProposalAI] Still generating... (attempt ${attempts})`)
+          } catch (pollError) {
+            if (pollError.response?.status === 404) {
+              throw new Error('Proposal not found during generation')
+            }
+            // Other errors, keep trying
+            console.log('[ProposalAI] Poll error, retrying...', pollError.message)
           }
         }
+        
+        throw new Error('Generation timed out. The proposal may still be generating in the background.')
       }
-
-      // Start polling after 3 seconds (give AI time to start)
-      setTimeout(pollForResults, 3000)
+      
+      await pollForCompletion()
+      
     } catch (error) {
       console.error('[ProposalAI] Error:', error)
       alert('Failed to generate proposal: ' + (error.response?.data?.error || error.message))
@@ -1221,9 +1227,8 @@ export default function ProposalAIDialog({
                         value={formData.websiteUrl} 
                         onChange={(e) => {
                           setFormData({ ...formData, websiteUrl: e.target.value })
-                          // Clear existing results when URL changes
+                          // Clear audit results when URL changes (existing audit will update via debounced search)
                           setAuditResults(null)
-                          setExistingAudit(null)
                         }} 
                         placeholder="https://current-website.com" 
                         className="flex-1 glass-bg border-[var(--glass-border)]" 
