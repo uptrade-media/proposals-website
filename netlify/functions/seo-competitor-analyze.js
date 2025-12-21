@@ -3,10 +3,7 @@
 // Compares keyword overlap, content gaps, and rankings
 import { createSupabaseAdmin, getAuthenticatedUser } from './utils/supabase.js'
 import { google } from 'googleapis'
-import OpenAI from 'openai'
-
-// Use env variable for model - easily update when new models release
-const SEO_AI_MODEL = process.env.SEO_AI_MODEL || 'gpt-4o'
+import { SEOSkill } from './skills/seo-skill.js'
 
 export async function handler(event) {
   const headers = {
@@ -99,13 +96,16 @@ async function analyzeCompetitor(event, headers) {
     // Fetch site details
     const { data: site, error: siteError } = await supabase
       .from('seo_sites')
-      .select('*, org:organizations(domain)')
+      .select('*, org_id, org:organizations(domain)')
       .eq('id', siteId)
       .single()
 
     if (siteError || !site) {
       return { statusCode: 404, headers, body: JSON.stringify({ error: 'Site not found' }) }
     }
+
+    // Initialize SEOSkill for AI operations
+    const seoSkill = new SEOSkill(supabase, site.org_id, siteId, { userId: contact.id })
 
     const ourDomain = site.org?.domain || site.domain
 
@@ -152,99 +152,12 @@ async function analyzeCompetitor(event, headers) {
       console.error('[Competitor] GSC error:', e)
     }
 
-    // Use AI to analyze the competitor
-    const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY })
-
-    const analysisPrompt = `Analyze this competitor for SEO comparison.
-
-OUR BUSINESS:
-- Domain: ${ourDomain}
-- Industry: ${knowledge?.industry || 'Unknown'}
-- Services: ${knowledge?.services?.join(', ') || 'Unknown'}
-- Service Areas: ${knowledge?.service_areas?.join(', ') || 'Unknown'}
-
-OUR TOP KEYWORDS (from Google Search Console):
-${ourKeywords.slice(0, 30).map(k => `- "${k.keyword}" (Position: ${k.position.toFixed(1)}, Clicks: ${k.clicks})`).join('\n')}
-
-COMPETITOR DOMAIN: ${competitorDomain}
-
-Analyze the competitive landscape and provide:
-
-1. POSITIONING ANALYSIS
-- How does this competitor likely position themselves?
-- What market segments are they targeting?
-- What's their likely competitive advantage?
-
-2. KEYWORD OPPORTUNITIES
-List 10-15 keywords we should target based on:
-- Keywords where competitor likely ranks but we don't appear in our GSC data
-- Keywords that align with our services
-- Local keywords for our service areas
-
-3. CONTENT GAPS
-What types of content should we create to compete better?
-
-4. DIFFERENTIATION STRATEGY
-How can we differentiate from this competitor in search?
-
-Return your analysis as JSON:
-{
-  "competitor_name": "Best guess at business name",
-  "competitor_positioning": "Brief description of their positioning",
-  "threat_level": "high|medium|low",
-  "overlap_assessment": "Description of how much we compete",
-  "keyword_opportunities": [
-    {
-      "keyword": "keyword phrase",
-      "difficulty": "easy|medium|hard",
-      "priority": "high|medium|low",
-      "rationale": "Why target this"
-    }
-  ],
-  "content_gaps": [
-    {
-      "topic": "Topic area",
-      "content_type": "blog|service page|landing page|guide",
-      "priority": "high|medium|low"
-    }
-  ],
-  "differentiation_strategies": [
-    "Strategy 1",
-    "Strategy 2"
-  ],
-  "quick_wins": [
-    "Action 1",
-    "Action 2",
-    "Action 3"
-  ]
-}`
-
-    const completion = await openai.chat.completions.create({
-      model: SEO_AI_MODEL,
-      messages: [
-        {
-          role: 'system',
-          content: 'You are an expert SEO competitive analyst. Analyze competitors and identify opportunities based on the provided data. Be specific and actionable.'
-        },
-        {
-          role: 'user',
-          content: analysisPrompt
-        }
-      ],
-      response_format: { type: 'json_object' },
-      temperature: 0.3
+    // Use SEOSkill to analyze the competitor
+    const analysis = await seoSkill.analyzeCompetitorSync(competitorDomain, {
+      ourKeywords,
+      knowledge,
+      ourDomain
     })
-
-    let analysis
-    try {
-      analysis = JSON.parse(completion.choices[0].message.content)
-    } catch (e) {
-      console.error('[Competitor] Failed to parse AI response:', e)
-      analysis = {
-        competitor_name: competitorDomain,
-        error: 'Failed to analyze'
-      }
-    }
 
     // Store competitor data
     const competitorData = {

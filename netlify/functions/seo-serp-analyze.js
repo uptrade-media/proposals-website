@@ -3,10 +3,7 @@
 // Identifies opportunities for SERP feature capture
 import { createSupabaseAdmin, getAuthenticatedUser } from './utils/supabase.js'
 import { google } from 'googleapis'
-import OpenAI from 'openai'
-
-// Use env variable for model - easily update when new models release
-const SEO_AI_MODEL = process.env.SEO_AI_MODEL || 'gpt-4o'
+import { SEOSkill } from './skills/seo-skill.js'
 
 export async function handler(event) {
   const headers = {
@@ -159,7 +156,20 @@ async function analyzeSerpFeatures(event, headers) {
     }
 
     const supabase = createSupabaseAdmin()
-    const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY })
+    
+    // Get site for org_id
+    const { data: site } = await supabase
+      .from('seo_sites')
+      .select('org_id')
+      .eq('id', siteId)
+      .single()
+
+    if (!site) {
+      return { statusCode: 404, headers, body: JSON.stringify({ error: 'Site not found' }) }
+    }
+
+    // Initialize SEOSkill
+    const seoSkill = new SEOSkill(supabase, site.org_id, siteId, { userId: contact.id })
 
     // Get site knowledge for context
     const { data: knowledge } = await supabase
@@ -216,20 +226,15 @@ Return as JSON:
 }`
 
       try {
-        const completion = await openai.chat.completions.create({
-          model: SEO_AI_MODEL,
-          messages: [
-            {
-              role: 'system',
-              content: 'You are an expert in SERP feature optimization. Analyze keywords and provide specific, actionable recommendations for capturing featured snippets, PAA boxes, and other SERP features.'
-            },
-            { role: 'user', content: prompt }
-          ],
-          response_format: { type: 'json_object' },
+        const analysis = await seoSkill.signal.invoke({
+          module: 'seo',
+          tool: 'serp_analysis',
+          systemPrompt: 'You are an expert in SERP feature optimization. Analyze keywords and provide specific, actionable recommendations for capturing featured snippets, PAA boxes, and other SERP features.',
+          prompt,
+          responseFormat: 'json',
           temperature: 0.3
         })
 
-        const analysis = JSON.parse(completion.choices[0].message.content)
         results.push(analysis)
 
         // Update keyword in database with SERP features

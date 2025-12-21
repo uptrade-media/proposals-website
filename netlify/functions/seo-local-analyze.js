@@ -2,10 +2,7 @@
 // Local SEO Analysis - GBP optimization, local citations, NAP consistency
 // Comprehensive local search optimization
 import { createSupabaseAdmin, getAuthenticatedUser } from './utils/supabase.js'
-import OpenAI from 'openai'
-
-// Use env variable for model - easily update when new models release
-const SEO_AI_MODEL = process.env.SEO_AI_MODEL || 'gpt-4o'
+import { SEOSkill } from './skills/seo-skill.js'
 
 export async function handler(event) {
   const headers = {
@@ -149,7 +146,15 @@ async function analyzeLocalSeo(event, headers) {
     }
 
     const supabase = createSupabaseAdmin()
-    const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY })
+
+    // Get site and org_id
+    const { data: site } = await supabase
+      .from('seo_sites')
+      .select('org_id, domain')
+      .eq('id', siteId)
+      .single()
+
+    const orgId = site?.org_id || 'uptrade'
 
     // Get all relevant data
     const [knowledgeResult, pagesResult, keywordsResult] = await Promise.all([
@@ -174,130 +179,52 @@ async function analyzeLocalSeo(event, headers) {
       }
     }
 
+    // Initialize SEO Skill
+    const seoSkill = new SEOSkill(supabase, orgId, siteId, { userId: contact.id })
+
     // Build context for AI analysis
     const analysisContext = {
-      business: {
-        name: knowledge.business_name,
-        industry: knowledge.industry,
-        primaryLocation: knowledge.primary_location,
-        serviceAreas: knowledge.service_areas || [],
-        serviceRadius: knowledge.service_radius_miles
-      },
-      currentState: {
-        totalPages: pages.length,
-        locationPages: pages.filter(p => 
-          p.url.includes('location') || 
-          p.url.includes('service-area') ||
-          p.url.includes('near')
-        ).length,
-        localKeywords: localKeywords.length,
-        localKeywordsRanking: localKeywords.filter(k => k.current_position <= 20).length
-      },
-      topLocalKeywords: localKeywords.slice(0, 20).map(k => ({
-        keyword: k.keyword,
-        position: k.current_position,
-        impressions: k.impressions_28d
-      }))
-    }
-
-    // AI Analysis
-    const prompt = `Analyze this local business's SEO and provide comprehensive recommendations.
-
-BUSINESS PROFILE:
-${JSON.stringify(analysisContext.business, null, 2)}
-
-CURRENT STATE:
-${JSON.stringify(analysisContext.currentState, null, 2)}
-
-TOP LOCAL KEYWORDS:
-${JSON.stringify(analysisContext.topLocalKeywords, null, 2)}
-
-Provide a comprehensive local SEO analysis covering:
-1. Google Business Profile optimization
-2. Local landing page strategy
-3. NAP (Name, Address, Phone) consistency
-4. Local schema markup
-5. Citation building priorities
-6. Review strategy
-7. Local content opportunities
-8. Geo-targeted keyword opportunities
-
-Return as JSON:
-{
-  "overallAssessment": "Brief overall assessment",
-  "priorityActions": [
-    {
-      "action": "Action to take",
-      "category": "gbp|pages|citations|schema|reviews|content",
-      "priority": "critical|high|medium|low",
-      "estimatedImpact": "Description of expected impact",
-      "effort": "quick|medium|significant"
-    }
-  ],
-  "locationPageStrategy": {
-    "missingPages": ["City 1", "City 2"],
-    "templateRecommendations": "How to structure location pages",
-    "contentGuidelines": ["Guideline 1", "Guideline 2"]
-  },
-  "gbpOptimization": [
-    {
-      "element": "Business Description",
-      "recommendation": "What to optimize",
-      "priority": "high|medium|low"
-    }
-  ],
-  "schemaRecommendations": [
-    {
-      "schemaType": "LocalBusiness",
-      "implementation": "How to implement",
-      "pages": "Which pages to add it to"
-    }
-  ],
-  "citationOpportunities": [
-    {
-      "platform": "Platform name",
-      "priority": "high|medium|low",
-      "notes": "Any specific notes"
-    }
-  ],
-  "keywordOpportunities": [
-    {
-      "keyword": "keyword phrase",
-      "type": "city+service|near me|neighborhood",
-      "suggestedPage": "URL or page type",
-      "priority": "high|medium|low"
-    }
-  ]
-}`
-
-    const completion = await openai.chat.completions.create({
-      model: SEO_AI_MODEL,
-      messages: [
-        {
-          role: 'system',
-          content: 'You are an expert local SEO strategist. Provide specific, actionable recommendations for improving local search visibility. Focus on high-impact, practical optimizations.'
+      businessName: knowledge.business_name,
+      industry: knowledge.industry,
+      location: knowledge.primary_location,
+      serviceAreas: knowledge.service_areas || [],
+      gbpData: {
+        serviceRadius: knowledge.service_radius_miles,
+        currentState: {
+          totalPages: pages.length,
+          locationPages: pages.filter(p => 
+            p.url.includes('location') || 
+            p.url.includes('service-area') ||
+            p.url.includes('near')
+          ).length,
+          localKeywords: localKeywords.length,
+          localKeywordsRanking: localKeywords.filter(k => k.current_position <= 20).length
         },
-        { role: 'user', content: prompt }
-      ],
-      response_format: { type: 'json_object' },
-      temperature: 0.3
-    })
+        topLocalKeywords: localKeywords.slice(0, 20).map(k => ({
+          keyword: k.keyword,
+          position: k.current_position,
+          impressions: k.impressions_28d
+        }))
+      }
+    }
 
-    const analysis = JSON.parse(completion.choices[0].message.content)
+    // AI Analysis via SEOSkill
+    const analysis = await seoSkill.analyzeLocalSEO(analysisContext)
 
-    // Store recommendations in database
-    const recommendationsToInsert = analysis.priorityActions.map(action => ({
+    // Store recommendations in database (SEOSkill returns recommendations[] format)
+    const recommendations = analysis.recommendations || []
+    const recommendationsToInsert = recommendations.map(rec => ({
       site_id: siteId,
       category: 'local',
-      subcategory: action.category,
-      priority: action.priority,
-      title: action.action,
-      description: action.estimatedImpact,
-      effort: action.effort,
+      subcategory: rec.category || 'general',
+      priority: rec.priority || 'medium',
+      title: rec.issue || rec.title || 'Local SEO recommendation',
+      description: rec.fix || rec.description || '',
+      effort: rec.effort || 'medium',
       auto_fixable: false,
-      one_click_fixable: action.category === 'schema',
+      one_click_fixable: rec.category === 'schema',
       status: 'pending',
-      ai_model: SEO_AI_MODEL,
+      ai_model: 'seo-skill',
       created_at: new Date().toISOString()
     }))
 

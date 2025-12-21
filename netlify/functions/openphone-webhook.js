@@ -1,12 +1,12 @@
 // ========================================
 // OPENPHONE WEBHOOK HANDLER
-// Processes call events and triggers AI analysis
+// Processes call events and triggers AI analysis via Signal CRM Skill
 // Events: call.completed, call.recording.completed, call.transcript.completed
 // ========================================
 
 import { createSupabaseAdmin } from './utils/supabase.js'
 import { createHash, createHmac } from 'crypto'
-import OpenAI from 'openai'
+import { CRMSkill } from './skills/crm-skill.js'
 
 const OPENPHONE_WEBHOOK_SECRET = process.env.OPENPHONE_WEBHOOK_SECRET
 
@@ -83,76 +83,16 @@ async function matchContactByPhone(supabase, phoneNumber) {
 }
 
 /**
- * Enhanced AI analysis using OpenPhone data
+ * Enhanced AI analysis using Signal CRM Skill
  */
-async function analyzeCallWithAI(transcript, openphoneSummary) {
+async function analyzeCallWithAI(transcript, openphoneSummary, supabase) {
   if (!transcript && !openphoneSummary) {
     return null // Nothing to analyze
   }
   
-  const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY })
-  
-  const prompt = `You are a CRM assistant analyzing a sales call. You have been provided:
-1. OpenPhone's transcript: ${transcript ? 'Available' : 'Not available'}
-2. OpenPhone's AI summary: ${openphoneSummary ? 'Available' : 'Not available'}
-
-Your task is to provide ENHANCED CRM analysis in JSON format with these fields:
-
-{
-  "enhanced_summary": "2-3 sentence summary with key business details",
-  "sentiment": "positive|neutral|negative|mixed",
-  "conversation_type": "sales|support|discovery|closing|follow_up",
-  "lead_quality_score": 0-100 (0-40 cold, 41-70 warm, 71-100 hot),
-  "contact": {
-    "name": "Full name if mentioned",
-    "company": "Company name",
-    "title": "Job title",
-    "email": "Email if mentioned",
-    "phone": "Phone if mentioned",
-    "website": "Website if mentioned",
-    "confidence": 0.00-1.00
-  },
-  "tasks": [
-    {
-      "title": "Action item title",
-      "description": "Details",
-      "task_type": "follow_up|send_proposal|schedule_meeting|research|technical",
-      "priority": "low|medium|high|urgent",
-      "due_date": "ISO 8601 date string",
-      "confidence": 0.00-1.00,
-      "reasoning": "Why this task is needed"
-    }
-  ],
-  "topics": [
-    {
-      "topic": "pricing|timeline|features|objections|budget|competition",
-      "relevance_score": 0.00-1.00,
-      "sentiment": "positive|neutral|negative",
-      "key_phrases": ["relevant quotes"]
-    }
-  ],
-  "follow_up": {
-    "type": "email|call|sms|meeting",
-    "scheduled_for": "ISO 8601 date string",
-    "suggested_subject": "Subject line for email",
-    "suggested_message": "Draft message"
-  }
-}
-
-INPUT DATA:
-${transcript ? `Transcript: ${transcript}` : ''}
-${openphoneSummary ? `OpenPhone Summary: ${openphoneSummary}` : ''}
-
-Return ONLY valid JSON, no markdown.`
-
-  const completion = await openai.chat.completions.create({
-    model: 'gpt-4o',
-    messages: [{ role: 'user', content: prompt }],
-    response_format: { type: 'json_object' },
-    temperature: 0.3
-  })
-  
-  return JSON.parse(completion.choices[0].message.content)
+  // Use CRM Skill for call analysis
+  const crmSkill = new CRMSkill(supabase, 'uptrade')
+  return await crmSkill.analyzeCall(transcript, openphoneSummary)
 }
 
 /**
@@ -364,7 +304,7 @@ export async function handler(event) {
           const summary = await fetchSummary(data.id).catch(() => null)
           
           if (transcript || summary) {
-            const analysis = await analyzeCallWithAI(transcript, summary)
+            const analysis = await analyzeCallWithAI(transcript, summary, supabase)
             await processCall(supabase, { ...data, id: data.id }, transcript, summary, analysis)
             console.log('Call analyzed immediately')
           }
@@ -394,7 +334,7 @@ export async function handler(event) {
           
           if (transcript || summary) {
             // If available, analyze immediately
-            const analysis = await analyzeCallWithAI(transcript, summary)
+            const analysis = await analyzeCallWithAI(transcript, summary, supabase)
             await processCall(supabase, data, transcript, summary, analysis)
             console.log('Call analyzed immediately')
           } else {
@@ -437,7 +377,7 @@ export async function handler(event) {
         
         // Only analyze if we have transcript OR summary and haven't processed yet
         if ((transcript || summary) && callLog.processing_status !== 'completed') {
-          const analysis = await analyzeCallWithAI(transcript, summary)
+          const analysis = await analyzeCallWithAI(transcript, summary, supabase)
           
           // Get call data from original webhook
           const callData = {

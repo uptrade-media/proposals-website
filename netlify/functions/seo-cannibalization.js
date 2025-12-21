@@ -1,9 +1,9 @@
 // netlify/functions/seo-cannibalization.js
 // Detect keyword cannibalization - multiple pages competing for same keyword
 import { createSupabaseAdmin, getAuthenticatedUser } from './utils/supabase.js'
-import OpenAI from 'openai'
+import { SEOSkill } from './skills/seo-skill.js'
 
-const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY })
+// SEOSkill instance created when needed for AI recommendations
 
 export async function handler(event) {
   const headers = {
@@ -216,7 +216,7 @@ async function detectCannibalization(event, supabase, headers) {
     .slice(0, 20)
 
   if (topIssues.length > 0) {
-    const aiRecommendations = await getAiRecommendations(topIssues, pages)
+    const aiRecommendations = await getAiRecommendations(topIssues, pages, supabase, siteId)
     
     // Merge AI recommendations
     for (const issue of topIssues) {
@@ -301,42 +301,39 @@ function hashKeyword(keyword) {
   return Math.abs(hash).toString(16)
 }
 
-async function getAiRecommendations(issues, pages) {
+async function getAiRecommendations(issues, pages, supabase, siteId) {
   try {
-    const issueDescriptions = issues.map(issue => ({
-      keyword: issue.keyword,
+    // Get site for orgId
+    const { data: site } = await supabase
+      .from('seo_sites')
+      .select('org_id, domain')
+      .eq('id', siteId)
+      .single()
+
+    const seoSkill = new SEOSkill(supabase, site?.org_id, siteId, {})
+    
+    // Transform issues to format expected by SEOSkill.analyzeCannibalization
+    const cannibalized = issues.map(issue => ({
+      query: issue.keyword,
       pages: issue.competing_pages.map(p => ({
-        url: p.url,
-        title: p.title,
+        page: p.url,
         position: p.position,
-        clicks: p.clicks
+        clicks: p.clicks,
+        title: p.title
       }))
     }))
 
-    const response = await openai.chat.completions.create({
-      model: 'gpt-4o-mini',
-      messages: [
-        {
-          role: 'system',
-          content: `You are an SEO expert analyzing keyword cannibalization issues. For each issue, recommend a strategy:
-- consolidate: Merge content into one page, redirect others
-- differentiate: Make each page target distinct long-tail variations  
-- canonicalize: Use canonical tags to signal preferred page
-- deindex: Remove weaker page from index
-
-Provide actionable steps. Be specific about which page should be primary.`
-        },
-        {
-          role: 'user',
-          content: `Analyze these cannibalization issues and recommend strategies:\n\n${JSON.stringify(issueDescriptions, null, 2)}\n\nRespond with JSON array: [{keyword, strategy, reasoning, action_steps: []}]`
-        }
-      ],
-      response_format: { type: 'json_object' },
-      temperature: 0.3
-    })
-
-    const result = JSON.parse(response.choices[0].message.content)
-    return result.recommendations || result.issues || []
+    const result = await seoSkill.analyzeCannibalization(cannibalized, site?.domain || '')
+    
+    // Transform result back to expected format
+    return (result.issues || []).map(r => ({
+      keyword: r.query,
+      strategy: r.action || r.strategy,
+      reasoning: r.recommendation || r.reason,
+      action_steps: r.implementation ? 
+        [r.implementation.action, r.implementation.contentChanges, r.implementation.technicalChanges].filter(Boolean) : 
+        []
+    }))
   } catch (error) {
     console.error('[Cannibalization] AI recommendation error:', error)
     return []

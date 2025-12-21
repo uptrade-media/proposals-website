@@ -131,7 +131,7 @@ export async function handler(event) {
     }
 
     if (dueDate !== undefined) {
-      updateData.due_date = dueDate
+      updateData.due_at = dueDate
     }
 
     if (status !== undefined) {
@@ -180,7 +180,7 @@ export async function handler(event) {
           taxAmount: updatedInvoice.tax_amount,
           totalAmount: updatedInvoice.total_amount,
           description: updatedInvoice.description,
-          dueDate: updatedInvoice.due_date,
+          dueDate: updatedInvoice.due_at || updatedInvoice.due_date,
           status: updatedInvoice.status,
           contact: updatedInvoice.contact,
           project: updatedInvoice.project,

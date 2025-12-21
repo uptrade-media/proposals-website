@@ -1,26 +1,9 @@
 // netlify/functions/proposals-update-ai.js
-// Update an existing proposal based on AI instruction
-import OpenAI from 'openai'
+// Update an existing proposal based on AI instruction - uses Signal ProposalsSkill
 import { createSupabaseAdmin, getAuthenticatedUser } from './utils/supabase.js'
+import { ProposalsSkill } from './skills/proposals-skill.js'
 
-const openai = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY
-})
-
-const UPDATE_PROMPT = `You are updating a proposal for Uptrade Media based on the user's instruction.
-
-Current proposal content (MDX format):
-{{currentContent}}
-
-User's instruction: {{instruction}}
-
-INSTRUCTIONS:
-1. Make the requested changes while maintaining the proposal's professional tone
-2. Keep the same MDX structure and formatting
-3. Preserve urgency triggers and conversion elements
-4. If changing pricing, ensure it's reflected in the investment section
-
-Return the complete updated MDX content only, no explanations.`
+// Note: Proposal editing prompts are now handled by ProposalsSkill
 
 export async function handler(event) {
   const headers = {
@@ -64,22 +47,19 @@ export async function handler(event) {
       return { statusCode: 404, headers, body: JSON.stringify({ error: 'Proposal not found' }) }
     }
 
-    // Build the prompt
-    const systemPrompt = UPDATE_PROMPT
-      .replace('{{currentContent}}', proposal.mdx_content || '')
-      .replace('{{instruction}}', instruction)
+    // Use ProposalsSkill for AI editing
+    const proposalsSkill = new ProposalsSkill(supabase, null, { userId: contact.id })
+    
+    console.log('[proposals-update-ai] Using ProposalsSkill for update')
+    
+    const result = await proposalsSkill.editSection(
+      proposalId,
+      'full', // Edit full content
+      proposal.mdx_content,
+      instruction
+    )
 
-    const completion = await openai.chat.completions.create({
-      model: 'gpt-4o',
-      messages: [
-        { role: 'system', content: systemPrompt },
-        { role: 'user', content: `Please update the proposal according to this instruction: ${instruction}` }
-      ],
-      temperature: 0.7,
-      max_tokens: 4000
-    })
-
-    const updatedContent = completion.choices[0]?.message?.content || ''
+    const updatedContent = typeof result === 'string' ? result : (result.content || result.mdxContent || '')
 
     // Update the proposal in the database
     const { data: updatedProposal, error: updateError } = await supabase

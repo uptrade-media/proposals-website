@@ -1,9 +1,6 @@
 // netlify/functions/seo-content-gap-analysis.js
 // Content Gap Analysis - Find missing topics, compare with competitors
 import { createSupabaseAdmin, getAuthenticatedUser } from './utils/supabase.js'
-import OpenAI from 'openai'
-
-const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY })
 
 export async function handler(event) {
   const headers = {

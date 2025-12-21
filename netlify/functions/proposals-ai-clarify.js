@@ -1,11 +1,7 @@
 // netlify/functions/proposals-ai-clarify.js
-// AI assistant that asks clarifying questions before generating a proposal
-import OpenAI from 'openai'
-import { getAuthenticatedUser } from './utils/supabase.js'
-
-const openai = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY
-})
+// AI assistant that asks clarifying questions before generating a proposal - uses Signal ProposalsSkill
+import { createSupabaseAdmin, getAuthenticatedUser } from './utils/supabase.js'
+import { ProposalsSkill } from './skills/proposals-skill.js'
 
 const CLARIFICATION_PROMPT = `You are a senior sales consultant at Uptrade Media helping prepare a high-converting proposal.
 
@@ -120,31 +116,35 @@ SEO Details:
       .replace('{{clientIndustry}}', clientInfo?.industry || 'Unknown')
       .replace('{{projectDetails}}', projectDetails || 'None provided yet')
 
-    // Build messages array
-    const messages = [
-      { role: 'system', content: systemPrompt },
-      ...conversation.map(msg => ({
-        role: msg.role,
-        content: msg.content
-      }))
-    ]
+    // Use ProposalsSkill for clarification questions
+    const supabase = createSupabaseAdmin()
+    const proposalsSkill = new ProposalsSkill(supabase, null, { userId: contact.id })
+    
+    console.log('[proposals-ai-clarify] Using ProposalsSkill for clarification')
+    
+    // Format the vague request with all available context
+    const vagueRequest = `
+Proposal Type: ${proposalType}
+Client: ${clientInfo?.name || 'Unknown'} at ${clientInfo?.company || 'Unknown'} (${clientInfo?.industry || 'Unknown'})
+Project Details: ${projectDetails || 'None'}
+${conversation.length > 0 ? `\nConversation so far:\n${conversation.map(m => `${m.role}: ${m.content}`).join('\n')}` : ''}
+    `.trim()
 
-    // If no conversation yet, just generate first question
+    let aiResponse
     if (conversation.length === 0) {
-      messages.push({
-        role: 'user',
-        content: 'Please review the information provided and ask any clarifying questions needed to create a high-converting proposal.'
-      })
+      // First call - get initial clarifying questions
+      const result = await proposalsSkill.clarifyRequest(vagueRequest)
+      aiResponse = result.questions ? result.questions.join('\n\n') : (result.message || result)
+    } else {
+      // Continuing conversation - use refine
+      const result = await proposalsSkill.refineWithChat(
+        null,
+        vagueRequest,
+        conversation[conversation.length - 1]?.content || '',
+        conversation
+      )
+      aiResponse = typeof result === 'string' ? result : (result.message || JSON.stringify(result))
     }
-
-    const completion = await openai.chat.completions.create({
-      model: 'gpt-4o',
-      messages,
-      temperature: 0.7,
-      max_tokens: 500
-    })
-
-    const aiResponse = completion.choices[0]?.message?.content || ''
 
     // Check if AI says it's done (has enough info)
     const isDone = aiResponse.toLowerCase().includes('have everything') || 

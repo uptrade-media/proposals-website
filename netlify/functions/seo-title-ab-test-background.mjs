@@ -2,7 +2,7 @@
 // Background function for Title A/B Test variant generation (up to 15 min timeout)
 // Generates AI-powered title variants for multiple pages at once
 import { createClient } from '@supabase/supabase-js'
-import OpenAI from 'openai'
+import { SEOSkill } from './skills/seo-skill.js'
 
 const SEO_AI_MODEL = process.env.SEO_AI_MODEL || 'gpt-4o'
 
@@ -82,7 +82,7 @@ export async function handler(event) {
     }
 
     // Start background processing
-    processVariantGeneration(supabase, siteId, jobId, pageIds, generateForTop).catch(err => {
+    processVariantGeneration(supabase, siteId, jobId, pageIds, generateForTop, orgId).catch(err => {
       console.error('[Title AB Background] Processing error:', err)
       supabase
         .from('seo_background_jobs')
@@ -102,8 +102,8 @@ export async function handler(event) {
   }
 }
 
-async function processVariantGeneration(supabase, siteId, jobId, pageIds, generateForTop) {
-  const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY })
+async function processVariantGeneration(supabase, siteId, jobId, pageIds, generateForTop, orgId) {
+  const seoSkill = new SEOSkill(supabase, orgId, siteId, {})
 
   try {
     await updateJobProgress(supabase, jobId, 5, 'Fetching pages...')
@@ -171,8 +171,8 @@ async function processVariantGeneration(supabase, siteId, jobId, pageIds, genera
           ? ((page.clicks_28d / page.impressions_28d) * 100).toFixed(2) 
           : 'unknown'
 
-        // Generate variants using AI
-        const variants = await generateTitleVariants(openai, {
+        // Generate variants using SEOSkill
+        const variants = await generateTitleVariants(seoSkill, {
           currentTitle,
           targetKeyword,
           url: page.url,
@@ -289,60 +289,22 @@ async function processVariantGeneration(supabase, siteId, jobId, pageIds, genera
   }
 }
 
-async function generateTitleVariants(openai, context) {
+async function generateTitleVariants(seoSkill, context) {
   const { currentTitle, targetKeyword, url, currentCtr, avgPosition, knowledge } = context
 
   try {
-    const response = await openai.chat.completions.create({
-      model: SEO_AI_MODEL,
-      messages: [
-        {
-          role: 'system',
-          content: `You are an SEO expert creating title tag variants for A/B testing.
-
-Create 3-4 variants that:
-1. Stay under 60 characters
-2. Include the target keyword (ideally near the beginning)
-3. Test different psychological triggers (urgency, curiosity, benefit-focused, numbers, etc.)
-4. Maintain brand consistency
-5. Are compelling and click-worthy
-
-Each variant should have a clear hypothesis about why it might perform better.`
-        },
-        {
-          role: 'user',
-          content: `Create title variants for A/B testing:
-
-Current Title: "${currentTitle}"
-Target Keyword: "${targetKeyword}"
-URL: ${url}
-Current CTR: ${currentCtr}%
-Average Position: ${avgPosition || 'unknown'}
-Business: ${knowledge?.business_name || 'Unknown'}
-Industry: ${knowledge?.industry || 'Unknown'}
-
-Respond with JSON:
-{
-  "variants": [
-    {
-      "title": "New Title Here (under 60 chars)",
-      "hypothesis": "Why this might perform better - specific reasoning",
-      "trigger": "urgency|curiosity|benefit|social_proof|specificity|numbers|question|how_to"
-    }
-  ],
-  "analysis": {
-    "currentTitleStrengths": ["strength 1"],
-    "currentTitleWeaknesses": ["weakness 1"],
-    "keyOptimizationOpportunity": "Main opportunity identified"
-  }
-}`
-        }
-      ],
-      response_format: { type: 'json_object' },
-      temperature: 0.7
-    })
-
-    const result = JSON.parse(response.choices[0].message.content)
+    const result = await seoSkill.generateTitleVariants(
+      { 
+        title: currentTitle, 
+        url,
+        ctr: currentCtr !== 'unknown' ? parseFloat(currentCtr) / 100 : null,
+        avgPosition,
+        business: knowledge?.business_name,
+        industry: knowledge?.industry
+      },
+      targetKeyword,
+      4 // Generate 4 variants
+    )
     return result.variants || []
   } catch (error) {
     console.error('[Title AB Background] Variant generation error:', error)

@@ -130,8 +130,8 @@ export async function handler(event) {
         const invoiceNumber = await generateInvoiceNumber(supabase)
         
         // Calculate due date (same offset from billing date as original)
-        const originalDueOffset = template.due_date 
-          ? Math.round((new Date(template.due_date) - new Date(template.created_at)) / (1000 * 60 * 60 * 24))
+        const originalDueOffset = (template.due_at || template.due_date)
+          ? Math.round((new Date(template.due_at || template.due_date) - new Date(template.created_at)) / (1000 * 60 * 60 * 24))
           : 30 // Default 30 days
         
         const dueDate = new Date()
@@ -155,7 +155,7 @@ export async function handler(event) {
             tax_amount: template.tax_amount,
             total_amount: template.total_amount,
             description: template.description,
-            due_date: dueDate.toISOString(),
+            due_at: dueDate.toISOString(),
             line_items: template.line_items,
             notes: template.notes,
             // Payment token for magic link

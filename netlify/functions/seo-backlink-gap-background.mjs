@@ -8,7 +8,7 @@
  */
 
 import { createClient } from '@supabase/supabase-js'
-import OpenAI from 'openai'
+import { SEOSkill } from './skills/seo-skill.js'
 
 const supabaseUrl = process.env.SUPABASE_URL
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY
@@ -24,7 +24,20 @@ export default async function handler(req) {
     }
 
     const supabase = createClient(supabaseUrl, supabaseServiceKey)
-    const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY })
+
+    // Get site info and org_id for SEOSkill
+    const { data: site } = await supabase
+      .from('seo_sites')
+      .select('domain, org_id, org:organizations(name)')
+      .eq('id', siteId)
+      .single()
+
+    if (!site) {
+      throw new Error('Site not found')
+    }
+
+    // Initialize SEOSkill
+    const seoSkill = new SEOSkill(supabase, site.org_id, siteId, {})
 
     // Update job status if jobId provided
     if (jobId) {
@@ -32,17 +45,6 @@ export default async function handler(req) {
         .from('seo_background_jobs')
         .update({ status: 'running', started_at: new Date().toISOString() })
         .eq('id', jobId)
-    }
-
-    // Get site info
-    const { data: site } = await supabase
-      .from('seo_sites')
-      .select('domain, org:organizations(name)')
-      .eq('id', siteId)
-      .single()
-
-    if (!site) {
-      throw new Error('Site not found')
     }
 
     console.log(`[seo-backlink-gap-background] Analyzing backlinks for ${site.domain}`)
@@ -81,7 +83,7 @@ export default async function handler(req) {
     } else {
       // Use AI to suggest potential backlink sources based on industry
       console.log('[seo-backlink-gap-background] Getting AI backlink suggestions...')
-      backlinksToAnalyze = await suggestBacklinkSources(openai, site, competitors, knowledge)
+      backlinksToAnalyze = await suggestBacklinkSources(seoSkill, site, competitors, knowledge)
     }
 
     console.log(`[seo-backlink-gap-background] Analyzing ${backlinksToAnalyze.length} sources...`)
@@ -90,7 +92,7 @@ export default async function handler(req) {
     const opportunities = []
 
     for (const source of backlinksToAnalyze) {
-      const analysis = await analyzeBacklinkSource(openai, source, site.domain, competitors, knowledge)
+      const analysis = await analyzeBacklinkSource(seoSkill, source, site.domain, competitors, knowledge)
       
       if (analysis.isOpportunity) {
         opportunities.push({
@@ -181,14 +183,9 @@ export default async function handler(req) {
   }
 }
 
-async function suggestBacklinkSources(openai, site, competitors, knowledge) {
+async function suggestBacklinkSources(seoSkill, site, competitors, knowledge) {
   try {
-    const response = await openai.chat.completions.create({
-      model: 'gpt-4o-mini',
-      messages: [
-        {
-          role: 'system',
-          content: `You are a link building expert. Suggest potential backlink sources based on the industry and competitors.
+    const systemPrompt = `You are a link building expert. Suggest potential backlink sources based on the industry and competitors.
 
 Think about:
 1. Industry directories and listings
@@ -198,10 +195,8 @@ Think about:
 5. Local business directories
 6. Professional associations
 7. Tool/resource aggregators`
-        },
-        {
-          role: 'user',
-          content: `Suggest backlink sources for:
+
+    const userPrompt = `Suggest backlink sources for:
 
 Domain: ${site.domain}
 Industry: ${knowledge?.industry || 'general business'}
@@ -222,13 +217,18 @@ Respond with JSON array of potential sources:
     }
   ]
 }`
-        }
-      ],
-      response_format: { type: 'json_object' },
-      temperature: 0.5
+
+    const result = await seoSkill.signal.invoke('seo', 'backlink_sources', {
+      systemPrompt,
+      userPrompt
+    }, {
+      additionalContext: {
+        tool_prompt: userPrompt,
+        response_format: { type: 'json_object' },
+        temperature: 0.5
+      }
     })
 
-    const result = JSON.parse(response.choices[0].message.content)
     return result.sources || []
   } catch (error) {
     console.error('[seo-backlink-gap-background] AI suggestion error:', error)
@@ -236,18 +236,11 @@ Respond with JSON array of potential sources:
   }
 }
 
-async function analyzeBacklinkSource(openai, source, ourDomain, competitors, knowledge) {
+async function analyzeBacklinkSource(seoSkill, source, ourDomain, competitors, knowledge) {
   try {
-    const response = await openai.chat.completions.create({
-      model: 'gpt-4o-mini',
-      messages: [
-        {
-          role: 'system',
-          content: `You are analyzing a potential backlink source. Assess if it's a good opportunity for outreach.`
-        },
-        {
-          role: 'user',
-          content: `Analyze this backlink source:
+    const systemPrompt = `You are analyzing a potential backlink source. Assess if it's a good opportunity for outreach.`
+
+    const userPrompt = `Analyze this backlink source:
 
 Source: ${JSON.stringify(source)}
 Our Domain: ${ourDomain}
@@ -275,13 +268,19 @@ Respond with JSON:
   "outreachStrategy": "How to approach them",
   "reasoning": "Why this is a good opportunity"
 }`
-        }
-      ],
-      response_format: { type: 'json_object' },
-      temperature: 0.3
+
+    const result = await seoSkill.signal.invoke('seo', 'analyze_backlink', {
+      systemPrompt,
+      userPrompt
+    }, {
+      additionalContext: {
+        tool_prompt: userPrompt,
+        response_format: { type: 'json_object' },
+        temperature: 0.3
+      }
     })
 
-    return JSON.parse(response.choices[0].message.content)
+    return result
   } catch (error) {
     console.error('[seo-backlink-gap-background] AI analysis error:', error)
     return { isOpportunity: false }

@@ -2,7 +2,7 @@
 // Technical SEO Audit - Comprehensive site health analysis
 // Background function for deep technical analysis
 import { createClient } from '@supabase/supabase-js'
-import OpenAI from 'openai'
+import { SEOSkill } from './skills/seo-skill.js'
 import * as cheerio from 'cheerio'
 
 // Background function - 15 minute timeout
@@ -54,21 +54,22 @@ async function runTechnicalAudit(siteId, runId) {
     process.env.SUPABASE_SERVICE_ROLE_KEY
   )
 
-  const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY })
-
   console.log(`[Technical Audit] Starting audit for site: ${siteId}`)
 
   try {
     // Get site details
     const { data: site, error: siteError } = await supabase
       .from('seo_sites')
-      .select('*, org:organizations(name)')
+      .select('*, org:organizations(id, name)')
       .eq('id', siteId)
       .single()
 
     if (siteError || !site) {
       throw new Error(`Site not found: ${siteId}`)
     }
+
+    // Initialize SEOSkill for AI operations
+    const seoSkill = new SEOSkill(supabase, site.org?.id || site.org_id, siteId)
 
     const domain = site.domain
     const baseUrl = `https://${domain}`
@@ -209,9 +210,9 @@ async function runTechnicalAudit(siteId, runId) {
     const score = Math.max(0, Math.min(100, Math.round(((maxPoints - issuePoints - warningPoints) / maxPoints) * 100)))
     auditResults.score = score
 
-    // Generate AI recommendations
+    // Generate AI recommendations using SEOSkill
     console.log('[Technical Audit] Generating AI recommendations...')
-    const aiRecommendations = await generateAIRecommendations(openai, auditResults, site)
+    const aiRecommendations = await seoSkill.generateTechnicalAuditRecommendations(auditResults, site)
     auditResults.recommendations = aiRecommendations
 
     // Save recommendations to the system
@@ -975,62 +976,4 @@ async function checkCommonIssues(baseUrl, pages) {
   }
 
   return result
-}
-
-// Generate AI recommendations
-async function generateAIRecommendations(openai, auditResults, site) {
-  try {
-    const prompt = `Analyze this technical SEO audit and provide prioritized recommendations.
-
-SITE: ${site.domain}
-
-AUDIT SCORE: ${auditResults.score}/100
-
-CRITICAL ISSUES (${auditResults.issues.length}):
-${auditResults.issues.map(i => `- ${i.message || i} (${i.severity || 'medium'})`).join('\n')}
-
-WARNINGS (${auditResults.warnings.length}):
-${auditResults.warnings.map(w => `- ${w.message || w} (${w.severity || 'low'})`).join('\n')}
-
-PASSED CHECKS (${auditResults.passed.length}):
-${auditResults.passed.map(p => `- ${typeof p === 'string' ? p : p.message}`).join('\n')}
-
-METRICS:
-${JSON.stringify(auditResults.metrics, null, 2)}
-
-Provide the top 5 prioritized recommendations in JSON format:
-{
-  "recommendations": [
-    {
-      "title": "Brief title",
-      "description": "Detailed explanation",
-      "currentIssue": "What's wrong",
-      "solution": "How to fix it",
-      "priority": "critical|high|medium|low",
-      "impactScore": 1-10,
-      "category": "core_web_vitals|crawlability|indexability|security|content|structure"
-    }
-  ]
-}`
-
-    const completion = await openai.chat.completions.create({
-      model: SEO_AI_MODEL,
-      messages: [
-        {
-          role: 'system',
-          content: 'You are a technical SEO expert. Analyze audit results and provide actionable, prioritized recommendations. Focus on highest-impact issues first.'
-        },
-        { role: 'user', content: prompt }
-      ],
-      response_format: { type: 'json_object' },
-      temperature: 0.3
-    })
-
-    const result = JSON.parse(completion.choices[0].message.content)
-    return result.recommendations || []
-
-  } catch (error) {
-    console.error('[Technical Audit] AI recommendations error:', error)
-    return []
-  }
 }

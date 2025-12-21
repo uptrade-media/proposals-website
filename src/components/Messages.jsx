@@ -20,11 +20,19 @@ import {
   Search,
   Loader2,
   Clock,
-  CheckCircle2
+  CheckCircle2,
+  Sparkles,
+  Globe,
+  Bot
 } from 'lucide-react'
 import useMessagesStore from '@/lib/messages-store'
 import useProjectsStore from '@/lib/projects-store'
 import useAuthStore from '@/lib/auth-store'
+
+// Echo components
+import { EchoAvatar, EchoThreadItem, EchoConversation } from '@/components/echo'
+// Live Chat components
+import { LiveChatAvatar, LiveChatThreadItem, LiveChatConversation } from '@/components/livechat'
 
 const Messages = () => {
   const { user } = useAuthStore()
@@ -44,13 +52,35 @@ const Messages = () => {
     formatMessageDate,
     isLoading, 
     error, 
-    clearError 
+    clearError,
+    // Echo-specific
+    echoContact,
+    echoMessages,
+    echoTyping,
+    fetchEchoContact,
+    fetchEchoMessages,
+    sendToEcho,
+    getConversationsWithEcho,
+    isEchoContact,
+    // Live Chat
+    liveChatSessions,
+    currentLiveChatSession,
+    liveChatMessages,
+    liveChatLoading,
+    fetchLiveChatSessions,
+    fetchLiveChatSession,
+    sendLiveChatMessage,
+    updateLiveChatStatus,
+    isLiveChat,
+    getUnifiedInbox
   } = useMessagesStore()
   
   const hasFetchedRef = useRef(false)
   const [activeTab, setActiveTab] = useState('inbox')
   const [isComposeDialogOpen, setIsComposeDialogOpen] = useState(false)
   const [selectedConversation, setSelectedConversation] = useState(null)
+  const [showEchoChat, setShowEchoChat] = useState(false)
+  const [showLiveChatSession, setShowLiveChatSession] = useState(null) // Holds the live chat session being viewed
   const [composeForm, setComposeForm] = useState({
     recipient_id: '',
     subject: '',
@@ -70,6 +100,8 @@ const Messages = () => {
     fetchContacts()
     fetchConversations()
     fetchMessages()
+    fetchEchoContact() // Fetch Echo contact
+    fetchLiveChatSessions() // Fetch live chat sessions
   }, [])
 
   const handleComposeFormChange = (field, value) => {
@@ -437,70 +469,142 @@ const Messages = () => {
         </TabsContent>
 
         <TabsContent value="conversations" className="space-y-4">
-          {conversations.length === 0 ? (
-            <Card>
-              <CardContent className="flex flex-col items-center justify-center py-12">
-                <MessageCircle className="h-12 w-12 text-[var(--text-tertiary)] mb-4" />
-                <h3 className="text-lg font-medium text-[var(--text-primary)] mb-2">No conversations yet</h3>
-                <p className="text-[var(--text-secondary)] text-center mb-4">
-                  Start messaging with team members to see conversations here.
-                </p>
-                <Button 
-                  onClick={() => setIsComposeDialogOpen(true)}
-                  variant="glass-primary"
-                >
-                  <Plus className="w-4 h-4 mr-2" />
-                  Start Conversation
-                </Button>
-              </CardContent>
+          {/* Show Echo chat view if selected */}
+          {showEchoChat && echoContact ? (
+            <Card className="overflow-hidden">
+              <EchoConversation
+                echoContact={echoContact}
+                messages={echoMessages}
+                onBack={() => setShowEchoChat(false)}
+                className="h-[600px]"
+              />
+            </Card>
+          ) : showLiveChatSession ? (
+            /* Show Live Chat view if selected */
+            <Card className="overflow-hidden">
+              <LiveChatConversation
+                session={showLiveChatSession}
+                onBack={() => setShowLiveChatSession(null)}
+                onSessionUpdate={(updated) => {
+                  setShowLiveChatSession(updated)
+                  fetchConversations() // Refresh list
+                }}
+                className="h-[600px]"
+              />
             </Card>
           ) : (
-            <div className="space-y-2">
-              {conversations.map((conversation) => (
+            <>
+              {/* Echo thread - always pinned at top */}
+              {echoContact && (
                 <Card 
-                  key={conversation.partner_id} 
-                  className="cursor-pointer hover:shadow-md transition-shadow"
-                  onClick={() => setSelectedConversation(conversation)}
+                  className="cursor-pointer hover:shadow-md transition-shadow border-emerald-200 dark:border-emerald-800 bg-gradient-to-r from-emerald-50/50 to-transparent dark:from-emerald-950/20"
+                  onClick={() => {
+                    setShowEchoChat(true)
+                    fetchEchoMessages()
+                  }}
                 >
                   <CardContent className="p-4">
-                    <div className="flex items-start justify-between">
-                      <div className="flex items-start space-x-3 flex-1">
-                        <div className="w-10 h-10 bg-gradient-to-r from-[var(--brand-primary)] to-[var(--brand-secondary)] rounded-full flex items-center justify-center text-white font-medium">
-                          {conversation.partner_name.charAt(0)}
-                        </div>
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-center justify-between mb-1">
-                            <span className="font-medium text-[var(--text-primary)]">
-                              {conversation.partner_name}
-                            </span>
-                            <div className="flex items-center space-x-2">
-                              {conversation.unread_count > 0 && (
-                                <Badge variant="destructive" className="px-1 py-0 text-xs">
-                                  {conversation.unread_count}
-                                </Badge>
-                              )}
-                              <span className="text-xs text-[var(--text-tertiary)]">
-                                {formatMessageDate(conversation.latest_message.created_at)}
-                              </span>
-                            </div>
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center space-x-3">
+                        <EchoAvatar size="md" />
+                        <div>
+                          <div className="flex items-center gap-2">
+                            <span className="font-medium text-[var(--text-primary)]">Echo</span>
+                            <Badge className="text-[10px] px-1.5 py-0 h-4 bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400">
+                              <Sparkles className="w-2.5 h-2.5 mr-0.5" />
+                              AI
+                            </Badge>
                           </div>
-                          
-                          <p className="text-sm text-[var(--text-secondary)] truncate">
-                            {conversation.latest_message.is_from_partner ? '' : 'You: '}
-                            {conversation.latest_message.content}
+                          <p className="text-sm text-[var(--text-secondary)]">
+                            Your AI teammate - ask me anything!
                           </p>
                         </div>
+                      </div>
+                      <div className="flex items-center gap-1 text-xs text-emerald-500 font-medium">
+                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                        Always online
                       </div>
                     </div>
                   </CardContent>
                 </Card>
+              )}
+
+              {/* Live Chat Sessions - show pending first */}
+              {liveChatSessions.filter(s => s.chat_status !== 'closed').map((session) => (
+                <LiveChatThreadItem
+                  key={session.id}
+                  session={session}
+                  onClick={() => setShowLiveChatSession(session)}
+                />
               ))}
-            </div>
+
+              {/* Regular conversations */}
+              {conversations.length === 0 && !echoContact && liveChatSessions.length === 0 ? (
+                <Card>
+                  <CardContent className="flex flex-col items-center justify-center py-12">
+                    <MessageCircle className="h-12 w-12 text-[var(--text-tertiary)] mb-4" />
+                    <h3 className="text-lg font-medium text-[var(--text-primary)] mb-2">No conversations yet</h3>
+                    <p className="text-[var(--text-secondary)] text-center mb-4">
+                      Start messaging with team members to see conversations here.
+                    </p>
+                    <Button 
+                      onClick={() => setIsComposeDialogOpen(true)}
+                      variant="glass-primary"
+                    >
+                      <Plus className="w-4 h-4 mr-2" />
+                      Start Conversation
+                    </Button>
+                  </CardContent>
+                </Card>
+              ) : (
+                <div className="space-y-2">
+                  {conversations.filter(c => !isEchoContact(c) && !isLiveChat(c)).map((conversation) => (
+                    <Card 
+                      key={conversation.partner_id} 
+                      className="cursor-pointer hover:shadow-md transition-shadow"
+                      onClick={() => setSelectedConversation(conversation)}
+                    >
+                      <CardContent className="p-4">
+                        <div className="flex items-start justify-between">
+                          <div className="flex items-start space-x-3 flex-1">
+                            <div className="w-10 h-10 bg-gradient-to-r from-[var(--brand-primary)] to-[var(--brand-secondary)] rounded-full flex items-center justify-center text-white font-medium">
+                              {conversation.partner_name.charAt(0)}
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <div className="flex items-center justify-between mb-1">
+                                <span className="font-medium text-[var(--text-primary)]">
+                                  {conversation.partner_name}
+                                </span>
+                                <div className="flex items-center space-x-2">
+                                  {conversation.unread_count > 0 && (
+                                    <Badge variant="destructive" className="px-1 py-0 text-xs">
+                                      {conversation.unread_count}
+                                    </Badge>
+                                  )}
+                                  <span className="text-xs text-[var(--text-tertiary)]">
+                                    {formatMessageDate(conversation.latest_message.created_at)}
+                                  </span>
+                                </div>
+                              </div>
+                              
+                              <p className="text-sm text-[var(--text-secondary)] truncate">
+                                {conversation.latest_message.is_from_partner ? '' : 'You: '}
+                                {conversation.latest_message.content}
+                              </p>
+                            </div>
+                          </div>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  ))}
+                </div>
+              )}
+            </>
           )}
         </TabsContent>
 
         <TabsContent value="contacts" className="space-y-4">
-          {contacts.length === 0 ? (
+          {contacts.length === 0 && !echoContact ? (
             <Card>
               <CardContent className="flex flex-col items-center justify-center py-12">
                 <Users className="h-12 w-12 text-[var(--text-tertiary)] mb-4" />
@@ -512,7 +616,48 @@ const Messages = () => {
             </Card>
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-              {contacts.map((contact) => (
+              {/* Echo contact card - always first */}
+              {echoContact && (
+                <Card className="hover:shadow-md transition-shadow border-emerald-200 dark:border-emerald-800">
+                  <CardContent className="p-4">
+                    <div className="flex items-center space-x-3">
+                      <EchoAvatar size="md" />
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2">
+                          <h4 className="font-medium text-[var(--text-primary)]">Echo</h4>
+                          <Badge className="text-[10px] px-1.5 py-0 h-4 bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400">
+                            <Sparkles className="w-2.5 h-2.5 mr-0.5" />
+                            AI
+                          </Badge>
+                        </div>
+                        <p className="text-sm text-[var(--text-secondary)]">
+                          Signal AI Assistant
+                        </p>
+                        <div className="flex items-center gap-1 mt-1 text-xs text-emerald-500">
+                          <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                          Always available
+                        </div>
+                      </div>
+                    </div>
+                    
+                    <Button 
+                      size="sm" 
+                      className="w-full mt-3 bg-emerald-600 hover:bg-emerald-700"
+                      onClick={() => {
+                        setActiveTab('conversations')
+                        setShowEchoChat(true)
+                        fetchEchoMessages()
+                      }}
+                    >
+                      <Sparkles className="w-3 h-3 mr-1" />
+                      Chat with Echo
+                    </Button>
+                  </CardContent>
+                </Card>
+              )}
+
+              {/* Regular contacts */}
+              {contacts.filter(c => !isEchoContact(c)).map((contact) => (
                 <Card key={contact.id} className="hover:shadow-md transition-shadow">
                   <CardContent className="p-4">
                     <div className="flex items-center space-x-3">

@@ -55,22 +55,28 @@ export async function handler(event) {
     prevPeriodStart.setDate(prevPeriodStart.getDate() - daysNum)
     const prevPeriodStartStr = prevPeriodStart.toISOString()
 
-    // Get org context from header or params
-    const orgId = event.headers['x-organization-id'] || event.headers['x-tenant-id'] || tenantId
+    // Get org/project context from header or params
+    const contextId = event.headers['x-project-id'] || event.headers['x-organization-id'] || event.headers['x-tenant-id'] || tenantId
+    
+    // For analytics filtering, we use the project ID directly as tenant_id
+    // The analytics tables store tenant_id as the project UUID (not domain)
+    const tenantIdFilter = contextId || domain
+
+    console.log('[analytics-query] Filter context:', { contextId, tenantIdFilter })
+
+    // Build filter condition helper - use tenant_id which maps to project UUID
+    // Returns the query with filter applied (still needs to be awaited)
+    const applyTenantFilter = (query) => {
+      if (tenantIdFilter) {
+        // Filter by tenant_id which is the project UUID
+        return query.eq('tenant_id', tenantIdFilter)
+      }
+      return query.eq('tenant_id', 'uptrade')
+    }
 
     // Route to appropriate query
     switch (endpoint) {
       case 'overview': {
-        // Build filter condition helper
-        const buildFilter = (query) => {
-          if (orgId) {
-            return query.eq('org_id', orgId)
-          } else if (domain) {
-            return query.ilike('path', `%${domain}%`)
-          }
-          return query.eq('tenant_id', 'uptrade')
-        }
-
         // Current period queries
         const [
           pageViewsResult,
@@ -84,62 +90,72 @@ export async function handler(event) {
           deviceResult
         ] = await Promise.all([
           // Current period page views
-          buildFilter(supabase
+          applyTenantFilter(supabase
             .from('analytics_page_views')
             .select('id, visitor_id, device_type, browser, referrer, path, created_at')
             .gte('created_at', startDateStr)),
           
           // Previous period page views (for trend)
-          buildFilter(supabase
+          applyTenantFilter(supabase
             .from('analytics_page_views')
             .select('id', { count: 'exact' })
             .gte('created_at', prevPeriodStartStr)
             .lt('created_at', startDateStr)),
           
           // Current period sessions
-          buildFilter(supabase
+          applyTenantFilter(supabase
             .from('analytics_sessions')
             .select('id, visitor_id, duration_seconds, page_count, device_type, browser, os, utm_source, referrer, converted, started_at')
             .gte('started_at', startDateStr)),
           
           // Previous period sessions
-          buildFilter(supabase
+          applyTenantFilter(supabase
             .from('analytics_sessions')
             .select('id', { count: 'exact' })
             .gte('started_at', prevPeriodStartStr)
             .lt('started_at', startDateStr)),
           
           // Events
-          buildFilter(supabase
+          applyTenantFilter(supabase
             .from('analytics_events')
             .select('id, event_name, event_category', { count: 'exact' })
             .gte('created_at', startDateStr)),
           
           // Scroll depth (avg)
-          buildFilter(supabase
+          applyTenantFilter(supabase
             .from('analytics_scroll_depth')
             .select('depth, max_depth_percent, path')
             .gte('created_at', startDateStr)),
           
           // Top pages
-          buildFilter(supabase
+          applyTenantFilter(supabase
             .from('analytics_page_views')
             .select('path')
             .gte('created_at', startDateStr)),
           
           // Referrers
-          buildFilter(supabase
+          applyTenantFilter(supabase
             .from('analytics_page_views')
             .select('referrer')
             .gte('created_at', startDateStr)
             .not('referrer', 'is', null)),
           
           // Device breakdown
-          buildFilter(supabase
+          applyTenantFilter(supabase
             .from('analytics_page_views')
             .select('device_type')
             .gte('created_at', startDateStr))
         ])
+
+        // Debug log the results
+        console.log('[analytics-query] Overview results:', {
+          pageViewsCount: pageViewsResult.data?.length,
+          pageViewsError: pageViewsResult.error?.message,
+          sessionsCount: sessionsResult.data?.length,
+          sessionsError: sessionsResult.error?.message,
+          tenantIdFilter,
+          startDateStr
+        })
 
         // Calculate unique visitors
         const pageViews = pageViewsResult.data || []
@@ -264,10 +280,8 @@ export async function handler(event) {
           .select('*')
           .gte('created_at', startDateStr)
         
-        if (orgId) {
-          query = query.eq('org_id', orgId)
-        }
-
+        query = applyTenantFilter(query)
+        
         const { data: pageViews, error } = await query
           .order('created_at', { ascending: false })
           .limit(parseInt(limit))
@@ -320,10 +334,8 @@ export async function handler(event) {
           .select('*')
           .gte('created_at', startDateStr)
         
-        if (orgId) {
-          query = query.eq('org_id', orgId)
-        }
-
+        query = applyTenantFilter(query)
+        
         const { data: events, error } = await query
           .order('created_at', { ascending: false })
           .limit(parseInt(limit))
@@ -353,10 +365,8 @@ export async function handler(event) {
           .select('*')
           .gte('created_at', startDateStr)
         
-        if (orgId) {
-          query = query.eq('org_id', orgId)
-        }
-
+        query = applyTenantFilter(query)
+        
         const { data: scrollData, error } = await query
 
         if (error) throw error
@@ -392,9 +402,7 @@ export async function handler(event) {
           .select('*')
           .gte('created_at', startDateStr)
         
-        if (orgId) {
-          query = query.eq('org_id', orgId)
-        }
+        query = applyTenantFilter(query)
         
         if (filterPath) {
           query = query.eq('page_path', filterPath)
@@ -453,10 +461,8 @@ export async function handler(event) {
           .select('visitor_id, session_id, created_at, path, referrer, device_type, browser')
           .gte('created_at', startDateStr)
         
-        if (orgId) {
-          query = query.eq('org_id', orgId)
-        }
-
+        query = applyTenantFilter(query)
+        
         const { data: pageViews, error } = await query
           .order('created_at', { ascending: false })
 
@@ -515,9 +521,7 @@ export async function handler(event) {
           .select('*')
           .gte('created_at', startDateStr)
         
-        if (orgId) {
-          query = query.eq('org_id', orgId)
-        }
+        query = applyTenantFilter(query)
         
         if (filterPath) {
           query = query.eq('page_path', filterPath)
@@ -534,9 +538,7 @@ export async function handler(event) {
             .eq('event_name', 'click')
             .gte('created_at', startDateStr)
           
-          if (orgId) {
-            fallbackQuery = fallbackQuery.eq('org_id', orgId)
-          }
+          fallbackQuery = applyTenantFilter(fallbackQuery)
           
           const { data: eventClicks, error: fallbackError } = await fallbackQuery
           

@@ -2,10 +2,6 @@
 // Internal Linking Analysis - Optimize site architecture and link equity flow
 // Identifies orphan pages, hub opportunities, and strategic linking gaps
 import { createSupabaseAdmin, getAuthenticatedUser } from './utils/supabase.js'
-import OpenAI from 'openai'
-
-// Use env variable for model - easily update when new models release
-const SEO_AI_MODEL = process.env.SEO_AI_MODEL || 'gpt-4o'
 
 export async function handler(event) {
   const headers = {

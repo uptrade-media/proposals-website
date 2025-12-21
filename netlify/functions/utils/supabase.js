@@ -382,6 +382,42 @@ export async function getSecret(key) {
 }
 
 /**
+ * Get organization ID from request
+ * Checks header, query param, or body
+ * 
+ * @param {object} event - Netlify function event
+ * @returns {string | null}
+ */
+export function getOrgFromRequest(event) {
+  // Check X-Organization-Id header first (preferred for multi-tenant requests)
+  const orgHeader = event.headers['x-organization-id'] || event.headers['X-Organization-Id']
+  if (orgHeader) {
+    return orgHeader
+  }
+  
+  // Check query string
+  const params = new URLSearchParams(event.rawQuery || '')
+  const orgParam = params.get('org_id') || params.get('organization_id')
+  if (orgParam) {
+    return orgParam
+  }
+  
+  // Check request body (if JSON)
+  try {
+    if (event.body) {
+      const body = JSON.parse(event.body)
+      if (body.org_id || body.organization_id) {
+        return body.org_id || body.organization_id
+      }
+    }
+  } catch {
+    // Not JSON or parse failed, skip
+  }
+  
+  return null
+}
+
+/**
  * Get Google Service Account credentials from Supabase
  * Falls back to environment variable if not found in database
  * @returns {Promise<object | null>}
@@ -409,3 +445,4 @@ export async function getGoogleServiceAccountCredentials() {
   
   return null
 }
+

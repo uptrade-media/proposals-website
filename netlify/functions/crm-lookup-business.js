@@ -1,12 +1,12 @@
 /**
  * CRM Business Lookup Function
  * 
- * Uses Google Places API + GPT-4 to find business information
+ * Uses Google Places API + Signal CRM Skill to find business information
  * from a phone number after outbound calls
  */
 
 import { createSupabaseAdmin } from './utils/supabase.js'
-import OpenAI from 'openai'
+import { CRMSkill } from './skills/crm-skill.js'
 
 const GOOGLE_PLACES_API_KEY = process.env.GOOGLE_PLACES_API_KEY
 
@@ -84,45 +84,11 @@ async function searchByBusinessName(name, location) {
 }
 
 /**
- * Use GPT-4 to extract business context from call data
+ * Use CRM Skill to extract business context from call data
  */
-async function extractBusinessContext(callData) {
-  const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY })
-  
-  const prompt = `Analyze this call data and extract any business information mentioned:
-
-Phone Number: ${callData.phone_number}
-Direction: ${callData.direction}
-Transcript: ${callData.openphone_transcript || 'Not available'}
-Summary: ${callData.openphone_summary || 'Not available'}
-AI Analysis: ${callData.ai_summary || 'Not available'}
-
-Extract:
-1. Business name (if mentioned)
-2. Industry/business type
-3. Location/city (if mentioned)
-4. Contact name and title
-5. Any specific details about the business
-
-Return JSON:
-{
-  "business_name": "Name or null",
-  "industry": "Industry type or null",
-  "location": "City, State or null",
-  "contact_name": "Name or null",
-  "contact_title": "Title or null",
-  "business_details": "Any additional context",
-  "confidence": 0.0-1.0
-}`
-
-  const completion = await openai.chat.completions.create({
-    model: 'gpt-4o',
-    messages: [{ role: 'user', content: prompt }],
-    response_format: { type: 'json_object' },
-    temperature: 0.2
-  })
-  
-  return JSON.parse(completion.choices[0].message.content)
+async function extractBusinessContext(callData, supabase, orgId) {
+  const crmSkill = new CRMSkill(supabase, orgId)
+  return await crmSkill.extractBusinessContext(callData)
 }
 
 /**
@@ -212,10 +178,12 @@ export async function handler(event) {
       placeDetails = await getPlaceDetails(placeData.place_id)
     }
 
-    // Step 2: If no result and we have call data, extract context with AI
+    // Step 2: If no result and we have call data, extract context with CRM Skill
     let extractedContext = null
     if (callData) {
-      extractedContext = await extractBusinessContext(callData)
+      // Get org_id from call_log or contact
+      const orgId = callData.org_id || 'uptrade'
+      extractedContext = await extractBusinessContext(callData, supabase, orgId)
       
       // Step 3: If AI found a business name, try searching by name
       if (!placeDetails && extractedContext?.business_name && extractedContext.confidence > 0.5) {

@@ -1,15 +1,21 @@
 // netlify/functions/routes/email.js
 // ═══════════════════════════════════════════════════════════════════════════════
-// Email Routes - Campaigns, automations, templates
+// Email Routes - Campaigns, automations, templates, AI-powered email creation
 // ═══════════════════════════════════════════════════════════════════════════════
 
 import { response } from '../api.js'
+import { EmailSkill } from '../skills/email-skill.js'
 
 export async function handle(ctx) {
   const { method, segments, supabase, query, body, contact, orgId } = ctx
   const [, resource, id, action] = segments
   
   switch (resource) {
+    // ─────────────────────────────────────────────────────────────────────────
+    // AI-POWERED EMAIL ROUTES (Signal Email Skill)
+    // ─────────────────────────────────────────────────────────────────────────
+    case 'ai':
+      return await handleAI(ctx, id, action)
     case 'campaigns':
       return await handleCampaigns(ctx, id, action)
     case 'templates':
@@ -467,4 +473,183 @@ async function handleTracking(ctx, action, id) {
   }
   
   return response(404, { error: 'Invalid tracking request' })
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// AI-POWERED EMAIL HANDLERS (Signal Email Skill Integration)
+// ═══════════════════════════════════════════════════════════════════════════════
+
+async function handleAI(ctx, tool, action) {
+  const { method, supabase, body, orgId, contact } = ctx
+  
+  if (method !== 'POST') {
+    return response(405, { error: 'AI endpoints require POST method' })
+  }
+  
+  const email = new EmailSkill(supabase, orgId, { userId: contact.id })
+  
+  switch (tool) {
+    // ─────────────────────────────────────────────────────────────────────────
+    // POST /email/ai/draft - Generate email draft from purpose
+    // ─────────────────────────────────────────────────────────────────────────
+    case 'draft': {
+      const { purpose, recipientId, recipientEmail, recipientName, projectId, tone } = body
+      
+      if (!purpose) {
+        return response(400, { error: 'purpose is required' })
+      }
+      
+      try {
+        const draft = await email.draftEmail(purpose, {
+          recipientId,
+          recipientEmail,
+          recipientName,
+          projectId,
+          tone
+        })
+        return response(200, { draft })
+      } catch (err) {
+        return response(500, { error: err.message })
+      }
+    }
+    
+    // ─────────────────────────────────────────────────────────────────────────
+    // POST /email/ai/template - Create full email template
+    // ─────────────────────────────────────────────────────────────────────────
+    case 'template': {
+      const { purpose, category, includeBlocks } = body
+      
+      if (!purpose) {
+        return response(400, { error: 'purpose is required' })
+      }
+      
+      try {
+        const template = await email.createTemplate(purpose, { category, includeBlocks })
+        return response(200, { template })
+      } catch (err) {
+        return response(500, { error: err.message })
+      }
+    }
+    
+    // ─────────────────────────────────────────────────────────────────────────
+    // POST /email/ai/optimize - Optimize existing template
+    // ─────────────────────────────────────────────────────────────────────────
+    case 'optimize': {
+      const { templateId, focusArea } = body
+      
+      if (!templateId) {
+        return response(400, { error: 'templateId is required' })
+      }
+      
+      try {
+        const optimizations = await email.optimizeTemplate(templateId, { focusArea })
+        return response(200, { optimizations })
+      } catch (err) {
+        return response(500, { error: err.message })
+      }
+    }
+    
+    // ─────────────────────────────────────────────────────────────────────────
+    // POST /email/ai/subjects - Generate subject line variants
+    // ─────────────────────────────────────────────────────────────────────────
+    case 'subjects': {
+      const { emailContent, currentSubject, numberOfVariants, purpose } = body
+      
+      if (!emailContent && !currentSubject) {
+        return response(400, { error: 'emailContent or currentSubject is required' })
+      }
+      
+      try {
+        const subjects = await email.suggestSubjectLines(emailContent || currentSubject, {
+          currentSubject,
+          numberOfVariants,
+          purpose
+        })
+        return response(200, { subjects })
+      } catch (err) {
+        return response(500, { error: err.message })
+      }
+    }
+    
+    // ─────────────────────────────────────────────────────────────────────────
+    // POST /email/ai/analyze - Analyze campaign performance
+    // ─────────────────────────────────────────────────────────────────────────
+    case 'analyze': {
+      const { days, campaignId, templateId } = body
+      
+      try {
+        const analysis = await email.analyzePerformance({ days, campaignId, templateId })
+        return response(200, { analysis })
+      } catch (err) {
+        return response(500, { error: err.message })
+      }
+    }
+    
+    // ─────────────────────────────────────────────────────────────────────────
+    // POST /email/ai/patterns - Get learned email patterns
+    // ─────────────────────────────────────────────────────────────────────────
+    case 'patterns': {
+      const { patternType } = body
+      
+      try {
+        const patterns = await email.getPatterns(patternType || 'all')
+        return response(200, { patterns })
+      } catch (err) {
+        return response(500, { error: err.message })
+      }
+    }
+    
+    // ─────────────────────────────────────────────────────────────────────────
+    // POST /email/ai/blocks - Generate GrapesJS blocks
+    // ─────────────────────────────────────────────────────────────────────────
+    case 'blocks': {
+      const { purpose, blockTypes, style } = body
+      
+      if (!purpose) {
+        return response(400, { error: 'purpose is required' })
+      }
+      
+      try {
+        const blocks = await email.generateBlocks(purpose, { blockTypes, style })
+        return response(200, { blocks })
+      } catch (err) {
+        return response(500, { error: err.message })
+      }
+    }
+    
+    // ─────────────────────────────────────────────────────────────────────────
+    // POST /email/ai/send-time - Get optimal send time recommendation
+    // ─────────────────────────────────────────────────────────────────────────
+    case 'send-time': {
+      const { recipientId, audience } = body
+      
+      try {
+        const sendTime = await email.suggestSendTime({ recipientId, audience })
+        return response(200, { sendTime })
+      } catch (err) {
+        return response(500, { error: err.message })
+      }
+    }
+    
+    // ─────────────────────────────────────────────────────────────────────────
+    // POST /email/ai/full-template - Complete template creation flow
+    // ─────────────────────────────────────────────────────────────────────────
+    case 'full-template': {
+      const { name, purpose, category, audience } = body
+      
+      if (!purpose) {
+        return response(400, { error: 'purpose is required' })
+      }
+      
+      try {
+        const result = await email.createFullTemplate(name, purpose, { category, audience })
+        return response(200, { result })
+      } catch (err) {
+        return response(500, { error: err.message })
+      }
+    }
+    
+    default:
+      return response(404, { error: `Unknown AI tool: ${tool}` })
+  }
 }

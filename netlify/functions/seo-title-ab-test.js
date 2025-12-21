@@ -1,9 +1,9 @@
 // netlify/functions/seo-title-ab-test.js
 // AI-Powered Title A/B Testing - Generate variants, track CTR, auto-select winners
 import { createSupabaseAdmin, getAuthenticatedUser } from './utils/supabase.js'
-import OpenAI from 'openai'
+import { SEOSkill } from './skills/seo-skill.js'
 
-const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY })
+// SEOSkill instance created per-request in handler
 
 export async function handler(event) {
   const headers = {
@@ -103,6 +103,13 @@ async function createTest(event, supabase, headers) {
     return { statusCode: 400, headers, body: JSON.stringify({ error: 'siteId and pageId required' }) }
   }
 
+  // Get site info for orgId
+  const { data: site } = await supabase
+    .from('seo_sites')
+    .select('org_id')
+    .eq('id', siteId)
+    .single()
+
   // Get page data
   const { data: page, error: pageError } = await supabase
     .from('seo_pages')
@@ -125,7 +132,9 @@ async function createTest(event, supabase, headers) {
   // Generate AI variants if requested
   if (generateVariants || testVariants.length === 0) {
     const keyword = targetKeyword || page.top_queries?.[0]?.query || ''
-    testVariants = await generateTitleVariants(currentTitle, page, keyword)
+    // Use SEOSkill for AI generation
+    const seoSkill = new SEOSkill(supabase, site?.org_id, siteId, {})
+    testVariants = await generateTitleVariants(seoSkill, currentTitle, page, keyword)
   }
 
   // Add original as control (variant 0)
@@ -379,50 +388,19 @@ async function deleteTest(event, supabase, headers) {
   }
 }
 
-async function generateTitleVariants(currentTitle, page, targetKeyword) {
+async function generateTitleVariants(seoSkill, currentTitle, page, targetKeyword) {
   try {
-    const response = await openai.chat.completions.create({
-      model: 'gpt-4o',
-      messages: [
-        {
-          role: 'system',
-          content: `You are an SEO expert creating title tag variants for A/B testing. 
-          
-Create 3-4 variants that:
-1. Stay under 60 characters
-2. Include the target keyword
-3. Test different psychological triggers (urgency, curiosity, benefit-focused, etc.)
-4. Maintain brand consistency
-
-Each variant should have a clear hypothesis about why it might perform better.`
-        },
-        {
-          role: 'user',
-          content: `Create title variants for A/B testing:
-
-Current Title: "${currentTitle}"
-Target Keyword: "${targetKeyword}"
-URL: ${page.url}
-Current CTR: ${page.impressions_28d > 0 ? ((page.clicks_28d / page.impressions_28d) * 100).toFixed(2) : 'unknown'}%
-Average Position: ${page.avg_position_28d || 'unknown'}
-
-Respond with JSON:
-{
-  "variants": [
-    {
-      "title": "New Title Here",
-      "hypothesis": "Why this might perform better",
-      "trigger": "urgency|curiosity|benefit|social_proof|specificity"
-    }
-  ]
-}`
-        }
-      ],
-      response_format: { type: 'json_object' },
-      temperature: 0.7
-    })
-
-    const result = JSON.parse(response.choices[0].message.content)
+    // Use SEOSkill.generateTitleVariants method
+    const result = await seoSkill.generateTitleVariants(
+      { 
+        title: currentTitle, 
+        url: page.url,
+        ctr: page.impressions_28d > 0 ? (page.clicks_28d / page.impressions_28d) : null,
+        avgPosition: page.avg_position_28d
+      },
+      targetKeyword,
+      4 // Generate 4 variants
+    )
     return result.variants || []
   } catch (error) {
     console.error('[Title A/B] Generation error:', error)

@@ -377,6 +377,184 @@ export class CRMSkill {
   }
 
   // ─────────────────────────────────────────────────────────────────────────────
+  // TOOL: EXTRACT BUSINESS CONTEXT
+  // ─────────────────────────────────────────────────────────────────────────────
+
+  async extractBusinessContext(callData) {
+    const result = await this.signal.invoke({
+      module: 'crm',
+      tool: 'extract_business_context',
+      systemPrompt: CRM_SYSTEM_PROMPT,
+      userPrompt: `Analyze this call data and extract any business information mentioned:
+
+Phone Number: ${callData.phone_number}
+Direction: ${callData.direction}
+Transcript: ${callData.openphone_transcript || 'Not available'}
+Summary: ${callData.openphone_summary || 'Not available'}
+AI Analysis: ${callData.ai_summary || 'Not available'}
+
+Extract:
+1. Business name (if mentioned)
+2. Industry/business type
+3. Location/city (if mentioned)
+4. Contact name and title
+5. Any specific details about the business
+
+Return JSON:
+{
+  "business_name": "Name or null",
+  "industry": "Industry type or null",
+  "location": "City, State or null",
+  "contact_name": "Name or null",
+  "contact_title": "Title or null",
+  "business_details": "Any additional context",
+  "confidence": 0.0-1.0
+}`,
+      responseFormat: { type: 'json_object' },
+      temperature: 0.2
+    })
+
+    await this.echo.log({
+      action: 'extract_business_context',
+      input: { callId: callData.id, phoneNumber: callData.phone_number },
+      output: result
+    })
+
+    return result
+  }
+
+  // ─────────────────────────────────────────────────────────────────────────────
+  // TOOL: ANALYZE WEBSITE
+  // ─────────────────────────────────────────────────────────────────────────────
+
+  async analyzeWebsite(websiteUrl, context = {}) {
+    const result = await this.signal.invoke({
+      module: 'crm',
+      tool: 'analyze_website',
+      systemPrompt: CRM_SYSTEM_PROMPT,
+      userPrompt: `Analyze this website for sales intelligence:
+
+URL: ${websiteUrl}
+${context.pageContent ? `Page Content:\n${context.pageContent}` : ''}
+${context.metaInfo ? `Meta Info: ${JSON.stringify(context.metaInfo)}` : ''}
+${context.existingNotes ? `Existing Notes: ${context.existingNotes}` : ''}
+
+Extract sales-relevant intelligence:
+1. Company/business name
+2. Industry and business type
+3. Key products/services offered
+4. Target audience
+5. Company size indicators (team page, about us)
+6. Technology stack hints
+7. Pain points their messaging reveals
+8. Opportunities for our services
+
+Return JSON:
+{
+  "company_name": "Name",
+  "industry": "Industry type",
+  "business_type": "B2B/B2C/etc",
+  "products_services": ["Service 1", "Service 2"],
+  "target_audience": "Description",
+  "company_size": "small/medium/large or estimate",
+  "tech_indicators": ["Tech 1", "Tech 2"],
+  "pain_points": ["Pain point 1", "Pain point 2"],
+  "opportunities": ["Opportunity 1", "Opportunity 2"],
+  "talking_points": ["Point 1", "Point 2"],
+  "confidence": 0.0-1.0
+}`,
+      responseFormat: { type: 'json_object' },
+      temperature: 0.3
+    })
+
+    await this.echo.log({
+      action: 'analyze_website',
+      input: { websiteUrl },
+      output: result
+    })
+
+    return result
+  }
+
+  // ─────────────────────────────────────────────────────────────────────────────
+  // TOOL: ANALYZE CALL (OpenPhone integration)
+  // ─────────────────────────────────────────────────────────────────────────────
+
+  async analyzeCall(transcript, openphoneSummary) {
+    if (!transcript && !openphoneSummary) {
+      return null // Nothing to analyze
+    }
+
+    const result = await this.signal.invoke({
+      module: 'crm',
+      tool: 'analyze_call',
+      systemPrompt: CRM_SYSTEM_PROMPT,
+      userPrompt: `You are a CRM assistant analyzing a sales call. You have been provided:
+1. OpenPhone's transcript: ${transcript ? 'Available' : 'Not available'}
+2. OpenPhone's AI summary: ${openphoneSummary ? 'Available' : 'Not available'}
+
+Your task is to provide ENHANCED CRM analysis in JSON format with these fields:
+
+{
+  "enhanced_summary": "2-3 sentence summary with key business details",
+  "sentiment": "positive|neutral|negative|mixed",
+  "conversation_type": "sales|support|discovery|closing|follow_up",
+  "lead_quality_score": 0-100 (0-40 cold, 41-70 warm, 71-100 hot),
+  "contact": {
+    "name": "Full name if mentioned",
+    "company": "Company name",
+    "title": "Job title",
+    "email": "Email if mentioned",
+    "phone": "Phone if mentioned",
+    "website": "Website if mentioned",
+    "confidence": 0.00-1.00
+  },
+  "tasks": [
+    {
+      "title": "Action item title",
+      "description": "Details",
+      "task_type": "follow_up|send_proposal|schedule_meeting|research|technical",
+      "priority": "low|medium|high|urgent",
+      "due_date": "ISO 8601 date string",
+      "confidence": 0.00-1.00,
+      "reasoning": "Why this task is needed"
+    }
+  ],
+  "topics": [
+    {
+      "topic": "pricing|timeline|features|objections|budget|competition",
+      "relevance_score": 0.00-1.00,
+      "sentiment": "positive|neutral|negative",
+      "key_phrases": ["relevant quotes"]
+    }
+  ],
+  "follow_up": {
+    "type": "email|call|sms|meeting",
+    "scheduled_for": "ISO 8601 date string",
+    "suggested_subject": "Subject line for email",
+    "suggested_message": "Draft message"
+  }
+}
+
+INPUT DATA:
+${transcript ? `Transcript: ${transcript}` : ''}
+${openphoneSummary ? `OpenPhone Summary: ${openphoneSummary}` : ''}
+
+Return ONLY valid JSON, no markdown.`,
+      responseFormat: { type: 'json_object' },
+      temperature: 0.3
+    })
+
+    await this.echo.log({
+      action: 'analyze_call',
+      input: { hasTranscript: !!transcript, hasSummary: !!openphoneSummary },
+      output: result
+    })
+
+    return result
+  }
+
+  // ─────────────────────────────────────────────────────────────────────────────
   // CONVERSATIONAL (via Echo)
   // ─────────────────────────────────────────────────────────────────────────────
 

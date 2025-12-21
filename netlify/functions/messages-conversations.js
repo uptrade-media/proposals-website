@@ -1,4 +1,5 @@
 // netlify/functions/messages-conversations.js
+// Returns unified inbox: Echo, Live Chats, and Team conversations
 import { createClient } from '@supabase/supabase-js'
 import { getAuthenticatedUser } from './utils/supabase.js'
 
@@ -41,6 +42,7 @@ export async function handler(event) {
 
   try {
     const userId = contact.id
+    const orgId = contact.org_id
 
     if (!userId) {
       return {
@@ -50,7 +52,134 @@ export async function handler(event) {
       }
     }
 
-    // Get all messages where user is sender or recipient
+    // Build unified inbox with three types:
+    // 1. Echo (AI teammate)
+    // 2. Live chats (Engage widget)
+    // 3. Team/Direct conversations
+    
+    const conversations = []
+    
+    // =====================================================
+    // 1. ECHO - AI Teammate (always first)
+    // =====================================================
+    const { data: echoContact } = await supabase
+      .from('contacts')
+      .select('id, name, email, avatar_url')
+      .eq('org_id', orgId)
+      .eq('is_ai', true)
+      .single()
+    
+    if (echoContact) {
+      // Get last Echo message
+      const { data: lastEchoMsg } = await supabase
+        .from('messages')
+        .select('content, created_at')
+        .eq('org_id', orgId)
+        .eq('thread_type', 'echo')
+        .or(`sender_id.eq.${userId},recipient_id.eq.${userId}`)
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .single()
+      
+      conversations.push({
+        id: echoContact.id,
+        partner_id: echoContact.id,
+        partner_name: 'Echo',
+        partner_email: echoContact.email,
+        partner_avatar: echoContact.avatar_url || '/echo-avatar.svg',
+        thread_type: 'echo',
+        thread_source: 'echo',
+        is_ai: true,
+        is_live_chat: false,
+        unread_count: 0,
+        latest_message: lastEchoMsg ? {
+          content: lastEchoMsg.content,
+          created_at: lastEchoMsg.created_at,
+          is_from_partner: true
+        } : {
+          content: 'Your AI teammate - ask me anything!',
+          created_at: new Date().toISOString(),
+          is_from_partner: true
+        }
+      })
+    }
+    
+    // =====================================================
+    // 2. LIVE CHATS - From Engage widget
+    // =====================================================
+    const { data: liveChatSessions } = await supabase
+      .from('engage_chat_sessions')
+      .select(`
+        id,
+        visitor_name,
+        visitor_email,
+        visitor_phone,
+        source_url,
+        status,
+        chat_mode,
+        message_count,
+        last_message_at,
+        created_at,
+        project:projects(id, title)
+      `)
+      .eq('org_id', orgId)
+      .or(`status.neq.closed,updated_at.gt.${new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString()}`)
+      .order('last_message_at', { ascending: false, nullsFirst: false })
+      .order('created_at', { ascending: false })
+      .limit(20)
+    
+    if (liveChatSessions?.length) {
+      for (const session of liveChatSessions) {
+        // Get last message for preview
+        const { data: lastMsg } = await supabase
+          .from('engage_chat_messages')
+          .select('content, role, created_at, read_at')
+          .eq('session_id', session.id)
+          .order('created_at', { ascending: false })
+          .limit(1)
+          .single()
+        
+        // Count unread visitor messages
+        const { count: unreadCount } = await supabase
+          .from('engage_chat_messages')
+          .select('id', { count: 'exact', head: true })
+          .eq('session_id', session.id)
+          .eq('role', 'visitor')
+          .is('read_at', null)
+        
+        conversations.push({
+          id: session.id,
+          partner_id: session.id,
+          partner_name: session.visitor_name || 'Visitor',
+          partner_email: session.visitor_email,
+          partner_phone: session.visitor_phone,
+          partner_avatar: null,
+          thread_type: 'live_chat',
+          thread_source: 'live_chat',
+          is_ai: false,
+          is_live_chat: true,
+          engage_session_id: session.id,
+          chat_status: session.status,
+          chat_mode: session.chat_mode,
+          source_url: session.source_url,
+          project: session.project,
+          unread_count: unreadCount || 0,
+          latest_message: lastMsg ? {
+            content: lastMsg.content,
+            created_at: lastMsg.created_at,
+            is_from_partner: lastMsg.role === 'visitor'
+          } : {
+            content: 'New chat session',
+            created_at: session.created_at,
+            is_from_partner: true
+          }
+        })
+      }
+    }
+    
+    // =====================================================
+    // 3. TEAM/DIRECT CONVERSATIONS
+    // =====================================================
     const { data: allMessages, error: fetchError } = await supabase
       .from('messages')
       .select(`
@@ -61,48 +190,76 @@ export async function handler(event) {
         read_at,
         sender_id,
         recipient_id,
-        sender:contacts!messages_sender_id_fkey (id, name, email, company),
-        recipient:contacts!messages_recipient_id_fkey (id, name, email, company)
+        thread_type,
+        thread_source,
+        sender:contacts!messages_sender_id_fkey (id, name, email, company, is_ai, avatar_url),
+        recipient:contacts!messages_recipient_id_fkey (id, name, email, company, is_ai, avatar_url)
       `)
+      .eq('org_id', orgId)
       .or(`sender_id.eq.${userId},recipient_id.eq.${userId}`)
+      .neq('thread_type', 'echo') // Exclude Echo messages
+      .is('engage_session_id', null) // Exclude live chat messages
       .order('created_at', { ascending: false })
+      .limit(100)
 
     if (fetchError) {
       throw fetchError
     }
 
-    // Group by conversation partner and get latest message + unread count
+    // Group by conversation partner
     const conversationMap = new Map()
     
     for (const msg of allMessages || []) {
-      const partnerId = msg.sender_id === userId ? msg.recipient_id : msg.sender_id
+      // Skip if partner is Echo
       const partner = msg.sender_id === userId ? msg.recipient : msg.sender
+      if (partner?.is_ai) continue
+      
+      const partnerId = msg.sender_id === userId ? msg.recipient_id : msg.sender_id
       
       if (!conversationMap.has(partnerId)) {
         conversationMap.set(partnerId, {
-          partnerId,
-          partnerName: partner?.name,
-          partnerEmail: partner?.email,
-          partnerCompany: partner?.company,
-          lastMessage: {
+          id: msg.id,
+          partner_id: partnerId,
+          partner_name: partner?.name,
+          partner_email: partner?.email,
+          partner_company: partner?.company,
+          partner_avatar: partner?.avatar_url,
+          thread_type: msg.thread_type || 'direct',
+          thread_source: msg.thread_source || 'direct',
+          is_ai: false,
+          is_live_chat: false,
+          unread_count: 0,
+          latest_message: {
             id: msg.id,
             subject: msg.subject,
             content: msg.content,
-            createdAt: msg.created_at,
-            readAt: msg.read_at,
-            isFromMe: msg.sender_id === userId
-          },
-          unreadCount: 0
+            created_at: msg.created_at,
+            read_at: msg.read_at,
+            is_from_partner: msg.sender_id !== userId
+          }
         })
       }
       
       // Count unread messages from this partner
       if (msg.recipient_id === userId && !msg.read_at) {
-        conversationMap.get(partnerId).unreadCount++
+        conversationMap.get(partnerId).unread_count++
       }
     }
 
-    const conversations = Array.from(conversationMap.values())
+    // Add team conversations to the list
+    conversations.push(...Array.from(conversationMap.values()))
+    
+    // Sort: Echo first, then live chats, then by last message date
+    conversations.sort((a, b) => {
+      if (a.is_ai && !b.is_ai) return -1
+      if (!a.is_ai && b.is_ai) return 1
+      if (a.is_live_chat && !b.is_live_chat) return -1
+      if (!a.is_live_chat && b.is_live_chat) return 1
+      
+      const aDate = new Date(a.latest_message?.created_at || 0)
+      const bDate = new Date(b.latest_message?.created_at || 0)
+      return bDate - aDate
+    })
 
     return {
       statusCode: 200,

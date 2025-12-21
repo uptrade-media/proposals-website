@@ -33,8 +33,8 @@ function formatCurrency(amount) {
 
 // Generate invoice email HTML
 function generateInvoiceEmailHTML(invoice, contact, paymentUrl) {
-  const dueDate = invoice.due_date 
-    ? new Date(invoice.due_date).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })
+  const dueDate = (invoice.due_at || invoice.due_date)
+    ? new Date(invoice.due_at || invoice.due_date).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })
     : 'Upon Receipt'
 
   return `
@@ -174,8 +174,8 @@ function generateInvoiceEmailHTML(invoice, contact, paymentUrl) {
 
 // Generate reminder email HTML
 function generateReminderEmailHTML(invoice, contact, paymentUrl, reminderNumber, daysFromSend) {
-  const dueDate = invoice.due_date 
-    ? new Date(invoice.due_date).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })
+  const dueDate = (invoice.due_at || invoice.due_date)
+    ? new Date(invoice.due_at || invoice.due_date).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })
     : 'Upon Receipt'
 
   const urgencyColor = reminderNumber === 3 ? '#dc2626' : reminderNumber === 2 ? '#ea580c' : '#f59e0b'

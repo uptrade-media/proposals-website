@@ -189,6 +189,7 @@ function generateInvoiceNumber() {
 }
 
 // Create deposit invoice for the client
+// Note: Invoice starts as 'pending' - email only sent if client abandons payment page
 async function createDepositInvoice({ contactId, projectId, proposalId, proposalTitle, depositAmount, depositPercentage, totalAmount, clientEmail }) {
   try {
     const invoiceNumber = generateInvoiceNumber()
@@ -206,23 +207,26 @@ async function createDepositInvoice({ contactId, projectId, proposalId, proposal
       total: parseFloat(depositAmount)
     }])
 
+    // Invoice starts as 'pending' - no email sent yet
+    // Client will be redirected to payment page immediately
+    // Email only sent if they abandon the page without paying (via invoices-send-abandoned.js)
     const { data: invoice, error } = await supabase
       .from('invoices')
       .insert({
         contact_id: contactId,
         project_id: projectId || null,
         invoice_number: invoiceNumber,
-        status: 'sent',
+        status: 'pending', // Changed from 'sent' - email not sent yet
         amount: depositAmount,
         tax_amount: 0,
         total_amount: depositAmount,
-        due_date: dueDate.toISOString(),
+        due_at: dueDate.toISOString(),
         line_items: lineItems,
         notes: `Deposit invoice for proposal: ${proposalTitle}. Proposal ID: ${proposalId}`,
         payment_token: paymentToken,
         payment_token_expires: paymentTokenExpires.toISOString(),
-        sent_to_email: clientEmail,
-        sent_at: new Date().toISOString(),
+        // Don't set sent_at or sent_to_email yet - only set when actually emailed
+        pending_email_to: clientEmail, // Store for later email if abandoned
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString()
       })
@@ -534,8 +538,9 @@ export async function handler(event) {
 
     // Create deposit invoice (always, so client has it in billing)
     const clientEmailForInvoice = clientEmail || proposal.contact?.email || proposal.client_email
+    let depositInvoice = null
     if (contact && parseFloat(depositAmount) > 0) {
-      const invoice = await createDepositInvoice({
+      depositInvoice = await createDepositInvoice({
         contactId: contact.id,
         projectId: newProjectId,
         proposalId: proposal.id,
@@ -545,16 +550,17 @@ export async function handler(event) {
         totalAmount,
         clientEmail: clientEmailForInvoice
       })
-      if (invoice) {
+      if (depositInvoice) {
         invoiceCreated = true
-        console.log('Deposit invoice created:', invoice.invoice_number)
+        console.log('Deposit invoice created:', depositInvoice.invoice_number)
       }
     }
 
-    // Return success with payment info
+    // Return success with payment redirect URL
+    // Client will be redirected to the invoice payment page instead of inline payment
     return json(200, { 
       success: true,
-      message: 'Contract signed successfully! Please complete your deposit payment.',
+      message: 'Contract signed successfully! Redirecting to payment...',
       status: 'accepted',
       proposalId: proposal.id,
       proposalSlug: proposal.slug,
@@ -563,14 +569,18 @@ export async function handler(event) {
       projectId: newProjectId,
       magicLinkSent,
       invoiceCreated,
-      // Payment info for the frontend
-      payment: {
+      // Payment redirect info for the frontend
+      payment: depositInvoice ? {
         required: true,
         depositPercentage,
         depositAmount: parseFloat(depositAmount),
         totalAmount,
-        proposalTitle: proposal.title
-      }
+        proposalTitle: proposal.title,
+        // New: Include payment token for redirect to invoice payment page
+        paymentToken: depositInvoice.payment_token,
+        paymentUrl: `/pay/${depositInvoice.payment_token}`,
+        invoiceNumber: depositInvoice.invoice_number
+      } : null
     }, event)
 
   } catch (error) {

@@ -2,7 +2,7 @@
 // Auto-Optimize - Master automation that runs all SEO optimizations
 // Background function that orchestrates the AI Brain across all modules
 import { createClient } from '@supabase/supabase-js'
-import OpenAI from 'openai'
+import { SEOSkill } from './skills/seo-skill.js'
 
 // Background function - 15 minute timeout
 export const config = {
@@ -61,8 +61,6 @@ async function runAutoOptimization(siteId, mode) {
     process.env.SUPABASE_SERVICE_ROLE_KEY
   )
 
-  const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY })
-
   console.log(`[Auto-Optimize] Starting ${mode} optimization for site: ${siteId}`)
 
   // Create optimization run record
@@ -84,13 +82,16 @@ async function runAutoOptimization(siteId, mode) {
     // Get site details
     const { data: site } = await supabase
       .from('seo_sites')
-      .select('*, org:organizations(name, domain)')
+      .select('*, org:organizations(id, name, domain)')
       .eq('id', siteId)
       .single()
 
     if (!site) {
       throw new Error(`Site not found: ${siteId}`)
     }
+
+    // Initialize SEOSkill for AI operations
+    const seoSkill = new SEOSkill(supabase, site.org?.id || site.org_id, siteId)
 
     const results = {
       mode,
@@ -138,7 +139,7 @@ async function runAutoOptimization(siteId, mode) {
     // MODULE 3: Run AI Brain analysis
     // ============================================================
     console.log('[Auto-Optimize] Step 3: Running AI Brain analysis...')
-    const aiAnalysis = await runAIBrainAnalysis(supabase, openai, siteId, knowledge)
+    const aiAnalysis = await seoSkill.runAIBrainAnalysis(knowledge)
     results.modules.aiBrain = aiAnalysis
     results.totalRecommendations += aiAnalysis.recommendationsGenerated || 0
 
@@ -178,7 +179,7 @@ async function runAutoOptimization(siteId, mode) {
     // MODULE 8: Generate master summary
     // ============================================================
     console.log('[Auto-Optimize] Step 8: Generating summary...')
-    const summary = await generateOptimizationSummary(openai, results, site)
+    const summary = await seoSkill.generateOptimizationSummary(results, site)
     results.summary = summary
 
     // Update run record
@@ -212,121 +213,6 @@ async function runAutoOptimization(siteId, mode) {
     }
 
     throw error
-  }
-}
-
-// Run AI Brain comprehensive analysis
-async function runAIBrainAnalysis(supabase, openai, siteId, knowledge) {
-  try {
-    // Get pages that need analysis
-    const { data: pages } = await supabase
-      .from('seo_pages')
-      .select('*')
-      .eq('site_id', siteId)
-      .order('clicks_28d', { ascending: false, nullsFirst: false })
-      .limit(50)
-
-    if (!pages?.length) {
-      return { status: 'no_pages', recommendationsGenerated: 0 }
-    }
-
-    // Analyze pages and generate recommendations
-    const analysisPrompt = `Analyze these pages for SEO optimization opportunities:
-
-SITE CONTEXT:
-${knowledge ? `
-Business: ${knowledge.business_name}
-Industry: ${knowledge.industry}
-Services: ${knowledge.primary_services?.join(', ')}
-` : 'No site knowledge available'}
-
-TOP PAGES (${pages.length}):
-${pages.slice(0, 20).map(p => `
-- ${p.url}
-  Title: ${p.title || 'Missing'}
-  Clicks: ${p.clicks_28d || 0}
-  Position: ${p.avg_position?.toFixed(1) || 'N/A'}
-  Meta: ${p.meta_description ? 'Yes' : 'Missing'}
-  H1: ${p.h1 ? 'Yes' : 'Missing'}
-`).join('\n')}
-
-Generate prioritized SEO recommendations. Focus on:
-1. Missing or weak title tags
-2. Missing meta descriptions
-3. Striking distance keywords (position 4-20)
-4. Content gaps
-5. Technical issues
-
-Return as JSON:
-{
-  "recommendations": [
-    {
-      "pageUrl": "url",
-      "pageId": "id",
-      "category": "title|meta|content|technical|keyword",
-      "priority": "critical|high|medium|low",
-      "title": "Brief title",
-      "description": "Detailed explanation",
-      "currentValue": "What exists now",
-      "suggestedValue": "What to change to",
-      "autoFixable": true/false,
-      "impactScore": 1-10
-    }
-  ]
-}`
-
-    const completion = await openai.chat.completions.create({
-      model: SEO_AI_MODEL,
-      messages: [
-        {
-          role: 'system',
-          content: 'You are an expert SEO analyst. Provide specific, actionable recommendations with exact suggested values where possible.'
-        },
-        { role: 'user', content: analysisPrompt }
-      ],
-      response_format: { type: 'json_object' },
-      temperature: 0.3
-    })
-
-    const result = JSON.parse(completion.choices[0].message.content)
-    const recommendations = result.recommendations || []
-
-    // Save recommendations
-    for (const rec of recommendations) {
-      // Find page ID
-      const page = pages.find(p => p.url === rec.pageUrl)
-      
-      await supabase
-        .from('seo_ai_recommendations')
-        .upsert({
-          site_id: siteId,
-          page_id: page?.id || rec.pageId,
-          category: rec.category,
-          priority: rec.priority,
-          title: rec.title,
-          description: rec.description,
-          current_value: rec.currentValue,
-          suggested_value: rec.suggestedValue,
-          auto_fixable: rec.autoFixable,
-          impact_score: rec.impactScore,
-          ai_model: SEO_AI_MODEL,
-          status: 'pending',
-          created_at: new Date().toISOString()
-        }, {
-          onConflict: 'site_id,page_id,title',
-          ignoreDuplicates: true
-        })
-    }
-
-    return {
-      status: 'completed',
-      pagesAnalyzed: pages.length,
-      recommendationsGenerated: recommendations.length
-    }
-
-  } catch (error) {
-    console.error('[Auto-Optimize] AI Brain error:', error)
-    return { status: 'error', error: error.message }
   }
 }
 
@@ -486,47 +372,5 @@ async function autoApplyRecommendations(supabase, siteId) {
   } catch (error) {
     console.error('[Auto-Optimize] Auto-apply error:', error)
     return appliedCount
-  }
-}
-
-// Generate optimization summary
-async function generateOptimizationSummary(openai, results, site) {
-  try {
-    const prompt = `Summarize this SEO optimization run for ${site.domain}:
-
-Results:
-${JSON.stringify(results.modules, null, 2)}
-
-Total Recommendations: ${results.totalRecommendations}
-Auto-Applied: ${results.autoApplied}
-Alerts Generated: ${results.alerts}
-
-Provide a brief executive summary (2-3 sentences) highlighting:
-1. Key findings
-2. Most important actions needed
-3. Overall site health trend
-
-Return as JSON:
-{
-  "summary": "Executive summary text",
-  "healthTrend": "improving|stable|declining",
-  "topPriority": "Most important action"
-}`
-
-    const completion = await openai.chat.completions.create({
-      model: SEO_AI_MODEL,
-      messages: [
-        { role: 'system', content: 'You are an SEO expert providing concise optimization summaries.' },
-        { role: 'user', content: prompt }
-      ],
-      response_format: { type: 'json_object' },
-      temperature: 0.3
-    })
-
-    return JSON.parse(completion.choices[0].message.content)
-
-  } catch (error) {
-    console.error('[Auto-Optimize] Summary generation error:', error)
-    return { summary: 'Optimization completed. Review recommendations for details.' }
   }
 }

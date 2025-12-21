@@ -3,10 +3,7 @@
 // Creates comprehensive briefs based on keyword analysis and site knowledge
 import { createSupabaseAdmin, getAuthenticatedUser } from './utils/supabase.js'
 import { google } from 'googleapis'
-import OpenAI from 'openai'
-
-// Use env variable for model - easily update when new models release
-const SEO_AI_MODEL = process.env.SEO_AI_MODEL || 'gpt-4o'
+import { SEOSkill } from './skills/seo-skill.js'
 
 export async function handler(event) {
   const headers = {
@@ -107,13 +104,16 @@ async function generateContentBrief(event, headers) {
     // Fetch site details and knowledge
     const { data: site, error: siteError } = await supabase
       .from('seo_sites')
-      .select('*, org:organizations(domain, name)')
+      .select('*, org_id, org:organizations(domain, name)')
       .eq('id', siteId)
       .single()
 
     if (siteError || !site) {
       return { statusCode: 404, headers, body: JSON.stringify({ error: 'Site not found' }) }
     }
+
+    // Initialize SEOSkill for AI operations
+    const seoSkill = new SEOSkill(supabase, site.org_id, siteId, { userId: contact.id })
 
     const { data: knowledge } = await supabase
       .from('seo_knowledge_base')
@@ -200,125 +200,17 @@ async function generateContentBrief(event, headers) {
       .eq('site_id', siteId)
       .limit(50)
 
-    // Generate brief with AI
-    const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY })
-
-    const contentTypeDescriptions = {
-      blog: 'an informative blog post that educates and engages readers',
-      service_page: 'a service page that converts visitors into leads',
-      landing_page: 'a focused landing page optimized for conversions',
-      guide: 'a comprehensive guide that establishes authority',
-      case_study: 'a case study that showcases results and builds trust'
-    }
-
-    const briefPrompt = `Generate a comprehensive SEO content brief for creating ${contentTypeDescriptions[contentType]}.
-
-BUSINESS CONTEXT:
-- Business: ${knowledge?.business_name || site.org?.name || domain}
-- Industry: ${knowledge?.industry || 'Not specified'}
-- Services: ${knowledge?.services?.join(', ') || 'Not specified'}
-- Service Areas: ${knowledge?.service_areas?.join(', ') || 'Not specified'}
-- Target Audience: ${knowledge?.target_audience || 'Not specified'}
-- USPs: ${knowledge?.unique_selling_points?.join('; ') || 'Not specified'}
-
-TARGET KEYWORD: "${targetKeyword}"
-
-${existingPageData ? `CURRENT RANKING:
-We already rank #${existingPageData.position.toFixed(0)} for this keyword at: ${existingPageData.url}
-This brief should help improve/update that content.` : 'We do not currently rank for this keyword.'}
-
-RELATED KEYWORDS FROM GSC (consider incorporating):
-${relatedKeywords.slice(0, 15).map(k => `- "${k.keyword}" (${k.impressions} impressions, position ${k.position.toFixed(1)})`).join('\n')}
-
-EXISTING PAGES FOR INTERNAL LINKING:
-${existingPages?.slice(0, 10).map(p => `- ${p.title || p.url}`).join('\n') || 'None available'}
-
-${additionalContext ? `ADDITIONAL CONTEXT:\n${additionalContext}` : ''}
-
-Create a detailed content brief with:
-1. Optimized title tag (60 chars max)
-2. Meta description (160 chars max)
-3. H1 heading
-4. Target word count
-5. Search intent analysis
-6. Suggested outline with H2/H3 structure
-7. Key points to cover for each section
-8. Secondary keywords to include naturally
-9. Internal linking suggestions
-10. Call-to-action recommendations
-11. FAQ section suggestions (for featured snippet opportunities)
-12. Content differentiation strategies
-
-Return as JSON:
-{
-  "title_tag": "SEO-optimized title",
-  "meta_description": "Compelling meta description",
-  "h1": "Main heading",
-  "target_word_count": 1500,
-  "search_intent": "informational|transactional|navigational|commercial",
-  "intent_analysis": "Brief explanation of searcher intent",
-  "outline": [
-    {
-      "type": "h2",
-      "text": "Section heading",
-      "key_points": ["Point 1", "Point 2"],
-      "target_words": 200
-    },
-    {
-      "type": "h3",
-      "text": "Subsection heading",
-      "key_points": ["Point 1"],
-      "target_words": 150
-    }
-  ],
-  "primary_keyword": "target keyword",
-  "secondary_keywords": ["keyword 1", "keyword 2"],
-  "lsi_keywords": ["related term 1", "related term 2"],
-  "internal_links": [
-    {
-      "anchor_text": "suggested anchor",
-      "target_url": "URL to link to",
-      "context": "Where in content to place"
-    }
-  ],
-  "cta_suggestions": [
-    {
-      "type": "primary|secondary",
-      "text": "CTA text",
-      "placement": "Where to place"
-    }
-  ],
-  "faq_suggestions": [
-    {
-      "question": "FAQ question",
-      "answer_points": ["Key point 1", "Key point 2"]
-    }
-  ],
-  "differentiation_notes": "How to make this content stand out",
-  "competitor_gap_opportunities": "Content gaps to exploit"
-}`
-
-    const completion = await openai.chat.completions.create({
-      model: SEO_AI_MODEL,
-      messages: [
-        {
-          role: 'system',
-          content: `You are an expert SEO content strategist. Create detailed, actionable content briefs that help writers create high-ranking content. Focus on search intent, comprehensiveness, and business goals. Always consider E-E-A-T principles.`
-        },
-        {
-          role: 'user',
-          content: briefPrompt
-        }
-      ],
-      response_format: { type: 'json_object' },
-      temperature: 0.4
+    // Generate brief with SEOSkill
+    const brief = await seoSkill.generateContentBriefSync(targetKeyword, {
+      contentType,
+      knowledge,
+      relatedKeywords,
+      existingPageData,
+      existingPages,
+      additionalContext
     })
 
-    let brief
-    try {
-      brief = JSON.parse(completion.choices[0].message.content)
-    } catch (e) {
-      console.error('[Content Brief] Failed to parse AI response:', e)
+    if (!brief) {
       return { 
         statusCode: 500, 
         headers, 

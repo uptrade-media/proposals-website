@@ -12,7 +12,7 @@
  */
 
 import { createSupabaseAdmin, getAuthenticatedUser } from './utils/supabase.js'
-import OpenAI from 'openai'
+import { CRMSkill } from './skills/crm-skill.js'
 
 const PAGESPEED_API_KEY = process.env.GOOGLE_PAGESPEED_API_KEY
 
@@ -193,40 +193,33 @@ function calculateRebuildScore(healthMetrics, techStack) {
 }
 
 /**
- * Generate AI summary of website analysis
+ * Generate AI summary of website analysis using CRM Skill
  */
-async function generateAISummary(url, healthMetrics, techStack) {
-  const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY })
-  
-  const prompt = `Analyze this website data and provide a brief 2-3 sentence summary for a sales representative about to pitch web services. Focus on pain points and opportunities.
-
-URL: ${url}
-
-Performance Metrics:
-- Mobile Performance: ${healthMetrics?.mobile?.performance || 'N/A'}/100
-- Desktop Performance: ${healthMetrics?.desktop?.performance || 'N/A'}/100
-- SEO Score: ${healthMetrics?.mobile?.seo || 'N/A'}/100
-- LCP: ${healthMetrics?.mobile?.lcp ? Math.round(healthMetrics.mobile.lcp) + 'ms' : 'N/A'}
-- CLS: ${healthMetrics?.mobile?.cls || 'N/A'}
-
-Technology:
-- Platform: ${techStack?.platform || 'Unknown'}
-- Theme: ${techStack?.theme || 'Unknown'}
-- Plugins: ${techStack?.plugins?.join(', ') || 'None detected'}
-
-Write a brief summary like: "This WordPress site has poor mobile performance (32/100) and slow load times. Built with Divi theme and multiple heavy plugins. Strong candidate for a Next.js rebuild to improve Core Web Vitals and SEO."
-
-Keep it under 50 words, focus on the most impactful issues.`
-
+async function generateAISummary(url, healthMetrics, techStack, supabase, orgId) {
   try {
-    const completion = await openai.chat.completions.create({
-      model: 'gpt-4o-mini',
-      messages: [{ role: 'user', content: prompt }],
-      temperature: 0.3,
-      max_tokens: 150
+    const crmSkill = new CRMSkill(supabase, orgId)
+    
+    const result = await crmSkill.analyzeWebsite(url, {
+      metaInfo: {
+        mobile_performance: healthMetrics?.mobile?.performance,
+        desktop_performance: healthMetrics?.desktop?.performance,
+        seo_score: healthMetrics?.mobile?.seo,
+        lcp: healthMetrics?.mobile?.lcp,
+        cls: healthMetrics?.mobile?.cls,
+        platform: techStack?.platform,
+        theme: techStack?.theme,
+        plugins: techStack?.plugins
+      }
     })
     
-    return completion.choices[0].message.content.trim()
+    // Return a concise summary for sales
+    if (result.pain_points?.length > 0 || result.opportunities?.length > 0) {
+      const painPoint = result.pain_points?.[0] || ''
+      const opportunity = result.opportunities?.[0] || ''
+      return `${result.company_name ? result.company_name + ': ' : ''}${painPoint}${opportunity ? ' ' + opportunity : ''}`
+    }
+    
+    return null
   } catch (error) {
     console.error('AI summary error:', error.message)
     return null
@@ -333,8 +326,16 @@ export async function handler(event) {
     // Calculate rebuild score
     const rebuildScore = calculateRebuildScore(healthMetrics, techStack)
 
-    // Generate AI summary
-    const aiSummary = await generateAISummary(targetUrl, healthMetrics, techStack)
+    // Generate AI summary using CRM Skill
+    // Get org_id from contact if available
+    const { data: contactWithOrg } = await supabase
+      .from('contacts')
+      .select('org_id')
+      .eq('id', contactId)
+      .single()
+    
+    const orgId = contactWithOrg?.org_id || 'uptrade'
+    const aiSummary = await generateAISummary(targetUrl, healthMetrics, techStack, supabase, orgId)
 
     // Update contact with intelligence
     const { error: updateError } = await supabase

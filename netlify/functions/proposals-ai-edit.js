@@ -1,11 +1,7 @@
 // netlify/functions/proposals-ai-edit.js
-// Chat-based AI editing of proposal content
-import OpenAI from 'openai'
+// Chat-based AI editing of proposal content - uses Signal ProposalsSkill
 import { createSupabaseAdmin, getAuthenticatedUser } from './utils/supabase.js'
-
-const openai = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY
-})
+import { ProposalsSkill } from './skills/proposals-skill.js'
 
 // Helper to display payment terms in human-readable format
 function formatPaymentTermsDisplay(value) {
@@ -138,25 +134,20 @@ export async function handler(event) {
       .replace('{{totalAmount}}', currentProposal.totalAmount || '0')
       .replace('{{validUntil}}', currentProposal.validUntil || 'Not set')
 
-    // Include conversation history for context
-    const messages = [
-      { role: 'system', content: systemPrompt },
-      ...conversationHistory.slice(-6).map(msg => ({
-        role: msg.role,
-        content: msg.content
-      })),
-      { role: 'user', content: message }
-    ]
-
-    const completion = await openai.chat.completions.create({
-      model: 'gpt-5.2',
-      messages,
-      temperature: 0.7,
-      max_tokens: 4000,
-      response_format: { type: 'json_object' }
-    })
-
-    const aiResponseText = completion.choices[0]?.message?.content || '{}'
+    // Use ProposalsSkill for AI refinement
+    const supabase = createSupabaseAdmin()
+    const proposalsSkill = new ProposalsSkill(supabase, null, { userId: contact.id })
+    
+    console.log('[proposals-ai-edit] Using ProposalsSkill for refinement')
+    
+    const result = await proposalsSkill.refineWithChat(
+      proposalId,
+      currentContent,
+      message,
+      conversationHistory.slice(-6)
+    )
+    
+    const aiResponseText = typeof result === 'string' ? result : JSON.stringify(result)
     console.log('[proposals-ai-edit] Full AI response:', aiResponseText)
     
     let aiResponse

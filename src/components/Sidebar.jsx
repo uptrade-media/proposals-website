@@ -7,6 +7,7 @@ import {
   Home, 
   FileText, 
   MessageSquare, 
+  MessageCircle,
   DollarSign, 
   BarChart3, 
   Settings, 
@@ -162,6 +163,7 @@ const Sidebar = ({
     // Note: Team is in org modules (org-wide, not per project)
     ...(tenantHasFeature('seo') ? [{ id: 'seo', label: 'SEO', icon: Search, badge: null, route: null }] : []),
     ...(tenantHasFeature('ecommerce') ? [{ id: 'ecommerce', label: 'Ecommerce', icon: ShoppingCart, badge: null, route: null }] : []),
+    ...(tenantHasFeature('engage') ? [{ id: 'engage', label: 'Engage', icon: MessageCircle, badge: null, route: '/engage' }] : []),
     ...(tenantHasFeature('forms') ? [{ id: 'forms', label: 'Forms', icon: ClipboardList, badge: null, route: null }] : []),
     ...(tenantHasFeature('email') ? [{ id: 'email', label: 'Email Manager', icon: Mail, badge: null, route: null }] : []),
     ...(tenantHasFeature('blog') ? [{ id: 'blog', label: 'Blog', icon: BookOpen, badge: null, route: null }] : []),
@@ -203,6 +205,7 @@ const Sidebar = ({
     { id: 'clients', label: 'Clients', icon: Users, badge: newLeadsCount > 0 ? newLeadsCount.toString() : null, route: null },
     ...(hasFeature('seo') ? [{ id: 'seo', label: 'SEO', icon: Search, badge: null, route: null }] : []),
     ...(hasFeature('ecommerce') ? [{ id: 'ecommerce', label: 'Ecommerce', icon: ShoppingCart, badge: null, route: null }] : []),
+    ...(hasFeature('engage') ? [{ id: 'engage', label: 'Engage', icon: MessageCircle, badge: null, route: '/engage' }] : []),
     ...(hasFeature('team') ? [{ id: 'team', label: 'Team', icon: Shield, badge: null, route: null }] : []),
     ...(hasFeature('team_metrics') ? [{ id: 'team-metrics', label: 'Team Metrics', icon: Trophy, badge: null, route: null }] : []),
     ...(hasFeature('forms') ? [{ id: 'forms', label: 'Forms', icon: ClipboardList, badge: null, route: null }] : []),

@@ -99,6 +99,7 @@ import SegmentBuilder from './SegmentBuilder'
 import ImageLibrary from './ImageLibrary'
 import ListManagement from './ListManagement'
 import ABTestingPanel from './ABTestingPanel'
+import SystemEmailsTab from './SystemEmailsTab'
 
 // ============================================
 // DASHBOARD OVERVIEW TAB
@@ -1857,7 +1858,7 @@ export default function EmailPlatform() {
       </div>
 
       <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-        <TabsList className="grid w-full grid-cols-8 max-w-4xl">
+        <TabsList className="grid w-full grid-cols-9 max-w-5xl">
           <TabsTrigger value="overview" className="flex items-center gap-2">
             <BarChart3 className="h-4 w-4" />
             <span className="hidden sm:inline">Overview</span>
@@ -1869,6 +1870,10 @@ export default function EmailPlatform() {
           <TabsTrigger value="automations" className="flex items-center gap-2">
             <Zap className="h-4 w-4" />
             <span className="hidden sm:inline">Automations</span>
+          </TabsTrigger>
+          <TabsTrigger value="system-emails" className="flex items-center gap-2">
+            <Mail className="h-4 w-4" />
+            <span className="hidden sm:inline">System</span>
           </TabsTrigger>
           <TabsTrigger value="templates" className="flex items-center gap-2">
             <FileText className="h-4 w-4" />
@@ -1909,6 +1914,10 @@ export default function EmailPlatform() {
             onCreateAutomation={handleCreateAutomation}
             onEditAutomation={handleEditAutomation}
           />
+        </TabsContent>
+
+        <TabsContent value="system-emails" className="mt-6">
+          <SystemEmailsTab />
         </TabsContent>
 
         <TabsContent value="templates" className="mt-6">

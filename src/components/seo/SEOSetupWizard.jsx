@@ -1,19 +1,22 @@
 /**
- * SEO Setup Wizard - Comprehensive Edition
+ * Signal Setup Wizard (formerly SEO Setup Wizard)
  * 
- * Epic onboarding flow that walks through ALL SEO features:
- * - Site discovery & crawling
- * - Google Search Console integration
- * - Signal AI training
- * - Schema markup generation
- * - Internal link analysis
+ * Unified onboarding flow that trains Signal AI on your business:
+ * - Site discovery & crawling (content understanding)
+ * - Google Search Console integration (performance data)
+ * - Signal AI training (knowledge base & brain)
+ * - Schema markup generation (structured data)
+ * - Internal link analysis (site architecture)
  * - Keyword cannibalization detection
- * - Topic cluster mapping
+ * - Topic cluster mapping (content organization)
  * - SERP feature opportunities
  * - Content decay detection
  * - Competitor analysis
  * - Local SEO setup
  * - And much more!
+ * 
+ * This wizard populates both the SEO module AND Signal's knowledge base.
+ * Signal is the universal AI brain that powers chat, SEO, Engage, and more.
  */
 
 import { useState, useEffect, useCallback, useRef } from 'react'
@@ -665,6 +668,7 @@ function StatCard({ label, value, icon: Icon, color }) {
 
 // =============================================================================
 // MAIN WIZARD COMPONENT
+// Also exported as SignalWizard for use from Signal module context
 // =============================================================================
 export default function SEOSetupWizard({ siteId, domain, onComplete, onSkip }) {
   const [currentStep, setCurrentStep] = useState(0)
@@ -2102,3 +2106,5 @@ export default function SEOSetupWizard({ siteId, domain, onComplete, onSkip }) {
     </div>
   )
 }
+// Named export alias for Signal module context
+export { SEOSetupWizard as SignalWizard }

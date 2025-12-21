@@ -198,6 +198,29 @@ export async function handler(event) {
       `)
       .single()
 
+    // Create portal notification for admin
+    try {
+      await supabase
+        .from('smart_notifications')
+        .insert({
+          contact_id: invoice.contact_id,
+          type: 'invoice_paid',
+          priority: 'normal',
+          title: `💰 Payment received: $${parseFloat(invoice.total_amount).toFixed(2)}`,
+          message: `Invoice ${invoice.invoice_number} paid by ${invoice.contact?.name || 'client'}`,
+          metadata: {
+            invoiceId: invoice.id,
+            invoiceNumber: invoice.invoice_number,
+            amount: invoice.total_amount,
+            paymentId: payment.id,
+            paidAt: now
+          }
+        })
+      console.log('[invoices-pay] Created payment notification')
+    } catch (notifyErr) {
+      console.error('[invoices-pay] Notification error:', notifyErr)
+    }
+
     // Cancel any scheduled reminder emails
     if (RESEND_API_KEY && invoice.scheduled_reminder_ids && invoice.scheduled_reminder_ids.length > 0) {
       const resend = new Resend(RESEND_API_KEY)

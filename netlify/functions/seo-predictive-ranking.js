@@ -1,9 +1,7 @@
 // netlify/functions/seo-predictive-ranking.js
 // Predictive Ranking - Score content before publishing, predict rank improvements
 import { createSupabaseAdmin, getAuthenticatedUser } from './utils/supabase.js'
-import OpenAI from 'openai'
-
-const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY })
+import { SEOSkill } from './skills/seo-skill.js'
 
 // Ranking factor weights (based on industry research)
 const RANKING_FACTORS = {
@@ -102,12 +100,14 @@ async function generatePrediction(event, supabase, headers) {
 
   console.log(`[Predictive] Generating prediction for site ${siteId}`)
 
-  // Get site data
+  // Get site data with org_id
   const { data: site } = await supabase
     .from('seo_sites')
-    .select('domain, org:organizations(name)')
+    .select('domain, org_id, org:organizations(name)')
     .eq('id', siteId)
     .single()
+
+  const orgId = site?.org_id || 'uptrade'
 
   // Get site knowledge
   const { data: knowledge } = await supabase
@@ -160,6 +160,9 @@ async function generatePrediction(event, supabase, headers) {
     .eq('is_active', true)
     .limit(5)
 
+  // Initialize SEO Skill
+  const seoSkill = new SEOSkill(supabase, orgId, siteId)
+
   // Calculate current scores
   const scores = await calculateRankingScores({
     page,
@@ -173,8 +176,10 @@ async function generatePrediction(event, supabase, headers) {
     competitors
   })
 
-  // Generate predictions with AI
-  const predictions = await generateAIPredictions(scores, {
+  // Generate predictions with AI via SEOSkill
+  const predictions = await generateAIPredictions(seoSkill, scores, {
+    domain: site?.domain,
+    page,
     content,
     title,
     keyword,
@@ -340,69 +345,56 @@ async function calculateRankingScores({ page, content, title, url, keyword, keyw
   return scores
 }
 
-async function generateAIPredictions(scores, context) {
+async function generateAIPredictions(seoSkill, scores, context) {
   try {
-    const response = await openai.chat.completions.create({
-      model: 'gpt-4o-mini',
-      messages: [
-        {
-          role: 'system',
-          content: `You are an SEO prediction expert. Based on ranking factor scores and content analysis, predict ranking improvements and provide specific recommendations.
-
-Assess what improvements would have the most impact and estimate the resulting position change.`
-        },
-        {
-          role: 'user',
-          content: `Analyze and predict ranking potential:
-
-Current Scores: ${JSON.stringify(scores)}
-Target Keyword: "${context.keyword}"
-Current Position: ${context.currentPosition || 'not ranking'}
-Title: "${context.title}"
-Content Length: ${context.content?.split(/\s+/).length || 0} words
-
-Respond with JSON:
-{
-  "confidence": 0.75,
-  "improvementFactors": [
-    {
-      "factor": "content_length",
-      "current": "1200 words",
-      "suggested": "2000 words",
-      "impact_score": 15,
-      "predicted_position_change": -3,
-      "effort": "quick|medium|significant"
-    }
-  ],
-  "ifAddWords": {
-    "words_to_add": 800,
-    "predicted_position": 5,
-    "predicted_traffic_increase": 150
-  },
-  "ifAddLinks": {
-    "links_to_add": 5,
-    "predicted_position": 7
-  },
-  "ifImproveSpeed": {
-    "lcp_target_ms": 2000,
-    "predicted_position": 8
-  },
-  "ifAddBacklinks": {
-    "links_needed": 10,
-    "predicted_position": 4
-  },
-  "ifUpdateTitle": {
-    "suggested_title": "Better title here",
-    "predicted_ctr_increase": 0.02
-  }
-}`
-        }
-      ],
-      response_format: { type: 'json_object' },
-      temperature: 0.3
+    // Use SEOSkill predictRankings method
+    const result = await seoSkill.predictRankings({
+      domain: context.domain,
+      keyword: context.keyword,
+      page: context.page ? { url: context.page.url } : null,
+      currentPosition: context.currentPosition,
+      changes: Object.entries(scores).map(([factor, score]) => ({
+        type: factor,
+        description: `Current score: ${score}/100`
+      })),
+      competitors: context.competitors?.map(c => ({
+        domain: c.competitor_domain,
+        position: 'unknown'
+      }))
     })
 
-    return JSON.parse(response.choices[0].message.content)
+    // Map SEOSkill response to expected format
+    const prediction = result.prediction || result
+    return {
+      confidence: prediction.confidenceLevel || 0.7,
+      improvementFactors: (prediction.keyFactors || []).map(factor => ({
+        factor: factor,
+        impact_score: 10,
+        effort: 'medium',
+        predicted_position_change: -2
+      })),
+      ifAddWords: {
+        words_to_add: 500,
+        predicted_position: prediction.predictedPosition || context.currentPosition,
+        predicted_traffic_increase: 100
+      },
+      ifAddLinks: {
+        links_to_add: 5,
+        predicted_position: prediction.predictedPosition || context.currentPosition
+      },
+      ifImproveSpeed: {
+        lcp_target_ms: 2000,
+        predicted_position: prediction.predictedPosition || context.currentPosition
+      },
+      ifAddBacklinks: {
+        links_needed: 10,
+        predicted_position: Math.max(1, (prediction.predictedPosition || 10) - 3)
+      },
+      ifUpdateTitle: {
+        suggested_title: context.title,
+        predicted_ctr_increase: 0.02
+      }
+    }
   } catch (error) {
     console.error('[Predictive] AI error:', error)
     return {

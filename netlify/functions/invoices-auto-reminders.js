@@ -37,8 +37,8 @@ function calculateNextReminderDate(reminderCount) {
 }
 
 function generateReminderEmailHTML(invoice, contact, paymentUrl, reminderCount, daysOverdue) {
-  const dueDate = invoice.due_date 
-    ? new Date(invoice.due_date).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })
+  const dueDate = (invoice.due_at || invoice.due_date)
+    ? new Date(invoice.due_at || invoice.due_date).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })
     : 'Upon Receipt'
 
   const urgencyColor = daysOverdue > 14 ? '#dc2626' : daysOverdue > 7 ? '#ea580c' : '#f59e0b'
@@ -209,8 +209,8 @@ export async function handler(event) {
         }
 
         // Calculate days overdue
-        const daysOverdue = invoice.due_date 
-          ? Math.max(0, Math.ceil((new Date() - new Date(invoice.due_date)) / (1000 * 60 * 60 * 24)))
+        const daysOverdue = (invoice.due_at || invoice.due_date)
+          ? Math.max(0, Math.ceil((new Date() - new Date(invoice.due_at || invoice.due_date)) / (1000 * 60 * 60 * 24)))
           : 0
 
         const newReminderCount = (invoice.reminder_count || 0) + 1

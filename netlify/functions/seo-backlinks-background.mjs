@@ -2,7 +2,7 @@
 // Background function for Backlink Opportunity Discovery (up to 15 min timeout)
 // Comprehensive AI-powered backlink opportunity identification
 import { createClient } from '@supabase/supabase-js'
-import OpenAI from 'openai'
+import { SEOSkill } from './skills/seo-skill.js'
 
 const SEO_AI_MODEL = process.env.SEO_AI_MODEL || 'gpt-4o'
 
@@ -103,8 +103,6 @@ export async function handler(event) {
 }
 
 async function processBacklinkDiscovery(supabase, siteId, jobId, analysisType) {
-  const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY })
-
   try {
     await updateJobProgress(supabase, jobId, 5, 'Fetching site data...')
 
@@ -118,6 +116,9 @@ async function processBacklinkDiscovery(supabase, siteId, jobId, analysisType) {
     if (!site) {
       throw new Error('Site not found')
     }
+
+    // Initialize SEOSkill with org_id from site
+    const seoSkill = new SEOSkill(supabase, site.org_id, siteId, {})
 
     const { data: knowledge } = await supabase
       .from('seo_knowledge_base')
@@ -146,11 +147,11 @@ async function processBacklinkDiscovery(supabase, siteId, jobId, analysisType) {
 
     // Run multiple AI analyses in parallel for different opportunity types
     const [resourceOpps, contentOpps, prOpps, competitorGapOpps, localOpps] = await Promise.all([
-      discoverResourceOpportunities(openai, { site, knowledge, topContent }),
-      discoverContentOpportunities(openai, { site, knowledge, topContent }),
-      discoverPROpportunities(openai, { site, knowledge }),
-      discoverCompetitorGapOpportunities(openai, { site, knowledge, competitors }),
-      knowledge?.is_local_business ? discoverLocalOpportunities(openai, { site, knowledge }) : Promise.resolve([])
+      discoverResourceOpportunities(seoSkill, { site, knowledge, topContent }),
+      discoverContentOpportunities(seoSkill, { site, knowledge, topContent }),
+      discoverPROpportunities(seoSkill, { site, knowledge }),
+      discoverCompetitorGapOpportunities(seoSkill, { site, knowledge, competitors }),
+      knowledge?.is_local_business ? discoverLocalOpportunities(seoSkill, { site, knowledge }) : Promise.resolve([])
     ])
 
     await updateJobProgress(supabase, jobId, 70, 'Processing and storing opportunities...')

@@ -8,7 +8,7 @@
  */
 
 import { createClient } from '@supabase/supabase-js'
-import OpenAI from 'openai'
+import { SEOSkill } from './skills/seo-skill.js'
 
 const supabaseUrl = process.env.SUPABASE_URL
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY
@@ -44,7 +44,6 @@ export default async function handler(req) {
     }
 
     const supabase = createClient(supabaseUrl, supabaseServiceKey)
-    const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY })
 
     // Update job status if jobId provided
     if (jobId) {
@@ -59,9 +58,15 @@ export default async function handler(req) {
     // Get site data
     const { data: site } = await supabase
       .from('seo_sites')
-      .select('domain, org:organizations(name)')
+      .select('domain, org_id, org:organizations(name)')
       .eq('id', siteId)
       .single()
+
+    if (!site) {
+      return new Response(JSON.stringify({ error: 'Site not found' }), { status: 404 })
+    }
+
+    const seoSkill = new SEOSkill(supabase, site.org_id, siteId, {})
 
     // Get site knowledge
     const { data: knowledge } = await supabase
@@ -137,7 +142,7 @@ export default async function handler(req) {
       })
 
       // Generate predictions with AI
-      const predictions = await generateAIPredictions(openai, scores, {
+      const predictions = await generateAIPredictions(seoSkill, scores, {
         content: page.content_text || page.content_summary,
         title: page.title,
         keyword,
@@ -333,18 +338,13 @@ function calculateRankingScores({ page, content, title, url, keyword, keywordDat
   return scores
 }
 
-async function generateAIPredictions(openai, scores, context) {
+async function generateAIPredictions(seoSkill, scores, context) {
   try {
-    const response = await openai.chat.completions.create({
-      model: 'gpt-4o-mini',
-      messages: [
-        {
-          role: 'system',
-          content: `You are an SEO prediction expert. Based on ranking factor scores and content analysis, predict ranking improvements and provide specific recommendations.`
-        },
-        {
-          role: 'user',
-          content: `Analyze and predict ranking potential:
+    const result = await seoSkill.signal.invoke({
+      module: 'seo',
+      tool: 'predict_ranking_improvements',
+      systemPrompt: `You are an SEO prediction expert. Based on ranking factor scores and content analysis, predict ranking improvements and provide specific recommendations.`,
+      userPrompt: `Analyze and predict ranking potential:
 
 Current Scores: ${JSON.stringify(scores)}
 Target Keyword: "${context.keyword}"
@@ -386,14 +386,12 @@ Respond with JSON:
     "suggested_title": "Better title here",
     "predicted_ctr_increase": 0.02
   }
-}`
-        }
-      ],
-      response_format: { type: 'json_object' },
+}`,
+      responseFormat: { type: 'json_object' },
       temperature: 0.3
     })
 
-    return JSON.parse(response.choices[0].message.content)
+    return result
   } catch (error) {
     console.error('[seo-predictive-ranking-background] AI error:', error)
     return {

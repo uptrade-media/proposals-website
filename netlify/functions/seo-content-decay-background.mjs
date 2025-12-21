@@ -8,7 +8,7 @@
  */
 
 import { createClient } from '@supabase/supabase-js'
-import OpenAI from 'openai'
+import { SEOSkill } from './skills/seo-skill.js'
 
 const supabaseUrl = process.env.SUPABASE_URL
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY
@@ -25,7 +25,6 @@ export default async function handler(req) {
     }
 
     const supabase = createClient(supabaseUrl, supabaseServiceKey)
-    const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY })
 
     // Update job status if jobId provided
     if (jobId) {
@@ -47,13 +46,15 @@ export default async function handler(req) {
     // Get site GSC connection
     const { data: site } = await supabase
       .from('seo_sites')
-      .select('*, gsc_property_url, org:organizations(name)')
+      .select('*, gsc_property_url, org_id, org:organizations(name)')
       .eq('id', siteId)
       .single()
 
     if (!site) {
       throw new Error('Site not found')
     }
+
+    const seoSkill = new SEOSkill(supabase, site.org_id, siteId, {})
 
     console.log(`[seo-content-decay-background] Fetching pages for site ${siteId}`)
 
@@ -195,7 +196,7 @@ export default async function handler(req) {
 
     if (topDecaying.length > 0) {
       console.log('[seo-content-decay-background] Generating AI recommendations...')
-      refreshRecommendations = await generateRefreshRecommendations(openai, topDecaying, site)
+      refreshRecommendations = await generateRefreshRecommendations(seoSkill, topDecaying, site)
       
       // Save recommendations
       for (const rec of refreshRecommendations) {
@@ -315,7 +316,7 @@ export default async function handler(req) {
 }
 
 // Generate AI refresh recommendations
-async function generateRefreshRecommendations(openai, decayingPages, site) {
+async function generateRefreshRecommendations(seoSkill, decayingPages, site) {
   try {
     const prompt = `Analyze these decaying content pages and provide specific refresh recommendations.
 
@@ -354,20 +355,14 @@ Return as JSON:
   ]
 }`
 
-    const completion = await openai.chat.completions.create({
-      model: SEO_AI_MODEL,
-      messages: [
-        {
-          role: 'system',
-          content: 'You are an expert content strategist specializing in content refresh and SEO recovery. Analyze decaying content and provide specific, actionable refresh recommendations.'
-        },
-        { role: 'user', content: prompt }
-      ],
-      response_format: { type: 'json_object' },
+    const result = await seoSkill.signal.invoke({
+      module: 'seo',
+      tool: 'content_decay_recommendations',
+      systemPrompt: 'You are an expert content strategist specializing in content refresh and SEO recovery. Analyze decaying content and provide specific, actionable refresh recommendations.',
+      userPrompt: prompt,
+      responseFormat: { type: 'json_object' },
       temperature: 0.4
     })
-
-    const result = JSON.parse(completion.choices[0].message.content)
     
     // Merge with original page data
     return (result.recommendations || []).map(rec => {

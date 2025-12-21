@@ -2,7 +2,7 @@
 // Background function for Local SEO Analysis (up to 15 min timeout)
 // Comprehensive local search optimization with AI
 import { createClient } from '@supabase/supabase-js'
-import OpenAI from 'openai'
+import { SEOSkill } from './skills/seo-skill.js'
 
 const SEO_AI_MODEL = process.env.SEO_AI_MODEL || 'gpt-4o'
 
@@ -82,8 +82,19 @@ export async function handler(event) {
       })
     }
 
+    // Get site to fetch orgId for SEOSkill
+    const { data: siteForOrg } = await supabase
+      .from('seo_sites')
+      .select('org_id')
+      .eq('id', siteId)
+      .single()
+
+    const seoSkill = siteForOrg 
+      ? new SEOSkill(supabase, siteForOrg.org_id, siteId, {})
+      : null
+
     // Start background processing
-    processLocalSeoAnalysis(supabase, siteId, jobId, includeCompetitorAnalysis).catch(err => {
+    processLocalSeoAnalysis(supabase, siteId, jobId, includeCompetitorAnalysis, seoSkill).catch(err => {
       console.error('[Local SEO Background] Processing error:', err)
       supabase
         .from('seo_background_jobs')
@@ -103,9 +114,7 @@ export async function handler(event) {
   }
 }
 
-async function processLocalSeoAnalysis(supabase, siteId, jobId, includeCompetitorAnalysis) {
-  const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY })
-
+async function processLocalSeoAnalysis(supabase, siteId, jobId, includeCompetitorAnalysis, seoSkill) {
   try {
     // Update progress: Getting data
     await updateJobProgress(supabase, jobId, 10, 'Fetching site data...')
@@ -283,20 +292,16 @@ Return as JSON:
   }
 }`
 
-    const completion = await openai.chat.completions.create({
-      model: SEO_AI_MODEL,
-      messages: [
-        {
-          role: 'system',
-          content: 'You are an expert local SEO strategist. Provide specific, actionable recommendations for improving local search visibility. Focus on high-impact, practical optimizations that a business can implement.'
-        },
-        { role: 'user', content: prompt }
-      ],
-      response_format: { type: 'json_object' },
+    const completion = await seoSkill.signal.invoke({
+      module: 'seo',
+      tool: 'local_seo_analysis',
+      systemPrompt: 'You are an expert local SEO strategist. Provide specific, actionable recommendations for improving local search visibility. Focus on high-impact, practical optimizations that a business can implement.',
+      userPrompt: prompt,
+      responseFormat: { type: 'json_object' },
       temperature: 0.3
     })
 
-    const analysis = JSON.parse(completion.choices[0].message.content)
+    const analysis = completion
 
     await updateJobProgress(supabase, jobId, 75, 'Storing recommendations...')
 

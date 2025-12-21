@@ -156,6 +156,9 @@ export async function handler(event) {
       projects?.forEach(p => { projectsMap[p.id] = p })
     }
 
+    // Check if user is admin (for exposing payment token)
+    const isAdmin = contact.role === 'admin'
+
     // Format response
     const formattedInvoices = (invoices || []).map(inv => ({
       id: inv.id,
@@ -165,7 +168,7 @@ export async function handler(event) {
       taxAmount: inv.tax_amount,
       totalAmount: inv.total_amount,
       description: inv.description,
-      dueDate: inv.due_date,
+      dueDate: inv.due_at || inv.due_date, // Support both column names
       status: inv.status,
       paidAt: inv.paid_at,
       paymentMethod: inv.payment_method,
@@ -186,8 +189,9 @@ export async function handler(event) {
       viewCount: inv.view_count || 0,
       firstViewedAt: inv.first_viewed_at,
       lastViewedAt: inv.last_viewed_at,
-      // Token info (admin only - don't expose actual token)
+      // Token info - expose actual token to admins for View button
       hasPaymentToken: !!inv.payment_token,
+      paymentToken: isAdmin ? inv.payment_token : undefined,
       paymentTokenExpires: inv.payment_token_expires,
       // Recurring invoice fields
       isRecurring: inv.is_recurring || false,

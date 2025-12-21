@@ -70,22 +70,26 @@ export default function Analytics() {
   const hasFetchedRef = useRef(false)
   const [isRefreshing, setIsRefreshing] = useState(false)
   const [showComparison, setShowComparison] = useState(false)
+  const [tenantReady, setTenantReady] = useState(false)
 
   // Set tenant ID for analytics filtering
   useEffect(() => {
     if (isProjectTenant && activeContext?.id && setTenantId) {
       setTenantId(activeContext.id)
+      setTenantReady(true)
     } else if (!isProjectTenant && setTenantId) {
       setTenantId(null) // Reset to default (all data)
+      setTenantReady(true)
     }
   }, [isProjectTenant, activeContext?.id, setTenantId])
 
-  // Initial data fetch
+  // Initial data fetch - wait for tenant to be ready
   useEffect(() => {
+    if (!tenantReady) return
     if (hasFetchedRef.current) return
     hasFetchedRef.current = true
     fetchAllAnalytics()
-  }, [])
+  }, [tenantReady])
 
   // Refetch when date range changes
   useEffect(() => {

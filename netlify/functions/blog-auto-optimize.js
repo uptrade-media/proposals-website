@@ -7,16 +7,14 @@
  * - Adds source citations where claims are made
  * - Optimizes for SEO based on target keywords
  * - Adds internal links to Uptrade services
+ * 
+ * Uses Signal ContentSkill for AI operations.
  */
 
 import { createSupabaseAdmin, getAuthenticatedUser } from './utils/supabase.js'
-import OpenAI from 'openai'
+import { ContentSkill } from './skills/content-skill.js'
 
 const SEO_AI_MODEL = process.env.SEO_AI_MODEL || 'gpt-4o'
-
-const openai = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY
-})
 
 /**
  * Remove em dashes and fix punctuation
@@ -232,7 +230,7 @@ export async function handler(event) {
       }
 
       case 'optimize-post': {
-        // Full AI optimization of a post
+        // Full AI optimization of a post using ContentSkill
         const { data: post, error } = await supabase
           .from('blog_posts')
           .select('*')
@@ -243,7 +241,8 @@ export async function handler(event) {
           return { statusCode: 404, headers, body: JSON.stringify({ error: 'Post not found' }) }
         }
 
-        const optimizationResult = await optimizePostWithAI(post, options)
+        const contentSkill = new ContentSkill(supabase, contact.organization_id || 'uptrade', { userId: contact.id })
+        const optimizationResult = await optimizePostWithSkill(contentSkill, post, options)
 
         if (options.applyChanges) {
           await supabase
@@ -269,7 +268,7 @@ export async function handler(event) {
       }
 
       case 'add-citations': {
-        // AI-powered citation addition
+        // AI-powered citation addition using ContentSkill
         const { data: post, error } = await supabase
           .from('blog_posts')
           .select('*')
@@ -280,7 +279,8 @@ export async function handler(event) {
           return { statusCode: 404, headers, body: JSON.stringify({ error: 'Post not found' }) }
         }
 
-        const citedContent = await addCitationsWithAI(post.content, post.category)
+        const contentSkill = new ContentSkill(supabase, contact.organization_id || 'uptrade', { userId: contact.id })
+        const citedContent = await contentSkill.addCitations(post.content, post.category)
 
         if (options.applyChanges) {
           await supabase
@@ -409,68 +409,21 @@ function analyzePostIssues(post) {
 }
 
 /**
- * Full AI optimization of a post
+ * Full AI optimization of a post using ContentSkill
  */
-async function optimizePostWithAI(post, options = {}) {
-  const optimizationPrompt = `Optimize this blog post for better engagement and SEO while maintaining the core message.
-
-CURRENT CONTENT:
-${post.content}
-
-OPTIMIZATION GOALS:
-1. Remove ALL em dashes (—) and replace with appropriate punctuation (commas, periods, parentheses)
-2. Improve the opening hook if it starts generically
-3. Make the tone more conversational (like teaching a friend)
-4. Break up any paragraphs longer than 3 sentences
-5. Add natural transition phrases between sections
-6. Ensure the conclusion has a clear, actionable takeaway
-
-CONSTRAINTS:
-- Keep the same overall structure and topics
-- Maintain approximately the same word count
-- Don't add fictional statistics or sources
-- Keep existing source citations intact
-
-Return the optimized content in Markdown format.`
-
-  const response = await openai.chat.completions.create({
-    model: SEO_AI_MODEL,
-    messages: [
-      { 
-        role: 'system', 
-        content: 'You are an expert blog editor. Improve content while maintaining accuracy and the author\'s voice.' 
-      },
-      { role: 'user', content: optimizationPrompt }
-    ],
-    temperature: 0.5,
-    max_tokens: 8000
-  })
-
-  const optimizedContent = response.choices[0].message.content
+async function optimizePostWithSkill(contentSkill, post, options = {}) {
+  // Use ContentSkill for main optimization
+  const result = await contentSkill.optimizeBlogPost(post, options)
+  
+  const optimizedContent = result.optimizedContent || result
 
   // Also optimize meta description if needed
   let optimizedMetaDescription = post.meta_description
   if (!post.meta_description || post.meta_description.length < 120 || post.meta_description.includes('—')) {
-    const metaResponse = await openai.chat.completions.create({
-      model: SEO_AI_MODEL,
-      messages: [
-        {
-          role: 'user',
-          content: `Write a compelling meta description (150-160 characters) for this blog post. No em dashes. Make it click-worthy.
-
-Title: ${post.title}
-Topic: ${post.content?.substring(0, 500)}
-
-Return ONLY the meta description text, nothing else.`
-        }
-      ],
-      temperature: 0.7,
-      max_tokens: 100
-    })
-    optimizedMetaDescription = metaResponse.choices[0].message.content.trim()
+    optimizedMetaDescription = await contentSkill.generateMetaDescription(post)
   }
 
-  // Optimize excerpt if needed
+  // Optimize excerpt if needed (use local removeEmDashes function)
   let optimizedExcerpt = post.excerpt
   if (post.excerpt?.includes('—')) {
     optimizedExcerpt = removeEmDashes(post.excerpt)
@@ -486,39 +439,4 @@ Return ONLY the meta description text, nothing else.`
       excerptChanged: optimizedExcerpt !== post.excerpt
     }
   }
-}
-
-/**
- * Add citations to content using AI
- */
-async function addCitationsWithAI(content, category) {
-  const citationPrompt = `Add credible source citations to this blog post where claims are made.
-
-CONTENT:
-${content}
-
-INSTRUCTIONS:
-1. Identify statements that make claims about statistics, research, or industry facts
-2. Add realistic, credible citations from well-known sources in this industry
-3. Format citations naturally, e.g., "According to HubSpot's 2024 State of Marketing Report..."
-4. For statistics, add the source in parentheses or inline
-5. Don't add citations to obvious common knowledge
-6. Don't make up fake studies or statistics
-
-Return the content with citations added in Markdown format.`
-
-  const response = await openai.chat.completions.create({
-    model: SEO_AI_MODEL,
-    messages: [
-      {
-        role: 'system',
-        content: 'You are a research editor adding credible citations to content. Only add realistic, verifiable sources from well-known industry publications, studies, and companies.'
-      },
-      { role: 'user', content: citationPrompt }
-    ],
-    temperature: 0.3,
-    max_tokens: 8000
-  })
-
-  return response.choices[0].message.content
 }

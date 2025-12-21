@@ -92,7 +92,7 @@ export async function handler(event) {
       taxAmount: parseFloat(invoice.tax_amount) || 0,
       totalAmount: parseFloat(invoice.total_amount) || 0,
       description: invoice.description,
-      dueDate: invoice.due_date,
+      dueDate: invoice.due_at || invoice.due_date, // Support both column names
       status: invoice.status,
       paidAt: invoice.paid_at,
       sentToEmail: invoice.sent_to_email,

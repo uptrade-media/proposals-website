@@ -15,11 +15,11 @@ async function testEmail() {
   try {
     console.log('Testing Resend email...')
     console.log('API Key:', process.env.RESEND_API_KEY?.substring(0, 10) + '...')
-    console.log('From:', process.env.RESEND_FROM_EMAIL)
+    console.log('From:', process.env.RESEND_FROM)
     console.log('To:', process.env.ADMIN_EMAIL)
     
     const result = await resend.emails.send({
-      from: process.env.RESEND_FROM_EMAIL,
+      from: process.env.RESEND_FROM,
       to: process.env.ADMIN_EMAIL,
       subject: 'Test Email from Quick Invoice',
       html: '<h1>Test Email</h1><p>If you receive this, Resend is working correctly.</p>'

@@ -134,7 +134,7 @@ export async function handler(event) {
         tax_rate: taxRate,
         tax_amount: taxAmount,
         total_amount: totalAmount,
-        due_date: finalDueDate || new Date(Date.now() + 14 * 24 * 60 * 60 * 1000).toISOString().split('T')[0], // 14 days default
+        due_at: finalDueDate || new Date(Date.now() + 14 * 24 * 60 * 60 * 1000).toISOString().split('T')[0], // 14 days default
         status: finalSendNow ? 'sent' : 'draft',
         notes: notes || null,
         payment_token: paymentToken,
@@ -169,7 +169,7 @@ export async function handler(event) {
         console.log('[quick-invoice] Attempting to send email to:', email)
         const resend = new Resend(RESEND_API_KEY)
         const recipientName = name || email.split('@')[0]
-        const dueDateFormatted = new Date(invoice.due_date).toLocaleDateString('en-US', {
+        const dueDateFormatted = new Date(invoice.due_at || invoice.due_date).toLocaleDateString('en-US', {
           year: 'numeric',
           month: 'long',
           day: 'numeric'
@@ -186,7 +186,7 @@ export async function handler(event) {
             amount: amountValue,
             taxAmount: 0,
             totalAmount: totalAmount,
-            dueDate: invoice.due_date,
+            dueDate: invoice.due_at || invoice.due_date,
             paymentToken: paymentToken,
             invoiceId: invoice.id
           })

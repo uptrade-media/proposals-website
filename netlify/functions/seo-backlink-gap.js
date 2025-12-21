@@ -1,9 +1,7 @@
 // netlify/functions/seo-backlink-gap.js
 // Backlink Gap Analysis - Find sites linking to competitors but not us
 import { createSupabaseAdmin, getAuthenticatedUser } from './utils/supabase.js'
-import OpenAI from 'openai'
-
-const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY })
+import { SEOSkill } from './skills/seo-skill.js'
 
 export async function handler(event) {
   const headers = {
@@ -31,7 +29,7 @@ export async function handler(event) {
 
   // POST - Analyze backlink gaps from competitor data
   if (event.httpMethod === 'POST') {
-    return await analyzeBacklinkGap(event, supabase, headers)
+    return await analyzeBacklinkGap(event, supabase, headers, contact)
   }
 
   return { statusCode: 405, headers, body: JSON.stringify({ error: 'Method not allowed' }) }
@@ -80,7 +78,7 @@ async function getBacklinkGap(event, supabase, headers) {
   }
 }
 
-async function analyzeBacklinkGap(event, supabase, headers) {
+async function analyzeBacklinkGap(event, supabase, headers, contact) {
   const body = JSON.parse(event.body || '{}')
   const { siteId, competitorDomains, manualBacklinks } = body
 
@@ -93,13 +91,16 @@ async function analyzeBacklinkGap(event, supabase, headers) {
   // Get site info
   const { data: site } = await supabase
     .from('seo_sites')
-    .select('domain, org:organizations(name)')
+    .select('domain, org_id, org:organizations(name)')
     .eq('id', siteId)
     .single()
 
   if (!site) {
     return { statusCode: 404, headers, body: JSON.stringify({ error: 'Site not found' }) }
   }
+
+  // Initialize SEOSkill for AI operations
+  const seoSkill = new SEOSkill(supabase, site.org_id, siteId, { userId: contact.id })
 
   // Get competitors
   let competitors = []
@@ -135,7 +136,7 @@ async function analyzeBacklinkGap(event, supabase, headers) {
     backlinksToAnalyze = manualBacklinks
   } else {
     // Use AI to suggest potential backlink sources based on industry
-    backlinksToAnalyze = await suggestBacklinkSources(site, competitors, knowledge)
+    backlinksToAnalyze = await seoSkill.suggestBacklinkSources(site, competitors, knowledge)
   }
 
   // Analyze each potential backlink source
@@ -143,7 +144,7 @@ async function analyzeBacklinkGap(event, supabase, headers) {
 
   for (const source of backlinksToAnalyze) {
     // Check if it links to competitors but not us
-    const analysis = await analyzeBacklinkSource(source, site.domain, competitors, knowledge)
+    const analysis = await seoSkill.analyzeBacklinkSource(source, site.domain, competitors, knowledge)
     
     if (analysis.isOpportunity) {
       opportunities.push({
@@ -199,116 +200,3 @@ async function analyzeBacklinkGap(event, supabase, headers) {
   }
 }
 
-async function suggestBacklinkSources(site, competitors, knowledge) {
-  try {
-    const response = await openai.chat.completions.create({
-      model: 'gpt-4o-mini',
-      messages: [
-        {
-          role: 'system',
-          content: `You are a link building expert. Suggest potential backlink sources based on the industry and competitors.
-
-Think about:
-1. Industry directories and listings
-2. Resource pages that link to similar companies
-3. Guest posting opportunities
-4. Industry publications and blogs
-5. Local business directories
-6. Professional associations
-7. Tool/resource aggregators`
-        },
-        {
-          role: 'user',
-          content: `Suggest backlink sources for:
-
-Domain: ${site.domain}
-Industry: ${knowledge?.industry || 'general business'}
-Business Type: ${knowledge?.business_type || 'service business'}
-Services: ${JSON.stringify(knowledge?.primary_services || [])}
-
-Competitors: ${competitors.join(', ')}
-
-Respond with JSON array of potential sources:
-{
-  "sources": [
-    {
-      "type": "directory|resource_page|blog|publication|association",
-      "domain": "example.com",
-      "url": "https://example.com/resources",
-      "why": "Why this is relevant",
-      "approach": "How to get a link"
-    }
-  ]
-}`
-        }
-      ],
-      response_format: { type: 'json_object' },
-      temperature: 0.5
-    })
-
-    const result = JSON.parse(response.choices[0].message.content)
-    return result.sources || []
-  } catch (error) {
-    console.error('[Backlink Gap] AI suggestion error:', error)
-    return []
-  }
-}
-
-async function analyzeBacklinkSource(source, ourDomain, competitors, knowledge) {
-  // In a real implementation, we would:
-  // 1. Crawl the source page
-  // 2. Check if it links to competitors
-  // 3. Assess domain authority (via Moz/Ahrefs API)
-  // 4. Determine relevance
-
-  // For now, use AI to assess based on available data
-  try {
-    const response = await openai.chat.completions.create({
-      model: 'gpt-4o-mini',
-      messages: [
-        {
-          role: 'system',
-          content: `You are analyzing a potential backlink source. Assess if it's a good opportunity for outreach.`
-        },
-        {
-          role: 'user',
-          content: `Analyze this backlink source:
-
-Source: ${JSON.stringify(source)}
-Our Domain: ${ourDomain}
-Competitors: ${competitors.join(', ')}
-Industry: ${knowledge?.industry || 'unknown'}
-
-Assess:
-1. Is this likely to be a good backlink opportunity?
-2. Estimated domain authority (0-100)
-3. Relevance to our business (0-100)
-4. What anchor text should we suggest?
-5. Best outreach strategy
-
-Respond with JSON:
-{
-  "isOpportunity": true,
-  "url": "full url",
-  "domain": "domain only",
-  "domainAuthority": 45,
-  "relevanceScore": 75,
-  "pageType": "resource_page|directory|blog|etc",
-  "linksToCompetitors": ["competitor1.com"],
-  "suggestedAnchor": "anchor text",
-  "contactEmail": "email if found or null",
-  "outreachStrategy": "How to approach them",
-  "reasoning": "Why this is or isn't a good opportunity"
-}`
-        }
-      ],
-      response_format: { type: 'json_object' },
-      temperature: 0.3
-    })
-
-    return JSON.parse(response.choices[0].message.content)
-  } catch (error) {
-    console.error('[Backlink Gap] Analysis error:', error)
-    return { isOpportunity: false }
-  }
-}

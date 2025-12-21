@@ -1,7 +1,7 @@
 // netlify/functions/seo-auto-optimize.js
 // Master automation function that runs all SEO optimizations
 import { createSupabaseAdmin, getAuthenticatedUser } from './utils/supabase.js'
-import OpenAI from 'openai'
+// Note: OpenAI removed - this function only does DB operations and revalidation
 
 const headers = {
   'Content-Type': 'application/json',

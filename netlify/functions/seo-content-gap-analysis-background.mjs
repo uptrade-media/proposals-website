@@ -8,7 +8,7 @@
  */
 
 import { createClient } from '@supabase/supabase-js'
-import OpenAI from 'openai'
+import { SEOSkill } from './skills/seo-skill.js'
 
 const supabaseUrl = process.env.SUPABASE_URL
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY
@@ -24,7 +24,19 @@ export default async function handler(req) {
     }
 
     const supabase = createClient(supabaseUrl, supabaseServiceKey)
-    const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY })
+
+    // Get site to fetch orgId for SEOSkill
+    const { data: siteData } = await supabase
+      .from('seo_sites')
+      .select('org_id, domain')
+      .eq('id', siteId)
+      .single()
+    
+    if (!siteData) {
+      return new Response(JSON.stringify({ error: 'Site not found' }), { status: 404 })
+    }
+
+    const seoSkill = new SEOSkill(supabase, siteData.org_id, siteId, {})
 
     // Update job status if jobId provided
     if (jobId) {
@@ -73,12 +85,13 @@ export default async function handler(req) {
 
     // Analyze with AI
     console.log('[seo-content-gap-analysis-background] Running AI analysis...')
-    const analysis = await analyzeGapsWithAI(openai, {
+    const analysis = await analyzeGapsWithAI(seoSkill, {
       knowledge,
       pages: pages || [],
       keywords: keywords || [],
       competitors: competitorData,
-      focusTopics
+      focusTopics,
+      domain: siteData.domain
     })
 
     console.log(`[seo-content-gap-analysis-background] Found ${analysis.gaps?.length || 0} gaps`)
@@ -220,7 +233,7 @@ export default async function handler(req) {
   }
 }
 
-async function analyzeGapsWithAI(openai, { knowledge, pages, keywords, competitors, focusTopics }) {
+async function analyzeGapsWithAI(seoSkill, { knowledge, pages, keywords, competitors, focusTopics, domain }) {
   try {
     const ourTopics = pages.map(p => p.title).filter(Boolean)
     const ourKeywords = keywords.map(k => k.keyword)
@@ -231,12 +244,10 @@ async function analyzeGapsWithAI(openai, { knowledge, pages, keywords, competito
     
     const competitorTopics = competitors.flatMap(c => c.content_topics || [])
 
-    const response = await openai.chat.completions.create({
-      model: 'gpt-4o',
-      messages: [
-        {
-          role: 'system',
-          content: `You are an SEO content strategist analyzing content gaps. Identify topics and keywords that are:
+    const result = await seoSkill.signal.invoke({
+      module: 'seo',
+      tool: 'content_gap_analysis',
+      systemPrompt: `You are an SEO content strategist analyzing content gaps. Identify topics and keywords that are:
 1. Covered by competitors but not by us
 2. Important for the industry but missing from our site
 3. Related to our services but not addressed
@@ -247,11 +258,8 @@ For each gap, assess:
 - Competition level
 - Relevance to business
 - Content type needed
-- Priority level`
-        },
-        {
-          role: 'user',
-          content: `Analyze content gaps for this business:
+- Priority level`,
+      userPrompt: `Analyze content gaps for this business:
 
 Business: ${knowledge?.business_name || 'Unknown'}
 Industry: ${knowledge?.industry || 'general'}
@@ -294,14 +302,12 @@ Identify 10-20 content gaps. Respond with JSON:
       "isThin": false
     }
   ]
-}`
-        }
-      ],
-      response_format: { type: 'json_object' },
+}`,
+      responseFormat: { type: 'json_object' },
       temperature: 0.4
     })
 
-    return JSON.parse(response.choices[0].message.content)
+    return result
   } catch (error) {
     console.error('[seo-content-gap-analysis-background] AI error:', error)
     return { gaps: [] }

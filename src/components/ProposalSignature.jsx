@@ -160,9 +160,15 @@ export default function ProposalSignature({
       setSigned(true)
       setSigning(false)
       
-      // Check if there's a deposit to pay (payment info is in data.payment)
+      // Check if there's a deposit to pay
       const payment = data.payment
-      if (payment?.depositAmount && payment.depositAmount > 0) {
+      if (payment?.paymentToken && payment.depositAmount > 0) {
+        // Redirect to invoice payment page instead of showing inline payment
+        // This consolidates all billing through the invoice system
+        window.location.href = payment.paymentUrl
+        return
+      } else if (payment?.depositAmount && payment.depositAmount > 0) {
+        // Fallback for older API responses without paymentToken - show inline payment
         setPaymentInfo({
           depositAmount: payment.depositAmount,
           totalAmount: payment.totalAmount

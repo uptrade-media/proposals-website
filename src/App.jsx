@@ -29,6 +29,9 @@ const SEOModule = lazy(() => import('./pages/seo/SEOModule'))
 // Ecommerce Module
 const EcommerceModule = lazy(() => import('./pages/ecommerce/EcommerceModule'))
 
+// Engage Module - Live chat and conversion optimization
+const Engage = lazy(() => import('./pages/Engage'))
+
 // Client SEO Dashboard (tenant-facing, read-only)
 const ClientSEODashboard = lazy(() => import('./pages/client/ClientSEODashboard'))
 
@@ -144,6 +147,16 @@ export default function App() {
                 element={
                   <Protected>
                     <EcommerceModule />
+                  </Protected>
+                }
+              />
+              
+              {/* Engage Module - Live chat and conversion optimization */}
+              <Route
+                path="/engage/*"
+                element={
+                  <Protected>
+                    <Engage />
                   </Protected>
                 }
               />

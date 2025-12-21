@@ -1,9 +1,6 @@
 // netlify/functions/seo-serp-features.js
 // SERP Feature Opportunities - Target featured snippets, FAQs, PAA
 import { createSupabaseAdmin, getAuthenticatedUser } from './utils/supabase.js'
-import OpenAI from 'openai'
-
-const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY })
 
 // SERP feature types we track
 const FEATURE_TYPES = [
@@ -128,9 +125,9 @@ async function analyzeFeatures(event, supabase, headers) {
     return { statusCode: 500, headers, body: JSON.stringify({ error: 'Failed to queue job' }) }
   }
 
-  // Trigger background function
+  // Trigger background function (consolidated with seo-serp-analyze-background)
   const baseUrl = process.env.URL || 'http://localhost:8888'
-  fetch(`${baseUrl}/.netlify/functions/seo-serp-features-background`, {
+  fetch(`${baseUrl}/.netlify/functions/seo-serp-analyze-background`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ siteId, jobId: job.id, keywords: targetKeywords })

@@ -1,4 +1,5 @@
-import { createSupabaseAdmin, getAuthenticatedUser } from './utils/supabase.js'
+import { createSupabaseAdmin, getAuthenticatedUser, getOrgFromRequest } from './utils/supabase.js'
+import { sendAuthEmail } from './utils/system-email-sender.js'
 
 export async function handler(event) {
   // Only allow POST
@@ -27,6 +28,9 @@ export async function handler(event) {
     if (!clientId) {
       return { statusCode: 400, body: JSON.stringify({ error: 'Client ID is required' }) }
     }
+
+    // Get org context for multi-tenant email templates
+    const orgId = getOrgFromRequest(event) || contact.organization_id
 
     // Get client from database
     const supabase = createSupabaseAdmin()
@@ -65,25 +69,32 @@ export async function handler(event) {
       authUser = userList?.users?.find(u => u.email?.toLowerCase() === clientContact.email.toLowerCase())
     }
 
+    // Get first name for email personalization
+    const firstName = clientContact.name?.split(' ')[0] || clientContact.email.split('@')[0]
+
     if (authUser) {
-      // User exists - send magic link
+      // User exists - send magic link using our multi-tenant template system
       console.log('[admin-resend-setup-email] User exists, generating magic link')
       
-      const { data: magicLink, error: magicLinkError } = await supabase.auth.admin.generateLink({
+      const result = await sendAuthEmail({
         type: 'magiclink',
         email: clientContact.email,
-        options: {
-          redirectTo: AUTH_CALLBACK_URL
+        redirectTo: AUTH_CALLBACK_URL,
+        orgId,
+        userData: {
+          first_name: firstName,
+          name: clientContact.name,
+          contact_id: clientContact.id
         }
       })
 
-      if (magicLinkError) {
-        console.error('[admin-resend-setup-email] Magic link error:', magicLinkError)
+      if (!result.success) {
+        console.error('[admin-resend-setup-email] Magic link error:', result.error)
         return {
           statusCode: 500,
           body: JSON.stringify({ 
             error: 'Failed to generate magic link',
-            details: magicLinkError.message 
+            details: result.error 
           })
         }
       }
@@ -96,7 +107,7 @@ export async function handler(event) {
           .eq('id', clientContact.id)
       }
 
-      console.log('[admin-resend-setup-email] Magic link generated and email sent')
+      console.log('[admin-resend-setup-email] Magic link generated and email sent via custom template')
       return {
         statusCode: 200,
         body: JSON.stringify({ 
@@ -106,40 +117,44 @@ export async function handler(event) {
         })
       }
     } else {
-      // User doesn't exist - send invite
+      // User doesn't exist - send invite using our multi-tenant template system
       console.log('[admin-resend-setup-email] User not found, sending invite')
       
-      const { data: inviteData, error: inviteError } = await supabase.auth.admin.inviteUserByEmail(
-        clientContact.email,
-        {
-          redirectTo: AUTH_CALLBACK_URL,
-          data: {
-            name: clientContact.name,
-            contact_id: clientContact.id
-          }
+      const result = await sendAuthEmail({
+        type: 'invite',
+        email: clientContact.email,
+        redirectTo: AUTH_CALLBACK_URL,
+        orgId,
+        userData: {
+          first_name: firstName,
+          name: clientContact.name,
+          contact_id: clientContact.id
         }
-      )
+      })
 
-      if (inviteError) {
-        console.error('[admin-resend-setup-email] Invite error:', inviteError)
+      if (!result.success) {
+        console.error('[admin-resend-setup-email] Invite error:', result.error)
         return {
           statusCode: 500,
           body: JSON.stringify({ 
             error: 'Failed to send invite email',
-            details: inviteError.message 
+            details: result.error 
           })
         }
       }
 
-      // Link contact to new auth user
-      if (inviteData?.user?.id) {
+      // Get the newly created auth user and link to contact
+      const { data: userList } = await supabase.auth.admin.listUsers()
+      const newAuthUser = userList?.users?.find(u => u.email?.toLowerCase() === clientContact.email.toLowerCase())
+      
+      if (newAuthUser?.id) {
         await supabase
           .from('contacts')
-          .update({ auth_user_id: inviteData.user.id })
+          .update({ auth_user_id: newAuthUser.id })
           .eq('id', clientContact.id)
       }
 
-      console.log('[admin-resend-setup-email] Invite sent successfully')
+      console.log('[admin-resend-setup-email] Invite sent successfully via custom template')
       return {
         statusCode: 200,
         body: JSON.stringify({ 

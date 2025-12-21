@@ -3,7 +3,7 @@
 // Creates optimal JSON-LD schema for different page types
 // Validates existing schema and provides fix recommendations
 import { createSupabaseAdmin, getAuthenticatedUser } from './utils/supabase.js'
-import OpenAI from 'openai'
+import { SEOSkill } from './skills/seo-skill.js'
 
 // Use env variable for model - easily update when new models release
 const SEO_AI_MODEL = process.env.SEO_AI_MODEL || 'gpt-4o'
@@ -488,7 +488,14 @@ async function fixSchema(event, headers) {
     }
 
     const supabase = createSupabaseAdmin()
-    const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY })
+
+    // Get site for orgId to create SEOSkill
+    const { data: site } = await supabase
+      .from('seo_sites')
+      .select('org_id')
+      .eq('id', siteId)
+      .single()
+    const seoSkill = new SEOSkill(supabase, site?.org_id, siteId, {})
 
     let page, existingSchema
     
@@ -546,52 +553,8 @@ async function fixSchema(event, headers) {
       .eq('site_id', siteId)
       .single()
 
-    // Use AI to fix the schema
-    const prompt = `Fix the following JSON-LD schema markup based on these validation errors:
-
-CURRENT SCHEMA:
-${JSON.stringify(existingSchema, null, 2)}
-
-VALIDATION ERRORS:
-${JSON.stringify(allErrors, null, 2)}
-
-${page ? `PAGE CONTEXT:
-URL: ${page.url}
-Title: ${page.title}
-H1: ${page.h1}
-Description: ${page.meta_description}` : ''}
-
-${knowledge ? `BUSINESS CONTEXT:
-Name: ${knowledge.business_name}
-Type: ${knowledge.business_type}
-Location: ${knowledge.primary_location || 'Not specified'}` : ''}
-
-Fix all the errors while:
-1. Preserving existing valid data
-2. Adding missing required fields with appropriate values
-3. Correcting format issues
-4. Following Google's structured data guidelines
-
-Return the fixed schema as valid JSON in this format:
-{
-  "fixedSchema": { ... the complete fixed schema ... },
-  "changesMade": ["description of each fix"]
-}`
-
-    const completion = await openai.chat.completions.create({
-      model: SEO_AI_MODEL,
-      messages: [
-        {
-          role: 'system',
-          content: 'You are an expert in schema.org structured data. Fix schema validation errors while preserving valid data and following Google guidelines.'
-        },
-        { role: 'user', content: prompt }
-      ],
-      response_format: { type: 'json_object' },
-      temperature: 0.2
-    })
-
-    const result = JSON.parse(completion.choices[0].message.content)
+    // Use SEOSkill to fix the schema
+    const result = await seoSkill.fixSchema(existingSchema, allErrors, { page, knowledge })
 
     // Optionally update the page with the fixed schema
     if (page && result.fixedSchema) {
@@ -720,7 +683,6 @@ async function generateSchema(event, headers) {
     }
 
     const supabase = createSupabaseAdmin()
-    const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY })
 
     // Get page data
     let page
@@ -755,9 +717,12 @@ async function generateSchema(event, headers) {
     // Get site info
     const { data: site } = await supabase
       .from('seo_sites')
-      .select('*, org:organizations(name, domain)')
+      .select('*, org:organizations(id, name, domain)')
       .eq('id', siteId)
       .single()
+
+    // Create SEOSkill for AI generation
+    const seoSkill = new SEOSkill(supabase, site?.org?.id, siteId, {})
 
     // Build context for AI
     const context = {
@@ -804,60 +769,8 @@ async function generateSchema(event, headers) {
       }
     }
 
-    // Generate schema with AI
-    const prompt = `Generate optimal JSON-LD schema markup for this page.
-
-PAGE DETAILS:
-URL: ${context.page.url}
-Title: ${context.page.title}
-H1: ${context.page.h1}
-Description: ${context.page.metaDescription}
-Page Type: ${schemaType}
-Word Count: ${context.page.wordCount || 'Unknown'}
-
-BUSINESS CONTEXT:
-${context.business ? JSON.stringify(context.business, null, 2) : 'Not available'}
-
-ORGANIZATION:
-Name: ${context.organization.name}
-Domain: ${context.organization.domain}
-
-${Object.keys(additionalData).length > 0 ? `ADDITIONAL DATA:\n${JSON.stringify(additionalData, null, 2)}` : ''}
-
-Generate complete, valid JSON-LD schema that:
-1. Uses the most appropriate schema.org types
-2. Includes all relevant properties
-3. Is optimized for rich results
-4. Follows Google's structured data guidelines
-
-Return as JSON:
-{
-  "primarySchema": {
-    // The main schema object (Article, LocalBusiness, Service, etc.)
-  },
-  "additionalSchemas": [
-    // Any additional schemas that would benefit the page (BreadcrumbList, Organization, etc.)
-  ],
-  "richResultEligibility": ["Article", "FAQ", "LocalBusiness"],
-  "recommendations": [
-    "Any additional data that would enhance the schema"
-  ]
-}`
-
-    const completion = await openai.chat.completions.create({
-      model: SEO_AI_MODEL,
-      messages: [
-        {
-          role: 'system',
-          content: 'You are an expert in schema.org structured data and Google rich results. Generate valid, comprehensive JSON-LD schema that maximizes chances for rich results in search.'
-        },
-        { role: 'user', content: prompt }
-      ],
-      response_format: { type: 'json_object' },
-      temperature: 0.2
-    })
-
-    const result = JSON.parse(completion.choices[0].message.content)
+    // Generate schema with SEOSkill
+    const result = await seoSkill.generateSchemaEnhanced(context, schemaType, additionalData)
 
     // Format as ready-to-use JSON-LD
     const jsonLd = {

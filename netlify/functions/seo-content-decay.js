@@ -2,10 +2,7 @@
 // Content Decay Detection - Identify declining content for refresh
 // Analyzes historical performance to find content losing rankings/traffic
 import { createSupabaseAdmin, getAuthenticatedUser } from './utils/supabase.js'
-import OpenAI from 'openai'
-
-// Use env variable for model - easily update when new models release
-const SEO_AI_MODEL = process.env.SEO_AI_MODEL || 'gpt-4o'
+import { SEOSkill } from './skills/seo-skill.js'
 
 export async function handler(event) {
   const headers = {
@@ -117,7 +114,6 @@ async function runDecayDetection(event, headers) {
     }
 
     const supabase = createSupabaseAdmin()
-    const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY })
 
     // Default thresholds
     const config = {
@@ -138,6 +134,9 @@ async function runDecayDetection(event, headers) {
     if (!site) {
       return { statusCode: 404, headers, body: JSON.stringify({ error: 'Site not found' }) }
     }
+
+    // Initialize SEOSkill for AI operations
+    const seoSkill = new SEOSkill(supabase, site.org_id, siteId, { userId: contact.id })
 
     // Get pages with historical data
     const { data: pages, error: pagesError } = await supabase
@@ -274,7 +273,7 @@ async function runDecayDetection(event, headers) {
     let refreshRecommendations = []
 
     if (topDecaying.length > 0) {
-      refreshRecommendations = await generateRefreshRecommendations(openai, topDecaying, site)
+      refreshRecommendations = await seoSkill.generateContentRefreshRecommendations(topDecaying, site)
       
       // Save recommendations
       for (const rec of refreshRecommendations) {
@@ -291,7 +290,7 @@ async function runDecayDetection(event, headers) {
             suggested_value: rec.refreshStrategy,
             auto_fixable: false,
             impact_score: rec.severity === 'critical' ? 9 : rec.severity === 'high' ? 7 : 5,
-            ai_model: SEO_AI_MODEL,
+            ai_model: 'signal-seo',
             status: 'pending',
             created_at: new Date().toISOString()
           })
@@ -315,7 +314,7 @@ async function runDecayDetection(event, headers) {
           },
           thresholds: config
         },
-        ai_model: SEO_AI_MODEL,
+        ai_model: 'signal-seo',
         started_at: new Date().toISOString(),
         completed_at: new Date().toISOString()
       })
@@ -362,73 +361,3 @@ async function runDecayDetection(event, headers) {
   }
 }
 
-// Generate AI refresh recommendations
-async function generateRefreshRecommendations(openai, decayingPages, site) {
-  try {
-    const prompt = `Analyze these decaying content pages and provide specific refresh recommendations.
-
-SITE: ${site.domain}
-INDUSTRY: ${site.org?.name || 'Unknown'}
-
-DECAYING PAGES:
-${decayingPages.map((p, i) => `
-${i + 1}. ${p.url}
-   Title: ${p.title}
-   Severity: ${p.severity}
-   Clicks: ${p.metrics.earlierClicks} → ${p.metrics.recentClicks} (${p.metrics.clicksChange}%)
-   Position: ${p.metrics.earlierPosition || 'N/A'} → ${p.metrics.recentPosition || 'N/A'}
-   Decay Factors: ${p.decayFactors.join(', ')}
-`).join('\n')}
-
-For each page, provide a specific refresh strategy:
-1. Why is it likely decaying? (content freshness, competition, search intent shift, etc.)
-2. What specific updates would help recover rankings?
-3. Priority level for refresh
-
-Return as JSON:
-{
-  "recommendations": [
-    {
-      "pageUrl": "url",
-      "title": "page title",
-      "pageId": "id",
-      "severity": "critical|high|medium",
-      "likelyDecayCause": "explanation",
-      "recommendation": "detailed recommendation",
-      "refreshStrategy": "specific steps to take",
-      "estimatedEffort": "hours",
-      "potentialImpact": "expected traffic recovery"
-    }
-  ]
-}`
-
-    const completion = await openai.chat.completions.create({
-      model: SEO_AI_MODEL,
-      messages: [
-        {
-          role: 'system',
-          content: 'You are an expert content strategist specializing in content refresh and SEO recovery. Analyze decaying content and provide specific, actionable refresh recommendations.'
-        },
-        { role: 'user', content: prompt }
-      ],
-      response_format: { type: 'json_object' },
-      temperature: 0.4
-    })
-
-    const result = JSON.parse(completion.choices[0].message.content)
-    
-    // Merge with original page data
-    return (result.recommendations || []).map(rec => {
-      const original = decayingPages.find(p => p.url === rec.pageUrl)
-      return {
-        ...rec,
-        pageId: original?.pageId,
-        metrics: original?.metrics
-      }
-    })
-
-  } catch (error) {
-    console.error('[Content Decay] AI recommendations error:', error)
-    return []
-  }
-}

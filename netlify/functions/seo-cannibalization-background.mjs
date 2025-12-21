@@ -8,7 +8,7 @@
  */
 
 import { createClient } from '@supabase/supabase-js'
-import OpenAI from 'openai'
+import { SEOSkill } from './skills/seo-skill.js'
 
 const supabaseUrl = process.env.SUPABASE_URL
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY
@@ -24,7 +24,19 @@ export default async function handler(req) {
     }
 
     const supabase = createClient(supabaseUrl, supabaseServiceKey)
-    const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY })
+
+    // Get site to get orgId
+    const { data: site } = await supabase
+      .from('seo_sites')
+      .select('org_id, domain')
+      .eq('id', siteId)
+      .single()
+    
+    if (!site) {
+      return new Response(JSON.stringify({ error: 'Site not found' }), { status: 404 })
+    }
+
+    const seoSkill = new SEOSkill(supabase, site.org_id, siteId, {})
 
     // Update job status if jobId provided
     if (jobId) {
@@ -163,7 +175,7 @@ export default async function handler(req) {
 
     if (topIssues.length > 0) {
       console.log('[seo-cannibalization-background] Getting AI recommendations...')
-      const aiRecommendations = await getAiRecommendations(openai, topIssues)
+      const aiRecommendations = await getAiRecommendations(seoSkill, topIssues, site.domain)
       
       // Merge AI recommendations
       for (const issue of topIssues) {
@@ -285,42 +297,32 @@ function hashKeyword(keyword) {
   return Math.abs(hash).toString(16)
 }
 
-async function getAiRecommendations(openai, issues) {
+async function getAiRecommendations(seoSkill, issues, domain) {
   try {
-    const issueDescriptions = issues.map(issue => ({
-      keyword: issue.keyword,
+    // Transform issues into cannibalized format for SEOSkill
+    const cannibalized = issues.map(issue => ({
+      query: issue.keyword,
       pages: issue.competing_pages.map(p => ({
-        url: p.url,
+        page: p.url,
         title: p.title,
-        position: p.position,
-        clicks: p.clicks
+        position: p.position || 0,
+        clicks: p.clicks || 0
       }))
     }))
 
-    const response = await openai.chat.completions.create({
-      model: 'gpt-4o-mini',
-      messages: [
-        {
-          role: 'system',
-          content: `You are an SEO expert analyzing keyword cannibalization issues. For each issue, recommend a strategy:
-- consolidate: Merge content into one page, redirect others
-- differentiate: Make each page target distinct long-tail variations  
-- canonicalize: Use canonical tags to signal preferred page
-- deindex: Remove weaker page from index
-
-Provide actionable steps. Be specific about which page should be primary.`
-        },
-        {
-          role: 'user',
-          content: `Analyze these cannibalization issues and recommend strategies:\n\n${JSON.stringify(issueDescriptions, null, 2)}\n\nRespond with JSON array: [{keyword, strategy, reasoning, action_steps: []}]`
-        }
-      ],
-      response_format: { type: 'json_object' },
-      temperature: 0.3
-    })
-
-    const result = JSON.parse(response.choices[0].message.content)
-    return result.recommendations || result.issues || []
+    const result = await seoSkill.analyzeCannibalization(cannibalized, domain)
+    
+    // Map SEOSkill result back to expected format
+    if (result.issues) {
+      return result.issues.map(issue => ({
+        keyword: issue.query,
+        strategy: issue.action || issue.recommendation,
+        reasoning: issue.recommendation || issue.expectedImpact,
+        action_steps: issue.competingPages?.map(p => `Handle ${p}`) || []
+      }))
+    }
+    
+    return result.recommendations || []
   } catch (error) {
     console.error('[seo-cannibalization-background] AI recommendation error:', error)
     return []

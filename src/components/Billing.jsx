@@ -1261,11 +1261,18 @@ const Billing = () => {
                               variant="outline"
                               size="sm"
                               onClick={() => {
-                                const paymentUrl = invoice.hasPaymentToken 
-                                  ? `${window.location.origin}/pay/${invoice.id}?token=${invoice.paymentToken}`
-                                  : `${window.location.origin}/pay/${invoice.id}`
-                                window.open(paymentUrl, '_blank')
+                                // Use token as path (matches email URL format)
+                                const paymentUrl = invoice.paymentToken 
+                                  ? `${window.location.origin}/pay/${invoice.paymentToken}`
+                                  : null
+                                if (paymentUrl) {
+                                  window.open(paymentUrl, '_blank')
+                                } else {
+                                  // No token - invoice hasn't been sent yet
+                                  alert('Send the invoice first to generate a payment link')
+                                }
                               }}
+                              disabled={!invoice.paymentToken}
                             >
                               <Eye className="w-4 h-4 mr-2" />
                               View

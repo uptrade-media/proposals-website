@@ -2,7 +2,7 @@
 // Backlink Opportunity Identification
 // Finds link building opportunities based on content, competitors, and industry
 import { createSupabaseAdmin, getAuthenticatedUser } from './utils/supabase.js'
-import OpenAI from 'openai'
+import { SEOSkill } from './skills/seo-skill.js'
 
 // Use env variable for model - easily update when new models release
 const SEO_AI_MODEL = process.env.SEO_AI_MODEL || 'gpt-4o'
@@ -122,7 +122,6 @@ async function analyzeBacklinks(event, headers) {
     }
 
     const supabase = createSupabaseAdmin()
-    const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY })
 
     // Get site knowledge
     const { data: site } = await supabase
@@ -156,8 +155,9 @@ async function analyzeBacklinks(event, headers) {
       .eq('site_id', siteId)
       .limit(5)
 
-    // Discover opportunities using AI
-    const opportunities = await discoverOpportunities(openai, {
+    // Discover opportunities using SEOSkill
+    const seoSkill = new SEOSkill(supabase, site?.org?.id, siteId, {})
+    const opportunities = await discoverOpportunities(seoSkill, {
       site,
       knowledge,
       topContent: topContent || [],
@@ -236,97 +236,28 @@ async function analyzeBacklinks(event, headers) {
   }
 }
 
-// AI-powered opportunity discovery
-async function discoverOpportunities(openai, context) {
+// AI-powered opportunity discovery via SEOSkill
+async function discoverOpportunities(seoSkill, context) {
   const { site, knowledge, topContent, competitors } = context
 
   try {
-    const prompt = `As a link building expert, identify 15-20 high-quality backlink opportunities for this website.
-
-WEBSITE:
-Domain: ${site.domain}
-Business: ${knowledge?.business_name || site.org?.name || 'Unknown'}
-Industry: ${knowledge?.industry || 'Unknown'}
-Services: ${knowledge?.primary_services?.join(', ') || 'Unknown'}
-Location: ${knowledge?.primary_location || 'Unknown'}
-Service Areas: ${knowledge?.service_areas?.join(', ') || 'Unknown'}
-
-TOP PERFORMING CONTENT:
-${topContent.slice(0, 10).map(c => `- ${c.title} (${c.url})`).join('\n')}
-
-COMPETITORS:
-${competitors.map(c => `- ${c.competitor_domain}`).join('\n')}
-
-Generate diverse link building opportunities across these categories:
-
-1. RESOURCE LINK BUILDING
-   - Industry directories, associations, chambers of commerce
-   - Niche resource pages that list businesses/tools
-   - Local business directories
-
-2. CONTENT-BASED OPPORTUNITIES
-   - Guest posting on industry blogs
-   - HARO/journalist queries
-   - Expert roundups
-   - Podcast appearances
-
-3. DIGITAL PR
-   - Local news angles
-   - Industry news hooks
-   - Data/study opportunities
-
-4. COMPETITOR LINK ANALYSIS
-   - Common competitor backlinks we're missing
-   - Industry sites linking to competitors
-
-5. RELATIONSHIP-BASED
-   - Partner/vendor link opportunities
-   - Sponsor/association links
-   - Local community involvement
-
-Return as JSON:
-{
-  "opportunities": [
-    {
-      "type": "resource|guest_post|directory|digital_pr|competitor_gap|partnership",
-      "targetDomain": "example.com",
-      "targetUrl": "https://example.com/page (if known)",
-      "targetPageTitle": "Page name/section",
-      "linkType": "dofollow|nofollow|unknown",
-      "suggestedAnchor": "anchor text suggestion",
-      "targetPage": "which of our pages to link to",
-      "reason": "Why this is a good opportunity",
-      "outreachTemplate": "Brief outreach approach",
-      "priorityScore": 1-10,
-      "difficultyScore": 1-10,
-      "estimatedDA": 0-100
-    }
-  ]
-}
-
-Focus on:
-- Relevance to the business and industry
-- Realistic opportunities (not just top-tier publications)
-- Mix of quick wins and high-value targets
-- Local opportunities for local businesses
-- Diverse link types for natural profile`
-
-    const completion = await openai.chat.completions.create({
-      model: SEO_AI_MODEL,
-      messages: [
-        {
-          role: 'system',
-          content: 'You are an expert link building strategist. Identify specific, actionable backlink opportunities. Focus on realistic targets that match the business type and industry. Include specific domains and page types where possible.'
-        },
-        { role: 'user', content: prompt }
-      ],
-      response_format: { type: 'json_object' },
-      temperature: 0.6
+    const result = await seoSkill.discoverBacklinkOpportunities({
+      domain: site.domain,
+      business: {
+        name: knowledge?.business_name || site.org?.name,
+        type: knowledge?.business_type,
+        industry: knowledge?.industry,
+        services: knowledge?.primary_services
+      },
+      isLocal: knowledge?.is_local_business,
+      location: knowledge?.primary_location,
+      serviceAreas: knowledge?.service_areas,
+      topContent: topContent.slice(0, 10),
+      competitors: competitors.map(c => c.competitor_domain),
+      keywords: knowledge?.target_keywords
     })
 
-    const result = JSON.parse(completion.choices[0].message.content)
     return result.opportunities || []
-
   } catch (error) {
     console.error('[Backlinks] AI discovery error:', error)
     return []

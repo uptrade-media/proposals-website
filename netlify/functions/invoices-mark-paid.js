@@ -117,6 +117,30 @@ export async function handler(event) {
       }
     }
 
+    // Create portal notification for payment tracking
+    try {
+      await supabase
+        .from('smart_notifications')
+        .insert({
+          contact_id: invoice.contact_id,
+          type: 'invoice_paid',
+          priority: 'normal',
+          title: `💰 Payment recorded: $${parseFloat(invoice.total_amount).toFixed(2)}`,
+          message: `Invoice ${invoice.invoice_number} marked as paid (${paymentMethod || 'manual'})`,
+          metadata: {
+            invoiceId: invoice.id,
+            invoiceNumber: invoice.invoice_number,
+            amount: invoice.total_amount,
+            paymentMethod: paymentMethod || 'manual',
+            markedBy: contact.name || contact.email,
+            paidAt: now
+          }
+        })
+      console.log('[invoices-mark-paid] Created payment notification')
+    } catch (notifyErr) {
+      console.error('[invoices-mark-paid] Notification error:', notifyErr)
+    }
+
     // Send payment confirmation email to client
     if (RESEND_API_KEY && invoice.contact?.email) {
       try {
@@ -167,7 +191,7 @@ export async function handler(event) {
           taxAmount: updatedInvoice.tax_amount,
           totalAmount: updatedInvoice.total_amount,
           description: updatedInvoice.description,
-          dueDate: updatedInvoice.due_date,
+          dueDate: updatedInvoice.due_at || updatedInvoice.due_date,
           status: updatedInvoice.status,
           paidAt: updatedInvoice.paid_at,
           paymentMethod: updatedInvoice.payment_method,

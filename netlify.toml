@@ -56,6 +56,12 @@
 [functions."invoices-generate-recurring"]
   schedule = "0 6 * * *"
 
+# Scheduled function for sending abandoned invoice emails
+# Runs every hour to send emails for proposal deposit invoices
+# where client left the payment page without paying (after 1hr threshold)
+[functions."invoices-send-abandoned"]
+  schedule = "0 * * * *"
+
 # Scheduled function for generating smart notifications
 # Runs every 15 minutes
 [functions."crm-notifications-generate"]
@@ -122,10 +128,6 @@
 [functions."seo-ai-brain-background"]
   timeout = 900
 
-# SEO AI Brain v2 - Uses OpenAI Assistants API with persistent threads
-[functions."seo-ai-brain-v2-background"]
-  timeout = 900
-
 [functions."seo-ai-train-background"]
   timeout = 900
 
@@ -166,8 +168,7 @@
 [functions."seo-topic-clusters-background"]
   timeout = 900
 
-[functions."seo-serp-features-background"]
-  timeout = 900
+# seo-serp-features-background removed - consolidated with seo-serp-analyze-background
 
 [functions."seo-content-gap-analysis-background"]
   timeout = 900

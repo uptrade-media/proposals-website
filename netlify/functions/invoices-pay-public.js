@@ -221,6 +221,29 @@ export async function handler(event) {
       // Payment went through but db update failed - log this critical issue
     }
 
+    // Create portal notification for admin
+    try {
+      await supabase
+        .from('smart_notifications')
+        .insert({
+          contact_id: invoice.contact_id,
+          type: 'invoice_paid',
+          priority: 'normal',
+          title: `💰 Payment received: ${formatCurrency(invoice.total_amount)}`,
+          message: `Invoice ${invoice.invoice_number} paid by ${invoice.contact?.name || 'client'}`,
+          metadata: {
+            invoiceId: invoice.id,
+            invoiceNumber: invoice.invoice_number,
+            amount: invoice.total_amount,
+            paymentId,
+            paidAt: now
+          }
+        })
+      console.log('[invoices-pay-public] Created payment notification')
+    } catch (notifyErr) {
+      console.error('[invoices-pay-public] Notification error:', notifyErr)
+    }
+
     // Cancel any scheduled reminder emails via Resend API
     if (RESEND_API_KEY && invoice.scheduled_reminder_ids && invoice.scheduled_reminder_ids.length > 0) {
       const resend = new Resend(RESEND_API_KEY)

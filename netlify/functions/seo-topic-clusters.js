@@ -1,9 +1,6 @@
 // netlify/functions/seo-topic-clusters.js
 // Semantic Keyword Clustering - Build topic clusters and pillar page strategies
 import { createSupabaseAdmin, getAuthenticatedUser } from './utils/supabase.js'
-import OpenAI from 'openai'
-
-const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY })
 
 export async function handler(event) {
   const headers = {

@@ -120,7 +120,7 @@ export async function handler(event) {
             <p style="margin: 0 0 8px 0; color: #666;">Milestone Invoice</p>
             <p style="margin: 0; font-size: 14px;"><strong>Description:</strong> ${invoice.description}</p>
             <p style="margin: 8px 0 0 0; font-size: 14px;"><strong>Amount:</strong> $${parseFloat(invoice.total_amount).toLocaleString('en-US', { minimumFractionDigits: 2 })}</p>
-            <p style="margin: 8px 0 0 0; font-size: 14px;"><strong>Due Date:</strong> ${new Date(invoice.due_date).toLocaleDateString()}</p>
+            <p style="margin: 8px 0 0 0; font-size: 14px;"><strong>Due Date:</strong> ${new Date(invoice.due_at || invoice.due_date).toLocaleDateString()}</p>
           </div>
           
           <a href="${paymentLink}" 

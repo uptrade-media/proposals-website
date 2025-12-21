@@ -3,7 +3,10 @@
  * ═══════════════════════════════════════════════════════════════════════════════
  * 
  * Zustand store for Signal AI state management.
- * Handles conversations, skills, and Echo interface state.
+ * Handles:
+ * - Echo interface (chat UI)
+ * - Signal Module (knowledge base, FAQs, widget config)
+ * - Conversations and learning suggestions
  */
 
 import { create } from 'zustand'
@@ -11,12 +14,13 @@ import { persist } from 'zustand/middleware'
 import axios from 'axios'
 
 const API_BASE = '/.netlify/functions/api/signal'
+const MODULE_BASE = '/.netlify/functions'
 
 export const useSignalStore = create(
   persist(
     (set, get) => ({
       // ─────────────────────────────────────────────────────────────────────────
-      // State
+      // Echo UI State
       // ─────────────────────────────────────────────────────────────────────────
       
       // Echo UI state
@@ -41,6 +45,41 @@ export const useSignalStore = create(
       isLoading: false,
       isSending: false,
       error: null,
+      
+      // ─────────────────────────────────────────────────────────────────────────
+      // Signal Module State (Knowledge Base, FAQs, Widget Config)
+      // ─────────────────────────────────────────────────────────────────────────
+      
+      // Config state
+      moduleConfig: null,
+      moduleConfigLoading: false,
+      moduleConfigError: null,
+      
+      // Knowledge base state
+      knowledge: [],
+      knowledgeLoading: false,
+      knowledgePagination: { page: 1, total: 0, pages: 0 },
+      knowledgeStats: { total: 0, byType: {} },
+      
+      // FAQs state
+      faqs: [],
+      faqsLoading: false,
+      faqsPagination: { page: 1, total: 0, pages: 0 },
+      faqsStats: { pending: 0, approved: 0, rejected: 0 },
+      
+      // Widget conversations state
+      widgetConversations: [],
+      widgetConversationsLoading: false,
+      widgetConversationsPagination: { page: 1, total: 0, pages: 0 },
+      widgetConversationsStats: { total: 0, byStatus: {}, leadsCreated: 0 },
+      activeWidgetConversation: null,
+      activeWidgetMessages: [],
+      
+      // Learning suggestions state
+      suggestions: [],
+      suggestionsLoading: false,
+      suggestionsPagination: { page: 1, total: 0, pages: 0 },
+      suggestionsStats: { byStatus: {}, byType: {} },
 
       // ─────────────────────────────────────────────────────────────────────────
       // Echo Actions
@@ -265,11 +304,298 @@ export const useSignalStore = create(
       },
 
       // ─────────────────────────────────────────────────────────────────────────
+      // Signal Module Config Actions
+      // ─────────────────────────────────────────────────────────────────────────
+      
+      fetchModuleConfig: async (projectId) => {
+        set({ moduleConfigLoading: true, moduleConfigError: null })
+        try {
+          const res = await axios.get(`${MODULE_BASE}/signal-config?projectId=${projectId}`)
+          set({ 
+            moduleConfig: res.data.config, 
+            moduleConfigLoading: false 
+          })
+          return res.data
+        } catch (error) {
+          set({ moduleConfigLoading: false, moduleConfigError: error.message })
+          throw error
+        }
+      },
+      
+      updateModuleConfig: async (projectId, updates) => {
+        set({ moduleConfigLoading: true })
+        try {
+          const res = await axios.put(`${MODULE_BASE}/signal-config`, {
+            projectId,
+            config: updates
+          })
+          set({ moduleConfig: res.data.config, moduleConfigLoading: false })
+          return res.data
+        } catch (error) {
+          set({ moduleConfigLoading: false, moduleConfigError: error.message })
+          throw error
+        }
+      },
+      
+      enableSignal: async (projectId) => {
+        return get().updateModuleConfig(projectId, { is_enabled: true })
+      },
+      
+      disableSignal: async (projectId) => {
+        return get().updateModuleConfig(projectId, { is_enabled: false })
+      },
+      
+      // ─────────────────────────────────────────────────────────────────────────
+      // Knowledge Base Actions
+      // ─────────────────────────────────────────────────────────────────────────
+      
+      fetchKnowledge: async (projectId, options = {}) => {
+        set({ knowledgeLoading: true })
+        try {
+          const params = new URLSearchParams({ projectId, ...options })
+          const res = await axios.get(`${MODULE_BASE}/signal-knowledge?${params}`)
+          set({ 
+            knowledge: res.data.chunks,
+            knowledgePagination: res.data.pagination,
+            knowledgeStats: res.data.stats,
+            knowledgeLoading: false
+          })
+          return res.data
+        } catch (error) {
+          set({ knowledgeLoading: false })
+          throw error
+        }
+      },
+      
+      addKnowledge: async (projectId, entry) => {
+        const res = await axios.post(`${MODULE_BASE}/signal-knowledge`, {
+          projectId,
+          ...entry
+        })
+        await get().fetchKnowledge(projectId)
+        return res.data
+      },
+      
+      updateKnowledge: async (projectId, id, updates) => {
+        const res = await axios.put(`${MODULE_BASE}/signal-knowledge`, {
+          projectId,
+          id,
+          ...updates
+        })
+        set(state => ({
+          knowledge: state.knowledge.map(k => k.id === id ? res.data.chunk : k)
+        }))
+        return res.data
+      },
+      
+      deleteKnowledge: async (id) => {
+        await axios.delete(`${MODULE_BASE}/signal-knowledge?id=${id}`)
+        set(state => ({
+          knowledge: state.knowledge.filter(k => k.id !== id)
+        }))
+      },
+      
+      // ─────────────────────────────────────────────────────────────────────────
+      // FAQ Actions
+      // ─────────────────────────────────────────────────────────────────────────
+      
+      fetchFaqs: async (projectId, options = {}) => {
+        set({ faqsLoading: true })
+        try {
+          const params = new URLSearchParams({ projectId, ...options })
+          const res = await axios.get(`${MODULE_BASE}/signal-faqs?${params}`)
+          set({ 
+            faqs: res.data.faqs,
+            faqsPagination: res.data.pagination,
+            faqsStats: res.data.stats,
+            faqsLoading: false
+          })
+          return res.data
+        } catch (error) {
+          set({ faqsLoading: false })
+          throw error
+        }
+      },
+      
+      createFaq: async (projectId, faq) => {
+        const res = await axios.post(`${MODULE_BASE}/signal-faqs`, {
+          projectId,
+          ...faq
+        })
+        await get().fetchFaqs(projectId)
+        return res.data
+      },
+      
+      updateFaq: async (projectId, id, updates) => {
+        const res = await axios.put(`${MODULE_BASE}/signal-faqs`, {
+          projectId,
+          id,
+          ...updates
+        })
+        set(state => ({
+          faqs: state.faqs.map(f => f.id === id ? res.data.faq : f)
+        }))
+        return res.data
+      },
+      
+      approveFaq: async (projectId, id) => {
+        const res = await axios.post(`${MODULE_BASE}/signal-faqs?id=${id}&action=approve`, { projectId })
+        set(state => ({
+          faqs: state.faqs.map(f => f.id === id ? res.data.faq : f)
+        }))
+        return res.data
+      },
+      
+      rejectFaq: async (projectId, id) => {
+        const res = await axios.post(`${MODULE_BASE}/signal-faqs?id=${id}&action=reject`, { projectId })
+        set(state => ({
+          faqs: state.faqs.map(f => f.id === id ? res.data.faq : f)
+        }))
+        return res.data
+      },
+      
+      deleteFaq: async (id) => {
+        await axios.delete(`${MODULE_BASE}/signal-faqs?id=${id}`)
+        set(state => ({
+          faqs: state.faqs.filter(f => f.id !== id)
+        }))
+      },
+      
+      // ─────────────────────────────────────────────────────────────────────────
+      // Widget Conversation Actions
+      // ─────────────────────────────────────────────────────────────────────────
+      
+      fetchWidgetConversations: async (projectId, options = {}) => {
+        set({ widgetConversationsLoading: true })
+        try {
+          const params = new URLSearchParams({ projectId, ...options })
+          const res = await axios.get(`${MODULE_BASE}/signal-conversations?${params}`)
+          set({ 
+            widgetConversations: res.data.conversations,
+            widgetConversationsPagination: res.data.pagination,
+            widgetConversationsStats: res.data.stats,
+            widgetConversationsLoading: false
+          })
+          return res.data
+        } catch (error) {
+          set({ widgetConversationsLoading: false })
+          throw error
+        }
+      },
+      
+      fetchWidgetConversation: async (conversationId) => {
+        set({ widgetConversationsLoading: true })
+        try {
+          const res = await axios.get(`${MODULE_BASE}/signal-conversations?id=${conversationId}`)
+          set({ 
+            activeWidgetConversation: res.data.conversation,
+            activeWidgetMessages: res.data.messages,
+            widgetConversationsLoading: false
+          })
+          return res.data
+        } catch (error) {
+          set({ widgetConversationsLoading: false })
+          throw error
+        }
+      },
+      
+      closeWidgetConversation: async (conversationId) => {
+        const res = await axios.put(`${MODULE_BASE}/signal-conversations`, {
+          id: conversationId,
+          status: 'closed'
+        })
+        set(state => ({
+          widgetConversations: state.widgetConversations.map(c => 
+            c.id === conversationId ? res.data.conversation : c
+          ),
+          activeWidgetConversation: state.activeWidgetConversation?.id === conversationId 
+            ? res.data.conversation 
+            : state.activeWidgetConversation
+        }))
+        return res.data
+      },
+      
+      // ─────────────────────────────────────────────────────────────────────────
+      // Learning Suggestions Actions
+      // ─────────────────────────────────────────────────────────────────────────
+      
+      fetchSuggestions: async (projectId, options = {}) => {
+        set({ suggestionsLoading: true })
+        try {
+          const params = new URLSearchParams({ projectId, ...options })
+          const res = await axios.get(`${MODULE_BASE}/signal-learning?${params}`)
+          set({ 
+            suggestions: res.data.suggestions,
+            suggestionsPagination: res.data.pagination,
+            suggestionsStats: res.data.stats,
+            suggestionsLoading: false
+          })
+          return res.data
+        } catch (error) {
+          set({ suggestionsLoading: false })
+          throw error
+        }
+      },
+      
+      approveSuggestion: async (projectId, suggestionId) => {
+        const res = await axios.post(
+          `${MODULE_BASE}/signal-learning?id=${suggestionId}&action=approve`,
+          { projectId }
+        )
+        set(state => ({
+          suggestions: state.suggestions.map(s => 
+            s.id === suggestionId ? res.data.suggestion : s
+          )
+        }))
+        return res.data
+      },
+      
+      applySuggestion: async (projectId, suggestionId) => {
+        const res = await axios.post(
+          `${MODULE_BASE}/signal-learning?id=${suggestionId}&action=apply`,
+          { projectId }
+        )
+        set(state => ({
+          suggestions: state.suggestions.map(s => 
+            s.id === suggestionId ? res.data.suggestion : s
+          )
+        }))
+        return res.data
+      },
+      
+      rejectSuggestion: async (projectId, suggestionId, reason) => {
+        const res = await axios.post(
+          `${MODULE_BASE}/signal-learning?id=${suggestionId}&action=reject`,
+          { projectId, reason }
+        )
+        set(state => ({
+          suggestions: state.suggestions.map(s => 
+            s.id === suggestionId ? res.data.suggestion : s
+          )
+        }))
+        return res.data
+      },
+      
+      deferSuggestion: async (projectId, suggestionId) => {
+        const res = await axios.post(
+          `${MODULE_BASE}/signal-learning?id=${suggestionId}&action=defer`,
+          { projectId }
+        )
+        set(state => ({
+          suggestions: state.suggestions.map(s => 
+            s.id === suggestionId ? res.data.suggestion : s
+          )
+        }))
+        return res.data
+      },
+
+      // ─────────────────────────────────────────────────────────────────────────
       // Reset
       // ─────────────────────────────────────────────────────────────────────────
 
       reset: () => {
         set({
+          // Echo state
           conversations: [],
           activeConversation: null,
           messages: [],
@@ -277,7 +603,21 @@ export const useSignalStore = create(
           isEchoMinimized: false,
           echoSkill: null,
           echoContextId: null,
-          error: null
+          error: null,
+          // Module state
+          moduleConfig: null,
+          moduleConfigLoading: false,
+          moduleConfigError: null,
+          knowledge: [],
+          knowledgeLoading: false,
+          faqs: [],
+          faqsLoading: false,
+          widgetConversations: [],
+          widgetConversationsLoading: false,
+          activeWidgetConversation: null,
+          activeWidgetMessages: [],
+          suggestions: [],
+          suggestionsLoading: false
         })
       }
     }),
@@ -296,10 +636,24 @@ export const useSignalStore = create(
 // Selectors
 // ═══════════════════════════════════════════════════════════════════════════════
 
+// Echo selectors
 export const selectIsEchoOpen = (state) => state.isEchoOpen
 export const selectMessages = (state) => state.messages
 export const selectActiveConversation = (state) => state.activeConversation
 export const selectSkills = (state) => state.skills
 export const selectIsSending = (state) => state.isSending
+
+// Signal Module selectors
+export const selectModuleConfig = (state) => state.moduleConfig
+export const selectModuleConfigLoading = (state) => state.moduleConfigLoading
+export const selectIsSignalEnabled = (state) => state.moduleConfig?.is_enabled || false
+export const selectKnowledge = (state) => state.knowledge
+export const selectKnowledgeStats = (state) => state.knowledgeStats
+export const selectFaqs = (state) => state.faqs
+export const selectFaqsStats = (state) => state.faqsStats
+export const selectWidgetConversations = (state) => state.widgetConversations
+export const selectWidgetConversationsStats = (state) => state.widgetConversationsStats
+export const selectSuggestions = (state) => state.suggestions
+export const selectSuggestionsStats = (state) => state.suggestionsStats
 
 export default useSignalStore

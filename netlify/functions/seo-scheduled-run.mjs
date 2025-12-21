@@ -4,7 +4,7 @@
 // Run via: netlify functions:invoke seo-scheduled-run (or automatic cron)
 
 import { createClient } from '@supabase/supabase-js'
-import OpenAI from 'openai'
+import { SEOSkill } from './skills/seo-skill.js'
 
 // Background function for 15-minute timeout
 export const config = {
@@ -12,11 +12,6 @@ export const config = {
 }
 
 const SEO_AI_MODEL = process.env.SEO_AI_MODEL || 'gpt-4o'
-
-// Initialize OpenAI
-const openai = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY
-})
 
 // Create Supabase admin client
 function createSupabaseAdmin() {
@@ -62,7 +57,7 @@ export async function handler(event) {
       console.log(`[SEO Scheduled Run] Processing site: ${schedule.site?.domain}`)
       
       try {
-        const runResult = await runSiteAnalysis(supabase, schedule, openai)
+        const runResult = await runSiteAnalysis(supabase, schedule)
         results.push({
           siteId: schedule.site_id,
           domain: schedule.site?.domain,
@@ -110,8 +105,9 @@ export async function handler(event) {
 }
 
 // Run analysis for a single site
-async function runSiteAnalysis(supabase, schedule, openai) {
+async function runSiteAnalysis(supabase, schedule) {
   const siteId = schedule.site_id
+  const site = schedule.site
   const modules = schedule.modules?.includes('all') 
     ? ['keywords', 'technical', 'content', 'backlinks', 'local', 'schema']
     : schedule.modules
@@ -121,21 +117,24 @@ async function runSiteAnalysis(supabase, schedule, openai) {
 
   console.log(`[SEO Scheduled Run] Running modules: ${modules.join(', ')}`)
 
+  // Initialize SEOSkill for AI operations
+  const seoSkill = new SEOSkill(supabase, site?.org_id, siteId)
+
   // Run each module
   for (const module of modules) {
     try {
       switch (module) {
         case 'keywords':
-          analysisResults.keywords = await analyzeKeywords(supabase, siteId, openai)
+          analysisResults.keywords = await analyzeKeywords(supabase, siteId)
           break
         case 'technical':
           analysisResults.technical = await runTechnicalCheck(supabase, siteId)
           break
         case 'content':
-          analysisResults.content = await analyzeContentDecay(supabase, siteId, openai)
+          analysisResults.content = await analyzeContentDecay(supabase, siteId)
           break
         case 'backlinks':
-          analysisResults.backlinks = await discoverBacklinks(supabase, siteId, openai)
+          analysisResults.backlinks = await discoverBacklinks(supabase, siteId)
           break
         case 'local':
           analysisResults.local = await analyzeLocalSeo(supabase, siteId)
@@ -150,8 +149,8 @@ async function runSiteAnalysis(supabase, schedule, openai) {
     }
   }
 
-  // Generate AI summary of findings
-  const summary = await generateAISummary(openai, analysisResults, schedule.site)
+  // Generate AI summary of findings using SEOSkill
+  const summary = await seoSkill.generateAnalysisSummary(analysisResults, site)
 
   // Log the successful run
   await logScheduledRun(supabase, siteId, 'success', {
@@ -173,7 +172,7 @@ async function runSiteAnalysis(supabase, schedule, openai) {
 }
 
 // Module implementations
-async function analyzeKeywords(supabase, siteId, openai) {
+async function analyzeKeywords(supabase, siteId) {
   // Fetch tracked keywords
   const { data: keywords } = await supabase
     .from('seo_tracked_keywords')
@@ -251,7 +250,7 @@ async function runTechnicalCheck(supabase, siteId) {
   return checks
 }
 
-async function analyzeContentDecay(supabase, siteId, openai) {
+async function analyzeContentDecay(supabase, siteId) {
   // Fetch pages with declining traffic
   const { data: pages } = await supabase
     .from('seo_pages')
@@ -290,7 +289,7 @@ async function analyzeContentDecay(supabase, siteId, openai) {
   return { total_pages: pages?.length || 0, decaying_count: decaying.length }
 }
 
-async function discoverBacklinks(supabase, siteId, openai) {
+async function discoverBacklinks(supabase, siteId) {
   // This would integrate with a backlink API in production
   // For now, we track existing opportunities
   const { data: opportunities } = await supabase
@@ -332,32 +331,6 @@ async function validateSchema(supabase, siteId) {
     total: schemas?.length || 0,
     valid,
     invalid
-  }
-}
-
-// AI Summary generation
-async function generateAISummary(openai, results, site) {
-  try {
-    const completion = await openai.chat.completions.create({
-      model: SEO_AI_MODEL,
-      messages: [
-        {
-          role: 'system',
-          content: 'You are an SEO expert. Generate a brief, actionable summary of SEO analysis results. Be concise - 2-3 sentences max.'
-        },
-        {
-          role: 'user',
-          content: `SEO Analysis for ${site?.domain || 'site'}:\n${JSON.stringify(results, null, 2)}\n\nProvide a brief summary with top priority action.`
-        }
-      ],
-      temperature: 0.3,
-      max_tokens: 200
-    })
-
-    return completion.choices[0]?.message?.content || 'Analysis complete. Review dashboard for details.'
-  } catch (e) {
-    console.error('[AI Summary] Error:', e.message)
-    return 'Analysis complete. Review dashboard for details.'
   }
 }
 
