@@ -1,6 +1,7 @@
 // netlify/functions/invoices-pay.js
 import { createSupabaseAdmin, getAuthenticatedUser } from './utils/supabase.js'
-import { Client } from 'square'
+import square from 'square'
+const { Client } = square
 import { Resend } from 'resend'
 import { paymentConfirmationEmail, paymentNotificationAdminEmail } from './utils/email-templates.js'
 

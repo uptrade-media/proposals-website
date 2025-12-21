@@ -1,7 +1,8 @@
 // netlify/functions/proposals-pay-deposit.js
 // Handle deposit payments for signed proposals using Square
 import { createClient } from '@supabase/supabase-js'
-import { Client } from 'square'
+import square from 'square'
+const { Client } = square
 import { Resend } from 'resend'
 
 const supabase = createClient(

@@ -1,7 +1,8 @@
 // netlify/functions/invoices-pay-public.js
 // Process payment for invoice via magic link (no auth required)
 import { createSupabaseAdmin } from './utils/supabase.js'
-import { Client } from 'square'
+import square from 'square'
+const { Client } = square
 import { Resend } from 'resend'
 import { randomUUID } from 'crypto'
 
