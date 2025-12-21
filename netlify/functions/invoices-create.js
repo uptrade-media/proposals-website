@@ -1,6 +1,7 @@
 // netlify/functions/invoices-create.js
 import { createSupabaseAdmin, getAuthenticatedUser } from './utils/supabase.js'
-import { Client, Environment } from 'square'
+import pkg from 'square'
+const { Client, Environment } = pkg
 import { Resend } from 'resend'
 import crypto from 'crypto'
 import { invoiceEmail } from './utils/email-templates.js'

@@ -89,11 +89,9 @@ export async function handler(event) {
 
     // Calculate amounts (store as dollars, no cents math)
     const amountValue = parseFloat(amount)
-    const taxRate = 0 // No tax by default for quick invoices
-    const taxAmount = 0
-    const totalAmount = amountValue
+    const taxAmount = 0 // No tax by default for quick invoices
 
-    // Check if contact exists
+    // Check if contact exists, or create one (contact_id is required)
     let contactId = null
     const { data: existingContact } = await supabase
       .from('contacts')
@@ -103,8 +101,8 @@ export async function handler(event) {
 
     if (existingContact) {
       contactId = existingContact.id
-    } else if (createContact) {
-      // Create new contact
+    } else {
+      // Always create a contact for quick invoices (contact_id is NOT NULL in DB)
       const { data: newContact, error: contactError } = await supabase
         .from('contacts')
         .insert({
@@ -118,12 +116,20 @@ export async function handler(event) {
         .select('id')
         .single()
 
-      if (!contactError && newContact) {
-        contactId = newContact.id
+      if (contactError) {
+        console.error('[quick-invoice] Failed to create contact:', contactError)
+        return { 
+          statusCode: 500, 
+          headers, 
+          body: JSON.stringify({ error: 'Failed to create contact for invoice' }) 
+        }
       }
+      contactId = newContact.id
     }
 
     // Create the invoice
+    // Note: total_amount is a GENERATED column (amount + tax_amount - discount_amount)
+    // so we don't insert it directly
     const { data: invoice, error: invoiceError } = await supabase
       .from('invoices')
       .insert({
@@ -131,10 +137,8 @@ export async function handler(event) {
         contact_id: contactId,
         description,
         amount: amountValue,
-        tax_rate: taxRate,
         tax_amount: taxAmount,
-        total_amount: totalAmount,
-        due_at: finalDueDate || new Date(Date.now() + 14 * 24 * 60 * 60 * 1000).toISOString().split('T')[0], // 14 days default
+        due_at: finalDueDate || new Date(Date.now() + 14 * 24 * 60 * 60 * 1000).toISOString(),
         status: finalSendNow ? 'sent' : 'draft',
         notes: notes || null,
         payment_token: paymentToken,
@@ -169,7 +173,7 @@ export async function handler(event) {
         console.log('[quick-invoice] Attempting to send email to:', email)
         const resend = new Resend(RESEND_API_KEY)
         const recipientName = name || email.split('@')[0]
-        const dueDateFormatted = new Date(invoice.due_at || invoice.due_date).toLocaleDateString('en-US', {
+        const dueDateFormatted = new Date(invoice.due_at).toLocaleDateString('en-US', {
           year: 'numeric',
           month: 'long',
           day: 'numeric'
@@ -215,14 +219,14 @@ export async function handler(event) {
         invoice: {
           id: invoice.id,
           invoiceNumber: invoice.invoice_number,
-          amount: totalAmount,
+          amount: invoice.total_amount || amountValue,
           description,
-          dueDate: invoice.due_date,
+          dueDate: invoice.due_at,
           status: invoice.status,
           sentTo: email
         },
         payment_url: paymentLink,
-        contactCreated: createContact && !existingContact && contactId
+        contactCreated: !existingContact
       })
     }
 
