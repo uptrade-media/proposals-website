@@ -17,10 +17,10 @@ import {
 } from 'lucide-react'
 import api from '@/lib/api'
 
-// Square Web SDK
-const SQUARE_APP_ID = import.meta.env.SQUARE_APPLICATION_ID
-const SQUARE_LOCATION_ID = import.meta.env.SQUARE_LOCATION_ID
-const SQUARE_ENV = import.meta.env.SQUARE_ENVIRONMENT || 'sandbox'
+// Square Web SDK - Use VITE_ prefix for client-side env vars
+const SQUARE_APP_ID = import.meta.env.VITE_SQUARE_APPLICATION_ID
+const SQUARE_LOCATION_ID = import.meta.env.VITE_SQUARE_LOCATION_ID
+const SQUARE_ENV = import.meta.env.VITE_SQUARE_ENVIRONMENT || 'sandbox'
 
 function formatCurrency(amount) {
   return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(amount || 0)

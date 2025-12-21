@@ -29,7 +29,7 @@ export default function PaymentForm({ invoice, customer, onSuccess, onError, onC
   // Load Square Web Payments SDK
   useEffect(() => {
     const script = document.createElement('script')
-    const isProduction = import.meta.env.SQUARE_ENVIRONMENT === 'production'
+    const isProduction = import.meta.env.VITE_SQUARE_ENVIRONMENT === 'production'
     script.src = isProduction 
       ? 'https://web.squarecdn.com/v1/square.js'
       : 'https://sandbox.web.squarecdn.com/v1/square.js'
