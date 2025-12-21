@@ -460,136 +460,109 @@ export async function handler(event) {
 }
 
 /**
- * Send invite email to new organization member with magic link for account setup
+ * Send invite email to new organization member with simple magic link token
+ * This approach stores a token in the contacts table and validates it ourselves,
+ * avoiding Supabase Auth complexities.
  */
 async function sendOrgMemberInviteEmail(supabase, member, orgName, inviterName) {
-  try {
-    if (!process.env.RESEND_API_KEY) {
-      console.error('[admin-org-members] RESEND_API_KEY not configured, cannot send invite email')
-      throw new Error('Email service not configured')
-    }
-
-    const PORTAL_URL = process.env.URL || process.env.SITE_URL || 'https://portal.uptrademedia.com'
-
-    // Generate Supabase magic link for account setup
-    const { data: linkData, error: linkError } = await supabase.auth.admin.generateLink({
-      type: 'magiclink',
-      email: member.email,
-      options: {
-        redirectTo: `${PORTAL_URL}/setup?org=${encodeURIComponent(orgName)}`
-      }
-    })
-
-    if (linkError) {
-      console.error('[admin-org-members] Error generating magic link:', linkError)
-      throw new Error('Failed to generate setup link')
-    }
-
-    const setupUrl = linkData?.properties?.action_link || `${PORTAL_URL}/login`
-
-    console.log(`[admin-org-members] Generated Supabase magic link for ${member.email}`)
-
-    // Ensure from address has proper format with display name
-    let fromEmail = process.env.RESEND_FROM || 'Uptrade Media <portal@send.uptrademedia.com>'
-    // If env var is just an email address, wrap it with display name
-    if (fromEmail && !fromEmail.includes('<')) {
-      fromEmail = `Uptrade Media <${fromEmail}>`
-    }
-    
-    console.log(`[admin-org-members] Sending org invite email to ${member.email} for ${orgName}`)
-    console.log(`[admin-org-members] From: ${fromEmail}`)
-    console.log(`[admin-org-members] To: ${member.email}`)
-    console.log(`[admin-org-members] RESEND_API_KEY configured: ${!!process.env.RESEND_API_KEY}`)
-
-    const { data: result, error: emailError } = await resend.emails.send({
-      from: fromEmail,
-      to: member.email,
-      subject: `You've been invited to ${orgName} on Uptrade Media`,
-      html: `
-        <!DOCTYPE html>
-        <html>
-        <head>
-          <meta charset="utf-8">
-          <meta name="viewport" content="width=device-width, initial-scale=1">
-          <title>Organization Invitation</title>
-        </head>
-        <body style="margin:0;padding:0;background-color:#f5f5f5;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;">
-          <table width="100%" cellpadding="0" cellspacing="0" style="background-color:#f5f5f5;padding:40px 20px;">
-            <tr>
-              <td align="center">
-                <table width="600" cellpadding="0" cellspacing="0" style="background:#ffffff;border-radius:16px;overflow:hidden;box-shadow:0 4px 6px rgba(0,0,0,0.1);">
-                  
-                  <!-- Header -->
-                  <tr>
-                    <td style="background:linear-gradient(135deg, #54b948 0%, #39bfb0 100%);padding:32px 40px;text-align:center;">
-                      <img src="https://portal.uptrademedia.com/uptrade_media_logo_white.png" alt="Uptrade Media" width="180" height="auto" style="display:block;margin:0 auto;">
-                      <h1 style="margin:16px 0 0;font-size:24px;font-weight:700;color:#ffffff;">Welcome to ${orgName}</h1>
-                    </td>
-                  </tr>
-                  
-                  <!-- Content -->
-                  <tr>
-                    <td style="padding:40px;">
-                      <p style="margin:0 0 16px;font-size:16px;line-height:1.6;color:#333333;">
-                        Hi${member.name ? ` ${member.name}` : ''},
-                      </p>
-                      <p style="margin:0 0 24px;font-size:16px;line-height:1.6;color:#333333;">
-                        ${inviterName} has invited you to join <strong>${orgName}</strong> on the Uptrade Media client portal.
-                      </p>
-                      
-                      <p style="margin:0 0 32px;font-size:16px;line-height:1.6;color:#333333;">
-                        Click the button below to set up your account. You can sign in with Google or create a password.
-                      </p>
-                      
-                      <!-- CTA Button -->
-                      <div style="text-align:center;">
-                        <a href="${setupUrl}" style="display:inline-block;padding:14px 32px;background:linear-gradient(135deg,#54b948,#39bfb0);color:#ffffff;text-decoration:none;font-weight:600;font-size:16px;border-radius:8px;">
-                          Set Up My Account
-                        </a>
-                      </div>
-                      
-                      <p style="margin:32px 0 0;font-size:14px;color:#666666;text-align:center;">
-                        This link expires in 7 days.
-                      </p>
-                    </td>
-                  </tr>
-                  
-                  <!-- Footer -->
-                  <tr>
-                    <td style="padding:24px 40px;border-top:1px solid #eeeeee;background:#fafafa;">
-                      <p style="margin:0;font-size:13px;color:#888888;text-align:center;">
-                        Uptrade Media • Houston, TX
-                      </p>
-                    </td>
-                  </tr>
-                </table>
-              </td>
-            </tr>
-          </table>
-        </body>
-        </html>
-      `
-    })
-
-    if (emailError) {
-      console.error(`[admin-org-members] Resend error:`, emailError)
-      throw new Error(`Failed to send email: ${emailError.message || JSON.stringify(emailError)}`)
-    }
-
-    if (result?.id) {
-      console.log(`[admin-org-members] Invite email sent successfully to ${member.email}, email ID: ${result.id}`)
-    } else {
-      console.log(`[admin-org-members] Invite email sent to ${member.email} (no ID returned)`)
-      throw new Error('Email sent but no ID returned from Resend')
-    }
-  } catch (error) {
-    console.error(`[admin-org-members] Error sending invite email to ${member.email}:`, error)
-    console.error('[admin-org-members] Error details:', {
-      message: error.message,
-      stack: error.stack,
-      resendApiKeyConfigured: !!process.env.RESEND_API_KEY
-    })
-    // Re-throw so caller knows email failed
-    throw error
+  if (!process.env.RESEND_API_KEY) {
+    console.error('[admin-org-members] RESEND_API_KEY not configured')
+    throw new Error('Email service not configured')
   }
+
+  const PORTAL_URL = process.env.URL || process.env.SITE_URL || 'https://portal.uptrademedia.com'
+
+  // Generate a simple magic link token and store in database
+  const magicToken = randomBytes(32).toString('hex')
+  const magicTokenExpiry = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000) // 7 days
+  
+  const { error: tokenError } = await supabase
+    .from('contacts')
+    .update({
+      magic_link_token: magicToken,
+      magic_link_expires: magicTokenExpiry.toISOString(),
+      updated_at: new Date().toISOString()
+    })
+    .eq('id', member.id)
+
+  if (tokenError) {
+    console.error('[admin-org-members] Error storing magic link token:', tokenError)
+    throw new Error('Failed to generate setup link')
+  }
+
+  // Simple magic link that goes to our custom handler
+  const setupUrl = `${PORTAL_URL}/auth/magic?token=${magicToken}&redirect=${encodeURIComponent('/setup?org=' + orgName)}`
+  
+  console.log(`[admin-org-members] Generated magic link for ${member.email}`)
+
+  // Send the email
+  let fromEmail = process.env.RESEND_FROM || 'Uptrade Media <portal@send.uptrademedia.com>'
+  if (fromEmail && !fromEmail.includes('<')) {
+    fromEmail = `Uptrade Media <${fromEmail}>`
+  }
+
+  const { data: result, error: emailError } = await resend.emails.send({
+    from: fromEmail,
+    to: member.email,
+    subject: `You've been invited to ${orgName} on Uptrade Media`,
+    html: `
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <meta charset="utf-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+      </head>
+      <body style="margin:0;padding:0;background-color:#f5f5f5;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;">
+        <table width="100%" cellpadding="0" cellspacing="0" style="background-color:#f5f5f5;padding:40px 20px;">
+          <tr>
+            <td align="center">
+              <table width="600" cellpadding="0" cellspacing="0" style="background:#ffffff;border-radius:16px;overflow:hidden;box-shadow:0 4px 6px rgba(0,0,0,0.1);">
+                <tr>
+                  <td style="background:linear-gradient(135deg, #54b948 0%, #39bfb0 100%);padding:32px 40px;text-align:center;">
+                    <h1 style="margin:0;font-size:24px;font-weight:700;color:#ffffff;">Welcome to ${orgName}</h1>
+                  </td>
+                </tr>
+                <tr>
+                  <td style="padding:40px;">
+                    <p style="margin:0 0 16px;font-size:16px;line-height:1.6;color:#333333;">
+                      Hi${member.name ? ` ${member.name}` : ''},
+                    </p>
+                    <p style="margin:0 0 24px;font-size:16px;line-height:1.6;color:#333333;">
+                      ${inviterName} has invited you to join <strong>${orgName}</strong> on the Uptrade Media portal.
+                    </p>
+                    <p style="margin:0 0 32px;font-size:16px;line-height:1.6;color:#333333;">
+                      Click below to set up your account. You can sign in with Google.
+                    </p>
+                    <div style="text-align:center;">
+                      <a href="${setupUrl}" style="display:inline-block;padding:14px 32px;background:linear-gradient(135deg,#54b948,#39bfb0);color:#ffffff;text-decoration:none;font-weight:600;font-size:16px;border-radius:8px;">
+                        Set Up My Account
+                      </a>
+                    </div>
+                    <p style="margin:32px 0 0;font-size:14px;color:#666666;text-align:center;">
+                      This link expires in 7 days.
+                    </p>
+                  </td>
+                </tr>
+                <tr>
+                  <td style="padding:24px 40px;border-top:1px solid #eeeeee;background:#fafafa;">
+                    <p style="margin:0;font-size:13px;color:#888888;text-align:center;">
+                      Uptrade Media • Houston, TX
+                    </p>
+                  </td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+        </table>
+      </body>
+      </html>
+    `
+  })
+
+  if (emailError) {
+    console.error('[admin-org-members] Resend error:', emailError)
+    throw new Error(`Failed to send email: ${emailError.message}`)
+  }
+
+  console.log(`[admin-org-members] Invite email sent to ${member.email}, ID: ${result?.id}`)
 }

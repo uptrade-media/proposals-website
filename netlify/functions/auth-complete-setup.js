@@ -1,5 +1,6 @@
 // netlify/functions/auth-complete-setup.js
 // Completes account setup after user creates their Supabase auth account
+// Supports both JWT tokens and database hex tokens
 import jwt from 'jsonwebtoken'
 import { createSupabaseAdmin } from './utils/supabase.js'
 
@@ -34,12 +35,59 @@ export async function handler(event) {
       }
     }
 
-    // Verify the JWT token
-    let decoded
+    const supabase = createSupabaseAdmin()
+    let contact = null
+
+    // First, try JWT token verification
     try {
-      decoded = jwt.verify(token, process.env.AUTH_JWT_SECRET)
+      const decoded = jwt.verify(token, process.env.AUTH_JWT_SECRET)
+      
+      if (decoded.type === 'account_setup') {
+        // Find contact by email from JWT
+        const { data, error } = await supabase
+          .from('contacts')
+          .select('id, email, name, account_setup')
+          .eq('email', decoded.email)
+          .single()
+
+        if (!error && data) {
+          contact = data
+          console.log('[auth-complete-setup] JWT token valid for:', contact.email)
+        }
+      }
     } catch (jwtError) {
-      console.error('[auth-complete-setup] JWT verification failed:', jwtError.message)
+      // JWT failed - try database token lookup
+      console.log('[auth-complete-setup] JWT failed, trying database token lookup')
+    }
+
+    // If JWT didn't work, try database hex token lookup
+    if (!contact) {
+      const { data, error } = await supabase
+        .from('contacts')
+        .select('id, email, name, account_setup, magic_link_token, magic_link_expires')
+        .eq('magic_link_token', token)
+        .single()
+
+      if (!error && data) {
+        // Check if token has expired
+        if (data.magic_link_expires) {
+          const expiresAt = new Date(data.magic_link_expires)
+          if (expiresAt < new Date()) {
+            console.log('[auth-complete-setup] Database token expired for:', data.email)
+            return {
+              statusCode: 400,
+              headers,
+              body: JSON.stringify({ error: 'Setup link has expired. Please request a new one.' })
+            }
+          }
+        }
+        contact = data
+        console.log('[auth-complete-setup] Database token valid for:', contact.email)
+      }
+    }
+
+    // No valid token found
+    if (!contact) {
       return {
         statusCode: 400,
         headers,
@@ -47,35 +95,13 @@ export async function handler(event) {
       }
     }
 
-    if (decoded.type !== 'account_setup') {
-      return {
-        statusCode: 400,
-        headers,
-        body: JSON.stringify({ error: 'Invalid token type' })
-      }
-    }
-
-    const supabase = createSupabaseAdmin()
-
-    // Find the contact
-    const { data: contact, error: contactError } = await supabase
-      .from('contacts')
-      .select('id, email, name, account_setup')
-      .eq('email', decoded.email)
-      .single()
-
-    if (contactError || !contact) {
-      return {
-        statusCode: 404,
-        headers,
-        body: JSON.stringify({ error: 'Account not found' })
-      }
-    }
-
     // Update the contact to mark as setup complete
     const updateData = {
       account_setup: 'true',
-      updated_at: new Date().toISOString()
+      updated_at: new Date().toISOString(),
+      // Clear the magic link token after use
+      magic_link_token: null,
+      magic_link_expires: null
     }
 
     // If Google auth was used, store the Google ID

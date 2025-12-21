@@ -141,20 +141,37 @@ export async function handler(event) {
     // Only send email and generate magic link if email is provided and contact is not a prospect
     // Prospects typically don't need account setup emails immediately
     if (newContact.email && resolvedContactType !== 'prospect') {
-      // Generate Supabase magic link for account setup
-      const { data: linkData, error: linkError } = await supabase.auth.admin.generateLink({
-        type: 'magiclink',
-        email: newContact.email,
-        options: {
-          redirectTo: `${PORTAL_URL}/setup`
+      const AUTH_CALLBACK_URL = `${PORTAL_URL}/auth/callback`
+      let setupUrl = `${PORTAL_URL}/login`
+
+      // New users need to be invited first (they don't exist in Supabase Auth yet)
+      console.log('[admin-clients-create] Inviting new user to Supabase Auth:', newContact.email)
+      
+      const { data: inviteData, error: inviteError } = await supabase.auth.admin.inviteUserByEmail(
+        newContact.email,
+        {
+          redirectTo: AUTH_CALLBACK_URL,
+          data: {
+            name: newContact.name,
+            contact_id: newContact.id
+          }
         }
-      })
+      )
 
-      if (linkError) {
-        console.error('Error generating magic link:', linkError)
+      if (inviteError) {
+        console.error('[admin-clients-create] Invite error:', inviteError)
+        // Non-fatal - continue with fallback URL
+      } else {
+        // Link contact to new auth user
+        if (inviteData?.user?.id) {
+          await supabase
+            .from('contacts')
+            .update({ auth_user_id: inviteData.user.id })
+            .eq('id', newContact.id)
+        }
+        setupUrl = inviteData?.properties?.action_link || setupUrl
+        console.log('[admin-clients-create] Invite sent successfully')
       }
-
-      const setupUrl = linkData?.properties?.action_link || `${PORTAL_URL}/login`
 
       // Send account setup email
       if (RESEND_API_KEY) {

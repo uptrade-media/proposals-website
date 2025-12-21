@@ -1,5 +1,5 @@
 // netlify/functions/auth-validate-setup-token.js
-// Validates a setup token from the magic link email
+// Validates setup tokens - supports both JWT tokens and database hex tokens
 import jwt from 'jsonwebtoken'
 import { createSupabaseAdmin } from './utils/supabase.js'
 
@@ -34,47 +34,68 @@ export async function handler(event) {
       }
     }
 
-    // Verify the JWT token
-    let decoded
-    try {
-      decoded = jwt.verify(token, process.env.AUTH_JWT_SECRET)
-    } catch (jwtError) {
-      console.error('[auth-validate-setup-token] JWT verification failed:', jwtError.message)
-      return {
-        statusCode: 200,
-        headers,
-        body: JSON.stringify({ 
-          valid: false, 
-          error: jwtError.name === 'TokenExpiredError' 
-            ? 'This setup link has expired. Please request a new one.'
-            : 'Invalid setup link'
-        })
-      }
-    }
-
-    // Check if this is a setup token
-    if (decoded.type !== 'account_setup') {
-      return {
-        statusCode: 200,
-        headers,
-        body: JSON.stringify({ valid: false, error: 'Invalid token type' })
-      }
-    }
-
-    // Verify the contact exists in the database
     const supabase = createSupabaseAdmin()
-    const { data: contact, error: contactError } = await supabase
-      .from('contacts')
-      .select('id, email, name, account_setup')
-      .eq('email', decoded.email)
-      .single()
+    let contact = null
 
-    if (contactError || !contact) {
-      console.error('[auth-validate-setup-token] Contact not found:', decoded.email)
+    // First, try JWT token verification
+    try {
+      const decoded = jwt.verify(token, process.env.AUTH_JWT_SECRET)
+      
+      // Check if this is a setup token
+      if (decoded.type === 'account_setup') {
+        // Verify the contact exists in the database
+        const { data, error } = await supabase
+          .from('contacts')
+          .select('id, email, name, account_setup')
+          .eq('email', decoded.email)
+          .single()
+
+        if (!error && data) {
+          contact = data
+          console.log('[auth-validate-setup-token] JWT token valid for:', contact.email)
+        }
+      }
+    } catch (jwtError) {
+      // JWT failed - try database token lookup
+      console.log('[auth-validate-setup-token] JWT failed, trying database token lookup')
+    }
+
+    // If JWT didn't work, try database hex token lookup
+    if (!contact) {
+      const { data, error } = await supabase
+        .from('contacts')
+        .select('id, email, name, account_setup, magic_link_token, magic_link_expires')
+        .eq('magic_link_token', token)
+        .single()
+
+      if (!error && data) {
+        // Check if token has expired
+        if (data.magic_link_expires) {
+          const expiresAt = new Date(data.magic_link_expires)
+          if (expiresAt < new Date()) {
+            console.log('[auth-validate-setup-token] Database token expired for:', data.email)
+            return {
+              statusCode: 200,
+              headers,
+              body: JSON.stringify({ 
+                valid: false, 
+                error: 'This setup link has expired. Please request a new one.' 
+              })
+            }
+          }
+        }
+        contact = data
+        console.log('[auth-validate-setup-token] Database token valid for:', contact.email)
+      }
+    }
+
+    // No valid token found
+    if (!contact) {
+      console.log('[auth-validate-setup-token] No valid token found')
       return {
         statusCode: 200,
         headers,
-        body: JSON.stringify({ valid: false, error: 'Account not found' })
+        body: JSON.stringify({ valid: false, error: 'Invalid or expired setup link' })
       }
     }
 
