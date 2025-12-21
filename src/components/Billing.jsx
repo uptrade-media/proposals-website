@@ -95,8 +95,11 @@ const Billing = () => {
   const [sendingReminderId, setSendingReminderId] = useState(null)
   const [togglingRecurringId, setTogglingRecurringId] = useState(null)
   const [clients, setClients] = useState([])
+  const [organizations, setOrganizations] = useState([])
+  const [orgMembers, setOrgMembers] = useState([])
   const [reportDateFilters, setReportDateFilters] = useState({ start_date: '', end_date: '' })
   const [formData, setFormData] = useState({
+    organizationId: '',
     contactId: '',
     project_id: '',
     amount: '',
@@ -159,6 +162,7 @@ const Billing = () => {
     fetchOverdueInvoices()
     if (isAdmin) {
       fetchClients()
+      fetchOrganizations()
     }
   }, [])
   
@@ -185,6 +189,29 @@ const Billing = () => {
     }
   }
 
+  const fetchOrganizations = async () => {
+    try {
+      const response = await api.get('/.netlify/functions/admin-org-list')
+      setOrganizations(response.data.organizations || [])
+    } catch (err) {
+      console.error('Failed to fetch organizations:', err)
+    }
+  }
+
+  const fetchOrgMembers = async (orgId) => {
+    if (!orgId) {
+      setOrgMembers([])
+      return
+    }
+    try {
+      const response = await api.get(`/.netlify/functions/admin-org-members?organizationId=${orgId}`)
+      setOrgMembers(response.data.members || [])
+    } catch (err) {
+      console.error('Failed to fetch org members:', err)
+      setOrgMembers([])
+    }
+  }
+
   const handleFormChange = (field, value) => {
     setFormData(prev => ({
       ...prev,
@@ -198,6 +225,7 @@ const Billing = () => {
 
   const resetForm = () => {
     setFormData({
+      organizationId: '',
       contactId: '',
       project_id: '',
       amount: '',
@@ -212,12 +240,14 @@ const Billing = () => {
       recurringEndDate: '',
       recurringCount: ''
     })
+    setOrgMembers([])
   }
 
   const handleCreateInvoice = async (e) => {
     e.preventDefault()
     
     const invoiceData = {
+      organizationId: formData.organizationId || null,
       contactId: formData.contactId,
       projectId: formData.project_id || null,
       amount: parseFloat(formData.amount),
@@ -715,7 +745,7 @@ const Billing = () => {
               <DialogHeader>
                 <DialogTitle>Create New Invoice</DialogTitle>
                 <DialogDescription>
-                  Generate a new invoice for a project.
+                  Generate a new invoice for an organization.
                 </DialogDescription>
               </DialogHeader>
               <form onSubmit={handleCreateInvoice} className="space-y-4">
@@ -726,16 +756,46 @@ const Billing = () => {
                 )}
                 
                 <div className="space-y-2">
-                  <Label htmlFor="contactId">Client *</Label>
+                  <Label htmlFor="organizationId">Organization *</Label>
+                  <Select 
+                    value={formData.organizationId} 
+                    onValueChange={(value) => {
+                      handleFormChange('organizationId', value)
+                      handleFormChange('contactId', '') // Reset contact when org changes
+                      fetchOrgMembers(value)
+                    }}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select organization" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {organizations.filter(org => org.id).map((org) => (
+                        <SelectItem key={org.id} value={org.id}>
+                          {org.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="contactId">Send Invoice To *</Label>
                   <Select 
                     value={formData.contactId} 
                     onValueChange={(value) => handleFormChange('contactId', value)}
+                    disabled={!formData.organizationId}
                   >
                     <SelectTrigger>
-                      <SelectValue placeholder="Select client" />
+                      <SelectValue placeholder={formData.organizationId ? "Select recipient" : "Select organization first"} />
                     </SelectTrigger>
                     <SelectContent>
-                      {clients.filter(client => client.id).map((client) => (
+                      {orgMembers.filter(member => member.contact?.id).map((member) => (
+                        <SelectItem key={member.contact.id} value={member.contact.id}>
+                          {member.contact.name || member.contact.email} ({member.contact.email})
+                        </SelectItem>
+                      ))}
+                      {/* Also show from clients list if they match org */}
+                      {orgMembers.length === 0 && clients.filter(client => client.id).map((client) => (
                         <SelectItem key={client.id} value={client.id}>
                           {client.name} ({client.email})
                         </SelectItem>
@@ -913,7 +973,7 @@ const Billing = () => {
                   </Button>
                   <Button 
                     type="submit" 
-                    disabled={isLoading || !formData.contactId || !formData.amount || !formData.due_date || (formData.isRecurring && !formData.recurringInterval)}
+                    disabled={isLoading || !formData.organizationId || !formData.contactId || !formData.amount || !formData.due_date || (formData.isRecurring && !formData.recurringInterval)}
                     variant="glass-primary"
                   >
                     {isLoading ? (

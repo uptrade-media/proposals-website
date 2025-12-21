@@ -128,7 +128,7 @@ export async function getAuthenticatedUser(event) {
     
     const isSuperAdmin = !!superAdminRecord
 
-    // Get user's organizations
+    // Get user's organizations from user_organizations table (legacy)
     const { data: userOrgs } = await supabasePublic
       .from('user_organizations')
       .select(`
@@ -149,19 +149,67 @@ export async function getAuthenticatedUser(event) {
       `)
       .eq('user_email', user.email)
 
+    // Also check organization_members table (new system via contact_id)
+    // First get the contact to find their ID
+    const { data: contactForMembership } = await supabasePublic
+      .from('contacts')
+      .select('id')
+      .or(`auth_user_id.eq.${user.id},email.ilike.${user.email}`)
+      .single()
+    
+    let memberOrgs = []
+    if (contactForMembership) {
+      const { data: orgMemberships } = await supabasePublic
+        .from('organization_members')
+        .select(`
+          role,
+          access_level,
+          organization:organizations (
+            id,
+            slug,
+            name,
+            domain,
+            schema_name,
+            features,
+            theme,
+            plan,
+            status,
+            org_type
+          )
+        `)
+        .eq('contact_id', contactForMembership.id)
+      
+      if (orgMemberships) {
+        memberOrgs = orgMemberships.map(om => ({
+          role: om.role,
+          is_primary: false,
+          organization: om.organization,
+          access_level: om.access_level
+        }))
+      }
+    }
+    
+    // Combine both sources, avoiding duplicates
+    const allUserOrgs = [...(userOrgs || [])]
+    for (const memberOrg of memberOrgs) {
+      if (!allUserOrgs.some(uo => uo.organization?.id === memberOrg.organization?.id)) {
+        allUserOrgs.push(memberOrg)
+      }
+    }
+
     // Determine current organization
     // Priority: 1) X-Organization-Id header, 2) Primary org, 3) First available, 4) Uptrade (super admin fallback)
     const requestedOrgId = event.headers['x-organization-id']
     let currentOrg = null
     
-    if (requestedOrgId && userOrgs) {
-      currentOrg = userOrgs.find(uo => uo.organization?.id === requestedOrgId)?.organization
+    if (requestedOrgId && allUserOrgs) {
+      currentOrg = allUserOrgs.find(uo => uo.organization?.id === requestedOrgId)?.organization
     }
     
-    if (!currentOrg && userOrgs?.length > 0) {
+    if (!currentOrg && allUserOrgs?.length > 0) {
       // Try primary org first
-      const primaryOrg = userOrgs.find(uo => uo.is_primary)
-      currentOrg = primaryOrg?.organization || userOrgs[0]?.organization
+      const primaryOrg = allUserOrgs.find(uo => uo.is_primary)
+      currentOrg = primaryOrg?.organization || allUserOrgs[0]?.organization
     }
     
     // Super admins can access Uptrade if they don't have explicit access
@@ -207,10 +255,10 @@ export async function getAuthenticatedUser(event) {
     // Build organization context
     const organization = currentOrg ? {
       ...currentOrg,
-      userRole: userOrgs?.find(uo => uo.organization?.id === currentOrg.id)?.role || (isSuperAdmin ? 'admin' : 'member'),
+      userRole: allUserOrgs?.find(uo => uo.organization?.id === currentOrg.id)?.role || (isSuperAdmin ? 'admin' : 'member'),
       availableOrgs: isSuperAdmin 
         ? null // Super admins fetch all orgs separately
-        : (userOrgs || []).map(uo => ({
+        : (allUserOrgs || []).map(uo => ({
             id: uo.organization?.id,
             name: uo.organization?.name,
             slug: uo.organization?.slug,

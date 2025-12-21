@@ -139,25 +139,28 @@ const CATEGORIES = {
 }
 
 export default function Settings() {
-  const { currentOrg, isSuperAdmin, setOrganization } = useAuthStore()
+  const { currentOrg, currentProject, isSuperAdmin, setOrganization } = useAuthStore()
   const { features } = useOrgFeatures()
   const [localFeatures, setLocalFeatures] = useState({})
   const [saving, setSaving] = useState(null) // Which module is currently saving
   const [saveStatus, setSaveStatus] = useState({}) // { moduleKey: 'success' | 'error' }
   
-  // Check if viewing a project-based tenant (e.g., GWA)
-  const isProjectTenant = currentOrg?.isProjectTenant === true
+  // When in project context, use project as the "org" for settings
+  const activeContext = currentProject || currentOrg
   
-  // Initialize local features from current org
+  // Check if viewing a project-based tenant (e.g., GWA)
+  const isProjectTenant = activeContext?.isProjectTenant === true || !!currentProject
+  
+  // Initialize local features from current context
   useEffect(() => {
-    if (currentOrg?.features) {
-      setLocalFeatures(currentOrg.features)
+    if (activeContext?.features) {
+      setLocalFeatures(activeContext.features)
     }
-  }, [currentOrg])
+  }, [activeContext])
 
   // Toggle a feature
   const toggleFeature = async (moduleKey) => {
-    if (!currentOrg) return
+    if (!activeContext) return
     
     const newValue = !localFeatures[moduleKey]
     
@@ -221,7 +224,7 @@ export default function Settings() {
     (a, b) => CATEGORIES[a].order - CATEGORIES[b].order
   )
 
-  if (!currentOrg) {
+  if (!activeContext) {
     return (
       <div className="max-w-4xl mx-auto">
         <div className="text-center py-12">
@@ -236,7 +239,7 @@ export default function Settings() {
   // For project tenants, show a simplified settings view without module toggles
   if (isProjectTenant) {
     // Get enabled features for display
-    const enabledFeatures = currentOrg.features || []
+    const enabledFeatures = activeContext.features || []
     const enabledModules = AVAILABLE_MODULES.filter(m => 
       enabledFeatures.includes(m.key)
     )
@@ -251,7 +254,7 @@ export default function Settings() {
           <div>
             <h1 className="text-2xl font-bold text-[var(--text-primary)]">Settings</h1>
             <p className="text-[var(--text-secondary)] text-sm">
-              {currentOrg.name} • Account Settings
+              {activeContext.name} • Account Settings
             </p>
           </div>
         </div>
@@ -262,29 +265,29 @@ export default function Settings() {
           <div className="grid grid-cols-2 gap-4">
             <div>
               <p className="text-xs uppercase tracking-wider text-[var(--text-tertiary)] mb-1">Organization</p>
-              <p className="text-[var(--text-primary)] font-medium">{currentOrg.name}</p>
+              <p className="text-[var(--text-primary)] font-medium">{activeContext.name}</p>
             </div>
-            {currentOrg.domain && (
+            {activeContext.domain && (
               <div>
                 <p className="text-xs uppercase tracking-wider text-[var(--text-tertiary)] mb-1">Website</p>
                 <a 
-                  href={`https://${currentOrg.domain}`} 
+                  href={`https://${activeContext.domain}`} 
                   target="_blank" 
                   rel="noopener noreferrer"
                   className="text-[var(--accent-primary)] hover:underline font-medium"
                 >
-                  {currentOrg.domain}
+                  {activeContext.domain}
                 </a>
               </div>
             )}
             <div>
               <p className="text-xs uppercase tracking-wider text-[var(--text-tertiary)] mb-1">Plan</p>
-              <p className="text-[var(--text-primary)] font-medium capitalize">{currentOrg.plan || 'Managed'}</p>
+              <p className="text-[var(--text-primary)] font-medium capitalize">{activeContext.plan || 'Managed'}</p>
             </div>
             <div>
               <p className="text-xs uppercase tracking-wider text-[var(--text-tertiary)] mb-1">Status</p>
               <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-green-500/10 text-green-400">
-                {currentOrg.status || 'Active'}
+                {activeContext.status || 'Active'}
               </span>
             </div>
           </div>

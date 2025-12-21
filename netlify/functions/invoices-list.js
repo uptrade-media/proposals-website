@@ -73,9 +73,32 @@ export async function handler(event) {
     // Apply filters based on context
     if (orgId) {
       // Organization context: show all invoices for this org
-      // First check if it's a project_id (legacy) or organization_id
-      query = query.or(`organization_id.eq.${orgId},project_id.eq.${orgId}`)
-      console.log('[invoices-list] Organization context, filtering by organization_id or project_id:', orgId)
+      // Match by org_id, project_id (projects in org), or contact who is an org member
+      // First get the org's projects and contacts
+      const { data: orgProjects } = await supabase
+        .from('projects')
+        .select('id')
+        .eq('organization_id', orgId)
+      
+      const { data: orgMembers } = await supabase
+        .from('organization_members')
+        .select('contact_id')
+        .eq('organization_id', orgId)
+      
+      const projectIds = (orgProjects || []).map(p => p.id)
+      const contactIds = (orgMembers || []).map(m => m.contact_id)
+      
+      // Build OR filter for all possible matches
+      let orFilters = [`org_id.eq.${orgId}`]
+      if (projectIds.length > 0) {
+        orFilters.push(`project_id.in.(${projectIds.join(',')})`)
+      }
+      if (contactIds.length > 0) {
+        orFilters.push(`contact_id.in.(${contactIds.join(',')})`)
+      }
+      
+      query = query.or(orFilters.join(','))
+      console.log('[invoices-list] Organization context, filtering with:', orFilters.join(' OR '))
     } else if (contact.role !== 'admin') {
       // Clients can only see their own invoices
       query = query.eq('contact_id', contact.id)

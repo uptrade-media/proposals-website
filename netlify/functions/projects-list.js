@@ -11,7 +11,7 @@ const supabase = createClient(
 export async function handler(event) {
   const headers = {
     'Access-Control-Allow-Origin': '*',
-    'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+    'Access-Control-Allow-Headers': 'Content-Type, Authorization, X-Organization-Id',
     'Access-Control-Allow-Methods': 'GET, OPTIONS',
     'Content-Type': 'application/json'
   }
@@ -30,7 +30,7 @@ export async function handler(event) {
 
   try {
     // Verify authentication via Supabase
-    const { user, contact, error: authError } = await getAuthenticatedUser(event)
+    const { user, contact, organization, isSuperAdmin, error: authError } = await getAuthenticatedUser(event)
     if (authError || !user) {
       return {
         statusCode: 401,
@@ -44,6 +44,37 @@ export async function handler(event) {
     const { status, contactId, limit: limitParam, offset: offsetParam } = queryParams
     const limit = Math.min(parseInt(limitParam) || 50, 100)
     const offset = parseInt(offsetParam) || 0
+    
+    // Get organization ID from header or query
+    const orgId = event.headers['x-organization-id'] || queryParams.organizationId
+
+    // Check user's org membership and access level
+    let hasOrgLevelAccess = false
+    let accessibleProjectIds = []
+    
+    if (contact?.id && orgId) {
+      // Check organization_members for this user
+      const { data: membership } = await supabase
+        .from('organization_members')
+        .select('access_level, role')
+        .eq('organization_id', orgId)
+        .eq('contact_id', contact.id)
+        .single()
+      
+      if (membership) {
+        hasOrgLevelAccess = membership.access_level === 'organization'
+        
+        // If project-level access, get their specific project assignments
+        if (membership.access_level === 'project') {
+          const { data: projectMemberships } = await supabase
+            .from('project_members')
+            .select('project_id')
+            .eq('contact_id', contact.id)
+          
+          accessibleProjectIds = (projectMemberships || []).map(pm => pm.project_id)
+        }
+      }
+    }
 
     // Build query
     let query = supabase
@@ -67,11 +98,26 @@ export async function handler(event) {
       .order('updated_at', { ascending: false })
       .range(offset, offset + limit - 1)
 
-    // Filter by user role
-    if (contact.role !== 'admin') {
-      query = query.eq('contact_id', contact.id)
-    } else if (contactId) {
-      query = query.eq('contact_id', contactId)
+    // Filter by user access
+    const isAdmin = contact?.role === 'admin' || isSuperAdmin
+    
+    if (isAdmin) {
+      // Admins see all projects (optionally filtered by org or contact)
+      if (orgId) {
+        query = query.eq('organization_id', orgId)
+      }
+      if (contactId) {
+        query = query.eq('contact_id', contactId)
+      }
+    } else if (hasOrgLevelAccess && orgId) {
+      // Org-level members see all projects in their org
+      query = query.eq('organization_id', orgId)
+    } else if (accessibleProjectIds.length > 0) {
+      // Project-level members see only their assigned projects
+      query = query.in('id', accessibleProjectIds)
+    } else {
+      // Fallback: only see projects where they are the contact
+      query = query.eq('contact_id', contact?.id)
     }
 
     if (status) {
@@ -98,8 +144,9 @@ export async function handler(event) {
       end_date: p.end_date, // Include snake_case for frontend compatibility
       createdAt: p.created_at,
       updatedAt: p.updated_at,
-      // Include contact_id directly for edit operations
+      // Include contact_id and organization_id directly for edit operations
       contact_id: p.contact_id,
+      organization_id: p.organization_id,
       // Tenant fields
       is_tenant: p.is_tenant || false,
       tenant_domain: p.tenant_domain || null,
@@ -108,7 +155,7 @@ export async function handler(event) {
       // Transform features array to modules object for frontend compatibility
       tenant_modules: (p.tenant_features || []).reduce((acc, f) => ({ ...acc, [f]: true }), {}),
       // Include contact info for admin view
-      ...(contact.role === 'admin' && p.contact ? {
+      ...(isAdmin && p.contact ? {
         contact: {
           id: p.contact.id,
           name: p.contact.name,

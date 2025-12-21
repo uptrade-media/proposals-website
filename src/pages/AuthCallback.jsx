@@ -3,18 +3,17 @@ import { useNavigate } from 'react-router-dom'
 import { Loader2 } from 'lucide-react'
 import useAuthStore from '../lib/auth-store'
 import axios from 'axios'
-import { supabase } from '../lib/supabase-auth'
+import { supabase, getCurrentUser } from '../lib/supabase-auth'
 
 export default function AuthCallback() {
   const navigate = useNavigate()
-  const { checkAuth } = useAuthStore()
+  const { setUser, fetchOrganizationContext } = useAuthStore()
 
   useEffect(() => {
     const handleCallback = async () => {
       console.log('[AuthCallback] Processing OAuth callback...')
       
       // Wait for Supabase to process the OAuth callback and establish session
-      // The URL hash contains the tokens that Supabase needs to process
       const { data: { session }, error: sessionError } = await supabase.auth.getSession()
       
       if (sessionError) {
@@ -30,7 +29,7 @@ export default function AuthCallback() {
           console.log('[AuthCallback] Auth state changed:', event)
           if (event === 'SIGNED_IN' && newSession) {
             subscription.unsubscribe()
-            await processAuthenticatedUser(newSession.user)
+            await processAuthenticatedUser(newSession)
           }
         })
         
@@ -44,25 +43,24 @@ export default function AuthCallback() {
       }
       
       // Session exists, process the user
-      await processAuthenticatedUser(session.user)
+      await processAuthenticatedUser(session)
     }
     
-    const processAuthenticatedUser = async (user) => {
+    const processAuthenticatedUser = async (session) => {
+      const user = session.user
       console.log('[AuthCallback] User authenticated:', user.email)
       
-      // Check if this is a new account setup (from AccountSetup page with JWT token or contact ID)
+      // Check if this is a new account setup (from AccountSetup page with token)
       const pendingSetupToken = localStorage.getItem('pendingSetupToken')
       const pendingSetupContactId = localStorage.getItem('pendingSetupContactId')
       
       if (pendingSetupToken) {
-        console.log('[AuthCallback] Completing account setup after OAuth with JWT...')
+        console.log('[AuthCallback] Completing account setup after OAuth...')
         localStorage.removeItem('pendingSetupToken')
         
         try {
-          // Get the current user's Google ID
           const googleId = user?.user_metadata?.provider_id || user?.id
           
-          // Complete the setup on the backend
           await axios.post('/.netlify/functions/auth-complete-setup', {
             token: pendingSetupToken,
             method: 'google',
@@ -72,25 +70,20 @@ export default function AuthCallback() {
           console.log('[AuthCallback] Account setup completed via Google OAuth')
         } catch (setupError) {
           console.error('[AuthCallback] Failed to complete setup:', setupError)
-          // Continue anyway - the user is authenticated
         }
       } else if (pendingSetupContactId) {
-        console.log('[AuthCallback] Completing account setup after OAuth (Supabase magic link)...')
+        console.log('[AuthCallback] Completing account setup (contactId)...')
         localStorage.removeItem('pendingSetupContactId')
         
         try {
-          // Mark setup as complete for Supabase magic link user
           await axios.post('/.netlify/functions/auth-mark-setup-complete', {
             contactId: pendingSetupContactId
           }, { withCredentials: true })
-          
-          console.log('[AuthCallback] Account setup completed via Google OAuth (magic link)')
         } catch (setupError) {
           console.error('[AuthCallback] Failed to complete setup:', setupError)
-          // Continue anyway - the user is authenticated
         }
       } else {
-        // This might be from a Supabase magic link/invite - link contact by email
+        // Link contact by email for regular OAuth logins
         console.log('[AuthCallback] Linking contact for:', user.email)
         try {
           await axios.post('/.netlify/functions/auth-link-contact', {
@@ -99,26 +92,35 @@ export default function AuthCallback() {
             name: user.user_metadata?.name || user.user_metadata?.full_name
           })
         } catch (linkError) {
-          // Non-fatal - contact might already be linked
           console.log('[AuthCallback] Contact link result:', linkError?.response?.data || 'ok')
         }
       }
       
-      // Verify and fetch user data
-      const result = await checkAuth()
-      
-      if (result.success && result.user) {
-        console.log('[AuthCallback] Auth successful, redirecting...')
-        // Always redirect to dashboard - let the dashboard handle role-based routing
-        navigate('/dashboard', { replace: true })
-      } else {
-        console.error('[AuthCallback] Authentication failed:', result.error)
-        navigate('/login?error=auth_failed', { replace: true })
+      // Get user data from contacts table - we already have a valid session
+      try {
+        const contactUser = await getCurrentUser()
+        
+        if (contactUser) {
+          console.log('[AuthCallback] Found contact:', contactUser.email)
+          setUser(contactUser)
+          
+          // Fetch organization context
+          await fetchOrganizationContext(session.access_token)
+          
+          console.log('[AuthCallback] Auth successful, redirecting to dashboard')
+          navigate('/dashboard', { replace: true })
+        } else {
+          console.error('[AuthCallback] No contact found for user')
+          navigate('/login?error=no_contact', { replace: true })
+        }
+      } catch (error) {
+        console.error('[AuthCallback] Error fetching user:', error)
+        navigate('/login?error=fetch_failed', { replace: true })
       }
     }
 
     handleCallback()
-  }, [navigate, checkAuth])
+  }, [navigate, setUser, fetchOrganizationContext])
 
   return (
     <div className="flex items-center justify-center min-h-screen bg-gray-950">

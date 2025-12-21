@@ -100,6 +100,7 @@ export async function handler(event) {
     // Parse request body
     const body = JSON.parse(event.body || '{}')
     const { 
+      organizationId,
       contactId,
       projectId,
       amount,
@@ -123,6 +124,9 @@ export async function handler(event) {
         body: JSON.stringify({ error: 'contactId and amount are required' })
       }
     }
+    
+    // Get organization ID from body or headers
+    const orgId = organizationId || event.headers['x-organization-id'] || null
 
     // Validate recurring invoice fields
     if (isRecurring) {
@@ -176,7 +180,8 @@ export async function handler(event) {
     const taxAmountValue = amountValue * (taxRateValue / 100)
     const totalAmountValue = amountValue + taxAmountValue
 
-    // Generate invoice number
+    // Generate invoice number (starting from 1085)
+    const INVOICE_START_NUMBER = 1084 // Next invoice will be 1085
     const { data: lastInvoice } = await supabase
       .from('invoices')
       .select('invoice_number')
@@ -186,7 +191,7 @@ export async function handler(event) {
     
     const lastNumber = lastInvoice?.invoice_number 
       ? parseInt(lastInvoice.invoice_number.replace(/\D/g, '')) 
-      : 0
+      : INVOICE_START_NUMBER
     const invoiceNumber = `INV-${String(lastNumber + 1).padStart(5, '0')}`
 
     // Create invoice in Square (if configured)
@@ -227,7 +232,7 @@ export async function handler(event) {
       }
     }
 
-    // Generate payment token (magic link)
+    // Generate payment token for magic payment link
     const paymentToken = crypto.randomBytes(32).toString('hex')
     const paymentTokenExpires = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000) // 30 days
 
@@ -244,27 +249,25 @@ export async function handler(event) {
       .insert({
         contact_id: contactId,
         project_id: projectId || null,
+        org_id: orgId,
         invoice_number: invoiceNumber,
         amount: amountValue,
-        tax_rate: taxRateValue,
         tax_amount: taxAmountValue,
-        total_amount: totalAmountValue,
+        // Note: total_amount is a generated column, don't insert it
         description: description || null,
-        due_date: dueDate || new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
+        due_at: dueDate || new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
         status: 'sent',
         square_invoice_id: squareInvoiceId,
+        issued_at: new Date().toISOString(),
+        created_by: contact.id,
+        // Payment magic link token
         payment_token: paymentToken,
         payment_token_expires: paymentTokenExpires.toISOString(),
-        sent_to_email: targetContact.email.toLowerCase(),
-        sent_at: new Date().toISOString(),
         // Recurring invoice fields
         is_recurring: isRecurring,
         recurring_interval: isRecurring ? recurringInterval : null,
-        recurring_day_of_month: isRecurring ? recurringDayOfMonth : null,
-        recurring_day_of_week: isRecurring ? recurringDayOfWeek : null,
         recurring_end_date: isRecurring && recurringEndDate ? recurringEndDate : null,
-        recurring_count: isRecurring && recurringCount ? recurringCount : null,
-        next_recurring_date: nextRecurringDate
+        next_invoice_date: nextRecurringDate ? nextRecurringDate.split('T')[0] : null // DATE type, not TIMESTAMPTZ
       })
       .select()
       .single()

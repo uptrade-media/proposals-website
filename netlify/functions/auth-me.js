@@ -37,7 +37,7 @@ export async function handler(event) {
   
   // Get user's access level for the current organization
   let accessLevel = null
-  const orgId = event.headers['x-organization-id']
+  const orgId = organization?.id || event.headers['x-organization-id']
   
   if (orgId && contact?.id) {
     const { data: membership } = await supabase
@@ -55,6 +55,33 @@ export async function handler(event) {
   // If user is Uptrade admin, they always have org-level access
   if (contact?.role === 'admin') {
     accessLevel = 'organization'
+  }
+
+  // Fetch projects the user has access to
+  let projects = []
+  if (orgId && contact?.id) {
+    if (accessLevel === 'organization' || contact?.role === 'admin' || isSuperAdmin) {
+      // Org-level users see all projects in the org
+      const { data: orgProjects } = await supabase
+        .from('projects')
+        .select('id, title, tenant_domain, tenant_features, tenant_theme_color, tenant_logo_url, organization_id')
+        .eq('organization_id', orgId)
+        .order('title')
+      
+      projects = orgProjects || []
+    } else {
+      // Project-level users only see their assigned projects
+      const { data: projectMemberships } = await supabase
+        .from('project_members')
+        .select(`
+          project:projects (
+            id, title, tenant_domain, tenant_features, tenant_theme_color, tenant_logo_url, organization_id
+          )
+        `)
+        .eq('contact_id', contact.id)
+      
+      projects = (projectMemberships || []).map(pm => pm.project).filter(Boolean)
+    }
   }
 
   return {
@@ -89,6 +116,7 @@ export async function handler(event) {
         org_type: organization.org_type,
         userRole: organization.userRole
       } : null,
+      projects, // Projects the user can access
       availableOrgs: organization?.availableOrgs || [],
       isSuperAdmin,
       accessLevel

@@ -39,10 +39,12 @@ function ChartLoader() {
 }
 
 export default function Analytics() {
-  const { currentOrg } = useAuthStore()
-  const isProjectTenant = currentOrg?.isProjectTenant === true
-  const tenantName = currentOrg?.name || 'Your Site'
-  const tenantDomain = currentOrg?.domain
+  const { currentOrg, currentProject } = useAuthStore()
+  // Use project context if available, otherwise org context
+  const activeContext = currentProject || currentOrg
+  const isProjectTenant = activeContext?.isProjectTenant === true || !!currentProject
+  const tenantName = activeContext?.name || 'Your Site'
+  const tenantDomain = activeContext?.domain
   
   const {
     overview,
@@ -71,12 +73,12 @@ export default function Analytics() {
 
   // Set tenant ID for analytics filtering
   useEffect(() => {
-    if (isProjectTenant && currentOrg?.id && setTenantId) {
-      setTenantId(currentOrg.id)
+    if (isProjectTenant && activeContext?.id && setTenantId) {
+      setTenantId(activeContext.id)
     } else if (!isProjectTenant && setTenantId) {
       setTenantId(null) // Reset to default (all data)
     }
-  }, [isProjectTenant, currentOrg?.id, setTenantId])
+  }, [isProjectTenant, activeContext?.id, setTenantId])
 
   // Initial data fetch
   useEffect(() => {

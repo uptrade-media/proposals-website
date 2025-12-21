@@ -269,6 +269,40 @@ const useAuthStore = create(
             
             // Update localStorage with merged data
             localStorage.setItem('currentOrganization', JSON.stringify(mergedOrg))
+            
+            // Auto-select project if:
+            // 1. User has exactly one project, OR
+            // 2. This is a non-agency org and there's at least one project
+            // AND no project is currently selected AND no stored project
+            const storedProject = localStorage.getItem('currentTenantProject')
+            const currentProject = get().currentProject
+            
+            if (!storedProject && !currentProject && projects?.length > 0) {
+              // Only skip auto-select for agency orgs with multiple projects
+              // null/undefined org_type means regular client org - always auto-select
+              const isAgencyWithMultipleProjects = organization.org_type === 'agency' && projects.length > 1
+              
+              // Auto-select first project unless it's an agency with multiple projects
+              if (!isAgencyWithMultipleProjects) {
+                const firstProject = projects[0]
+                const projectContext = {
+                  id: firstProject.id,
+                  name: firstProject.title,
+                  domain: firstProject.tenant_domain,
+                  features: firstProject.tenant_features || [],
+                  theme: { 
+                    primaryColor: firstProject.tenant_theme_color || '#4bbf39',
+                    logoUrl: firstProject.tenant_logo_url
+                  },
+                  isProjectTenant: true,
+                  organization_id: organization.id
+                }
+                
+                console.log('[AuthStore] Auto-selecting project:', firstProject.title)
+                set({ currentProject: projectContext })
+                localStorage.setItem('currentTenantProject', JSON.stringify(firstProject))
+              }
+            }
           }
         } catch (error) {
           console.log('[AuthStore] Could not fetch org context (may not be set up yet):', error.message)

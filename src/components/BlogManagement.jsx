@@ -319,8 +319,10 @@ function StatsCard({ icon: Icon, label, value, color = 'emerald' }) {
 }
 
 export default function BlogManagement() {
-  const { user, currentOrg } = useAuthStore()
+  const { user, currentOrg, currentProject } = useAuthStore()
   const isAdmin = user?.role === 'admin'
+  // Allow access if user is admin OR if they have a current project context (org member with project access)
+  const hasAccess = isAdmin || !!currentProject
   const tenantConfig = getTenantConfig(currentOrg)
   
   const [blogs, setBlogs] = useState([])
@@ -336,12 +338,12 @@ export default function BlogManagement() {
   const [editingBlog, setEditingBlog] = useState(null)
   const [previewBlog, setPreviewBlog] = useState(null)
 
-  // Admin-only access check
-  if (!isAdmin) {
+  // Access check - admins or org members with project context
+  if (!hasAccess) {
     return (
       <div className="flex items-center justify-center min-h-[400px]">
         <div className="text-center">
-          <p className="text-[var(--text-secondary)]">Access denied. Admin privileges required.</p>
+          <p className="text-[var(--text-secondary)]">Access denied. Please select a project first.</p>
         </div>
       </div>
     )
