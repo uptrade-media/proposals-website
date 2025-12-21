@@ -311,11 +311,12 @@ export async function handler(event) {
     const supabase = createSupabaseAdmin()
 
     // Fetch invoice with contact info
+    // Use explicit FK name because invoices has multiple FK to contacts
     const { data: invoice, error: invoiceError } = await supabase
       .from('invoices')
       .select(`
         *,
-        contact:contacts(id, name, email, company)
+        contact:contacts!invoices_contact_id_fkey(id, name, email, company)
       `)
       .eq('id', invoiceId)
       .single()
