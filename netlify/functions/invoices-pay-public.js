@@ -133,6 +133,12 @@ export async function handler(event) {
   try {
     const { token, sourceId } = JSON.parse(event.body || '{}')
 
+    console.log('[invoices-pay-public] Request received:', { 
+      tokenLength: token?.length, 
+      tokenPrefix: token?.slice(0, 8),
+      hasSourceId: !!sourceId 
+    })
+
     if (!token || !sourceId) {
       return { statusCode: 400, headers, body: JSON.stringify({ error: 'token and sourceId are required' }) }
     }
@@ -148,6 +154,12 @@ export async function handler(event) {
       `)
       .eq('payment_token', token)
       .single()
+
+    console.log('[invoices-pay-public] Invoice lookup:', { 
+      found: !!invoice, 
+      error: invoiceError?.message,
+      invoiceId: invoice?.id 
+    })
 
     if (invoiceError || !invoice) {
       return { statusCode: 404, headers, body: JSON.stringify({ error: 'Invoice not found or link has expired' }) }
