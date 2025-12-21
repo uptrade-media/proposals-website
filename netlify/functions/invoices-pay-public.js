@@ -1,8 +1,7 @@
 // netlify/functions/invoices-pay-public.js
 // Process payment for invoice via magic link (no auth required)
 import { createSupabaseAdmin } from './utils/supabase.js'
-import pkg from 'square'
-const { Client, Environment } = pkg
+import { Client } from 'square'
 import { Resend } from 'resend'
 import { randomUUID } from 'crypto'
 
@@ -182,9 +181,10 @@ export async function handler(event) {
     }
 
     // Initialize Square client
+    // Use string environment instead of Environment enum for better compatibility
     const squareClient = new Client({
       accessToken: SQUARE_ACCESS_TOKEN,
-      environment: SQUARE_ENVIRONMENT === 'production' ? Environment.Production : Environment.Sandbox
+      environment: SQUARE_ENVIRONMENT === 'production' ? 'production' : 'sandbox'
     })
 
     // Convert to cents

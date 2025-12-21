@@ -1,7 +1,6 @@
 // netlify/functions/invoices-pay.js
 import { createSupabaseAdmin, getAuthenticatedUser } from './utils/supabase.js'
-import pkg from 'square'
-const { Client, Environment } = pkg
+import { Client } from 'square'
 import { Resend } from 'resend'
 import { paymentConfirmationEmail, paymentNotificationAdminEmail } from './utils/email-templates.js'
 
@@ -145,9 +144,7 @@ export async function handler(event) {
     // Process payment with Square
     const squareClient = new Client({
       accessToken: SQUARE_ACCESS_TOKEN,
-      environment: SQUARE_ENVIRONMENT === 'production' 
-        ? Environment.Production 
-        : Environment.Sandbox
+      environment: SQUARE_ENVIRONMENT === 'production' ? 'production' : 'sandbox'
     })
 
     // Create payment

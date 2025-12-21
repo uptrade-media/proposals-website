@@ -1,8 +1,7 @@
 // netlify/functions/proposals-pay-deposit.js
 // Handle deposit payments for signed proposals using Square
 import { createClient } from '@supabase/supabase-js'
-import pkg from 'square'
-const { Client, Environment } = pkg
+import { Client } from 'square'
 import { Resend } from 'resend'
 
 const supabase = createClient(
@@ -91,7 +90,7 @@ export async function handler(event) {
     // Initialize Square client
     const squareClient = new Client({
       accessToken: SQUARE_ACCESS_TOKEN,
-      environment: SQUARE_ENVIRONMENT === 'production' ? Environment.Production : Environment.Sandbox
+      environment: SQUARE_ENVIRONMENT === 'production' ? 'production' : 'sandbox'
     })
 
     // Create payment
