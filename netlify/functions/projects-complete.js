@@ -113,7 +113,11 @@ export async function handler(event) {
       
       for (const invoice of draftInvoices) {
         try {
-          const paymentLink = `${PORTAL_URL}/pay/${invoice.payment_token || invoice.id}`
+          if (!invoice.payment_token) {
+            console.error('[projects-complete] Invoice missing payment_token:', invoice.id)
+            continue
+          }
+          const paymentLink = `${PORTAL_URL}/pay/${invoice.payment_token}`
           
           // Send invoice email
           await resend.emails.send({

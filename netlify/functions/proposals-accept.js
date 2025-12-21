@@ -231,7 +231,12 @@ async function sendInvoiceEmail(invoice, proposal, contact) {
   
   try {
     const resend = new Resend(RESEND_API_KEY)
-    const paymentLink = `${PORTAL_URL}/pay/${invoice.payment_token || invoice.id}`
+    
+    if (!invoice.payment_token) {
+      console.error('[proposals-accept] Invoice missing payment_token:', invoice.id)
+      return
+    }
+    const paymentLink = `${PORTAL_URL}/pay/${invoice.payment_token}`
     
     await resend.emails.send({
       from: RESEND_FROM,

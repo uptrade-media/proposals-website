@@ -101,7 +101,12 @@ export async function handler(event) {
 
     const now = new Date().toISOString()
     const resend = new Resend(RESEND_API_KEY)
-    const paymentLink = `${PORTAL_URL}/pay/${invoice.payment_token || invoice.id}`
+    
+    if (!invoice.payment_token) {
+      console.error('[invoices-send-milestone] Invoice missing payment_token:', invoice.id)
+      return { statusCode: 500, headers, body: JSON.stringify({ error: 'Invoice missing payment token' }) }
+    }
+    const paymentLink = `${PORTAL_URL}/pay/${invoice.payment_token}`
 
     // Send invoice email
     await resend.emails.send({

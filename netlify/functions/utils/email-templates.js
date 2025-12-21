@@ -82,7 +82,8 @@ export function invoiceEmail({
     day: 'numeric'
   })
   
-  const paymentLink = `${PORTAL_URL}/pay/${invoiceId}?token=${paymentToken}`
+  // Use payment token directly in path
+  const paymentLink = `${PORTAL_URL}/pay/${paymentToken}`
   
   const content = `
     <p style="margin: 0 0 20px 0; font-size: 16px; color: #1d1d1f; line-height: 1.5;">

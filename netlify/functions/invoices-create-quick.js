@@ -158,8 +158,8 @@ export async function handler(event) {
       }
     }
 
-    // Generate payment link
-    const paymentLink = `${PORTAL_URL}/pay/${invoice.id}?token=${paymentToken}`
+    // Generate payment link - use payment token directly in path
+    const paymentLink = `${PORTAL_URL}/pay/${paymentToken}`
 
     // Send email if requested
     if (finalSendNow && RESEND_API_KEY) {
