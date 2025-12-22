@@ -1,8 +1,5 @@
 // netlify/functions/invoices-create.js
 import { createSupabaseAdmin, getAuthenticatedUser } from './utils/supabase.js'
-import { createRequire } from 'module'
-const require = createRequire(import.meta.url)
-const { Client } = require('square')
 import { Resend } from 'resend'
 import crypto from 'crypto'
 import { invoiceEmail } from './utils/email-templates.js'
@@ -12,6 +9,20 @@ const SQUARE_ENVIRONMENT = process.env.SQUARE_ENVIRONMENT || 'sandbox'
 const RESEND_API_KEY = process.env.RESEND_API_KEY
 const RESEND_FROM_EMAIL = process.env.RESEND_FROM_EMAIL || 'portal@send.uptrademedia.com'
 const RESEND_FROM = `Uptrade Media <${RESEND_FROM_EMAIL}>`
+
+// Dynamic import Square to avoid esbuild bundling issues
+let squareClientInstance = null
+async function getSquareClient() {
+  if (!squareClientInstance) {
+    const squareModule = await import('square')
+    const Client = squareModule.Client || squareModule.default?.Client
+    squareClientInstance = new Client({
+      accessToken: SQUARE_ACCESS_TOKEN,
+      environment: SQUARE_ENVIRONMENT === 'production' ? 'production' : 'sandbox'
+    })
+  }
+  return squareClientInstance
+}
 
 // Helper function to calculate next recurring date
 function calculateNextRecurringDate(baseDate, interval, dayOfMonth, dayOfWeek) {
@@ -200,10 +211,7 @@ export async function handler(event) {
     let squareInvoiceId = null
     if (SQUARE_ACCESS_TOKEN) {
       try {
-        const squareClient = new Client({
-          accessToken: SQUARE_ACCESS_TOKEN,
-          environment: SQUARE_ENVIRONMENT === 'production' ? 'production' : 'sandbox'
-        })
+        const squareClient = await getSquareClient()
 
         // Create Square invoice
         const { result } = await squareClient.invoicesApi.createInvoice({

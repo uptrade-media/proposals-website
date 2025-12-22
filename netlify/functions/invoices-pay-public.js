@@ -1,15 +1,26 @@
 // netlify/functions/invoices-pay-public.js
 // Process payment for invoice via magic link (no auth required)
 import { createSupabaseAdmin } from './utils/supabase.js'
-import { createRequire } from 'module'
-const require = createRequire(import.meta.url)
-const { Client } = require('square')
 import { Resend } from 'resend'
 import { randomUUID } from 'crypto'
 
 const SQUARE_ACCESS_TOKEN = process.env.SQUARE_ACCESS_TOKEN
 const SQUARE_LOCATION_ID = process.env.SQUARE_LOCATION_ID
 const SQUARE_ENVIRONMENT = process.env.SQUARE_ENVIRONMENT || 'sandbox'
+
+// Dynamic import Square to avoid esbuild bundling issues
+let squareClient = null
+async function getSquareClient() {
+  if (!squareClient) {
+    const squareModule = await import('square')
+    const Client = squareModule.Client || squareModule.default?.Client
+    squareClient = new Client({
+      accessToken: SQUARE_ACCESS_TOKEN,
+      environment: SQUARE_ENVIRONMENT === 'production' ? 'production' : 'sandbox'
+    })
+  }
+  return squareClient
+}
 
 const RESEND_API_KEY = process.env.RESEND_API_KEY
 const RESEND_FROM_EMAIL = process.env.RESEND_FROM_EMAIL || 'portal@send.uptrademedia.com'
@@ -182,12 +193,8 @@ export async function handler(event) {
       return { statusCode: 500, headers, body: JSON.stringify({ error: 'Payment processing not configured' }) }
     }
 
-    // Initialize Square client
-    // Use string environment instead of Environment enum for better compatibility
-    const squareClient = new Client({
-      accessToken: SQUARE_ACCESS_TOKEN,
-      environment: SQUARE_ENVIRONMENT === 'production' ? 'production' : 'sandbox'
-    })
+    // Get Square client (dynamically loaded)
+    const client = await getSquareClient()
 
     // Convert to cents
     const amountInCents = Math.round(parseFloat(invoice.total_amount) * 100)
@@ -195,7 +202,7 @@ export async function handler(event) {
     // Create payment
     const idempotencyKey = randomUUID()
     
-    const { result, statusCode } = await squareClient.paymentsApi.createPayment({
+    const { result, statusCode } = await client.paymentsApi.createPayment({
       sourceId,
       idempotencyKey,
       amountMoney: {

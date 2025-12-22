@@ -1,8 +1,5 @@
 // netlify/functions/invoices-pay.js
 import { createSupabaseAdmin, getAuthenticatedUser } from './utils/supabase.js'
-import { createRequire } from 'module'
-const require = createRequire(import.meta.url)
-const { Client } = require('square')
 import { Resend } from 'resend'
 import { paymentConfirmationEmail, paymentNotificationAdminEmail } from './utils/email-templates.js'
 
@@ -12,6 +9,20 @@ const SQUARE_ENVIRONMENT = process.env.SQUARE_ENVIRONMENT || 'sandbox'
 const RESEND_API_KEY = process.env.RESEND_API_KEY
 const RESEND_FROM = process.env.RESEND_FROM || 'Uptrade Media <portal@send.uptrademedia.com>'
 const ADMIN_EMAIL = process.env.ADMIN_EMAIL
+
+// Dynamic import Square to avoid esbuild bundling issues
+let squareClientInstance = null
+async function getSquareClient() {
+  if (!squareClientInstance) {
+    const squareModule = await import('square')
+    const Client = squareModule.Client || squareModule.default?.Client
+    squareClientInstance = new Client({
+      accessToken: SQUARE_ACCESS_TOKEN,
+      environment: SQUARE_ENVIRONMENT === 'production' ? 'production' : 'sandbox'
+    })
+  }
+  return squareClientInstance
+}
 
 // Simple in-memory rate limiting (resets on function cold start)
 const rateLimitMap = new Map()
@@ -144,10 +155,7 @@ export async function handler(event) {
     }
 
     // Process payment with Square
-    const squareClient = new Client({
-      accessToken: SQUARE_ACCESS_TOKEN,
-      environment: SQUARE_ENVIRONMENT === 'production' ? 'production' : 'sandbox'
-    })
+    const squareClient = await getSquareClient()
 
     // Create payment
     const amountInCents = Math.round(invoice.total_amount * 100)

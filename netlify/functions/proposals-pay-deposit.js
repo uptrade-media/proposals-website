@@ -1,9 +1,6 @@
 // netlify/functions/proposals-pay-deposit.js
 // Handle deposit payments for signed proposals using Square
 import { createClient } from '@supabase/supabase-js'
-import { createRequire } from 'module'
-const require = createRequire(import.meta.url)
-const { Client } = require('square')
 import { Resend } from 'resend'
 
 const supabase = createClient(
@@ -18,6 +15,20 @@ const RESEND_API_KEY = process.env.RESEND_API_KEY
 const RESEND_FROM = process.env.RESEND_FROM || 'Uptrade Media <portal@send.uptrademedia.com>'
 const ADMIN_EMAIL = process.env.ADMIN_EMAIL || 'admin@uptrademedia.com'
 const PORTAL_URL = process.env.URL || 'https://portal.uptrademedia.com'
+
+// Dynamic import Square to avoid esbuild bundling issues
+let squareClientInstance = null
+async function getSquareClient() {
+  if (!squareClientInstance) {
+    const squareModule = await import('square')
+    const Client = squareModule.Client || squareModule.default?.Client
+    squareClientInstance = new Client({
+      accessToken: SQUARE_ACCESS_TOKEN,
+      environment: SQUARE_ENVIRONMENT === 'production' ? 'production' : 'sandbox'
+    })
+  }
+  return squareClientInstance
+}
 
 export async function handler(event) {
   const headers = {
@@ -90,10 +101,7 @@ export async function handler(event) {
     }
 
     // Initialize Square client
-    const squareClient = new Client({
-      accessToken: SQUARE_ACCESS_TOKEN,
-      environment: SQUARE_ENVIRONMENT === 'production' ? 'production' : 'sandbox'
-    })
+    const squareClient = await getSquareClient()
 
     // Create payment
     const amountInCents = Math.round(depositAmount * 100)
