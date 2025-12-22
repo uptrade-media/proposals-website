@@ -60,11 +60,7 @@ function generateReceiptEmailHTML(invoice, contact, paymentId) {
           <!-- Header -->
           <tr>
             <td style="background: linear-gradient(135deg, #4bbf39 0%, #3a9c2d 100%); padding: 32px 40px; text-align: center;">
-              <div style="display:inline-flex; align-items:center; justify-content:center; width:96px; height:96px; border-radius:24px; background: linear-gradient(135deg, #22c55e 0%, #16a34a 100%); margin-bottom: 12px;">
-                <svg width="48" height="48" viewBox="0 0 24 24" role="img" aria-label="Uptrade logo" class="logo-mark" style="display:block;">
-                  <path d="M6 4h2v12a4 4 0 0 0 8 0V4h2v12a6 6 0 0 1-12 0V4z" />
-                </svg>
-              </div>
+              <img src="https://portal.uptrademedia.com/uptrade_media_logo_white.png" alt="Uptrade Media" width="180" height="auto" style="display: block; margin: 0 auto 20px auto;" />
               <h1 style="color: #ffffff; margin: 0; font-size: 24px; font-weight: 600;">Payment Received ✓</h1>
             </td>
           </tr>
