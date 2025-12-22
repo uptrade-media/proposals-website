@@ -1,6 +1,5 @@
-import { useEffect, useRef, useState } from 'react'
-import grapesjs from 'grapesjs'
-import 'grapesjs/dist/css/grapes.min.css'
+import { useEffect, useRef, useState, useCallback } from 'react'
+// GrapesJS loaded dynamically to reduce bundle size
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -421,8 +420,13 @@ export default function EmailTemplateEditor({ template, onSave, onBack }) {
   useEffect(() => {
     if (!editorRef.current || editorInstance.current) return
 
-    // Initialize GrapesJS
-    const editor = grapesjs.init({
+    // Dynamically load GrapesJS to reduce bundle size
+    const initEditor = async () => {
+      const grapesjs = (await import('grapesjs')).default
+      await import('grapesjs/dist/css/grapes.min.css')
+      
+      // Initialize GrapesJS
+      const editor = grapesjs.init({
       container: editorRef.current,
       height: '100%',
       width: 'auto',
@@ -539,10 +543,15 @@ export default function EmailTemplateEditor({ template, onSave, onBack }) {
     }
 
     editorInstance.current = editor
+    }
+    
+    initEditor()
 
     return () => {
-      editor.destroy()
-      editorInstance.current = null
+      if (editorInstance.current) {
+        editorInstance.current.destroy()
+        editorInstance.current = null
+      }
     }
   }, [template])
 

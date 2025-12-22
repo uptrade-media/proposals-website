@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useEffect } from 'react'
 import { 
   Dialog, 
   DialogContent, 
@@ -20,14 +20,11 @@ import {
   UserPlus,
   Sparkles,
   Eye,
-  Check
+  Check,
+  Loader2
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
-import { 
-  allTemplates, 
-  templateCategories, 
-  getTemplatesByCategory 
-} from './templates/email-templates'
+import axios from 'axios'
 
 // Category icons
 const categoryIcons = {
@@ -208,21 +205,53 @@ export function TemplateGallery({ open, onOpenChange, onSelectTemplate }) {
   const [activeCategory, setActiveCategory] = useState('all')
   const [selectedTemplate, setSelectedTemplate] = useState(null)
   const [previewTemplate, setPreviewTemplate] = useState(null)
+  const [templates, setTemplates] = useState([])
+  const [categories, setCategories] = useState([])
+  const [isLoading, setIsLoading] = useState(false)
+  const [error, setError] = useState(null)
+  
+  // Fetch templates from API
+  useEffect(() => {
+    if (!open) return
+    
+    const fetchTemplates = async () => {
+      setIsLoading(true)
+      setError(null)
+      try {
+        const res = await axios.get('/.netlify/functions/email-templates-list', {
+          params: { includeGlobal: true }
+        })
+        setTemplates(res.data.templates || [])
+        setCategories(res.data.categories || [])
+      } catch (err) {
+        console.error('Failed to fetch templates:', err)
+        setError('Failed to load templates')
+      } finally {
+        setIsLoading(false)
+      }
+    }
+    
+    fetchTemplates()
+  }, [open])
   
   // Filter templates
   const filteredTemplates = useMemo(() => {
-    let templates = getTemplatesByCategory(activeCategory)
+    let filtered = templates
+    
+    if (activeCategory !== 'all') {
+      filtered = filtered.filter(t => t.category === activeCategory)
+    }
     
     if (search) {
       const searchLower = search.toLowerCase()
-      templates = templates.filter(t => 
+      filtered = filtered.filter(t => 
         t.name.toLowerCase().includes(searchLower) ||
-        t.description.toLowerCase().includes(searchLower)
+        (t.description || '').toLowerCase().includes(searchLower)
       )
     }
     
-    return templates
-  }, [activeCategory, search])
+    return filtered
+  }, [templates, activeCategory, search])
   
   // Handle selection
   const handleSelect = (template) => {
@@ -269,7 +298,7 @@ export function TemplateGallery({ open, onOpenChange, onSelectTemplate }) {
             
             {/* Categories */}
             <div className="flex items-center gap-2 overflow-x-auto">
-              {templateCategories.map(cat => {
+              {categories.map(cat => {
                 const Icon = categoryIcons[cat.id] || Layout
                 const isActive = activeCategory === cat.id
                 
@@ -303,7 +332,18 @@ export function TemplateGallery({ open, onOpenChange, onSelectTemplate }) {
           
           {/* Template Grid */}
           <ScrollArea className="flex-1 p-6">
-            {filteredTemplates.length > 0 ? (
+            {isLoading ? (
+              <div className="flex items-center justify-center py-20">
+                <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+              </div>
+            ) : error ? (
+              <div className="text-center py-20 text-muted-foreground">
+                <p>{error}</p>
+                <Button variant="outline" className="mt-4" onClick={() => setError(null)}>
+                  Retry
+                </Button>
+              </div>
+            ) : filteredTemplates.length > 0 ? (
               <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
                 {filteredTemplates.map(template => (
                   <TemplateCard
