@@ -21,10 +21,15 @@ let squareClientInstance = null
 async function getSquareClient() {
   if (!squareClientInstance) {
     const squareModule = await import('square')
-    const Client = squareModule.Client || squareModule.default?.Client
-    squareClientInstance = new Client({
-      accessToken: SQUARE_ACCESS_TOKEN,
-      environment: SQUARE_ENVIRONMENT === 'production' ? 'production' : 'sandbox'
+    // Square SDK v43+ uses SquareClient instead of Client
+    const SquareClient = squareModule.SquareClient || squareModule.default?.SquareClient
+    const SquareEnvironment = squareModule.SquareEnvironment || squareModule.default?.SquareEnvironment
+    
+    squareClientInstance = new SquareClient({
+      token: SQUARE_ACCESS_TOKEN,
+      environment: SQUARE_ENVIRONMENT === 'production' 
+        ? SquareEnvironment.Production 
+        : SquareEnvironment.Sandbox
     })
   }
   return squareClientInstance
@@ -103,23 +108,36 @@ export async function handler(event) {
     // Initialize Square client
     const squareClient = await getSquareClient()
 
-    // Create payment
+    // Create payment using Square SDK v43+ API
     const amountInCents = Math.round(depositAmount * 100)
     const idempotencyKey = `proposal-deposit-${proposalId}-${Date.now()}`
 
-    const { result: paymentResult, statusCode: squareStatus } = await squareClient.paymentsApi.createPayment({
-      sourceId,
-      idempotencyKey,
-      amountMoney: {
-        amount: BigInt(amountInCents),
-        currency: 'USD'
-      },
-      locationId: SQUARE_LOCATION_ID,
-      referenceId: `proposal-${proposalId}`,
-      note: `Deposit for: ${proposal.title}`,
-      verificationToken: verificationToken || undefined,
-      autocomplete: true
-    })
+    let paymentResult
+    try {
+      paymentResult = await squareClient.payments.create({
+        sourceId,
+        idempotencyKey,
+        amountMoney: {
+          amount: BigInt(amountInCents),
+          currency: 'USD'
+        },
+        locationId: SQUARE_LOCATION_ID,
+        referenceId: `proposal-${proposalId}`,
+        note: `Deposit for: ${proposal.title}`,
+        verificationToken: verificationToken || undefined,
+        autocomplete: true
+      })
+    } catch (paymentError) {
+      console.error('Square payment failed:', paymentError)
+      return {
+        statusCode: 400,
+        headers,
+        body: JSON.stringify({ 
+          error: 'Payment failed',
+          details: paymentError.errors?.[0]?.detail || paymentError.message || 'Unknown error'
+        })
+      }
+    }
 
     if (!paymentResult?.payment) {
       console.error('Square payment failed:', paymentResult)
@@ -128,7 +146,7 @@ export async function handler(event) {
         headers,
         body: JSON.stringify({ 
           error: 'Payment failed',
-          details: paymentResult?.errors || 'Unknown error'
+          details: 'Unknown error'
         })
       }
     }

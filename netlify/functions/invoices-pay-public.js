@@ -13,10 +13,15 @@ let squareClient = null
 async function getSquareClient() {
   if (!squareClient) {
     const squareModule = await import('square')
-    const Client = squareModule.Client || squareModule.default?.Client
-    squareClient = new Client({
-      accessToken: SQUARE_ACCESS_TOKEN,
-      environment: SQUARE_ENVIRONMENT === 'production' ? 'production' : 'sandbox'
+    // Square SDK v43+ uses SquareClient instead of Client
+    const SquareClient = squareModule.SquareClient || squareModule.default?.SquareClient
+    const SquareEnvironment = squareModule.SquareEnvironment || squareModule.default?.SquareEnvironment
+    
+    squareClient = new SquareClient({
+      token: SQUARE_ACCESS_TOKEN,
+      environment: SQUARE_ENVIRONMENT === 'production' 
+        ? SquareEnvironment.Production 
+        : SquareEnvironment.Sandbox
     })
   }
   return squareClient
@@ -199,31 +204,51 @@ export async function handler(event) {
     // Convert to cents
     const amountInCents = Math.round(parseFloat(invoice.total_amount) * 100)
 
-    // Create payment
+    // Create payment using Square SDK v43+ API
+    // https://github.com/square/square-nodejs-sdk
     const idempotencyKey = randomUUID()
     
-    const { result, statusCode } = await client.paymentsApi.createPayment({
-      sourceId,
-      idempotencyKey,
-      amountMoney: {
-        amount: BigInt(amountInCents),
-        currency: 'USD'
-      },
-      locationId: SQUARE_LOCATION_ID,
-      referenceId: invoice.id,
-      note: `Invoice ${invoice.invoice_number}`
-    })
+    let paymentResponse
+    try {
+      paymentResponse = await client.payments.create({
+        sourceId,
+        idempotencyKey,
+        amountMoney: {
+          amount: BigInt(amountInCents),
+          currency: 'USD'
+        },
+        locationId: SQUARE_LOCATION_ID,
+        referenceId: invoice.id,
+        note: `Invoice ${invoice.invoice_number}`,
+        autocomplete: true
+      })
+    } catch (paymentError) {
+      console.error('[invoices-pay-public] Square payment error:', paymentError)
+      // Handle Square API errors
+      if (paymentError.errors) {
+        const squareError = paymentError.errors[0]
+        return {
+          statusCode: 400,
+          headers,
+          body: JSON.stringify({ 
+            error: 'Payment failed', 
+            details: squareError?.detail || squareError?.code || 'Card was declined'
+          })
+        }
+      }
+      throw paymentError
+    }
 
-    if (!result.payment || result.payment.status === 'FAILED') {
-      console.error('[invoices-pay-public] Payment failed:', result)
+    if (!paymentResponse.payment || paymentResponse.payment.status === 'FAILED') {
+      console.error('[invoices-pay-public] Payment failed:', paymentResponse)
       return { 
         statusCode: 400, 
         headers, 
-        body: JSON.stringify({ error: 'Payment failed', details: result.errors }) 
+        body: JSON.stringify({ error: 'Payment failed', details: paymentResponse.errors }) 
       }
     }
 
-    const paymentId = result.payment.id
+    const paymentId = paymentResponse.payment.id
 
     // Update invoice as paid
     const now = new Date().toISOString()

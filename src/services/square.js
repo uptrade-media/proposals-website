@@ -4,6 +4,7 @@
 /**
  * Square Payment Service
  * Provides helper functions for Square Payments API integration
+ * Using Square SDK v43+ (SquareClient API)
  * 
  * Environment Variables Required:
  * - SQUARE_ACCESS_TOKEN: Your Square access token
@@ -11,23 +12,24 @@
  * - SQUARE_LOCATION_ID: Your Square location ID (optional, can be fetched)
  */
 
-import { Client, Environment } from 'square'
+import { SquareClient, SquareEnvironment } from 'square'
 
 /**
  * Initialize Square client with environment configuration
+ * Uses Square SDK v43+ SquareClient
  */
 export function getSquareClient() {
-  const accessToken = process.env.SQUARE_ACCESS_TOKEN
+  const token = process.env.SQUARE_ACCESS_TOKEN
   const environment = process.env.SQUARE_ENVIRONMENT === 'production' 
-    ? Environment.Production 
-    : Environment.Sandbox
+    ? SquareEnvironment.Production 
+    : SquareEnvironment.Sandbox
 
-  if (!accessToken) {
+  if (!token) {
     throw new Error('SQUARE_ACCESS_TOKEN environment variable is required')
   }
 
-  return new Client({
-    accessToken,
+  return new SquareClient({
+    token,
     environment
   })
 }
@@ -35,6 +37,7 @@ export function getSquareClient() {
 /**
  * Get Square location ID
  * Fetches the first active location if SQUARE_LOCATION_ID is not set
+ * Uses Square SDK v43+ API
  */
 export async function getLocationId(client) {
   // Use environment variable if set
@@ -44,13 +47,13 @@ export async function getLocationId(client) {
 
   // Otherwise fetch the first active location
   try {
-    const { result } = await client.locationsApi.listLocations()
+    const response = await client.locations.list()
     
-    if (!result.locations || result.locations.length === 0) {
+    if (!response.locations || response.locations.length === 0) {
       throw new Error('No Square locations found')
     }
 
-    return result.locations[0].id
+    return response.locations[0].id
   } catch (error) {
     console.error('Error fetching Square location:', error)
     throw new Error('Failed to get Square location ID')
@@ -100,7 +103,8 @@ export async function createPayment(client, paymentData) {
   }
 
   try {
-    const { result } = await client.paymentsApi.createPayment({
+    // Square SDK v43+ uses client.payments.create()
+    const response = await client.payments.create({
       sourceId,
       idempotencyKey,
       locationId,
@@ -117,10 +121,10 @@ export async function createPayment(client, paymentData) {
 
     return {
       success: true,
-      payment: result.payment,
-      paymentId: result.payment.id,
-      status: result.payment.status,
-      receiptUrl: result.payment.receiptUrl
+      payment: response.payment,
+      paymentId: response.payment.id,
+      status: response.payment.status,
+      receiptUrl: response.payment.receiptUrl
     }
   } catch (error) {
     console.error('Square payment error:', error)
@@ -146,10 +150,11 @@ export async function createPayment(client, paymentData) {
  */
 export async function getPayment(client, paymentId) {
   try {
-    const { result } = await client.paymentsApi.getPayment(paymentId)
+    // Square SDK v43+ uses client.payments.get()
+    const response = await client.payments.get({ paymentId })
     return {
       success: true,
-      payment: result.payment
+      payment: response.payment
     }
   } catch (error) {
     console.error('Error fetching payment:', error)
@@ -182,7 +187,8 @@ export async function createCustomer(client, customerData) {
 
   try {
     // First, search for existing customer by email
-    const { result: searchResult } = await client.customersApi.searchCustomers({
+    // Square SDK v43+ uses client.customers.search()
+    const searchResponse = await client.customers.search({
       query: {
         filter: {
           emailAddress: {
@@ -193,17 +199,18 @@ export async function createCustomer(client, customerData) {
     })
 
     // If customer exists, return existing customer
-    if (searchResult.customers && searchResult.customers.length > 0) {
+    if (searchResponse.customers && searchResponse.customers.length > 0) {
       return {
         success: true,
-        customer: searchResult.customers[0],
-        customerId: searchResult.customers[0].id,
+        customer: searchResponse.customers[0],
+        customerId: searchResponse.customers[0].id,
         isNew: false
       }
     }
 
     // Create new customer
-    const { result: createResult } = await client.customersApi.createCustomer({
+    // Square SDK v43+ uses client.customers.create()
+    const createResponse = await client.customers.create({
       emailAddress: email,
       givenName,
       familyName,
@@ -213,8 +220,8 @@ export async function createCustomer(client, customerData) {
 
     return {
       success: true,
-      customer: createResult.customer,
-      customerId: createResult.customer.id,
+      customer: createResponse.customer,
+      customerId: createResponse.customer.id,
       isNew: true
     }
   } catch (error) {
