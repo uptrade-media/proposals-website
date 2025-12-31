@@ -24,39 +24,65 @@ export async function handler(event) {
       return { statusCode: 401, headers, body: JSON.stringify({ error: 'Unauthorized' }) }
     }
 
-    const { id } = event.queryStringParameters || {}
-    if (!id) {
-      return { statusCode: 400, headers, body: JSON.stringify({ error: 'Site ID is required' }) }
+    const { id, projectId, domain } = event.queryStringParameters || {}
+    if (!id && !projectId && !domain) {
+      return { statusCode: 400, headers, body: JSON.stringify({ error: 'Site ID, Project ID, or Domain is required' }) }
     }
 
     const supabase = createSupabaseAdmin()
     const isAdmin = contact.role === 'admin' || contact.role === 'super_admin'
 
-    // Fetch site
+    // Fetch site by id, project_id, or domain
     let query = supabase
       .from('seo_sites')
       .select(`
         *,
         contact:contacts!seo_sites_contact_id_fkey(id, name, email, company)
       `)
-      .eq('id', id)
+    
+    // Query by site id, project_id, or domain (in order of specificity)
+    if (id) {
+      query = query.eq('id', id)
+    } else if (projectId) {
+      query = query.eq('project_id', projectId)
+    } else if (domain) {
+      // Normalize domain for lookup (remove protocol, www, trailing slash)
+      const normalizedDomain = domain.replace(/^https?:\/\//, '').replace(/^www\./, '').replace(/\/$/, '')
+      query = query.ilike('domain', `%${normalizedDomain}%`)
+    }
 
     // Non-admins can only view their own sites
     if (!isAdmin) {
       query = query.eq('contact_id', contact.id)
     }
 
-    const { data: site, error: siteError } = await query.single()
+    let { data: site, error: siteError } = await query.single()
+
+    // If looked up by domain and we have a projectId to link, update the record
+    if (site && domain && projectId && !site.project_id) {
+      const { error: updateError } = await supabase
+        .from('seo_sites')
+        .update({ project_id: projectId })
+        .eq('id', site.id)
+      
+      if (!updateError) {
+        site.project_id = projectId
+        console.log(`[seo-sites-get] Linked site ${site.id} to project ${projectId}`)
+      }
+    }
 
     if (siteError || !site) {
       return { statusCode: 404, headers, body: JSON.stringify({ error: 'Site not found' }) }
     }
 
+    // Use the site's actual ID for all sub-queries
+    const siteId = site.id
+
     // Get page stats
     const { data: pageStats } = await supabase
       .from('seo_pages')
       .select('id, seo_health_score, index_status, opportunities_count')
-      .eq('site_id', id)
+      .eq('site_id', siteId)
 
     const stats = {
       totalPages: pageStats?.length || 0,
@@ -71,7 +97,7 @@ export async function handler(event) {
     const { data: opportunities } = await supabase
       .from('seo_opportunities')
       .select('id, type, priority, title, status, created_at')
-      .eq('site_id', id)
+      .eq('site_id', siteId)
       .eq('status', 'open')
       .order('priority', { ascending: true })
       .order('created_at', { ascending: false })
@@ -81,7 +107,7 @@ export async function handler(event) {
     const { data: topPages } = await supabase
       .from('seo_pages')
       .select('id, path, title, clicks_28d, impressions_28d, avg_position_28d, seo_health_score')
-      .eq('site_id', id)
+      .eq('site_id', siteId)
       .order('clicks_28d', { ascending: false })
       .limit(10)
 
@@ -89,7 +115,7 @@ export async function handler(event) {
     const { data: strikingQueries } = await supabase
       .from('seo_queries')
       .select('id, query, clicks_28d, impressions_28d, avg_position_28d')
-      .eq('site_id', id)
+      .eq('site_id', siteId)
       .eq('is_striking_distance', true)
       .order('impressions_28d', { ascending: false })
       .limit(10)

@@ -31,6 +31,10 @@ const TenantSales = lazy(() => import('./tenant/TenantSales'))
 const SEOModuleWrapper = lazy(() => import('./seo/SEOModuleWrapper'))
 // Ecommerce Module
 const EcommerceModuleWrapper = lazy(() => import('./ecommerce/EcommerceModuleWrapper'))
+// Engage Module
+const EngageModuleDashboard = lazy(() => import('./engage/EngageModuleDashboard'))
+// Signal Module
+const SignalModuleDashboard = lazy(() => import('./signal/SignalModuleDashboard'))
 const Settings = lazy(() => import('./Settings'))
 // Tenants management moved to Projects.jsx
 
@@ -97,6 +101,10 @@ const MainLayout = () => {
         return <SEOModuleWrapper onNavigate={navigateTo} />
       case 'ecommerce':
         return <EcommerceModuleWrapper onNavigate={navigateTo} />
+      case 'engage':
+        return <EngageModuleDashboard onNavigate={navigateTo} />
+      case 'signal':
+        return <SignalModuleDashboard onNavigate={navigateTo} />
       case 'settings':
         return <Settings />
       case 'proposal-editor':

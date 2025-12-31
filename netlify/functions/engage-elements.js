@@ -98,7 +98,7 @@ async function handleGet(event, supabase, contact) {
     .select(`
       *,
       variants:engage_variants(id, variant_name, is_winner),
-      project:projects(id, title, slug)
+      project:projects(id, title, tenant_domain)
     `)
     .order('created_at', { ascending: false })
 

@@ -28,8 +28,12 @@ export async function handler(event) {
     }
   }
 
-  // Get project ID from path
-  const projectId = event.path.split('/').pop()
+  // Get project ID from path or query params
+  let projectId = event.path.split('/').pop()
+  // If path segment is the function name, check query params
+  if (projectId === 'projects-get' || !projectId) {
+    projectId = event.queryStringParameters?.id
+  }
   if (!projectId) {
     return {
       statusCode: 400,

@@ -244,10 +244,15 @@ async function analyzeGapsWithAI(seoSkill, { knowledge, pages, keywords, competi
     
     const competitorTopics = competitors.flatMap(c => c.content_topics || [])
 
-    const result = await seoSkill.signal.invoke({
-      module: 'seo',
-      tool: 'content_gap_analysis',
-      systemPrompt: `You are an SEO content strategist analyzing content gaps. Identify topics and keywords that are:
+    const result = await seoSkill.signal.invoke('seo', 'content_gap_analysis', {
+      competitorKeywords,
+      competitorTopics,
+      existingContent,
+      knowledge
+    }, {
+      trackAction: true,
+      additionalContext: {
+        tool_prompt: `You are an SEO content strategist analyzing content gaps. Identify topics and keywords that are:
 1. Covered by competitors but not by us
 2. Important for the industry but missing from our site
 3. Related to our services but not addressed
@@ -258,8 +263,9 @@ For each gap, assess:
 - Competition level
 - Relevance to business
 - Content type needed
-- Priority level`,
-      userPrompt: `Analyze content gaps for this business:
+- Priority level
+
+Analyze content gaps for this business:
 
 Business: ${knowledge?.business_name || 'Unknown'}
 Industry: ${knowledge?.industry || 'general'}
@@ -302,9 +308,10 @@ Identify 10-20 content gaps. Respond with JSON:
       "isThin": false
     }
   ]
-}`,
-      responseFormat: { type: 'json_object' },
-      temperature: 0.4
+}
+
+**Return valid JSON.**`
+      }
     })
 
     return result

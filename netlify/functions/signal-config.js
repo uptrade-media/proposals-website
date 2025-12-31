@@ -45,15 +45,16 @@ export async function handler(event) {
     // Verify user has access to this project
     const { data: project, error: projectError } = await supabase
       .from('projects')
-      .select('id, title, org_id, domain, organizations(id, name, slug)')
+      .select('id, title, org_id, tenant_domain, organizations!projects_organization_id_fkey(id, name, slug)')
       .eq('id', projectId)
       .single()
 
     if (projectError || !project) {
+      console.error('[signal-config] Project lookup failed:', projectError)
       return {
         statusCode: 404,
         headers: CORS_HEADERS,
-        body: JSON.stringify({ error: 'Project not found' })
+        body: JSON.stringify({ error: 'Project not found', details: projectError?.message })
       }
     }
 
@@ -150,7 +151,7 @@ export async function handler(event) {
           project: {
             id: project.id,
             title: project.title,
-            domain: project.domain,
+            domain: project.tenant_domain,
             org: project.organizations
           },
           seoIntegration: {

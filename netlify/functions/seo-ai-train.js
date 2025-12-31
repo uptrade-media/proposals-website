@@ -96,8 +96,10 @@ export async function handler(event) {
       }, { onConflict: 'site_id' })
 
     // Trigger background function
-    const baseUrl = process.env.URL || `https://${event.headers.host}`
+    const baseUrl = process.env.URL || 'http://localhost:8888'
     const backgroundUrl = `${baseUrl}/.netlify/functions/seo-ai-train-background`
+
+    console.log(`[AI Train] Triggering background function: ${backgroundUrl}`)
 
     // Fire and forget - don't await
     fetch(backgroundUrl, {
@@ -110,9 +112,18 @@ export async function handler(event) {
         userId: contact.id,
         forceRefresh
       })
-    }).catch(err => {
-      console.error('[AI Train] Failed to trigger background function:', err)
     })
+      .then(res => {
+        console.log(`[AI Train] Background function triggered: ${res.status}`)
+        if (!res.ok) {
+          return res.text().then(text => {
+            console.error(`[AI Train] Background function error: ${text}`)
+          })
+        }
+      })
+      .catch(err => {
+        console.error('[AI Train] Failed to trigger background function:', err)
+      })
 
     return {
       statusCode: 202, // Accepted

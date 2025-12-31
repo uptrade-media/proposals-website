@@ -187,15 +187,16 @@ export async function handler(event) {
     
     const existingPageMap = new Map((existingPages || []).map(p => [p.url, p.id]))
 
-    // Prepare page upserts (batch insert new, batch update existing)
-    const newPages = []
+    // Prepare page updates and track GSC orphans (pages in GSC but not sitemap)
     const pageUpdates = []
+    const gscOrphans = []
     
     for (const pageData of topPages) {
       const pageUrl = pageData.keys[0]
       const existingId = existingPageMap.get(pageUrl)
       
       if (existingId) {
+        // Page exists in sitemap - update metrics
         pageUpdates.push({
           id: existingId,
           clicks_28d: Math.round(pageData.clicks || 0),
@@ -204,47 +205,45 @@ export async function handler(event) {
           last_gsc_sync_at: new Date().toISOString()
         })
       } else {
-        let path = '/'
-        let title = 'Unknown Page'
-        try {
-          const urlObj = new URL(pageUrl)
-          path = urlObj.pathname
-          title = path
-            .replace(/\/$/, '')
-            .split('/')
-            .pop()
-            ?.replace(/-/g, ' ')
-            ?.replace(/\b\w/g, l => l.toUpperCase()) || site.domain
-        } catch (e) {
-          path = pageUrl
-        }
-
-        newPages.push({
-          site_id: siteId,
+        // Page in GSC but NOT in sitemap - flag as orphan/issue
+        gscOrphans.push({
           url: pageUrl,
-          path,
-          title,
-          status: 'active',
           clicks_28d: Math.round(pageData.clicks || 0),
           impressions_28d: Math.round(pageData.impressions || 0),
-          avg_position_28d: pageData.position?.toFixed(1) || null,
-          last_gsc_sync_at: new Date().toISOString()
+          avg_position_28d: pageData.position?.toFixed(1) || null
         })
       }
     }
 
-    // Batch insert new pages
-    let pagesCreated = 0
-    if (newPages.length > 0) {
-      const { data: insertedPages } = await supabase
-        .from('seo_pages')
-        .insert(newPages)
-        .select('id, url')
+    // Store GSC orphans as indexing issues for Signal to analyze
+    if (gscOrphans.length > 0) {
+      console.log(`[GSC Sync BG] Found ${gscOrphans.length} orphan URLs in GSC (not in sitemap)`)
       
-      pagesCreated = insertedPages?.length || 0
-      
-      // Add to map for potential future use
-      insertedPages?.forEach(p => existingPageMap.set(p.url, p.id))
+      // Store as technical issues
+      const orphanIssues = gscOrphans.map(orphan => ({
+        site_id: siteId,
+        issue_type: 'gsc_orphan_url',
+        severity: orphan.clicks_28d > 10 ? 'high' : 'medium', // High priority if getting traffic
+        page_url: orphan.url,
+        details: {
+          message: 'Page indexed in Google Search Console but missing from sitemap',
+          clicks_28d: orphan.clicks_28d,
+          impressions_28d: orphan.impressions_28d,
+          avg_position_28d: orphan.avg_position_28d,
+          recommendation: orphan.clicks_28d > 0 
+            ? 'This page is getting traffic but not in your sitemap. Add to sitemap or set up redirect.'
+            : 'This indexed page may be outdated. Consider 301 redirect or request removal from GSC.'
+        },
+        detected_at: new Date().toISOString()
+      }))
+
+      // Batch insert issues (ignore conflicts - may already exist)
+      await supabase
+        .from('seo_technical_issues')
+        .upsert(orphanIssues, { 
+          onConflict: 'site_id,issue_type,page_url',
+          ignoreDuplicates: false 
+        })
     }
 
     // Batch update existing pages (in chunks to avoid query size limits)
@@ -263,7 +262,7 @@ export async function handler(event) {
       ))
     }
 
-    console.log(`[GSC Sync BG] Created ${pagesCreated} pages, updated ${pageUpdates.length} pages`)
+    console.log(`[GSC Sync BG] Updated ${pageUpdates.length} pages, flagged ${gscOrphans.length} GSC orphans`)
 
     // Update progress: 75%
     await supabase
@@ -361,7 +360,8 @@ export async function handler(event) {
         result: {
           queriesCount: allQueries.length,
           pagesCount: topPages.length,
-          pagesCreated,
+          pagesUpdated: pageUpdates.length,
+          gscOrphansFound: gscOrphans.length,
           keywordsUpserted,
           sitemapsCount: sitemaps.length,
           metrics: {

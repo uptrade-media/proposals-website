@@ -91,15 +91,65 @@ export class Signal {
 
   /**
    * Invoke a skill with a specific tool
+   * 
+   * Supports two calling conventions:
+   * 1. New format: invoke(skillKey, tool, params, options)
+   * 2. Legacy format: invoke({ module, tool, systemPrompt, userPrompt, responseFormat, temperature })
    */
-  async invoke(skillKey, tool, params = {}, options = {}) {
+  async invoke(skillKeyOrConfig, tool, params = {}, options = {}) {
     const startTime = Date.now()
+    
+    // ═══════════════════════════════════════════════════════════════════════════
+    // BACKWARD COMPATIBILITY: Handle legacy object format
+    // ═══════════════════════════════════════════════════════════════════════════
+    let skillKey = skillKeyOrConfig
+    let actualTool = tool
+    let actualParams = params
+    let actualOptions = options
+    
+    if (typeof skillKeyOrConfig === 'object' && skillKeyOrConfig !== null) {
+      // Legacy format: invoke({ module, tool, systemPrompt, userPrompt, ... })
+      const config = skillKeyOrConfig
+      skillKey = config.module || 'seo'
+      actualTool = config.tool || 'analyze'
+      
+      // Build params from legacy fields
+      actualParams = config.params || {}
+      
+      // Build the tool prompt from systemPrompt + userPrompt
+      const promptParts = []
+      if (config.systemPrompt) promptParts.push(config.systemPrompt)
+      if (config.userPrompt) promptParts.push(config.userPrompt)
+      if (config.prompt) promptParts.push(config.prompt) // Some legacy code uses just 'prompt'
+      
+      let toolPrompt = promptParts.join('\n\n')
+      
+      // Ensure "JSON" keyword is present for json_object response format
+      if (config.responseFormat?.type === 'json_object' || config.responseFormat === 'json') {
+        if (!toolPrompt.toLowerCase().includes('json')) {
+          toolPrompt += '\n\n**Return valid JSON.**'
+        }
+      }
+      
+      actualOptions = {
+        trackAction: config.trackAction || false,
+        additionalContext: {
+          tool_prompt: toolPrompt,
+          legacy_temperature: config.temperature,
+          legacy_response_format: config.responseFormat
+        }
+      }
+      
+      console.log(`[Signal] Legacy invoke converted: ${skillKey}.${actualTool}`)
+    }
+    
     const skill = await this.loadSkill(skillKey)
 
-    // Validate tool is allowed
+    // Validate tool is allowed (skip validation for legacy calls - they often use unlisted tools)
     const allowedTools = skill.allowed_tools || []
-    if (!allowedTools.includes(tool) && tool !== 'chat') {
-      throw new Error(`Tool '${tool}' not allowed for skill '${skillKey}'`)
+    const isLegacyCall = typeof skillKeyOrConfig === 'object'
+    if (!isLegacyCall && !allowedTools.includes(actualTool) && actualTool !== 'chat') {
+      throw new Error(`Tool '${actualTool}' not allowed for skill '${skillKey}'`)
     }
 
     // Load relevant memory
@@ -113,33 +163,33 @@ export class Signal {
       org_id: this.orgId,
       site_id: this.siteId,
       user_id: this.userId,
-      tool,
-      params,
+      tool: actualTool,
+      params: actualParams,
       memory: memory.slice(0, 10), // Last 10 relevant memories
       patterns: patterns.slice(0, 5), // Top 5 relevant patterns
-      ...options.additionalContext
+      ...actualOptions.additionalContext
     }
 
     // Execute based on tool type
     let result
     try {
-      if (tool === 'chat') {
-        result = await this.chat(skill, params.message, context)
+      if (actualTool === 'chat') {
+        result = await this.chat(skill, actualParams.message, context)
       } else {
-        result = await this.executeTool(skill, tool, context)
+        result = await this.executeTool(skill, actualTool, context)
       }
 
       // Log successful invocation
       await this.log('invocation', {
         skill_key: skillKey,
-        tool,
+        tool: actualTool,
         success: true,
         duration_ms: Date.now() - startTime,
         tokens_used: result.usage?.total_tokens
       })
 
       // Track as action if it's actionable
-      if (options.trackAction && result.action) {
+      if (actualOptions.trackAction && result.action) {
         await this.trackAction(skillKey, result.action)
       }
 
@@ -149,7 +199,7 @@ export class Signal {
       // Log error
       await this.log('error', {
         skill_key: skillKey,
-        tool,
+        tool: actualTool,
         error_code: error.code || 'UNKNOWN',
         error_message: error.message,
         duration_ms: Date.now() - startTime
@@ -163,7 +213,10 @@ export class Signal {
    */
   async executeTool(skill, tool, context) {
     const toolDescriptions = skill.tool_descriptions || {}
-    const toolPrompt = toolDescriptions[tool] || `Execute the ${tool} tool with the provided parameters.`
+    const baseToolPrompt = toolDescriptions[tool] || `Execute the ${tool} tool with the provided parameters.`
+    
+    // Allow override from context (for dynamic prompts with "json" keyword requirement)
+    const toolPrompt = context.tool_prompt || baseToolPrompt
 
     const messages = [
       { role: 'system', content: skill.system_prompt },
@@ -192,10 +245,13 @@ export class Signal {
       content: JSON.stringify(context.params)
     })
 
+    // Use legacy temperature/response_format if provided, otherwise use skill defaults
+    const temperature = context.legacy_temperature ?? skill.temperature ?? 0.7
+
     const response = await openai.chat.completions.create({
       model: skill.model || DEFAULT_MODEL,
       messages,
-      temperature: skill.temperature || 0.7,
+      temperature,
       max_tokens: skill.max_tokens || 4000,
       response_format: { type: 'json_object' }
     })

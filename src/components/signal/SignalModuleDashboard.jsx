@@ -1,7 +1,6 @@
 // src/components/signal/SignalModuleDashboard.jsx
-// Main Signal Module dashboard - combines all Signal management components
+// Main Signal Module dashboard - Central AI brain management for the portal
 import { useState, useEffect } from 'react'
-import { motion, AnimatePresence } from 'framer-motion'
 import {
   Brain,
   Settings,
@@ -9,23 +8,20 @@ import {
   HelpCircle,
   Lightbulb,
   BarChart3,
-  Power,
-  ExternalLink,
   Copy,
   Check,
   Loader2,
   AlertCircle,
   ChevronRight,
   Sparkles,
-  Code2
+  Code2,
+  Wand2
 } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
-import { Switch } from '@/components/ui/switch'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Alert, AlertDescription } from '@/components/ui/alert'
-import { Separator } from '@/components/ui/separator'
 import {
   Dialog,
   DialogContent,
@@ -33,10 +29,14 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { useSignalStore } from '@/lib/signal-store'
+import useAuthStore from '@/lib/auth-store'
+import axios from 'axios'
 import { cn } from '@/lib/utils'
 
 // Sub-components
+import SignalSetupWizard from './SignalSetupWizard'
 import SignalProfileEditor from './SignalProfileEditor'
 import SignalKnowledgeManager from './SignalKnowledgeManager'
 import SignalFAQManager from './SignalFAQManager'
@@ -45,6 +45,7 @@ import SignalAnalytics from './SignalAnalytics'
 
 const TABS = [
   { id: 'overview', label: 'Overview', icon: Brain },
+  { id: 'setup', label: 'Setup Wizard', icon: Wand2 },
   { id: 'profile', label: 'Profile', icon: Settings },
   { id: 'knowledge', label: 'Knowledge', icon: BookOpen },
   { id: 'faqs', label: 'FAQs', icon: HelpCircle },
@@ -52,14 +53,21 @@ const TABS = [
   { id: 'analytics', label: 'Analytics', icon: BarChart3 }
 ]
 
-export default function SignalModuleDashboard({ projectId, siteUrl, className }) {
+export default function SignalModuleDashboard({ projectId: propProjectId, siteUrl, className, onNavigate }) {
+  // Get project ID from props or current context
+  const { currentProject, currentOrg } = useAuthStore()
+  const [projects, setProjects] = useState([])
+  const [selectedProjectId, setSelectedProjectId] = useState(null)
+  const [loadingProjects, setLoadingProjects] = useState(false)
+  
+  // Get project ID from props, current context, or selected
+  const projectId = propProjectId || currentProject?.id || selectedProjectId
+  
   const {
     moduleConfig,
     moduleConfigLoading,
     moduleConfigError,
     fetchModuleConfig,
-    enableSignal,
-    disableSignal,
     knowledgeStats,
     faqsStats,
     suggestionsStats
@@ -68,7 +76,31 @@ export default function SignalModuleDashboard({ projectId, siteUrl, className })
   const [activeTab, setActiveTab] = useState('overview')
   const [embedDialogOpen, setEmbedDialogOpen] = useState(false)
   const [copied, setCopied] = useState(false)
-  const [toggling, setToggling] = useState(false)
+  
+  // Fetch projects if no project context
+  useEffect(() => {
+    if (!propProjectId && !currentProject?.id && currentOrg?.id) {
+      fetchProjects()
+    }
+  }, [propProjectId, currentProject?.id, currentOrg?.id])
+  
+  const fetchProjects = async () => {
+    try {
+      setLoadingProjects(true)
+      // Filter by current org to only show projects for this organization
+      const { data } = await axios.get(`/.netlify/functions/projects-list?organizationId=${currentOrg?.id}`)
+      const orgProjects = data.projects || []
+      setProjects(orgProjects)
+      // Auto-select first project belonging to this org
+      if (orgProjects.length > 0) {
+        setSelectedProjectId(orgProjects[0].id)
+      }
+    } catch (error) {
+      console.error('Failed to fetch projects:', error)
+    } finally {
+      setLoadingProjects(false)
+    }
+  }
 
   // Fetch config on mount
   useEffect(() => {
@@ -77,24 +109,20 @@ export default function SignalModuleDashboard({ projectId, siteUrl, className })
     }
   }, [projectId])
 
-  const handleToggleSignal = async () => {
-    setToggling(true)
-    try {
-      if (moduleConfig?.is_enabled) {
-        await disableSignal(projectId)
-      } else {
-        await enableSignal(projectId)
-      }
-    } finally {
-      setToggling(false)
-    }
-  }
-
   const handleCopyEmbed = () => {
     const embedCode = generateEmbedCode(projectId, moduleConfig)
     navigator.clipboard.writeText(embedCode)
     setCopied(true)
     setTimeout(() => setCopied(false), 2000)
+  }
+  
+  // Loading projects state
+  if (loadingProjects) {
+    return (
+      <div className="flex items-center justify-center py-12">
+        <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+      </div>
+    )
   }
 
   if (moduleConfigLoading && !moduleConfig) {
@@ -117,6 +145,12 @@ export default function SignalModuleDashboard({ projectId, siteUrl, className })
   }
 
   const isEnabled = moduleConfig?.is_enabled
+  
+  // Get current project name for display
+  const currentProjectName = currentProject?.title || 
+    projects.find(p => p.id === selectedProjectId)?.title ||
+    currentOrg?.name || 
+    'your site'
 
   return (
     <div className={cn('space-y-6', className)}>
@@ -138,16 +172,32 @@ export default function SignalModuleDashboard({ projectId, siteUrl, className })
               <Badge variant={isEnabled ? 'default' : 'secondary'} className={cn(
                 isEnabled && 'bg-emerald-500/20 text-emerald-400'
               )}>
-                {isEnabled ? 'Enabled' : 'Disabled'}
+                {isEnabled ? 'Active' : 'Inactive'}
               </Badge>
             </h1>
             <p className="text-muted-foreground">
-              AI-powered chat widget and knowledge management
+              Central AI brain for {currentProjectName} — powers chat widget, SEO insights, and smart responses
             </p>
           </div>
         </div>
 
         <div className="flex items-center gap-3">
+          {/* Project Selector - show when no current project context */}
+          {!currentProject?.id && projects.length > 0 && (
+            <Select value={selectedProjectId || ''} onValueChange={setSelectedProjectId}>
+              <SelectTrigger className="w-[200px]">
+                <SelectValue placeholder="Select a project" />
+              </SelectTrigger>
+              <SelectContent>
+                {projects.map(project => (
+                  <SelectItem key={project.id} value={project.id}>
+                    {project.title}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          )}
+          
           <Button
             variant="outline"
             onClick={() => setEmbedDialogOpen(true)}
@@ -157,20 +207,18 @@ export default function SignalModuleDashboard({ projectId, siteUrl, className })
             <Code2 className="h-4 w-4" />
             Get Embed Code
           </Button>
-
-          <div className="flex items-center gap-2 px-4 py-2 rounded-lg border bg-card">
-            <span className="text-sm text-muted-foreground">
-              {isEnabled ? 'Signal is active' : 'Signal is off'}
-            </span>
-            <Switch
-              checked={isEnabled}
-              onCheckedChange={handleToggleSignal}
-              disabled={toggling}
-            />
-            {toggling && <Loader2 className="h-4 w-4 animate-spin" />}
-          </div>
         </div>
       </div>
+
+      {/* Signal disabled notice */}
+      {!isEnabled && (
+        <Alert>
+          <AlertCircle className="h-4 w-4" />
+          <AlertDescription>
+            Signal AI is not enabled for this project. Enable it from the <strong>Projects</strong> view by editing the project's modules.
+          </AlertDescription>
+        </Alert>
+      )}
 
       {/* Main Content */}
       <Tabs value={activeTab} onValueChange={setActiveTab}>
@@ -192,6 +240,18 @@ export default function SignalModuleDashboard({ projectId, siteUrl, className })
               faqsStats={faqsStats}
               suggestionsStats={suggestionsStats}
               onNavigate={setActiveTab}
+            />
+          </TabsContent>
+
+          <TabsContent value="setup" className="mt-0">
+            <SignalSetupWizard 
+              projectId={projectId}
+              domain={siteUrl || currentProject?.tenant_domain || moduleConfig?.seoIntegration?.domain}
+              onComplete={() => {
+                fetchModuleConfig(projectId)
+                setActiveTab('overview')
+              }}
+              onSkip={() => setActiveTab('overview')}
             />
           </TabsContent>
 
@@ -376,7 +436,11 @@ function OverviewTab({ projectId, config, knowledgeStats, faqsStats, suggestions
           <CardTitle className="text-base">Quick Actions</CardTitle>
         </CardHeader>
         <CardContent>
-          <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+          <div className="grid grid-cols-2 lg:grid-cols-5 gap-3">
+            <Button variant="default" className="h-auto py-4 flex-col gap-2 bg-gradient-to-br from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700" onClick={() => onNavigate('setup')}>
+              <Wand2 className="h-5 w-5" />
+              <span className="text-sm">Run Setup Wizard</span>
+            </Button>
             <Button variant="outline" className="h-auto py-4 flex-col gap-2" onClick={() => onNavigate('profile')}>
               <Settings className="h-5 w-5" />
               <span className="text-sm">Edit Profile</span>

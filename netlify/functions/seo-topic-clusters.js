@@ -114,7 +114,7 @@ async function generateClusters(event, supabase, headers) {
     .from('seo_background_jobs')
     .insert({
       site_id: siteId,
-      type: 'topic-clusters',
+      job_type: 'topic-clusters',
       status: 'pending',
       metadata: { minKeywords, includeQuestions, forceRefresh }
     })

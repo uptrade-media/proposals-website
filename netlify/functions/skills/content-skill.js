@@ -479,11 +479,16 @@ ${TOOL_PROMPTS.suggest_topics}`,
     const gapTopics = gaps.slice(0, 10).map(g => `${g.topic}: ${g.ai_reasoning}`).join('\n')
     const competitorKeywords = competitors.flatMap(c => (c.keyword_gap_data || []).slice(0, 5).map(k => k.keyword)).join(', ')
 
-    const result = await this.signal.invoke({
-      module: 'content',
-      tool: 'suggest_topics_seo',
-      systemPrompt: CONTENT_SYSTEM_PROMPT,
-      userPrompt: `Based on this SEO intelligence, recommend ${maxTopics} blog post topics.
+    const result = await this.signal.invoke('content', 'suggest_topics_seo', {
+      maxTopics,
+      knowledge,
+      competitors,
+      gaps,
+      easyWins
+    }, {
+      trackAction: true,
+      additionalContext: {
+        tool_prompt: `Based on this SEO intelligence, recommend ${maxTopics} blog post topics.
 
 ## BUSINESS CONTEXT
 ${knowledge?.business_name ? `Business: ${knowledge.business_name}` : 'Business: Uptrade Media (digital marketing agency)'}
@@ -504,18 +509,14 @@ ${existingTopics || 'No recent posts'}
 
 ${category ? `## FOCUS ON CATEGORY: ${category}` : ''}
 
-Generate ${maxTopics} topic recommendations. Return JSON with "topics" array containing objects with:
+Generate ${maxTopics} topic recommendations. **Return valid JSON** with "topics" array containing objects with:
 - title (compelling, keyword-rich, 50-60 chars)
 - primary_keyword
 - search_intent (informational/commercial/transactional)
 - traffic_potential (low/medium/high)
 - content_angle
 - related_services (array of service keys from: seo, ad-management, content-marketing, web-design, branding, video-production, ai-automation)
-- reasoning`,
-      responseFormat: { type: 'json_object' },
-      additionalContext: {
-        keywordCount: keywords.length,
-        gapsCount: gaps.length
+- reasoning`
       }
     })
 

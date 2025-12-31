@@ -113,7 +113,7 @@ async function analyzeFeatures(event, supabase, headers) {
     .from('seo_background_jobs')
     .insert({
       site_id: siteId,
-      type: 'serp-features',
+      job_type: 'serp-features',
       status: 'pending',
       metadata: { keywords: targetKeywords, forceRefresh }
     })

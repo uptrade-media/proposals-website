@@ -100,7 +100,7 @@ async function analyzeContentGaps(event, supabase, headers) {
     .from('seo_background_jobs')
     .insert({
       site_id: siteId,
-      type: 'content-gap-analysis',
+      job_type: 'content-gap-analysis',
       status: 'pending',
       metadata: { includeCompetitors, focusTopics, forceRefresh }
     })

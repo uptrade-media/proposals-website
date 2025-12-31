@@ -161,6 +161,12 @@ async function handlePageView(supabase, orgId, tenantId, payload) {
     sessionId,
     visitorId,
     userAgent,
+    screenWidth,
+    screenHeight,
+    viewportWidth,
+    viewportHeight,
+    language,
+    timezone,
     timestamp,
     properties = {}
   } = payload
@@ -179,6 +185,12 @@ async function handlePageView(supabase, orgId, tenantId, payload) {
     user_agent: userAgent,
     device_type: deviceInfo.deviceType,
     browser: deviceInfo.browser,
+    screen_width: screenWidth,
+    screen_height: screenHeight,
+    viewport_width: viewportWidth,
+    viewport_height: viewportHeight,
+    language,
+    timezone,
     created_at: new Date(timestamp || Date.now()).toISOString()
   })
 }
@@ -199,6 +211,7 @@ async function handleEvent(supabase, orgId, tenantId, payload) {
     sessionId,
     visitorId,
     referrer,
+    userAgent,
     properties = {},
     timestamp
   } = payload
@@ -220,6 +233,7 @@ async function handleEvent(supabase, orgId, tenantId, payload) {
     event_value: eventValue,
     path: parsedPath,
     referrer,
+    user_agent: userAgent,
     properties: { ...properties },
     created_at: new Date(timestamp || Date.now()).toISOString()
   })

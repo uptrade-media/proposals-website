@@ -1,6 +1,12 @@
 /**
  * Forms Submit - Public endpoint for submitting form responses
- * Used by tenant sites (GWA, etc.) to submit form data
+ * Used by tenant sites (GWA, Uptrade main site, etc.) to submit form data
+ * 
+ * Supports:
+ * - Auto-creating forms if they don't exist (autoCreateForm: true)
+ * - Auto-creating/updating contacts (createContact: true)
+ * - Email notifications to form owner
+ * - Confirmation emails to submitter
  */
 
 import { createSupabaseAdmin } from './utils/supabase.js'
@@ -12,7 +18,7 @@ export async function handler(event) {
   // CORS headers - allow all origins for public form submissions
   const headers = {
     'Access-Control-Allow-Origin': '*',
-    'Access-Control-Allow-Headers': 'Content-Type, X-Tenant-ID',
+    'Access-Control-Allow-Headers': 'Content-Type, X-Tenant-ID, X-Project-Id, X-Organization-Id',
     'Access-Control-Allow-Methods': 'POST, OPTIONS',
     'Content-Type': 'application/json'
   }
@@ -38,10 +44,16 @@ export async function handler(event) {
       formSlug,
       formId,
       data: formData = {},
-      metadata = {}
+      metadata = {},
+      autoCreateForm = false,
+      createContact = false,
+      projectId,
+      orgId
     } = body
 
     const tenantId = event.headers['x-tenant-id'] || body.tenantId
+    const headerProjectId = event.headers['x-project-id'] || projectId
+    const headerOrgId = event.headers['x-organization-id'] || orgId
 
     if (!formSlug && !formId) {
       return {
@@ -51,7 +63,10 @@ export async function handler(event) {
       }
     }
 
-    // Get form configuration
+    // Get or create form configuration
+    let form = null
+    
+    // First try to find existing form
     let query = supabase
       .from('forms')
       .select('*')
@@ -63,14 +78,54 @@ export async function handler(event) {
       query = query.eq('id', formId)
     }
 
-    // Filter by tenant if specified
+    // Filter by tenant/project if specified
     if (tenantId) {
       query = query.eq('tenant_id', tenantId)
+    } else if (headerProjectId) {
+      // Also check for null tenant_id (global forms)
+      query = query.or(`tenant_id.eq.${headerProjectId},tenant_id.is.null`)
     }
 
-    const { data: form, error: formError } = await query.single()
+    const { data: existingForm } = await query.maybeSingle()
+    form = existingForm
 
-    if (formError || !form) {
+    // Auto-create form if it doesn't exist and autoCreateForm is true
+    if (!form && autoCreateForm && formSlug) {
+      console.log('[Forms Submit] Auto-creating form:', formSlug)
+      
+      // Determine notify email based on tenant/org
+      let notifyEmail = process.env.ADMIN_EMAIL || 'hello@uptrademedia.com'
+      
+      const { data: newForm, error: createError } = await supabase
+        .from('forms')
+        .insert({
+          slug: formSlug,
+          name: formSlug.replace(/-/g, ' ').replace(/\b\w/g, l => l.toUpperCase()),
+          tenant_id: headerProjectId || tenantId || null,
+          org_id: headerOrgId || null,
+          notify_email: notifyEmail,
+          send_confirmation: true,
+          success_message: 'Thank you for your submission! We\'ll be in touch soon.',
+          is_active: true,
+          fields: [
+            { name: 'email', type: 'email', label: 'Email', required: true },
+            { name: 'name', type: 'text', label: 'Name', required: false },
+            { name: 'phone', type: 'tel', label: 'Phone', required: false },
+            { name: 'message', type: 'textarea', label: 'Message', required: false }
+          ]
+        })
+        .select()
+        .single()
+
+      if (createError) {
+        console.error('[Forms Submit] Failed to auto-create form:', createError)
+      } else {
+        form = newForm
+        console.log('[Forms Submit] Auto-created form:', newForm.id)
+      }
+    }
+
+    if (!form) {
       console.error('[Forms Submit] Form not found:', formSlug || formId)
       return {
         statusCode: 404,
@@ -79,21 +134,74 @@ export async function handler(event) {
       }
     }
 
-    // Validate required fields
-    const requiredFields = (form.fields || [])
-      .filter(f => f.required)
-      .map(f => f.name)
-    
-    const missingFields = requiredFields.filter(field => !formData[field])
-    
-    if (missingFields.length > 0) {
-      return {
-        statusCode: 400,
-        headers,
-        body: JSON.stringify({ 
-          error: 'Missing required fields',
-          fields: missingFields
-        })
+    // Create or update contact if requested
+    let contactId = null
+    if (createContact && formData.email) {
+      try {
+        const email = formData.email.toLowerCase().trim()
+        
+        // Check if contact exists
+        const { data: existingContact } = await supabase
+          .from('contacts')
+          .select('id')
+          .eq('email', email)
+          .maybeSingle()
+
+        if (existingContact) {
+          contactId = existingContact.id
+          // Update with any new info
+          await supabase
+            .from('contacts')
+            .update({
+              name: formData.name || undefined,
+              phone: formData.phone || undefined,
+              company: formData.company || undefined,
+              updated_at: new Date().toISOString()
+            })
+            .eq('id', contactId)
+        } else {
+          // Create new contact
+          const { data: newContact } = await supabase
+            .from('contacts')
+            .insert({
+              email,
+              name: formData.name || null,
+              phone: formData.phone || null,
+              company: formData.company || null,
+              org_id: headerOrgId || form.org_id || null,
+              role: 'client',
+              source: `website_${formSlug}`,
+              pipeline_stage: 'new_lead',
+              notes: formData.service_interest ? `Interested in: ${formData.service_interest}` : null
+            })
+            .select('id')
+            .single()
+          
+          contactId = newContact?.id
+          console.log('[Forms Submit] Created contact:', contactId)
+        }
+      } catch (contactError) {
+        console.error('[Forms Submit] Contact creation error (non-blocking):', contactError)
+      }
+    }
+
+    // Validate required fields (if form has field definitions)
+    if (form.fields && Array.isArray(form.fields)) {
+      const requiredFields = form.fields
+        .filter(f => f.required)
+        .map(f => f.name)
+      
+      const missingFields = requiredFields.filter(field => !formData[field])
+      
+      if (missingFields.length > 0) {
+        return {
+          statusCode: 400,
+          headers,
+          body: JSON.stringify({ 
+            error: 'Missing required fields',
+            fields: missingFields
+          })
+        }
       }
     }
 
@@ -101,7 +209,7 @@ export async function handler(event) {
     const clientIp = event.headers['x-forwarded-for']?.split(',')[0] || 
                      event.headers['client-ip'] || 
                      'unknown'
-    const userAgent = event.headers['user-agent'] || 'unknown'
+    const userAgent = event.headers['user-agent'] || metadata.userAgent || 'unknown'
 
     // Store submission
     const { data: submission, error: submitError } = await supabase
@@ -109,14 +217,18 @@ export async function handler(event) {
       .insert({
         form_id: form.id,
         tenant_id: form.tenant_id,
-        data: formData,
-        metadata: {
-          ...metadata,
-          ip: clientIp,
-          userAgent,
-          submittedAt: new Date().toISOString(),
-          referrer: event.headers.referer || event.headers.origin
-        },
+        contact_id: contactId || null,
+        email: formData.email || null,
+        name: formData.name || null,
+        phone: formData.phone || null,
+        company: formData.company || null,
+        message: formData.message || null,
+        fields: formData,
+        source_page: metadata.sourcePage || null,
+        source_url: metadata.sourceUrl || null,
+        referrer: metadata.referrer || event.headers.referer || event.headers.origin || null,
+        user_agent: userAgent,
+        ip_address: clientIp,
         status: 'new'
       })
       .select()

@@ -480,7 +480,7 @@ DOMAIN: ${domain}
 
 CANNIBALIZED KEYWORDS:
 ${cannibalized.map(c => `Query: "${c.query}"
-  Pages:${c.pages.map(p => `\n    - ${p.page} (pos ${p.position.toFixed(1)}, ${p.clicks} clicks)`).join('')}`).join('\n\n')}
+  Pages:${c.pages.map(p => `\n    - ${p.page} (pos ${p.position ? p.position.toFixed(1) : 'N/A'}, ${p.clicks} clicks)`).join('')}`).join('\n\n')}
 
 For each cannibalized keyword:
 1. Identify which page should be the PRIMARY target
@@ -739,11 +739,18 @@ Return JSON: { fixedSchema: {...}, changesMade: ["description of each fix"] }`,
   }
 
   async discoverBacklinkOpportunities(context) {
-    const result = await this.signal.invoke({
-      module: 'seo',
-      tool: 'discover_backlinks',
-      systemPrompt: 'You are an expert link building strategist. Identify specific, actionable backlink opportunities. Focus on realistic targets that match the business type and industry.',
-      userPrompt: `Discover backlink opportunities for this site:
+    const result = await this.signal.invoke('seo', 'discover_backlinks', {
+      business: context.business,
+      domain: context.domain,
+      isLocal: context.isLocal,
+      location: context.location,
+      topContent: context.topContent,
+      competitors: context.competitors,
+      keywords: context.keywords
+    }, {
+      trackAction: true,
+      additionalContext: {
+        tool_prompt: `Discover backlink opportunities for this site:
 
 BUSINESS: ${context.business?.name || 'Unknown'}
 TYPE: ${context.business?.type || 'Unknown'}
@@ -759,9 +766,8 @@ ${context.keywords?.length > 0 ? `TARGET KEYWORDS: ${context.keywords.join(', ')
 
 Find opportunities in: Resource pages, Guest posts, Directories, Digital PR, Competitor gaps, Partnerships.
 
-Return JSON: { opportunities: [{ type, targetDomain, targetUrl, reason, suggestedAnchor, priorityScore, difficultyScore }] }`,
-      responseFormat: { type: 'json_object' },
-      temperature: 0.6
+**Return valid JSON** with: { opportunities: [{ type, targetDomain, targetUrl, reason, suggestedAnchor, priorityScore, difficultyScore }] }`
+      }
     })
     return result
   }
@@ -839,11 +845,16 @@ Return JSON: { features: [{ type, currentlyShowing, opportunityLevel, recommenda
   }
 
   async analyzeLocalSEO(context) {
-    const result = await this.signal.invoke({
-      module: 'seo',
-      tool: 'analyze_local_seo',
-      systemPrompt: 'You are an expert in local SEO and Google Business Profile optimization.',
-      userPrompt: `Analyze local SEO for: ${context.businessName}
+    const result = await this.signal.invoke('seo', 'analyze_local_seo', {
+      businessName: context.businessName,
+      location: context.location,
+      industry: context.industry,
+      serviceAreas: context.serviceAreas,
+      gbpData: context.gbpData
+    }, {
+      trackAction: true,
+      additionalContext: {
+        tool_prompt: `Analyze local SEO for: ${context.businessName}
 Location: ${context.location}
 Industry: ${context.industry || 'Unknown'}
 ${context.serviceAreas ? `Service Areas: ${context.serviceAreas.join(', ')}` : ''}
@@ -856,9 +867,8 @@ Analyze and recommend:
 4. Local content ideas
 5. Local schema opportunities
 
-Return JSON: { score: 0-100, recommendations: [{ category, priority, issue, fix }], citationOpportunities: [], contentIdeas: [] }`,
-      responseFormat: { type: 'json_object' },
-      temperature: 0.5
+**Return valid JSON** with: { score: 0-100, recommendations: [{ category, priority, issue, fix }], citationOpportunities: [], contentIdeas: [] }`
+      }
     })
     return result
   }
@@ -1168,11 +1178,17 @@ Headings: ${p.headings.slice(0, 10).map(h => `${h.tag}: ${h.text}`).join(', ')}
 Content excerpt: ${p.content.substring(0, 500)}...
 `).join('\n---\n')
 
-    const result = await this.signal.invoke({
-      module: 'seo',
-      tool: 'train_site',
-      systemPrompt: `You are an expert SEO and business analyst. Analyze website content to deeply understand the business - their services, target audience, unique value proposition, service areas, and competitive positioning. Extract comprehensive knowledge that will power AI-driven SEO, content, and sales recommendations.`,
-      userPrompt: `Analyze this website and extract comprehensive business knowledge.
+    const result = await this.signal.invoke('seo', 'train_site', {
+      domain,
+      orgName: orgName || 'Unknown',
+      pagesAnalyzed: pageContents.length,
+      pagesInfo
+    }, {
+      trackAction: true,
+      additionalContext: {
+        tool_prompt: `You are an expert SEO and business analyst. Analyze website content to deeply understand the business - their services, target audience, unique value proposition, service areas, and competitive positioning. Extract comprehensive knowledge that will power AI-driven SEO, content, and sales recommendations.
+
+Analyze this website and extract comprehensive business knowledge.
 
 DOMAIN: ${domain}
 ORGANIZATION: ${orgName || 'Unknown'}
@@ -1206,9 +1222,8 @@ Extract and return JSON with:
   "site_summary": "2-3 sentence summary of the entire website and business",
   "key_topics": ["topic1", "topic2"],
   "faq_patterns": ["Common question pattern 1", "Common question pattern 2"]
-}`,
-      responseFormat: { type: 'json_object' },
-      temperature: 0.3
+}`
+      }
     })
 
     return result
@@ -1400,11 +1415,13 @@ Return JSON:
     for (let i = 0; i < keywordsToAnalyze.length; i += batchSize) {
       const batch = keywordsToAnalyze.slice(i, i + batchSize)
       
-      const batchResult = await this.signal.invoke({
-        module: 'seo',
-        tool: 'analyze_serp_features',
-        systemPrompt: 'You are an SEO specialist analyzing SERP features and rich result opportunities.',
-        userPrompt: `Analyze these keywords for SERP feature opportunities.
+      const batchResult = await this.signal.invoke('seo', 'analyze_serp_features', {
+        keywords: batch,
+        knowledge
+      }, {
+        trackAction: true,
+        additionalContext: {
+          tool_prompt: `Analyze these keywords for SERP feature opportunities.
 
 BUSINESS: ${knowledge?.business_name || 'Unknown'}
 INDUSTRY: ${knowledge?.industry || 'Unknown'}
@@ -1435,9 +1452,10 @@ Return JSON:
       "recommended_action": "Create FAQ section targeting this query"
     }
   ]
-}`,
-        responseFormat: { type: 'json_object' },
-        temperature: 0.4
+}
+
+**Return valid JSON.**`
+        }
       })
 
       // Save results
@@ -2979,12 +2997,16 @@ Analyze and provide:
 3. Topic cluster linking improvements
 4. Anchor text recommendations
 
-Return as JSON with: assessment (overall health), score (0-100),
-criticalIssues (array with issue, affectedPages, recommendation),
-linkingOpportunities (array with fromPage, toPage, suggestedAnchor, reason, priority),
-hubPageRecommendations (array with page, role, shouldLinkTo, reason),
-orphanPageFixes (array with orphanPage, linkFrom, suggestedAnchors),
-topicClusterStrategy (object with clusters array containing pillarPage, clusterPages, missingLinks)`
+**IMPORTANT: You must return your response as valid JSON.**
+
+Return as JSON object with these fields:
+- assessment (string: overall health)
+- score (number: 0-100)
+- criticalIssues (array with: issue, affectedPages, recommendation)
+- linkingOpportunities (array with: fromPage, toPage, suggestedAnchor, reason, priority)
+- hubPageRecommendations (array with: page, role, shouldLinkTo, reason)
+- orphanPageFixes (array with: orphanPage, linkFrom, suggestedAnchors)
+- topicClusterStrategy (object with clusters array containing: pillarPage, clusterPages, missingLinks)`
       }
     })
 

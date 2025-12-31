@@ -27,7 +27,9 @@ import {
   Building2,
   ClipboardList,
   ShoppingCart,
-  Search
+  Search,
+  Brain,
+  Zap
 } from 'lucide-react'
 import useAuthStore, { useOrgFeatures } from '@/lib/auth-store'
 import useReportsStore from '@/lib/reports-store'
@@ -78,7 +80,9 @@ const Sidebar = ({
   // Agency org (Uptrade Media) should show admin view, client orgs show tenant view
   const isAgencyOrg = currentOrg?.org_type === 'agency'
   const isClientOrg = isInOrg && !isAgencyOrg
-  const isInTenantContext = isInProject || isClientOrg
+  // Only show tenant context for client orgs OR when viewing a project under a CLIENT org
+  // Agency org's own projects should still show admin view
+  const isInTenantContext = isClientOrg || (isInProject && !isAgencyOrg)
   const tenantName = isInProject ? projectName : (currentOrg?.name || 'Tenant')
   const tenantFeatures = isInProject ? projectFeatures : (currentOrg?.features || [])
   
@@ -112,21 +116,35 @@ const Sidebar = ({
   const hasFeature = (featureKey) => {
     const rawValue = hasFeatureRaw(featureKey)
     
-    // If viewing a tenant, use their feature flags
-    if (isViewingTenant || isInTenantContext) {
-      return rawValue
+    // Admin tools that should always show for admins unless explicitly disabled
+    const adminTools = ['seo', 'ecommerce', 'blog', 'portfolio', 'email', 'team', 'team_metrics', 'forms', 'engage', 'signal']
+    
+    // DEBUG: Log feature checks for engage and signal
+    if (featureKey === 'engage' || featureKey === 'signal') {
+      console.log(`[Sidebar] hasFeature('${featureKey}')`, { 
+        rawValue, 
+        isAdmin, 
+        isInAdminTools: adminTools.includes(featureKey),
+        isViewingTenant,
+        isInTenantContext,
+        result: isAdmin && adminTools.includes(featureKey) ? rawValue !== false : rawValue === true
+      })
     }
     
-    // For admin portal: admin tools default to true unless explicitly set to false
-    const adminTools = ['seo', 'ecommerce', 'blog', 'portfolio', 'email', 'team', 'team_metrics', 'forms']
+    // For admins viewing the admin portal (agency org or no org context), show admin tools by default
     if (isAdmin && adminTools.includes(featureKey)) {
-      // If feature is undefined (not set), default to true for admin tools
-      // If feature is explicitly false, respect that
+      // If explicitly set to false, respect that
+      // Otherwise, show it (undefined or true both result in showing)
       return rawValue !== false
     }
     
+    // If viewing a tenant/client org, use their feature flags strictly
+    if (isViewingTenant || isInTenantContext) {
+      return rawValue === true
+    }
+    
     // All other features use normal checking
-    return rawValue
+    return rawValue === true
   }
 
   // Fetch notification counts on mount
@@ -163,7 +181,8 @@ const Sidebar = ({
     // Note: Team is in org modules (org-wide, not per project)
     ...(tenantHasFeature('seo') ? [{ id: 'seo', label: 'SEO', icon: Search, badge: null, route: null }] : []),
     ...(tenantHasFeature('ecommerce') ? [{ id: 'ecommerce', label: 'Ecommerce', icon: ShoppingCart, badge: null, route: null }] : []),
-    ...(tenantHasFeature('engage') ? [{ id: 'engage', label: 'Engage', icon: MessageCircle, badge: null, route: '/engage' }] : []),
+    ...(tenantHasFeature('engage') ? [{ id: 'engage', label: 'Engage', icon: Zap, badge: null, route: null }] : []),
+    ...(tenantHasFeature('signal') ? [{ id: 'signal', label: 'Signal AI', icon: Brain, badge: null, route: null }] : []),
     ...(tenantHasFeature('forms') ? [{ id: 'forms', label: 'Forms', icon: ClipboardList, badge: null, route: null }] : []),
     ...(tenantHasFeature('email') ? [{ id: 'email', label: 'Email Manager', icon: Mail, badge: null, route: null }] : []),
     ...(tenantHasFeature('blog') ? [{ id: 'blog', label: 'Blog', icon: BookOpen, badge: null, route: null }] : []),
@@ -205,7 +224,8 @@ const Sidebar = ({
     { id: 'clients', label: 'Clients', icon: Users, badge: newLeadsCount > 0 ? newLeadsCount.toString() : null, route: null },
     ...(hasFeature('seo') ? [{ id: 'seo', label: 'SEO', icon: Search, badge: null, route: null }] : []),
     ...(hasFeature('ecommerce') ? [{ id: 'ecommerce', label: 'Ecommerce', icon: ShoppingCart, badge: null, route: null }] : []),
-    ...(hasFeature('engage') ? [{ id: 'engage', label: 'Engage', icon: MessageCircle, badge: null, route: '/engage' }] : []),
+    ...(hasFeature('engage') ? [{ id: 'engage', label: 'Engage', icon: Zap, badge: null, route: null }] : []),
+    ...(hasFeature('signal') ? [{ id: 'signal', label: 'Signal AI', icon: Brain, badge: null, route: null }] : []),
     ...(hasFeature('team') ? [{ id: 'team', label: 'Team', icon: Shield, badge: null, route: null }] : []),
     ...(hasFeature('team_metrics') ? [{ id: 'team-metrics', label: 'Team Metrics', icon: Trophy, badge: null, route: null }] : []),
     ...(hasFeature('forms') ? [{ id: 'forms', label: 'Forms', icon: ClipboardList, badge: null, route: null }] : []),

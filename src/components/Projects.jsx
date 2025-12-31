@@ -47,7 +47,8 @@ import {
   ArrowRight,
   LogIn,
   ArrowLeft,
-  LayoutDashboard
+  LayoutDashboard,
+  Brain
 } from 'lucide-react'
 import {
   DropdownMenu,
@@ -115,6 +116,20 @@ const STATUS_CONFIG = {
 
 // Tenant modules configuration
 const TENANT_MODULES = [
+  { 
+    key: 'signal', 
+    label: 'Signal AI', 
+    description: 'AI-powered chat widget, knowledge base, and lead capture',
+    icon: Brain,
+    recommended: true
+  },
+  { 
+    key: 'engage', 
+    label: 'Engage', 
+    description: 'Popups, banners, exit-intent modals, and A/B testing',
+    icon: Zap,
+    recommended: true
+  },
   { 
     key: 'analytics', 
     label: 'Website Analytics', 

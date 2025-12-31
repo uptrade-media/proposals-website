@@ -31,7 +31,7 @@ export async function handler(event) {
 
     // Get org_id from header or request body
     const orgIdFromHeader = event.headers['x-organization-id'] || event.headers['X-Organization-Id']
-    const { domain, siteName, sitemapUrl, contactId, org_id: orgIdFromBody } = JSON.parse(event.body || '{}')
+    const { domain, siteName, sitemapUrl, contactId, org_id: orgIdFromBody, project_id: projectId } = JSON.parse(event.body || '{}')
     const orgId = orgIdFromBody || orgIdFromHeader
 
     if (!domain) {
@@ -80,6 +80,7 @@ export async function handler(event) {
         sitemap_url: sitemapUrl || `https://${normalizedDomain}/sitemap.xml`,
         contact_id: contactId || null,
         org_id: orgId || null,
+        project_id: projectId || null,
         auto_sync_enabled: true,
         sync_frequency_hours: 24
       })

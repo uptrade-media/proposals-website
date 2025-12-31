@@ -87,8 +87,49 @@ export default async function handler(req) {
 
     const existingUrls = new Set(existingPages?.map(p => p.url) || [])
 
+    // Check for dynamic content (blog posts, portfolio) that should be in seo_pages
+    const dynamicUrls = []
+    
+    // Add published blog posts URLs
+    const { data: blogPosts } = await supabase
+      .from('blog_posts')
+      .select('slug')
+      .eq('status', 'published')
+      .not('slug', 'is', null)
+    
+    if (blogPosts?.length > 0) {
+      blogPosts.forEach(post => {
+        const blogUrl = `https://${site.domain}/insights/${post.slug}`
+        if (!existingUrls.has(blogUrl)) {
+          dynamicUrls.push(blogUrl)
+        }
+      })
+      console.log(`[seo-crawl-sitemap-background] Found ${blogPosts.length} blog posts, ${dynamicUrls.length} not in seo_pages`)
+    }
+    
+    // Add portfolio items URLs
+    const { data: portfolioItems } = await supabase
+      .from('portfolio_items')
+      .select('slug')
+      .eq('status', 'published')
+      .not('slug', 'is', null)
+    
+    if (portfolioItems?.length > 0) {
+      portfolioItems.forEach(item => {
+        const portfolioUrl = `https://${site.domain}/portfolio/${item.slug}`
+        if (!existingUrls.has(portfolioUrl)) {
+          dynamicUrls.push(portfolioUrl)
+        }
+      })
+      console.log(`[seo-crawl-sitemap-background] Found ${portfolioItems.length} portfolio items`)
+    }
+
+    // Combine sitemap URLs with dynamic content URLs
+    const allUrls = [...urls, ...dynamicUrls]
+    console.log(`[seo-crawl-sitemap-background] Total URLs: ${allUrls.length} (${urls.length} from sitemap, ${dynamicUrls.length} from database)`)
+
     // Prepare new pages
-    const newPages = urls
+    const newPages = allUrls
       .filter(url => !existingUrls.has(url))
       .map(url => ({
         site_id: siteId,
@@ -121,8 +162,8 @@ export default async function handler(req) {
       .from('seo_crawl_log')
       .update({
         status: 'completed',
-        pages_found: urls.length,
-        pages_crawled: urls.length,
+        pages_found: allUrls.length,
+        pages_crawled: allUrls.length,
         pages_updated: pagesCreated,
         completed_at: new Date().toISOString()
       })
@@ -130,9 +171,11 @@ export default async function handler(req) {
 
     const result = {
       message: 'Sitemap crawl completed',
-      urlsFound: urls.length,
+      urlsFound: allUrls.length,
+      sitemapUrls: urls.length,
+      dynamicUrls: dynamicUrls.length,
       pagesCreated,
-      pagesAlreadyExist: urls.length - pagesCreated
+      pagesAlreadyExist: allUrls.length - pagesCreated
     }
 
     // Update job status
