@@ -152,7 +152,22 @@ export async function handler(event) {
         }
       }
       
-      // TODO: Add Echo contact when Signal is enabled for this tenant
+      // Add Echo contact for this organization
+      const { data: echoContact } = await supabase
+        .from('contacts')
+        .select('id, name, email, company, role, avatar, is_ai, contact_type')
+        .eq('org_id', orgId)
+        .eq('is_ai', true)
+        .eq('contact_type', 'ai')
+        .single()
+      
+      if (echoContact) {
+        contacts.push({ 
+          ...echoContact, 
+          contactType: 'echo',
+          status: 'always_available'
+        })
+      }
       
       // Remove duplicates (keep first occurrence which has correct contactType)
       const uniqueContacts = Array.from(

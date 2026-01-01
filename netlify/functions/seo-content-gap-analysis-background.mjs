@@ -244,6 +244,13 @@ async function analyzeGapsWithAI(seoSkill, { knowledge, pages, keywords, competi
     
     const competitorTopics = competitors.flatMap(c => c.content_topics || [])
 
+    // Build existing content summary from pages
+    const existingContent = {
+      topics: ourTopics,
+      keywords: ourKeywords,
+      pageCount: pages.length
+    }
+
     const result = await seoSkill.signal.invoke('seo', 'content_gap_analysis', {
       competitorKeywords,
       competitorTopics,

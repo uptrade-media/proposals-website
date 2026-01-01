@@ -243,11 +243,13 @@ ${TOOL_PROMPTS.generate_blog}`,
       }
     })
 
-    await this.echo.log({
+    if (this.echo && typeof this.echo.log === 'function') {
+      await this.echo.log({
       action: 'generate_blog',
       input: { topic, options },
       output: result
     })
+    }
 
     return result
   }
@@ -279,11 +281,13 @@ ${TOOL_PROMPTS.edit_blog}`,
       }
     })
 
-    await this.echo.log({
+    if (this.echo && typeof this.echo.log === 'function') {
+      await this.echo.log({
       action: 'edit_blog',
       input: { postId, instructions },
       output: result
     })
+    }
 
     return result
   }
@@ -352,11 +356,13 @@ ${TOOL_PROMPTS.generate_portfolio}`,
       result.tech_stack = validateTechStack(result.tech_stack)
     }
 
-    await this.echo.log({
+    if (this.echo && typeof this.echo.log === 'function') {
+      await this.echo.log({
       action: 'generate_portfolio',
       input: { projectData },
       output: result
     })
+    }
 
     return result
   }
@@ -385,11 +391,13 @@ ${TOOL_PROMPTS.edit_portfolio}`,
       }
     })
 
-    await this.echo.log({
+    if (this.echo && typeof this.echo.log === 'function') {
+      await this.echo.log({
       action: 'edit_portfolio',
       input: { itemId, instructions },
       output: result
     })
+    }
 
     return result
   }
@@ -420,11 +428,13 @@ ${TOOL_PROMPTS.suggest_topics}`,
       responseFormat: { type: 'json_object' }
     })
 
-    await this.echo.log({
+    if (this.echo && typeof this.echo.log === 'function') {
+      await this.echo.log({
       action: 'suggest_topics',
       input: context,
       output: result
     })
+    }
 
     return result
   }
@@ -478,6 +488,7 @@ ${TOOL_PROMPTS.suggest_topics}`,
       .join('\n')
     const gapTopics = gaps.slice(0, 10).map(g => `${g.topic}: ${g.ai_reasoning}`).join('\n')
     const competitorKeywords = competitors.flatMap(c => (c.keyword_gap_data || []).slice(0, 5).map(k => k.keyword)).join(', ')
+    const easyWins = keywords.filter(k => k.opportunity_score > 70).slice(0, 10)
 
     const result = await this.signal.invoke('content', 'suggest_topics_seo', {
       maxTopics,
@@ -520,7 +531,8 @@ Generate ${maxTopics} topic recommendations. **Return valid JSON** with "topics"
       }
     })
 
-    await this.echo.log({
+    if (this.echo && typeof this.echo.log === 'function') {
+      await this.echo.log({
       action: 'suggest_topics_seo',
       input: { siteId, options },
       output: result,
@@ -530,6 +542,7 @@ Generate ${maxTopics} topic recommendations. **Return valid JSON** with "topics"
         recentPostsCount: recentPosts.length
       }
     })
+    }
 
     return {
       topics: result.topics || [],
@@ -634,7 +647,8 @@ Return JSON with:
       }
     })
 
-    await this.echo.log({
+    if (this.echo && typeof this.echo.log === 'function') {
+      await this.echo.log({
       action: 'analyze_blog_post',
       input: { postId, siteId },
       output: result,
@@ -644,6 +658,7 @@ Return JSON with:
         relevantKeywords: relevantKeywords.length
       }
     })
+    }
 
     return {
       post: {
@@ -744,7 +759,8 @@ Return JSON with:
       }
     }
 
-    await this.echo.log({
+    if (this.echo && typeof this.echo.log === 'function') {
+      await this.echo.log({
       action: 'batch_optimize_posts',
       input: options,
       output: {
@@ -752,6 +768,7 @@ Return JSON with:
         optimized: results.filter(r => r.status === 'optimized').length
       }
     })
+    }
 
     return {
       totalProcessed: posts.length,
@@ -786,11 +803,13 @@ ${TOOL_PROMPTS.optimize_seo}`,
       responseFormat: { type: 'json_object' }
     })
 
-    await this.echo.log({
+    if (this.echo && typeof this.echo.log === 'function') {
+      await this.echo.log({
       action: 'optimize_seo',
       input: { contentLength: content?.length, options },
       output: result
     })
+    }
 
     return result
   }
@@ -864,11 +883,13 @@ Return as a markdown string.`
       blockContent = validateTechStack(blockContent)
     }
 
-    await this.echo.log({
+    if (this.echo && typeof this.echo.log === 'function') {
+      await this.echo.log({
       action: 'regenerate_portfolio_block',
       input: { blockId, companyName: projectData.companyName },
       output: blockContent
     })
+    }
 
     return blockContent
   }
@@ -913,11 +934,13 @@ Return ONLY valid JSON. Include only the fields that need to change, plus "messa
       updates.tech_stack = validateTechStack(updates.tech_stack)
     }
 
-    await this.echo.log({
+    if (this.echo && typeof this.echo.log === 'function') {
+      await this.echo.log({
       action: 'refine_portfolio_chat',
       input: { chatMessage, companyName: projectData.companyName },
       output: { message, updatedBlocks: Object.keys(updates) }
     })
+    }
 
     return {
       content: updates,
@@ -980,11 +1003,13 @@ Generate the requested content. Return plain text (not JSON) unless the instruct
       }
     })
 
-    await this.echo.log({
+    if (this.echo && typeof this.echo.log === 'function') {
+      await this.echo.log({
       action: 'generate_blog_section',
       input: { section, targetKeyword, hasExisting: !!existingContent },
       output: typeof result === 'string' ? result.substring(0, 200) : result
     })
+    }
 
     return result
   }
@@ -1050,11 +1075,13 @@ Return JSON with:
       additionalContext: { postId: post.id }
     })
 
-    await this.echo.log({
+    if (this.echo && typeof this.echo.log === 'function') {
+      await this.echo.log({
       action: 'optimize_blog_post',
       input: { postId: post.id, title: post.title },
       output: { changes: result.changes }
     })
+    }
 
     return result
   }
@@ -1076,11 +1103,13 @@ Topic: ${post.content?.substring(0, 500)}
 Return ONLY the meta description text as a string, nothing else.`
     })
 
-    await this.echo.log({
+    if (this.echo && typeof this.echo.log === 'function') {
+      await this.echo.log({
       action: 'generate_meta_description',
       input: { postId: post.id },
       output: result
     })
+    }
 
     return typeof result === 'string' ? result : result.metaDescription || result.meta_description
   }
@@ -1112,11 +1141,13 @@ INSTRUCTIONS:
 Return the content with citations added in Markdown format.`
     })
 
-    await this.echo.log({
+    if (this.echo && typeof this.echo.log === 'function') {
+      await this.echo.log({
       action: 'add_citations',
       input: { contentLength: content?.length, category },
       output: { citedContentLength: result?.length }
     })
+    }
 
     return result
   }

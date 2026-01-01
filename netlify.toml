@@ -106,12 +106,7 @@
 [functions."seo-competitor-scheduled"]
   schedule = "0 3 * * 4"
 
-[dev]
-  framework     = "#custom"
-  command       = "vite"
-  targetPort    = 5173
-  port          = 8888
-  functionsPort = 9999
+# [dev] section removed - letting Netlify detect everything automatically
 
 # ── Background Functions (15 min timeout) ───────────────────────────────────
 # These functions can run for up to 15 minutes instead of 10-26 seconds

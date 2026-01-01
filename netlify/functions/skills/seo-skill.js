@@ -376,7 +376,7 @@ Return JSON with: currentIssues[], recommendations[] (type, priority, current, s
       temperature: 0.7
     })
 
-    await this.echo.log({
+    if (this.echo && typeof this.echo.log === 'function') await this.echo.log({
       action: 'analyze_title_meta',
       input: { pageUrl: page.url, queriesCount: topQueries.length },
       output: result
@@ -414,7 +414,7 @@ Return JSON with: summary, recommendations[] (query, page, currentCtr, currentPo
       temperature: 0.7
     })
 
-    await this.echo.log({
+    if (this.echo && typeof this.echo.log === 'function') await this.echo.log({
       action: 'analyze_low_ctr',
       input: { queriesCount: lowCtrQueries.length, domain },
       output: result
@@ -452,7 +452,7 @@ Return JSON with: summary, opportunities[] (query, page, currentPosition, potent
       temperature: 0.7
     })
 
-    await this.echo.log({
+    if (this.echo && typeof this.echo.log === 'function') await this.echo.log({
       action: 'analyze_striking_distance',
       input: { queriesCount: strikingDistanceQueries.length, domain },
       output: result
@@ -480,7 +480,7 @@ DOMAIN: ${domain}
 
 CANNIBALIZED KEYWORDS:
 ${cannibalized.map(c => `Query: "${c.query}"
-  Pages:${c.pages.map(p => `\n    - ${p.page} (pos ${p.position ? p.position.toFixed(1) : 'N/A'}, ${p.clicks} clicks)`).join('')}`).join('\n\n')}
+  Pages:${c.pages.map(p => `\n    - ${p.page} (pos ${p.position != null ? Number(p.position).toFixed(1) : 'N/A'}, ${p.clicks} clicks)`).join('')}`).join('\n\n')}
 
 For each cannibalized keyword:
 1. Identify which page should be the PRIMARY target
@@ -492,7 +492,7 @@ Return JSON with: summary, issues[] (query, primaryPage, competingPages[], recom
       temperature: 0.7
     })
 
-    await this.echo.log({
+    if (this.echo && typeof this.echo.log === 'function') await this.echo.log({
       action: 'analyze_cannibalization',
       input: { issuesCount: cannibalized.length, domain },
       output: result
@@ -527,7 +527,7 @@ Return JSON with: overallScore (0-100), summary, criticalIssues[], opportunities
       temperature: 0.7
     })
 
-    await this.echo.log({
+    if (this.echo && typeof this.echo.log === 'function') await this.echo.log({
       action: 'full_audit',
       input: { domain: context.domain },
       output: result
@@ -563,7 +563,7 @@ Return JSON with: schemaType, schema (the actual JSON-LD object), implementation
       temperature: 0.5
     })
 
-    await this.echo.log({
+    if (this.echo && typeof this.echo.log === 'function') await this.echo.log({
       action: 'generate_schema',
       input: { pageUrl: page.url, schemaType },
       output: result
@@ -607,7 +607,7 @@ Return JSON: { primarySchema: {...}, additionalSchemas: [], richResultEligibilit
       temperature: 0.2
     })
 
-    await this.echo.log({
+    if (this.echo && typeof this.echo.log === 'function') await this.echo.log({
       action: 'generate_schema_enhanced',
       input: { pageUrl: context.page?.url, schemaType },
       output: result
@@ -640,7 +640,7 @@ Return JSON with: variants[] (title, charCount, approach, expectedCtrRange), tes
       temperature: 0.8
     })
 
-    await this.echo.log({
+    if (this.echo && typeof this.echo.log === 'function') await this.echo.log({
       action: 'generate_title_variants',
       input: { pageUrl: page.url, keyword, count },
       output: result
@@ -685,7 +685,7 @@ Return JSON with: summary, recommendations[] (page, currentWordCount, priority, 
       temperature: 0.7
     })
 
-    await this.echo.log({
+    if (this.echo && typeof this.echo.log === 'function') await this.echo.log({
       action: 'analyze_thin_content',
       input: { pagesCount: thinPages.length, domain },
       output: result
@@ -729,7 +729,7 @@ Return JSON: { fixedSchema: {...}, changesMade: ["description of each fix"] }`,
       temperature: 0.2
     })
 
-    await this.echo.log({
+    if (this.echo && typeof this.echo.log === 'function') await this.echo.log({
       action: 'fix_schema',
       input: { errorsCount: errors.length },
       output: result
@@ -1066,7 +1066,7 @@ Return JSON: { prediction: { currentPosition, predictedPosition, confidenceLevel
 
     updateProgress(100, 'Training complete!')
 
-    await this.echo.log({
+    if (this.echo && typeof this.echo.log === 'function') await this.echo.log({
       action: 'train_site',
       input: { domain, maxPages, forceRefresh },
       output: { pagesAnalyzed: pageContents.length, businessType: knowledge.business_type }
@@ -1354,11 +1354,13 @@ Return JSON:
       }
     }
 
-    await this.echo.log({
-      action: 'generate_topic_clusters',
-      input: { keywordCount: keywords.length },
-      output: { clustersCreated: savedClusters.length }
-    })
+    if (this.echo && typeof this.echo.log === 'function') {
+      await this.echo.log({
+        action: 'generate_topic_clusters',
+        input: { keywordCount: keywords.length },
+        output: { clustersCreated: savedClusters.length }
+      })
+    }
 
     return {
       success: true,
@@ -1496,7 +1498,7 @@ Return JSON:
       }
     }
 
-    await this.echo.log({
+    if (this.echo && typeof this.echo.log === 'function') await this.echo.log({
       action: 'analyze_serp_features_bulk',
       input: { keywordCount: keywordsToAnalyze.length },
       output: { analyzed: results.length }
@@ -1643,7 +1645,7 @@ Return JSON:
       }
     }
 
-    await this.echo.log({
+    if (this.echo && typeof this.echo.log === 'function') await this.echo.log({
       action: 'generate_schema_bulk',
       input: { pageCount: pagesToProcess.length },
       output: { generated: results.length }
@@ -1681,7 +1683,7 @@ Return JSON:
 
     const startTime = Date.now()
 
-    await this.echo.log({
+    if (this.echo && typeof this.echo.log === 'function') await this.echo.log({
       action: 'comprehensive_analysis_start',
       input: { analysisType, focusAreas, pageIds, runId }
     })
@@ -1813,7 +1815,7 @@ Return JSON:
     results.healthScore = healthScore
     results.duration = Date.now() - startTime
 
-    await this.echo.log({
+    if (this.echo && typeof this.echo.log === 'function') await this.echo.log({
       action: 'comprehensive_analysis_complete',
       input: { analysisType, runId },
       output: {
@@ -2033,7 +2035,7 @@ For each page, provide optimized versions. Return JSON:
 
     } catch (e) {
       console.error('[SEOSkill] Metadata analysis error:', e)
-      await this.echo.log({
+      if (this.echo && typeof this.echo.log === 'function') await this.echo.log({
         action: 'metadata_analysis_error',
         input: { pagesCount: pagesNeedingWork.length },
         output: { error: e.message }

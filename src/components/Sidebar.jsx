@@ -80,9 +80,9 @@ const Sidebar = ({
   // Agency org (Uptrade Media) should show admin view, client orgs show tenant view
   const isAgencyOrg = currentOrg?.org_type === 'agency'
   const isClientOrg = isInOrg && !isAgencyOrg
-  // Only show tenant context for client orgs OR when viewing a project under a CLIENT org
-  // Agency org's own projects should still show admin view
-  const isInTenantContext = isClientOrg || (isInProject && !isAgencyOrg)
+  // Only show tenant context for CLIENT orgs and their projects
+  // Agency org (Uptrade Media) and its projects should ALWAYS show admin view
+  const isInTenantContext = isClientOrg || (isInProject && currentOrg && !isAgencyOrg)
   const tenantName = isInProject ? projectName : (currentOrg?.name || 'Tenant')
   const tenantFeatures = isInProject ? projectFeatures : (currentOrg?.features || [])
   
@@ -171,7 +171,8 @@ const Sidebar = ({
   // When admin (no context): Show admin tools
   
   // --- PROJECT MODULES (when viewing a specific project like GWA) ---
-  const projectModuleItems = isInProject ? [
+  // Only show for CLIENT org projects, NOT for agency org projects
+  const projectModuleItems = (isInProject && isInTenantContext) ? [
     // Project name header
     { id: 'project-divider', label: `${projectName}`, isDivider: true },
     // Dashboard for this specific project

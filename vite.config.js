@@ -29,12 +29,12 @@ export default defineConfig(({ mode }) => {
 
     server: {
       port: 5173,
-      open: true,
-      // If you run `vite` directly, this proxies calls to your Netlify functions.
-      // If you run `netlify dev`, it already does this (so this is harmless).
+      // Don't auto-open browser (causes issues with netlify dev)
+      open: false,
+      // Proxy functions to separate server (workaround for netlify dev bug)
       proxy: {
         '/.netlify/functions': {
-          target: 'http://localhost:8888',
+          target: process.env.FUNCTIONS_PORT ? `http://localhost:${process.env.FUNCTIONS_PORT}` : 'http://localhost:9999',
           changeOrigin: true,
         },
       },

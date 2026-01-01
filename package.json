@@ -7,6 +7,8 @@
   "scripts": {
     "dev": "netlify dev",
     "dev:fe": "vite",
+    "dev:functions": "netlify functions:serve --port 9999",
+    "dev:manual": "concurrently \"pnpm dev:fe\" \"pnpm dev:functions\"",
     "build": "vite build",
     "lint": "eslint .",
     "preview": "vite preview",

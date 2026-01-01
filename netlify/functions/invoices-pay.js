@@ -15,15 +15,10 @@ let squareClientInstance = null
 async function getSquareClient() {
   if (!squareClientInstance) {
     const squareModule = await import('square')
-    // Square SDK v43+ uses SquareClient instead of Client
-    const SquareClient = squareModule.SquareClient || squareModule.default?.SquareClient
-    const SquareEnvironment = squareModule.SquareEnvironment || squareModule.default?.SquareEnvironment
-    
-    squareClientInstance = new SquareClient({
-      token: SQUARE_ACCESS_TOKEN,
-      environment: SQUARE_ENVIRONMENT === 'production' 
-        ? SquareEnvironment.Production 
-        : SquareEnvironment.Sandbox
+    const Client = squareModule.Client || squareModule.default?.Client
+    squareClientInstance = new Client({
+      accessToken: SQUARE_ACCESS_TOKEN,
+      environment: SQUARE_ENVIRONMENT === 'production' ? 'production' : 'sandbox'
     })
   }
   return squareClientInstance
@@ -162,43 +157,29 @@ export async function handler(event) {
     // Process payment with Square
     const squareClient = await getSquareClient()
 
-    // Create payment using Square SDK v43+ API
+    // Create payment
     const amountInCents = Math.round(invoice.total_amount * 100)
     const idempotencyKey = `${invoiceId}-${Date.now()}`
 
-    let paymentResult
-    try {
-      paymentResult = await squareClient.payments.create({
-        sourceId: sourceId,
-        idempotencyKey: idempotencyKey,
-        amountMoney: {
-          amount: BigInt(amountInCents),
-          currency: 'USD'
-        },
-        locationId: SQUARE_LOCATION_ID,
-        referenceId: invoice.invoice_number,
-        note: `Payment for invoice ${invoice.invoice_number}`,
-        autocomplete: true
-      })
-    } catch (paymentError) {
-      console.error('[invoices-pay] Square payment error:', paymentError)
-      const errorDetail = paymentError.errors?.[0]?.detail || paymentError.message || 'Unknown error'
-      return {
-        statusCode: 400,
-        headers,
-        body: JSON.stringify({ 
-          error: 'Payment failed: ' + errorDetail
-        })
-      }
-    }
+    const { result: paymentResult, errors: paymentErrors } = await squareClient.paymentsApi.createPayment({
+      sourceId: sourceId,
+      idempotencyKey: idempotencyKey,
+      amountMoney: {
+        amount: BigInt(amountInCents),
+        currency: 'USD'
+      },
+      locationId: SQUARE_LOCATION_ID,
+      referenceId: invoice.invoice_number,
+      note: `Payment for invoice ${invoice.invoice_number}`
+    })
 
-    if (!paymentResult?.payment) {
-      console.error('[invoices-pay] Square payment failed:', paymentResult)
+    if (paymentErrors && paymentErrors.length > 0) {
+      console.error('[invoices-pay] Square payment errors:', paymentErrors)
       return {
         statusCode: 400,
         headers,
         body: JSON.stringify({ 
-          error: 'Payment failed: Unknown error'
+          error: 'Payment failed: ' + (paymentErrors[0]?.detail || 'Unknown error')
         })
       }
     }

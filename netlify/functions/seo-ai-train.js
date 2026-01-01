@@ -32,7 +32,7 @@ export async function handler(event) {
 
   try {
     const body = JSON.parse(event.body || '{}')
-    const { siteId, forceRefresh = false } = body
+    const { siteId, forceRefresh = false, abort = false } = body
 
     if (!siteId) {
       return { statusCode: 400, headers, body: JSON.stringify({ error: 'siteId is required' }) }
@@ -58,22 +58,38 @@ export async function handler(event) {
       .eq('site_id', siteId)
       .single()
 
-    // If already training, return status
-    if (existingKb?.training_status === 'in_progress') {
+    console.log(`[AI Train] Existing KB status:`, existingKb?.training_status, `forceRefresh:`, forceRefresh, `abort:`, abort)
+
+    // If abort flag is set, cancel any existing training
+    if (abort && existingKb) {
+      console.log(`[AI Train] Aborting existing training for site ${siteId}`)
+      await supabase
+        .from('seo_knowledge_base')
+        .update({
+          training_status: null,
+          error_message: 'Training aborted by user',
+          updated_at: new Date().toISOString()
+        })
+        .eq('site_id', siteId)
+      // Continue to start new training
+    }
+    // If already training and NOT aborting, return status
+    else if (existingKb?.training_status === 'in_progress') {
+      console.log(`[AI Train] Training already in progress for site ${siteId}`)
       return {
         statusCode: 200,
         headers,
         body: JSON.stringify({
           success: true,
           status: 'in_progress',
-          message: 'Training already in progress',
+          message: 'Training already in progress. Use abort=true to cancel and restart.',
           knowledge: existingKb
         })
       }
     }
-
     // If already trained and not forcing refresh
-    if (existingKb && !forceRefresh && existingKb.training_status === 'completed') {
+    else if (existingKb && !forceRefresh && existingKb.training_status === 'completed') {
+      console.log(`[AI Train] Site ${siteId} already trained, skipping (use forceRefresh to retrain)`)
       return {
         statusCode: 200,
         headers,
@@ -85,6 +101,8 @@ export async function handler(event) {
         })
       }
     }
+
+    console.log(`[AI Train] Starting new training for site ${siteId}`)
 
     // Set status to in_progress immediately
     await supabase

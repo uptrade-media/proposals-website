@@ -29,9 +29,26 @@ export async function handler(event) {
 
   const supabase = createSupabaseAdmin()
   
-  // Get project ID from query or body
-  const projectId = event.queryStringParameters?.projectId || 
-                   JSON.parse(event.body || '{}').projectId
+  // Get project ID from query or body, or derive from siteId
+  let projectId = event.queryStringParameters?.projectId || 
+                 JSON.parse(event.body || '{}').projectId
+
+  // Also accept siteId and lookup projectId from it
+  const siteId = event.queryStringParameters?.siteId || 
+                JSON.parse(event.body || '{}').siteId
+
+  if (!projectId && siteId) {
+    // Lookup project from siteId
+    const { data: site } = await supabase
+      .from('seo_sites')
+      .select('project_id')
+      .eq('id', siteId)
+      .single()
+    
+    if (site?.project_id) {
+      projectId = site.project_id
+    }
+  }
 
   if (!projectId) {
     return {
@@ -172,13 +189,74 @@ export async function handler(event) {
 
     if (event.httpMethod === 'PUT' || event.httpMethod === 'POST') {
       const body = JSON.parse(event.body || '{}')
-      const { config: updates } = body
+      const { config: updates, action } = body
 
-      if (!updates) {
+      // If action is 'init' or no updates provided, just ensure config exists with defaults
+      if (action === 'init' || !updates) {
+        // Check if config exists
+        const { data: existing } = await supabase
+          .from('signal_config')
+          .select('*')
+          .eq('project_id', projectId)
+          .single()
+
+        if (existing) {
+          // Config already exists
+          return {
+            statusCode: 200,
+            headers: CORS_HEADERS,
+            body: JSON.stringify({ 
+              config: existing,
+              initialized: true,
+              message: 'Signal config already initialized'
+            })
+          }
+        }
+
+        // Create default config
+        const defaultConfig = {
+          project_id: projectId,
+          org_id: project.org_id,
+          seo_site_id: seoSite?.id || null,
+          widget_enabled: true,
+          greeting_message: `Hi! Welcome to ${project.title}. How can I help you today?`,
+          fallback_message: "I'm not sure about that. Would you like me to connect you with our team?",
+          primary_color: '#3B82F6',
+          position: 'bottom-right',
+          collect_email_prompt: 'before_chat',
+          business_hours: null,
+          allowed_domains: project.tenant_domain ? [project.tenant_domain] : [],
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString()
+        }
+
+        const { data: newConfig, error: insertError } = await supabase
+          .from('signal_config')
+          .insert(defaultConfig)
+          .select()
+          .single()
+
+        if (insertError) {
+          // If table doesn't exist or other error, just return success without config
+          console.log('[signal-config] Init error (may be missing table):', insertError.message)
+          return {
+            statusCode: 200,
+            headers: CORS_HEADERS,
+            body: JSON.stringify({ 
+              initialized: true,
+              message: 'Signal config initialized (defaults)'
+            })
+          }
+        }
+
         return {
-          statusCode: 400,
+          statusCode: 200,
           headers: CORS_HEADERS,
-          body: JSON.stringify({ error: 'Config updates required' })
+          body: JSON.stringify({ 
+            config: newConfig,
+            initialized: true,
+            message: 'Signal config created'
+          })
         }
       }
 

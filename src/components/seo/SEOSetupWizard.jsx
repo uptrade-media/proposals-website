@@ -1,5 +1,5 @@
 /**
- * Signal Setup Wizard
+ * Signal Setup Wizard (formerly SEO Setup Wizard)
  * 
  * Unified onboarding flow that trains Signal AI on your business:
  * - Site discovery & crawling (content understanding)
@@ -55,42 +55,38 @@ import {
   Gauge,
   Network,
   Microscope,
-  BookOpen,
-  Building2,
-  HelpCircle,
-  MessageSquare
+  BookOpen
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
 import { Progress } from '@/components/ui/progress'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { cn } from '@/lib/utils'
 import api from '@/lib/api'
-import SignalSEOLogo from '@/components/seo/SignalSEOLogo'
+import SignalSEOLogo from './SignalSEOLogo'
 
 // =============================================================================
-// PHASE DEFINITIONS - Major stages of Signal Learning
+// PHASE DEFINITIONS - Major stages of setup
 // =============================================================================
 const SETUP_PHASES = [
   {
     id: 'discovery',
     title: 'Discovery',
-    description: 'Website crawling & content analysis',
+    description: 'Site crawling & content analysis',
     icon: Search,
     color: 'from-blue-500 to-cyan-500'
   },
   {
     id: 'data',
     title: 'Data Integration',
-    description: 'Connect external data sources',
+    description: 'GSC & performance metrics',
     icon: BarChart3,
     color: 'from-green-500 to-emerald-500'
   },
   {
     id: 'intelligence',
-    title: 'AI Training',
-    description: 'Teaching Signal your business',
+    title: 'Signal Intelligence',
+    description: 'Training Signal AI',
     icon: Brain,
     color: 'from-purple-500 to-indigo-500'
   },
@@ -102,23 +98,16 @@ const SETUP_PHASES = [
     color: 'from-orange-500 to-rose-500'
   },
   {
-    id: 'signal',
-    title: 'Signal Setup',
-    description: 'Configure AI assistant',
-    icon: Sparkles,
-    color: 'from-emerald-500 to-teal-500'
-  },
-  {
     id: 'optimization',
-    title: 'Finalization',
-    description: 'Recommendations & automation',
+    title: 'Optimization',
+    description: 'Schema, metadata & recommendations',
     icon: Zap,
     color: 'from-amber-500 to-yellow-500'
   }
 ]
 
 // =============================================================================
-// DETAILED STEP DEFINITIONS - All Signal Learning operations
+// DETAILED STEP DEFINITIONS - All 47+ operations
 // =============================================================================
 const SETUP_STEPS = [
   // PHASE 1: DISCOVERY
@@ -362,64 +351,7 @@ const SETUP_STEPS = [
     duration: 5000
   },
   
-  // PHASE 5: SIGNAL SETUP - Configure AI assistant capabilities
-  {
-    id: 'signal-config-init',
-    phase: 'signal',
-    title: 'Initializing Signal Config',
-    description: 'Creating AI assistant configuration',
-    icon: Settings,
-    color: 'text-emerald-500',
-    bgColor: 'bg-emerald-500/10',
-    endpoint: 'signal-config',
-    duration: 2000
-  },
-  {
-    id: 'signal-profile-extract',
-    phase: 'signal',
-    title: 'Extracting Business Profile',
-    description: 'Learning brand, services, and tone from content',
-    icon: Building2,
-    color: 'text-teal-500',
-    bgColor: 'bg-teal-500/10',
-    endpoint: 'signal-profile-extract',
-    duration: 5000
-  },
-  {
-    id: 'signal-knowledge-sync',
-    phase: 'signal',
-    title: 'Syncing Knowledge Base',
-    description: 'Building RAG embeddings from page content',
-    icon: Database,
-    color: 'text-cyan-500',
-    bgColor: 'bg-cyan-500/10',
-    endpoint: 'signal-knowledge-sync',
-    duration: 8000
-  },
-  {
-    id: 'signal-faq-generate',
-    phase: 'signal',
-    title: 'Generating FAQs',
-    description: 'Auto-generating common Q&A from content',
-    icon: HelpCircle,
-    color: 'text-violet-500',
-    bgColor: 'bg-violet-500/10',
-    endpoint: 'signal-faq-generate',
-    duration: 5000
-  },
-  {
-    id: 'signal-test-chat',
-    phase: 'signal',
-    title: 'Testing Chat Response',
-    description: 'Verifying Signal can answer questions',
-    icon: MessageSquare,
-    color: 'text-pink-500',
-    bgColor: 'bg-pink-500/10',
-    endpoint: 'signal-test',
-    duration: 3000
-  },
-  
-  // PHASE 6: OPTIMIZATION
+  // PHASE 5: OPTIMIZATION
   {
     id: 'schema-generate',
     phase: 'optimization',
@@ -522,8 +454,8 @@ const SETUP_STEPS = [
   {
     id: 'complete',
     phase: 'optimization',
-    title: 'Learning Complete!',
-    description: 'Signal AI is fully trained and ready',
+    title: 'Setup Complete!',
+    description: 'Your AI SEO Brain is fully configured',
     icon: CheckCircle2,
     color: 'text-emerald-500',
     bgColor: 'bg-emerald-500/10',
@@ -617,9 +549,8 @@ function PhaseIndicator({ phase, isActive, isCompleted, index }) {
 }
 
 // Step status component
-function StepIndicator({ step, status, isActive, index, onRestartFromStep, canRestart }) {
+function StepIndicator({ step, status, isActive, index }) {
   const Icon = step.icon
-  const isClickable = canRestart && (status === 'completed' || status === 'error') && !isActive
   
   return (
     <motion.div
@@ -630,12 +561,8 @@ function StepIndicator({ step, status, isActive, index, onRestartFromStep, canRe
         'flex items-center gap-3 p-3 rounded-lg transition-all duration-300',
         isActive && 'bg-[var(--glass-bg)] shadow-md border border-[var(--glass-border)]',
         status === 'completed' && 'opacity-70',
-        status === 'pending' && 'opacity-40',
-        isClickable && 'cursor-pointer hover:bg-[var(--glass-bg)] hover:shadow-md'
+        status === 'pending' && 'opacity-40'
       )}
-      onClick={() => isClickable && onRestartFromStep(index)}
-      role={isClickable ? 'button' : undefined}
-      tabIndex={isClickable ? 0 : undefined}
     >
       <div className={cn(
         'w-10 h-10 rounded-lg flex items-center justify-center transition-all',
@@ -668,9 +595,6 @@ function StepIndicator({ step, status, isActive, index, onRestartFromStep, canRe
           </p>
           {step.optional && status === 'pending' && (
             <Badge variant="outline" className="text-xs">Optional</Badge>
-          )}
-          {isClickable && (
-            <Badge variant="secondary" className="text-xs">Click to restart</Badge>
           )}
         </div>
         {isActive && (
@@ -744,15 +668,9 @@ function StatCard({ label, value, icon: Icon, color }) {
 
 // =============================================================================
 // MAIN WIZARD COMPONENT
+// Also exported as SignalWizard for use from Signal module context
 // =============================================================================
-export default function SignalSetupWizard({ siteId: propSiteId, projectId, domain: propDomain, onComplete, onSkip }) {
-  // Track the actual siteId and domain (resolved from props or fetched)
-  const [siteId, setSiteId] = useState(propSiteId)
-  const [domain, setDomain] = useState(propDomain)
-  const [siteLoading, setSiteLoading] = useState(false)
-  const [siteError, setSiteError] = useState(null)
-  const [hasStarted, setHasStarted] = useState(false) // Track if user clicked Start
-  
+export default function SEOSetupWizard({ siteId, domain, onComplete, onSkip }) {
   const [currentStep, setCurrentStep] = useState(0)
   const [currentPhase, setCurrentPhase] = useState('discovery')
   const [stepStatuses, setStepStatuses] = useState({})
@@ -773,165 +691,6 @@ export default function SignalSetupWizard({ siteId: propSiteId, projectId, domai
   const abortSignalRef = useRef(0) // Increment to abort current operations
   const logContainerRef = useRef(null)
 
-  // State for manual domain entry
-  const [manualDomain, setManualDomain] = useState('')
-  const [creatingFromDomain, setCreatingFromDomain] = useState(false)
-
-  // Handle manual domain submission
-  const handleDomainSubmit = async () => {
-    if (!manualDomain.trim()) return
-    
-    setCreatingFromDomain(true)
-    try {
-      // Normalize domain
-      const normalizedDomain = manualDomain.trim()
-        .replace(/^https?:\/\//, '')
-        .replace(/\/$/, '')
-      
-      // Create the site
-      const createRes = await api.post('/.netlify/functions/seo-sites-create', {
-        domain: normalizedDomain,
-        siteName: normalizedDomain.replace(/^www\./, ''),
-        project_id: projectId
-      })
-      
-      if (createRes.data.site) {
-        setSiteId(createRes.data.site.id)
-        setDomain(createRes.data.site.domain || normalizedDomain)
-        setSiteError(null)
-      }
-    } catch (err) {
-      console.error('[SignalSetupWizard] Error creating site:', err)
-      setSiteError(err.response?.data?.error || err.message || 'Failed to create site')
-    } finally {
-      setCreatingFromDomain(false)
-    }
-  }
-
-  // Look up site by projectId first, then fall back to domain, or use auto-setup
-  useEffect(() => {
-    async function lookupOrCreateSite() {
-      if (propSiteId) {
-        // Already have a direct siteId, use it
-        setSiteId(propSiteId)
-        return
-      }
-      
-      // Allow wizard to work even without projectId if we can auto-setup
-      if (!projectId) {
-        console.log('[SignalSetupWizard] No projectId, will try auto-setup for known tenants')
-      }
-      
-      setSiteLoading(true)
-      setSiteError(null)
-      
-      // First, if we don't have a domain, try to get it from the project
-      let domainToUse = propDomain
-      if (!domainToUse && projectId) {
-        try {
-          const projectRes = await api.get(`/.netlify/functions/projects-get?id=${projectId}`)
-          const project = projectRes.data?.project
-          if (project?.tenant_domain) {
-            domainToUse = project.tenant_domain
-            setDomain(domainToUse)
-            console.log('[SignalSetupWizard] Got domain from project:', domainToUse)
-          }
-        } catch (err) {
-          console.error('[SignalSetupWizard] Error fetching project:', err)
-        }
-      }
-      
-      try {
-        // First try to find by projectId
-        if (projectId) {
-          try {
-            const res = await api.get(`/.netlify/functions/seo-sites-get?projectId=${projectId}`)
-            if (res.data.site) {
-              setSiteId(res.data.site.id)
-              setDomain(res.data.site.domain || domainToUse)
-              setSiteLoading(false)
-              return
-            }
-          } catch (err) {
-            // 404 is expected if site isn't linked to project yet, continue to domain lookup
-            if (err.response?.status !== 404) {
-              throw err
-            }
-          }
-        }
-        
-        // Fall back to domain lookup (also links to project if found)
-        if (domainToUse) {
-          try {
-            const domainParam = encodeURIComponent(domainToUse)
-            const projectParam = projectId ? `&projectId=${projectId}` : ''
-            const res = await api.get(`/.netlify/functions/seo-sites-get?domain=${domainParam}${projectParam}`)
-            if (res.data.site) {
-              setSiteId(res.data.site.id)
-              setDomain(res.data.site.domain || domainToUse)
-              setSiteLoading(false)
-              return
-            }
-          } catch (err) {
-            // 404 is expected if site doesn't exist yet
-            if (err.response?.status !== 404) {
-              throw err
-            }
-          }
-        }
-        
-        // No site found - create one automatically if we have a domain
-        if (domainToUse) {
-          console.log('[SignalSetupWizard] No site found, creating new site for domain:', domainToUse)
-          const createRes = await api.post('/.netlify/functions/seo-sites-create', {
-            domain: domainToUse,
-            siteName: domainToUse.replace(/^www\./, ''),
-            project_id: projectId
-          })
-          
-          if (createRes.data.site) {
-            setSiteId(createRes.data.site.id)
-            setDomain(createRes.data.site.domain || domainToUse)
-            console.log('[SignalSetupWizard] Created new site:', createRes.data.site.id)
-            setSiteLoading(false)
-            return
-          }
-        }
-        
-        // No domain available - try signal-auto-setup for known tenants
-        // This handles the case where a known tenant (like 'uptrade') accesses the wizard
-        console.log('[SignalSetupWizard] Trying signal-auto-setup for known tenant...')
-        try {
-          const autoSetupRes = await api.post('/.netlify/functions/signal-auto-setup', {
-            tenantId: 'uptrade', // Will expand to check auth context for tenant
-            domain: domainToUse || undefined
-          })
-          
-          if (autoSetupRes.data.success && autoSetupRes.data.siteId) {
-            console.log('[SignalSetupWizard] Auto-setup succeeded:', autoSetupRes.data)
-            setSiteId(autoSetupRes.data.siteId)
-            setDomain(autoSetupRes.data.domain)
-            setSiteLoading(false)
-            return
-          }
-        } catch (autoErr) {
-          console.log('[SignalSetupWizard] Auto-setup not available:', autoErr.response?.data?.error || autoErr.message)
-          // Fall through to show domain entry form
-        }
-        
-        // Still no site - show domain entry form
-        setSiteError('noDomain')
-      } catch (err) {
-        console.error('[SignalSetupWizard] Error looking up/creating site:', err)
-        setSiteError(err.response?.data?.error || err.message || 'Failed to load site')
-      } finally {
-        setSiteLoading(false)
-      }
-    }
-    
-    lookupOrCreateSite()
-  }, [propSiteId, projectId, propDomain])
-
   // Add log entry (with optional deduplication for parallel runs)
   const addLog = useCallback((message, type = 'info') => {
     const time = new Date().toLocaleTimeString('en-US', { 
@@ -949,30 +708,7 @@ export default function SignalSetupWizard({ siteId: propSiteId, projectId, domai
 
   // Update stats
   const updateStats = useCallback((newStats) => {
-    setStats(prev => {
-      // Support both patterns:
-      // 1. updateStats(prev => ({ ...prev, key: value })) - function that returns object
-      // 2. updateStats({ key: value }) - direct object
-      // 3. updateStats({ key: (prevValue) => newValue }) - object with function values
-      
-      if (typeof newStats === 'function') {
-        // Pattern 1: function that returns new state
-        return newStats(prev)
-      }
-      
-      // Pattern 2 & 3: object with direct values or function values
-      const updated = { ...prev }
-      for (const key in newStats) {
-        if (typeof newStats[key] === 'function') {
-          // Pattern 3: function value - call it with prev state
-          updated[key] = newStats[key](prev)
-        } else {
-          // Pattern 2: direct value
-          updated[key] = newStats[key]
-        }
-      }
-      return updated
-    })
+    setStats(prev => ({ ...prev, ...newStats }))
   }, [])
 
   // Auto-scroll logs
@@ -990,46 +726,17 @@ export default function SignalSetupWizard({ siteId: propSiteId, projectId, domai
     }
   }, [currentStep])
 
-  // Start setup when user clicks the Start button
-  useEffect(() => {
-    if (hasStarted && siteId && !isRunning && progress === 0) {
-      runSetup()
-    }
-  }, [hasStarted, siteId, isRunning, progress])
-
   // =========================================================================
   // PARALLEL STEP EXECUTION GROUPS
   // =========================================================================
   
-  // Progress allocation by phase (must sum to 100)
-  const PROGRESS_RANGES = {
-    discovery: { start: 0, end: 15 },      // 4 steps
-    gsc: { start: 15, end: 20 },           // 1 step (but does a lot)
-    parallel: { start: 20, end: 60 },      // 12 steps in parallel
-    training: { start: 60, end: 70 },      // 1 step (but slow)
-    signal: { start: 70, end: 85 },        // 5 steps
-    final: { start: 85, end: 100 }         // 10 steps
-  }
-  
-  // Helper to calculate progress within a phase
-  const calcPhaseProgress = (phase, stepIdx, totalSteps) => {
-    const range = PROGRESS_RANGES[phase]
-    const phaseWidth = range.end - range.start
-    const stepProgress = totalSteps > 0 ? (stepIdx / totalSteps) * phaseWidth : 0
-    return Math.round(range.start + stepProgress)
-  }
-  
-  // Phase 1: Sequential discovery (sitemap is source of truth)
-  // - connect: Creates site/org in DB
-  // - crawl-sitemap: Discovers canonical page URLs from sitemap.xml
-  // - crawl-pages: Extracts content for sitemap pages
-  // - internal-links: Maps link structure between pages
+  // Phase 1: Sequential discovery (must complete before parallel phase)
   const SEQUENTIAL_DISCOVERY_STEPS = ['connect', 'crawl-sitemap', 'crawl-pages', 'internal-links']
   
-  // Phase 2: GSC sync (validates against sitemap, flags orphan URLs)
-  const GSC_SYNC_STEPS = ['gsc-connect']
+  // Phase 2: GSC sync (must complete before parallel analysis) - single step does all GSC work
+  const GSC_SYNC_STEPS = ['gsc-connect'] // gsc-queries and gsc-pages are handled by same sync
   
-  // Phase 3: PARALLEL - All analysis tasks run together
+  // Phase 3: PARALLEL - All these can run simultaneously after GSC sync
   const PARALLEL_ANALYSIS_STEPS = [
     'gsc-indexing',
     'pagespeed',
@@ -1042,34 +749,18 @@ export default function SignalSetupWizard({ siteId: propSiteId, projectId, domai
     'technical-audit',
     'backlinks',
     'local-seo',
-    'competitors'
-  ]
-  
-  // Phase 4: Signal training (must wait for all analysis)
-  const SIGNAL_TRAINING_STEPS = ['ai-train']
-  
-  // Phase 5: Signal setup (configure AI assistant)
-  const SIGNAL_SETUP_STEPS = [
-    'signal-config-init',
-    'signal-profile-extract',
-    'signal-knowledge-sync',
-    'signal-faq-generate',
-    'signal-test-chat'
-  ]
-  
-  // Phase 6: Final optimization and recommendations
-  const FINAL_STEPS = [
+    'competitors',
     'schema-generate',
     'metadata-optimize',
     'predictive-ranking',
-    'opportunities',
-    'ai-recommendations',
-    'auto-optimize',
-    'keyword-tracking',
-    'cwv-baseline',
-    'schedule-setup',
-    'complete'
+    'opportunities'
   ]
+  
+  // Phase 4: Signal training (must wait for all analysis) - ai-knowledge is just a read, skip it
+  const SIGNAL_TRAINING_STEPS = ['ai-train']
+  
+  // Phase 5: Final recommendations (after Signal training)
+  const FINAL_STEPS = ['ai-recommendations', 'auto-optimize', 'keyword-tracking', 'cwv-baseline', 'schedule-setup', 'complete']
 
   // Main setup runner with parallel execution
   const runSetup = useCallback(async () => {
@@ -1080,19 +771,18 @@ export default function SignalSetupWizard({ siteId: propSiteId, projectId, domai
     setFailedStep(null)
     setLogs([])
     
-    addLog('🧠 Starting Signal Learning...', 'info')
-    addLog(`📍 Domain: ${domain || 'Not specified'}`, 'info')
+    addLog('🚀 Starting comprehensive SEO setup...', 'info')
+    addLog(`📍 Domain: ${domain}`, 'info')
 
     const startAbortSignal = abortSignalRef.current
     
     try {
       // =====================================================================
-      // PHASE 1: Sequential Discovery Steps (0-15%)
+      // PHASE 1: Sequential Discovery Steps
       // =====================================================================
-      addLog('🔍 Step 1: Discovering your website...', 'info')
+      addLog('📡 Phase 1: Site Discovery', 'info')
       
-      for (let discoveryIdx = 0; discoveryIdx < SEQUENTIAL_DISCOVERY_STEPS.length; discoveryIdx++) {
-        const stepId = SEQUENTIAL_DISCOVERY_STEPS[discoveryIdx]
+      for (const stepId of SEQUENTIAL_DISCOVERY_STEPS) {
         if (abortSignalRef.current !== startAbortSignal) return
         
         const stepIndex = SETUP_STEPS.findIndex(s => s.id === stepId)
@@ -1101,7 +791,7 @@ export default function SignalSetupWizard({ siteId: propSiteId, projectId, domai
         
         setCurrentStep(stepIndex)
         updateStep(step.id, 'running')
-        setProgress(calcPhaseProgress('discovery', discoveryIdx, SEQUENTIAL_DISCOVERY_STEPS.length))
+        setProgress(Math.round((stepIndex / SETUP_STEPS.length) * 100))
         
         addLog(`▶️ ${step.title}...`, 'info')
         
@@ -1123,14 +813,13 @@ export default function SignalSetupWizard({ siteId: propSiteId, projectId, domai
       }
       
       // =====================================================================
-      // PHASE 2: GSC Sync (15-20%)
+      // PHASE 2: GSC Sync (Sequential - must complete before parallel)
       // =====================================================================
       if (abortSignalRef.current !== startAbortSignal) return
       
-      addLog('📊 Step 2: Connecting data sources...', 'info')
+      addLog('📊 Phase 2: Google Search Console Sync', 'info')
       
-      for (let gscIdx = 0; gscIdx < GSC_SYNC_STEPS.length; gscIdx++) {
-        const stepId = GSC_SYNC_STEPS[gscIdx]
+      for (const stepId of GSC_SYNC_STEPS) {
         if (abortSignalRef.current !== startAbortSignal) return
         
         const stepIndex = SETUP_STEPS.findIndex(s => s.id === stepId)
@@ -1139,7 +828,7 @@ export default function SignalSetupWizard({ siteId: propSiteId, projectId, domai
         
         setCurrentStep(stepIndex)
         updateStep(step.id, 'running')
-        setProgress(calcPhaseProgress('gsc', gscIdx, GSC_SYNC_STEPS.length))
+        setProgress(Math.round((stepIndex / SETUP_STEPS.length) * 100))
         
         addLog(`▶️ ${step.title}...`, 'info')
         
@@ -1165,7 +854,7 @@ export default function SignalSetupWizard({ siteId: propSiteId, projectId, domai
       // =====================================================================
       if (abortSignalRef.current !== startAbortSignal) return
       
-      addLog(`⚡ Step 3: Running ${PARALLEL_ANALYSIS_STEPS.length} analysis tasks in parallel...`, 'info')
+      addLog(`⚡ Phase 3: Running ${PARALLEL_ANALYSIS_STEPS.length} analysis steps in parallel...`, 'info')
       
       // Mark all parallel steps as running
       const parallelStepObjects = PARALLEL_ANALYSIS_STEPS.map(id => {
@@ -1212,9 +901,8 @@ export default function SignalSetupWizard({ siteId: propSiteId, projectId, domai
         }
         const completed = completedCount
         const total = parallelStepObjects.length
-        // Use PROGRESS_RANGES for consistent progress calculation
-        const phaseProgress = calcPhaseProgress('parallel', completed, total)
-        setProgress(phaseProgress)
+        const pct = Math.round((completed / total) * 100)
+        setProgress(40 + Math.round(pct * 0.4)) // 40-80% range for parallel phase
         
         if (completed > 0 && completed < total) {
           // Update log with progress count (replace last progress log)
@@ -1247,14 +935,14 @@ export default function SignalSetupWizard({ siteId: propSiteId, projectId, domai
         }
       }
       
-      setProgress(PROGRESS_RANGES.parallel.end)
+      setProgress(80)
       
       // =====================================================================
-      // PHASE 4: Signal Training (60-70%)
+      // PHASE 4: Signal Training (Must wait for analysis data)
       // =====================================================================
       if (abortSignalRef.current !== startAbortSignal) return
       
-      addLog('🧠 Step 4: Training Signal AI on your business...', 'info')
+      addLog('🧠 Phase 4: Training Signal AI...', 'info')
       
       for (const stepId of SIGNAL_TRAINING_STEPS) {
         if (abortSignalRef.current !== startAbortSignal) return
@@ -1265,7 +953,7 @@ export default function SignalSetupWizard({ siteId: propSiteId, projectId, domai
         
         setCurrentStep(stepIndex)
         updateStep(step.id, 'running')
-        setProgress(calcPhaseProgress('training', SIGNAL_TRAINING_STEPS.indexOf(stepId), SIGNAL_TRAINING_STEPS.length))
+        setProgress(80 + Math.round((SIGNAL_TRAINING_STEPS.indexOf(stepId) / SIGNAL_TRAINING_STEPS.length) * 10))
         
         addLog(`▶️ ${step.title}...`, 'info')
         
@@ -1287,45 +975,11 @@ export default function SignalSetupWizard({ siteId: propSiteId, projectId, domai
       }
       
       // =====================================================================
-      // PHASE 5: Signal Setup (Configure AI assistant)
+      // PHASE 5: Final Steps
       // =====================================================================
       if (abortSignalRef.current !== startAbortSignal) return
       
-      addLog('⚡ Step 5: Configuring Signal AI assistant...', 'info')
-      
-      for (const stepId of SIGNAL_SETUP_STEPS) {
-        if (abortSignalRef.current !== startAbortSignal) return
-        
-        const stepIndex = SETUP_STEPS.findIndex(s => s.id === stepId)
-        const step = SETUP_STEPS[stepIndex]
-        if (!step) continue
-        
-        setCurrentStep(stepIndex)
-        updateStep(step.id, 'running')
-        setProgress(calcPhaseProgress('signal', SIGNAL_SETUP_STEPS.indexOf(stepId), SIGNAL_SETUP_STEPS.length))
-        
-        addLog(`▶️ ${step.title}...`, 'info')
-        
-        try {
-          await executeStep(step)
-          updateStep(step.id, 'completed')
-          addLog(`✅ ${step.title}`, 'success')
-        } catch (stepError) {
-          // Signal setup steps are less critical, log warning and continue
-          updateStep(step.id, 'error')
-          const errorMessage = stepError.response?.data?.message || stepError.response?.data?.error || stepError.message
-          addLog(`⚠️ ${step.title}: ${errorMessage} (continuing)`, 'warning')
-        }
-        
-        await new Promise(r => setTimeout(r, 200))
-      }
-      
-      // =====================================================================
-      // PHASE 6: Final Steps (85-100%)
-      // =====================================================================
-      if (abortSignalRef.current !== startAbortSignal) return
-      
-      addLog('🎯 Step 6: Finalizing recommendations...', 'info')
+      addLog('🎯 Phase 5: Generating Recommendations...', 'info')
       
       for (const stepId of FINAL_STEPS) {
         if (abortSignalRef.current !== startAbortSignal) return
@@ -1336,7 +990,7 @@ export default function SignalSetupWizard({ siteId: propSiteId, projectId, domai
         
         setCurrentStep(stepIndex)
         updateStep(step.id, 'running')
-        setProgress(calcPhaseProgress('final', FINAL_STEPS.indexOf(stepId), FINAL_STEPS.length))
+        setProgress(90 + Math.round((FINAL_STEPS.indexOf(stepId) / FINAL_STEPS.length) * 10))
         
         if (stepId !== 'complete') {
           addLog(`▶️ ${step.title}...`, 'info')
@@ -1359,7 +1013,7 @@ export default function SignalSetupWizard({ siteId: propSiteId, projectId, domai
       }
 
       setProgress(100)
-      addLog('🎉 Signal Learning complete! Your AI brain is fully trained.', 'success')
+      addLog('🎉 SEO setup complete! Signal is fully configured.', 'success')
 
       // Mark site as setup complete
       await api.put('/.netlify/functions/seo-sites-update', {
@@ -1529,11 +1183,7 @@ export default function SignalSetupWizard({ siteId: propSiteId, projectId, domai
                 stepLog(`  └ Internal link analysis complete`)
                 completed = true
               } else if (status === 'failed') {
-                // Job failed - don't retry, just log and move on
-                const errorMsg = jobStatus.data?.job?.error || jobStatus.data?.error || 'Job failed'
-                console.log('[Wizard] Internal links job failed:', errorMsg)
-                stepLog(`  └ Internal link analysis failed: ${errorMsg}`)
-                completed = true  // Exit the loop, don't keep polling
+                throw new Error(jobStatus.data.error || 'Job failed')
               } else if (attempts % 3 === 0) {
                 // Log every 15 seconds
                 stepLog(`  └ Still analyzing... (${attempts * 5}s elapsed)`)
@@ -1789,30 +1439,17 @@ export default function SignalSetupWizard({ siteId: propSiteId, projectId, domai
         break
 
       case 'ai-train':
-        // Always force refresh - this step should retrain every time it runs
-        // If restarting, abort any existing training first
-        const isRestart = stepStatuses[step.id]?.status === 'running' || stepStatuses[step.id]?.status === 'error'
-        const trainRes = await api.post('/.netlify/functions/seo-ai-train', { 
-          siteId, 
-          forceRefresh: true,
-          abort: isRestart // Abort existing training if this is a restart
-        })
+        // Force refresh during development to ensure training runs
+        const trainRes = await api.post('/.netlify/functions/seo-ai-train', { siteId, forceRefresh: true })
         stepLog(`  └ Signal training initiated...`)
         // Poll for completion
         for (let attempt = 0; attempt < 60; attempt++) {
           await new Promise(r => setTimeout(r, 2000))
           const statusRes = await api.get(`/.netlify/functions/seo-ai-knowledge?siteId=${siteId}`)
-          const trainingStatus = statusRes.data.knowledge?.training_status
-          
-          if (trainingStatus === 'completed') {
+          if (statusRes.data.knowledge?.training_status === 'completed') {
             stepLog(`  └ Signal training complete!`)
             break
-          } else if (trainingStatus === 'failed') {
-            const errorMsg = statusRes.data.knowledge?.error_message || 'Training failed'
-            stepLog(`  └ Training failed: ${errorMsg}`)
-            throw new Error(`Signal training failed: ${errorMsg}`)
           }
-          
           if (attempt === 59) {
             stepLog(`  └ Training still in progress (will complete in background)`)
           } else if (attempt % 5 === 0 && attempt > 0) {
@@ -2027,6 +1664,14 @@ export default function SignalSetupWizard({ siteId: propSiteId, projectId, domai
     }
   }
 
+  // Auto-start on mount
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      runSetup()
+    }, 800)
+    return () => clearTimeout(timer)
+  }, [])
+
   // Get phase completion status
   const getPhaseStatus = (phaseId) => {
     const phaseSteps = SETUP_STEPS.filter(s => s.phase === phaseId)
@@ -2083,54 +1728,20 @@ export default function SignalSetupWizard({ siteId: propSiteId, projectId, domai
     abortSignalRef.current++
     console.log('[Wizard] Abort signal incremented to:', abortSignalRef.current)
     
-    // Mark step as error status to trigger abort in ai-train case
+    // Clear current step status
     const updatedStatuses = { ...stepStatuses }
-    updatedStatuses[step.id] = { status: 'error', message: 'Aborted by user' }
+    delete updatedStatuses[step.id]
     setStepStatuses(updatedStatuses)
     
     addLog(`🔄 Restarting ${step.title}...`, 'info')
     
     // Restart from current step after a brief delay
     setTimeout(() => {
-      // Clear the error status and re-execute
-      const clearedStatuses = { ...updatedStatuses }
-      delete clearedStatuses[step.id]
-      setStepStatuses(clearedStatuses)
+      // Reset current step to trigger re-execution
       setCurrentStep(currentStep)
       continueFromStep(currentStep, true)
     }, 500)
   }, [isRunning, currentStep, stepStatuses, addLog])
-
-  // Restart from a clicked step - reset all subsequent steps to pending
-  const restartFromStep = useCallback((stepIndex) => {
-    if (isRunning) {
-      // Abort current execution
-      abortSignalRef.current++
-    }
-    
-    const restartStep = SETUP_STEPS[stepIndex]
-    
-    // Reset this step and all subsequent steps to pending
-    const updatedStatuses = { ...stepStatuses }
-    for (let i = stepIndex; i < SETUP_STEPS.length; i++) {
-      const stepId = SETUP_STEPS[i].id
-      updatedStatuses[stepId] = 'pending'
-    }
-    setStepStatuses(updatedStatuses)
-    
-    setError(null)
-    setFailedStep(null)
-    setLogs([...logs, { 
-      message: `🔄 Restarting from ${restartStep.title}...`, 
-      type: 'info',
-      time: new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', second: '2-digit' })
-    }])
-    
-    // Start from this step after a brief delay
-    setTimeout(() => {
-      continueFromStep(stepIndex, true)
-    }, 500)
-  }, [isRunning, stepStatuses, logs, addLog])
 
   // Continue setup from a specific step index
   const continueFromStep = useCallback(async (startIndex, isRestart = false) => {
@@ -2140,36 +1751,15 @@ export default function SignalSetupWizard({ siteId: propSiteId, projectId, domai
     setError(null)
     setFailedStep(null)
 
-    // Helper to determine which phase a step belongs to
-    const getStepPhase = (stepId) => {
-      if (SEQUENTIAL_DISCOVERY_STEPS.includes(stepId)) return 'discovery'
-      if (GSC_SYNC_STEPS.includes(stepId)) return 'gsc'
-      if (PARALLEL_ANALYSIS_STEPS.includes(stepId)) return 'parallel'
-      if (SIGNAL_TRAINING_STEPS.includes(stepId)) return 'training'
-      if (SIGNAL_SETUP_STEPS.includes(stepId)) return 'signal'
-      if (FINAL_STEPS.includes(stepId)) return 'final'
-      return 'final' // Default to final phase
-    }
-
     try {
       for (let i = startIndex; i < SETUP_STEPS.length; i++) {
         const step = SETUP_STEPS[i]
         setCurrentStep(i)
         updateStep(step.id, 'running')
         
-        // Calculate phase-aware progress
-        const phase = getStepPhase(step.id)
-        const phaseSteps = {
-          discovery: SEQUENTIAL_DISCOVERY_STEPS,
-          gsc: GSC_SYNC_STEPS,
-          parallel: PARALLEL_ANALYSIS_STEPS,
-          training: SIGNAL_TRAINING_STEPS,
-          signal: SIGNAL_SETUP_STEPS,
-          final: FINAL_STEPS
-        }[phase]
-        const phaseIdx = phaseSteps?.indexOf(step.id) || 0
-        const phaseLen = phaseSteps?.length || 1
-        setProgress(calcPhaseProgress(phase, phaseIdx, phaseLen))
+        // Calculate progress
+        const progressPercent = Math.round((i / SETUP_STEPS.length) * 100)
+        setProgress(progressPercent)
         
         addLog(`▶️ ${step.title}...`, 'info')
 
@@ -2199,7 +1789,7 @@ export default function SignalSetupWizard({ siteId: propSiteId, projectId, domai
       }
 
       setProgress(100)
-      addLog('🎉 Signal Learning complete! Your AI brain is fully trained.', 'success')
+      addLog('🎉 SEO setup complete! Signal is fully configured.', 'success')
 
       // Mark site as setup complete
       await api.put('/.netlify/functions/seo-sites-update', {
@@ -2220,169 +1810,6 @@ export default function SignalSetupWizard({ siteId: propSiteId, projectId, domai
   const isComplete = progress === 100 && !isRunning && !error
   const hasFailed = !!failedStep
 
-  // Show loading state while looking up site by projectId
-  if (siteLoading) {
-    return (
-      <div className="min-h-[400px] flex items-center justify-center">
-        <div className="text-center space-y-4">
-          <Loader2 className="w-12 h-12 animate-spin text-primary mx-auto" />
-          <p className="text-[var(--text-secondary)]">Loading site configuration...</p>
-        </div>
-      </div>
-    )
-  }
-
-  // Show error if site lookup failed (but not the 'noDomain' case which we handle below)
-  if (siteError && siteError !== 'noDomain') {
-    return (
-      <div className="min-h-[400px] flex items-center justify-center">
-        <Card className="p-8 max-w-md text-center">
-          <AlertCircle className="w-12 h-12 text-amber-500 mx-auto mb-4" />
-          <h3 className="text-lg font-semibold text-[var(--text-primary)] mb-2">Error Loading Site</h3>
-          <p className="text-[var(--text-secondary)] mb-4">{siteError}</p>
-          {onSkip && (
-            <Button onClick={onSkip} variant="outline" className="mt-4">
-              Go Back
-            </Button>
-          )}
-        </Card>
-      </div>
-    )
-  }
-
-  // Show "no site" error - allow entering domain directly
-  if (siteError === 'noDomain' || (!siteId && !siteLoading)) {
-    return (
-      <div className="min-h-[400px] flex items-center justify-center">
-        <Card className="p-8 max-w-lg">
-          <div className="text-center mb-6">
-            <Globe className="w-12 h-12 text-blue-500 mx-auto mb-4" />
-            <h3 className="text-lg font-semibold text-[var(--text-primary)] mb-2">Enter Your Website Domain</h3>
-            <p className="text-[var(--text-secondary)]">
-              Signal needs to know which website to learn from. Enter your domain below to get started.
-            </p>
-          </div>
-          
-          <div className="space-y-4">
-            <div className="flex gap-2">
-              <Input
-                type="text"
-                placeholder="www.example.com"
-                value={manualDomain}
-                onChange={(e) => setManualDomain(e.target.value)}
-                onKeyDown={(e) => e.key === 'Enter' && handleDomainSubmit()}
-                className="flex-1"
-              />
-              <Button 
-                onClick={handleDomainSubmit}
-                disabled={!manualDomain.trim() || creatingFromDomain}
-              >
-                {creatingFromDomain ? (
-                  <Loader2 className="w-4 h-4 animate-spin" />
-                ) : (
-                  <ArrowRight className="w-4 h-4" />
-                )}
-              </Button>
-            </div>
-            <p className="text-xs text-[var(--text-tertiary)] text-center">
-              Enter the full domain (e.g., www.uptrademedia.com)
-            </p>
-          </div>
-          
-          {onSkip && (
-            <div className="text-center mt-6">
-              <Button onClick={onSkip} variant="ghost" size="sm">
-                Skip for Now
-              </Button>
-            </div>
-          )}
-        </Card>
-      </div>
-    )
-  }
-
-  // Show "Start Setup" landing screen if not started yet
-  if (!hasStarted && !isRunning && progress === 0) {
-    return (
-      <div className="min-h-[600px] bg-[var(--surface-page)] p-6">
-        <div className="max-w-3xl mx-auto">
-          <motion.div
-            initial={{ opacity: 0, y: -20 }}
-            animate={{ opacity: 1, y: 0 }}
-            className="text-center mb-8"
-          >
-            <div className="flex items-center justify-center gap-3 mb-4">
-              <SignalSEOLogo size={72} />
-              <h1 className="text-4xl font-bold bg-gradient-to-r from-[#95d47d] to-[#238b95] bg-clip-text text-transparent">
-                Signal Learning
-              </h1>
-            </div>
-            <p className="text-lg text-[var(--text-secondary)] max-w-xl mx-auto">
-              Train Signal AI to understand your business, website content, and customer needs.
-            </p>
-          </motion.div>
-
-          <Card className="p-8 mb-6">
-            <div className="text-center mb-6">
-              <Badge variant="outline" className="mb-4">
-                {domain || 'Your Website'}
-              </Badge>
-              <h2 className="text-xl font-semibold text-[var(--text-primary)] mb-2">
-                What Signal Learning Does
-              </h2>
-              <p className="text-[var(--text-secondary)]">
-                This wizard will teach Signal everything about your business in about 5-10 minutes.
-              </p>
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-8">
-              {SETUP_PHASES.map((phase, index) => (
-                <motion.div
-                  key={phase.id}
-                  initial={{ opacity: 0, x: -10 }}
-                  animate={{ opacity: 1, x: 0 }}
-                  transition={{ delay: index * 0.1 }}
-                  className="flex items-start gap-3 p-4 rounded-lg bg-[var(--glass-bg)] border border-[var(--glass-border)]"
-                >
-                  <div className={cn('w-10 h-10 rounded-lg flex items-center justify-center bg-gradient-to-r', phase.color)}>
-                    <phase.icon className="w-5 h-5 text-white" />
-                  </div>
-                  <div>
-                    <h3 className="font-medium text-[var(--text-primary)]">{phase.title}</h3>
-                    <p className="text-sm text-[var(--text-secondary)]">{phase.description}</p>
-                  </div>
-                </motion.div>
-              ))}
-            </div>
-
-            <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
-              <Button 
-                size="lg" 
-                onClick={() => {
-                  setHasStarted(true)
-                  // runSetup will be called when hasStarted becomes true
-                }}
-                className="gap-2 bg-gradient-to-r from-[#95d47d] to-[#238b95] hover:opacity-90"
-              >
-                <Rocket className="w-5 h-5" />
-                Start Signal Learning
-              </Button>
-              {onSkip && (
-                <Button variant="ghost" onClick={onSkip}>
-                  Skip for Now
-                </Button>
-              )}
-            </div>
-          </Card>
-
-          <p className="text-center text-sm text-[var(--text-tertiary)]">
-            You can re-run this wizard anytime to refresh Signal's knowledge.
-          </p>
-        </div>
-      </div>
-    )
-  }
-
   return (
     <div className="min-h-screen bg-[var(--surface-page)] p-6">
       <div className="max-w-7xl mx-auto">
@@ -2396,17 +1823,15 @@ export default function SignalSetupWizard({ siteId: propSiteId, projectId, domai
           <div className="flex items-center justify-center gap-3 mb-4">
             <SignalSEOLogo size={56} animate={isRunning} />
             <h1 className="text-3xl font-bold bg-gradient-to-r from-[#95d47d] to-[#238b95] bg-clip-text text-transparent">
-              Signal Learning
+              Signal SEO Setup
             </h1>
           </div>
           <p className="text-[var(--text-secondary)]">
             {isComplete 
-              ? '🎉 Signal AI is fully trained and ready!' 
+              ? '🎉 Signal SEO is fully configured and ready!' 
               : hasFailed
-                ? '❌ Learning failed - see error details below'
-                : domain 
-                  ? `Training Signal AI on ${domain}`
-                  : 'Training Signal AI on your business'
+                ? '❌ Setup failed - see error details below'
+                : `Configuring comprehensive SEO intelligence for ${domain}`
             }
           </p>
         </motion.div>
@@ -2435,8 +1860,6 @@ export default function SignalSetupWizard({ siteId: propSiteId, projectId, domai
                 status={stepStatuses[step.id] || 'pending'}
                 isActive={currentStep === index}
                 index={index}
-                onRestartFromStep={restartFromStep}
-                canRestart={!isRunning && !isComplete}
               />
             ))}
           </div>
@@ -2683,5 +2106,5 @@ export default function SignalSetupWizard({ siteId: propSiteId, projectId, domai
     </div>
   )
 }
-// Legacy alias for SEO module backwards compatibility
-export { SignalSetupWizard as SEOSetupWizard }
+// Named export alias for Signal module context
+export { SEOSetupWizard as SignalWizard }

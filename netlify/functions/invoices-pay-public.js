@@ -13,15 +13,10 @@ let squareClient = null
 async function getSquareClient() {
   if (!squareClient) {
     const squareModule = await import('square')
-    // Square SDK v43+ uses SquareClient instead of Client
-    const SquareClient = squareModule.SquareClient || squareModule.default?.SquareClient
-    const SquareEnvironment = squareModule.SquareEnvironment || squareModule.default?.SquareEnvironment
-    
-    squareClient = new SquareClient({
-      token: SQUARE_ACCESS_TOKEN,
-      environment: SQUARE_ENVIRONMENT === 'production' 
-        ? SquareEnvironment.Production 
-        : SquareEnvironment.Sandbox
+    const Client = squareModule.Client || squareModule.default?.Client
+    squareClient = new Client({
+      accessToken: SQUARE_ACCESS_TOKEN,
+      environment: SQUARE_ENVIRONMENT === 'production' ? 'production' : 'sandbox'
     })
   }
   return squareClient
@@ -60,7 +55,11 @@ function generateReceiptEmailHTML(invoice, contact, paymentId) {
           <!-- Header -->
           <tr>
             <td style="background: linear-gradient(135deg, #4bbf39 0%, #3a9c2d 100%); padding: 32px 40px; text-align: center;">
-              <img src="https://portal.uptrademedia.com/uptrade_media_logo_white.png" alt="Uptrade Media" width="180" height="auto" style="display: block; margin: 0 auto 20px auto;" />
+              <div style="display:inline-flex; align-items:center; justify-content:center; width:96px; height:96px; border-radius:24px; background: linear-gradient(135deg, #22c55e 0%, #16a34a 100%); margin-bottom: 12px;">
+                <svg width="48" height="48" viewBox="0 0 24 24" role="img" aria-label="Uptrade logo" class="logo-mark" style="display:block;">
+                  <path d="M6 4h2v12a4 4 0 0 0 8 0V4h2v12a6 6 0 0 1-12 0V4z" />
+                </svg>
+              </div>
               <h1 style="color: #ffffff; margin: 0; font-size: 24px; font-weight: 600;">Payment Received ✓</h1>
             </td>
           </tr>
@@ -200,51 +199,31 @@ export async function handler(event) {
     // Convert to cents
     const amountInCents = Math.round(parseFloat(invoice.total_amount) * 100)
 
-    // Create payment using Square SDK v43+ API
-    // https://github.com/square/square-nodejs-sdk
+    // Create payment
     const idempotencyKey = randomUUID()
     
-    let paymentResponse
-    try {
-      paymentResponse = await client.payments.create({
-        sourceId,
-        idempotencyKey,
-        amountMoney: {
-          amount: BigInt(amountInCents),
-          currency: 'USD'
-        },
-        locationId: SQUARE_LOCATION_ID,
-        referenceId: invoice.id,
-        note: `Invoice ${invoice.invoice_number}`,
-        autocomplete: true
-      })
-    } catch (paymentError) {
-      console.error('[invoices-pay-public] Square payment error:', paymentError)
-      // Handle Square API errors
-      if (paymentError.errors) {
-        const squareError = paymentError.errors[0]
-        return {
-          statusCode: 400,
-          headers,
-          body: JSON.stringify({ 
-            error: 'Payment failed', 
-            details: squareError?.detail || squareError?.code || 'Card was declined'
-          })
-        }
-      }
-      throw paymentError
-    }
+    const { result, statusCode } = await client.paymentsApi.createPayment({
+      sourceId,
+      idempotencyKey,
+      amountMoney: {
+        amount: BigInt(amountInCents),
+        currency: 'USD'
+      },
+      locationId: SQUARE_LOCATION_ID,
+      referenceId: invoice.id,
+      note: `Invoice ${invoice.invoice_number}`
+    })
 
-    if (!paymentResponse.payment || paymentResponse.payment.status === 'FAILED') {
-      console.error('[invoices-pay-public] Payment failed:', paymentResponse)
+    if (!result.payment || result.payment.status === 'FAILED') {
+      console.error('[invoices-pay-public] Payment failed:', result)
       return { 
         statusCode: 400, 
         headers, 
-        body: JSON.stringify({ error: 'Payment failed', details: paymentResponse.errors }) 
+        body: JSON.stringify({ error: 'Payment failed', details: result.errors }) 
       }
     }
 
-    const paymentId = paymentResponse.payment.id
+    const paymentId = result.payment.id
 
     // Update invoice as paid
     const now = new Date().toISOString()
