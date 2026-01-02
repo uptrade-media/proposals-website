@@ -452,6 +452,17 @@ export default function ChatBubble({ hidden = false }) {
   // Note: prefetchAll and subscribeToMessages are now called in MainLayout on app mount
   // This ensures messaging is ready before the widget is ever opened
   
+  // Create Echo conversation entry (MUST be before useEffect that references it)
+  const echoConversation = echoContact ? {
+    id: echoContact.id,
+    contact: echoContact,
+    is_echo: true,
+    is_ai: true,
+    online: true,
+    lastMessage: 'Your AI teammate - ask me anything!',
+    lastMessageAt: new Date().toISOString()
+  } : null
+  
   // Listen for external requests to open with Echo
   useEffect(() => {
     const handleOpenWithEcho = (event) => {
@@ -492,17 +503,6 @@ export default function ChatBubble({ hidden = false }) {
       setChatMessages(echoMessages)
     }
   }, [echoMessages, activeConversation?.is_echo])
-
-  // Create Echo conversation entry
-  const echoConversation = echoContact ? {
-    id: echoContact.id,
-    contact: echoContact,
-    is_echo: true,
-    is_ai: true,
-    online: true,
-    lastMessage: 'Your AI teammate - ask me anything!',
-    lastMessageAt: new Date().toISOString()
-  } : null
 
   // Transform messages to conversations format - Echo first
   const displayConversations = [
