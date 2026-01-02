@@ -1,6 +1,5 @@
 import axios from 'axios'
 import { supabase } from './supabase-auth'
-import useAuthStore from './auth-store'
 
 // Create axios instance with default config
 const api = axios.create({
@@ -21,7 +20,8 @@ api.interceptors.request.use(
       config.headers.Authorization = `Bearer ${session.access_token}`
     }
     
-    // Get organization and project context from Zustand store (primary source)
+    // Import auth store dynamically to avoid circular dependency
+    const { default: useAuthStore } = await import('./auth-store')
     const state = useAuthStore.getState()
     
     // Check if this is an agency org (Uptrade Media) - agency orgs should NOT filter by org
