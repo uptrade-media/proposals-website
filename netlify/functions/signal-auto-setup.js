@@ -1,3 +1,17 @@
+// ============================================================================
+// DEPRECATED: This function is now redundant - use Signal API directly
+// ============================================================================
+// Portal now calls Signal API (NestJS) instead of internal Signal implementation.
+// This function remains for backward compatibility but should not be used in new code.
+//
+// Migration:
+//   Old: /.netlify/functions/signal-xxx
+//   New: Signal API endpoints (see SIGNAL-API-MIGRATION.md)
+//
+// Signal API Base URL: $SIGNAL_API_URL (http://localhost:3001 or https://signal-api.uptrademedia.com)
+// ============================================================================
+
+
 // netlify/functions/signal-auto-setup.js
 // Auto-setup Signal for a tenant site - creates project, SEO site, and initializes config
 // Called from tenant sites like uptrade-media-nextjs to self-register

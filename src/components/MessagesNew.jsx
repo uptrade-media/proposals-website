@@ -104,11 +104,15 @@ function getInitials(name) {
 
 // Message Bubble Component
 function MessageBubble({ message, isOwn, showAvatar = true, isFirst = false }) {
+  const isPending = message.status === 'sending'
+  const isFailed = message.status === 'failed'
+  
   return (
     <div className={cn(
       "flex gap-3 max-w-[75%] group",
       isOwn ? "ml-auto flex-row-reverse" : "",
-      !isFirst && "mt-0.5"
+      !isFirst && "mt-0.5",
+      isPending && "opacity-70"
     )}>
       {!isOwn && (
         <div className="w-8 flex-shrink-0">
@@ -142,7 +146,9 @@ function MessageBubble({ message, isOwn, showAvatar = true, isFirst = false }) {
           <div className={cn(
             "px-4 py-2.5 text-sm leading-relaxed",
             isOwn 
-              ? "bg-[var(--brand-primary)] text-white rounded-2xl rounded-br-lg" 
+              ? isFailed 
+                ? "bg-red-500/80 text-white rounded-2xl rounded-br-lg"
+                : "bg-[var(--brand-primary)] text-white rounded-2xl rounded-br-lg" 
               : "bg-[var(--glass-bg)] text-[var(--text-primary)] rounded-2xl rounded-bl-lg border border-[var(--glass-border)]"
           )}>
             {message.content}
@@ -169,7 +175,11 @@ function MessageBubble({ message, isOwn, showAvatar = true, isFirst = false }) {
               {formatMessageTime(message.created_at || message.createdAt)}
             </span>
             <span className="text-[var(--text-tertiary)]">
-              {message.read_at || message.readAt ? (
+              {isFailed ? (
+                <span className="text-[10px] text-red-400">Failed to send</span>
+              ) : isPending ? (
+                <Loader2 className="h-3 w-3 animate-spin" />
+              ) : message.read_at || message.readAt ? (
                 <CheckCheck className="h-3 w-3 text-[var(--brand-primary)]" />
               ) : (
                 <Check className="h-3 w-3" />
@@ -199,9 +209,15 @@ function DateSeparator({ date }) {
 function ConversationItem({ conversation, isActive, onClick, user }) {
   const hasUnread = conversation.unreadCount > 0
   const isGroup = conversation.type === 'group'
+  const isEcho = conversation.is_ai || conversation.is_echo
   const otherParticipant = conversation.recipient?.id === user?.id 
     ? conversation.sender 
     : conversation.recipient
+
+  // Get display name - prioritize Echo
+  const displayName = isEcho 
+    ? 'Echo' 
+    : (otherParticipant?.name || conversation.contact?.name || conversation.sender_name || conversation.recipient_name || 'Unknown')
 
   return (
     <button
@@ -209,11 +225,18 @@ function ConversationItem({ conversation, isActive, onClick, user }) {
       className={cn(
         "w-full flex items-center gap-3 p-3 rounded-xl transition-all text-left",
         "hover:bg-[var(--glass-bg-hover)]",
-        isActive && "bg-[var(--brand-primary)]/10"
+        isActive && "bg-[var(--brand-primary)]/10",
+        isEcho && "border border-emerald-200 dark:border-emerald-800 bg-gradient-to-r from-emerald-50/30 to-transparent dark:from-emerald-950/20"
       )}
     >
       <div className="relative flex-shrink-0">
-        {isGroup ? (
+        {isEcho ? (
+          <div className="w-12 h-12 rounded-full bg-gradient-to-br from-emerald-400 to-teal-500 flex items-center justify-center">
+            <svg className="w-6 h-6 text-white" viewBox="0 0 24 24" fill="currentColor">
+              <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/>
+            </svg>
+          </div>
+        ) : isGroup ? (
           <div className="w-12 h-12 rounded-full bg-[var(--glass-bg)] border border-[var(--glass-border)] flex items-center justify-center">
             <Users className="h-5 w-5 text-[var(--text-secondary)]" />
           </div>
@@ -221,28 +244,38 @@ function ConversationItem({ conversation, isActive, onClick, user }) {
           <Avatar className="h-12 w-12">
             <AvatarImage src={otherParticipant?.avatar || conversation.contact?.avatar} />
             <AvatarFallback className="bg-gradient-to-br from-teal-500 to-green-500 text-white">
-              {getInitials(otherParticipant?.name || conversation.contact?.name || conversation.sender_name || conversation.recipient_name)}
+              {getInitials(displayName)}
             </AvatarFallback>
           </Avatar>
         )}
-        {conversation.online && (
-          <span className="absolute bottom-0 right-0 w-3.5 h-3.5 bg-green-500 rounded-full border-2 border-[var(--surface-primary)]" />
+        {(conversation.online || isEcho) && (
+          <span className={cn(
+            "absolute bottom-0 right-0 w-3.5 h-3.5 rounded-full border-2 border-[var(--surface-primary)]",
+            isEcho ? "bg-emerald-400 animate-pulse" : "bg-green-500"
+          )} />
         )}
       </div>
       
       <div className="flex-1 min-w-0">
         <div className="flex items-center justify-between mb-0.5">
-          <span className={cn(
-            "text-sm truncate",
-            hasUnread ? "font-semibold text-[var(--text-primary)]" : "font-medium text-[var(--text-primary)]"
-          )}>
-            {otherParticipant?.name || conversation.contact?.name || conversation.sender_name || conversation.recipient_name || 'Unknown'}
-          </span>
+          <div className="flex items-center gap-2">
+            <span className={cn(
+              "text-sm truncate",
+              hasUnread ? "font-semibold text-[var(--text-primary)]" : "font-medium text-[var(--text-primary)]"
+            )}>
+              {displayName}
+            </span>
+            {isEcho && (
+              <Badge className="text-[10px] px-1.5 py-0 h-4 bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400 border-0">
+                AI
+              </Badge>
+            )}
+          </div>
           <span className={cn(
             "text-[11px] flex-shrink-0",
             hasUnread ? "text-[var(--brand-primary)] font-medium" : "text-[var(--text-tertiary)]"
           )}>
-            {formatRelativeTime(conversation.lastMessageAt || conversation.created_at || conversation.createdAt)}
+            {isEcho ? 'Always online' : formatRelativeTime(conversation.lastMessageAt || conversation.created_at || conversation.createdAt)}
           </span>
         </div>
         
@@ -251,7 +284,7 @@ function ConversationItem({ conversation, isActive, onClick, user }) {
             "text-xs truncate",
             hasUnread ? "text-[var(--text-secondary)] font-medium" : "text-[var(--text-tertiary)]"
           )}>
-            {conversation.lastMessage || conversation.content || 'Start a conversation'}
+            {conversation.lastMessage || conversation.content || (isEcho ? 'Your AI teammate - ask me anything!' : 'Start a conversation')}
           </p>
           {hasUnread && (
             <Badge className="h-5 min-w-5 px-1.5 text-[10px] bg-[var(--brand-primary)] text-white border-0 flex-shrink-0">
@@ -369,12 +402,15 @@ function ChatArea({
   onSendMessage, 
   onBack, 
   isLoading,
-  currentUserId 
+  currentUserId,
+  typingUsers = {},
+  onTyping
 }) {
   const [messageText, setMessageText] = useState('')
   const [isSending, setIsSending] = useState(false)
   const messagesEndRef = useRef(null)
   const textareaRef = useRef(null)
+  const typingTimeoutRef = useRef(null)
 
   // Auto-scroll to bottom
   useEffect(() => {
@@ -388,9 +424,33 @@ function ChatArea({
       textareaRef.current.style.height = Math.min(textareaRef.current.scrollHeight, 120) + 'px'
     }
   }, [messageText])
+  
+  // Handle typing input - send typing indicator
+  const handleTextChange = (e) => {
+    setMessageText(e.target.value)
+    
+    // Send typing indicator
+    if (onTyping && e.target.value) {
+      onTyping(true)
+      
+      // Clear previous timeout
+      if (typingTimeoutRef.current) {
+        clearTimeout(typingTimeoutRef.current)
+      }
+      
+      // Stop typing after 2 seconds of no input
+      typingTimeoutRef.current = setTimeout(() => {
+        onTyping(false)
+      }, 2000)
+    }
+  }
 
   const handleSend = async () => {
     if (!messageText.trim() || isSending) return
+    
+    // Clear typing
+    if (onTyping) onTyping(false)
+    if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current)
     
     setIsSending(true)
     await onSendMessage(messageText.trim())
@@ -408,6 +468,12 @@ function ChatArea({
   const otherParticipant = conversation?.recipient?.id === currentUserId 
     ? conversation?.sender 
     : conversation?.recipient
+  
+  // Get typing users for this conversation
+  const conversationId = conversation?.id || conversation?.contact?.id
+  const typingInConversation = Object.values(typingUsers).filter(
+    t => t.conversationId === conversationId
+  )
 
   // Group messages by date
   const groupedMessages = messages.reduce((groups, message) => {
@@ -541,6 +607,22 @@ function ChatArea({
         </div>
       </ScrollArea>
 
+      {/* Typing Indicator */}
+      {typingInConversation.length > 0 && (
+        <div className="px-6 py-2">
+          <div className="flex items-center gap-2 text-sm text-[var(--text-tertiary)]">
+            <div className="flex gap-1">
+              <span className="w-2 h-2 rounded-full bg-[var(--text-tertiary)] animate-bounce" style={{ animationDelay: '0ms' }} />
+              <span className="w-2 h-2 rounded-full bg-[var(--text-tertiary)] animate-bounce" style={{ animationDelay: '150ms' }} />
+              <span className="w-2 h-2 rounded-full bg-[var(--text-tertiary)] animate-bounce" style={{ animationDelay: '300ms' }} />
+            </div>
+            <span>
+              {typingInConversation.map(t => t.name).join(', ')} {typingInConversation.length === 1 ? 'is' : 'are'} typing...
+            </span>
+          </div>
+        </div>
+      )}
+      
       {/* Message Input */}
       <div className="px-6 py-4 border-t border-[var(--glass-border)] bg-[var(--glass-bg)]/30">
         <div className="flex items-end gap-3">
@@ -564,7 +646,7 @@ function ChatArea({
               ref={textareaRef}
               placeholder="Type a message..."
               value={messageText}
-              onChange={(e) => setMessageText(e.target.value)}
+              onChange={handleTextChange}
               onKeyDown={handleKeyDown}
               rows={1}
               className="min-h-[44px] max-h-[120px] py-3 pr-12 resize-none bg-[var(--glass-bg)] border-[var(--glass-border)] rounded-2xl"
@@ -610,7 +692,22 @@ export default function Messages() {
     fetchMessage,
     sendMessage,
     replyToMessage,
-    isLoading 
+    isLoading,
+    // Echo support
+    echoContact,
+    echoMessages,
+    fetchEchoContact,
+    fetchEchoMessages,
+    sendToEcho,
+    isEchoContact,
+    // Realtime support
+    subscribeToMessages,
+    unsubscribeFromMessages,
+    realtimeConnected,
+    setActiveConversation: setStoreActiveConversation,
+    // Typing indicators
+    typingUsers,
+    sendTypingIndicator
   } = useMessagesStore()
 
   const [activeConversation, setActiveConversation] = useState(null)
@@ -648,18 +745,76 @@ export default function Messages() {
     }
   }, [contacts])
 
-  // Fetch initial data
+  // Fetch initial data and subscribe to realtime
   useEffect(() => {
     if (hasFetchedRef.current) return
     hasFetchedRef.current = true
     
-    fetchConversations()
-    fetchContacts()
-    fetchMessages()
+    // Use prefetchAll for parallel loading
+    const { prefetchAll } = useMessagesStore.getState()
+    prefetchAll()
+    
+    // Subscribe to realtime messages if we have user info
+    if (user?.id && user?.org_id) {
+      subscribeToMessages(user.id, user.org_id, user.name || 'User')
+    }
+    
+    // Cleanup on unmount
+    return () => {
+      unsubscribeFromMessages()
+    }
   }, [])
+  
+  // Subscribe to realtime when user becomes available
+  useEffect(() => {
+    if (user?.id && user?.org_id && !realtimeConnected) {
+      subscribeToMessages(user.id, user.org_id, user.name || 'User')
+    }
+  }, [user?.id, user?.org_id, realtimeConnected])
 
-  // Use messages as conversations if conversations are empty
-  const displayConversations = conversations.length > 0 ? conversations : messages
+  // Update chat messages when store's messages change (from realtime)
+  useEffect(() => {
+    if (activeConversation && messages.length > 0) {
+      const conversationMessages = messages.filter(msg => {
+        const partnerId = activeConversation.contact?.id || activeConversation.recipient?.id
+        return msg.sender_id === partnerId || msg.recipient_id === partnerId
+      })
+      if (conversationMessages.length > chatMessages.length) {
+        setChatMessages(conversationMessages)
+      }
+    }
+  }, [messages, activeConversation])
+  
+  // Update Echo messages from store
+  useEffect(() => {
+    if (activeConversation?.is_echo && echoMessages.length > 0) {
+      setChatMessages(echoMessages)
+    }
+  }, [echoMessages, activeConversation?.is_echo])
+
+  // Build display conversations with Echo at top
+  const baseConversations = conversations.length > 0 ? conversations : messages
+  
+  // Create Echo conversation entry if echoContact exists
+  const echoConversation = echoContact ? {
+    id: echoContact.id,
+    partner_id: echoContact.id,
+    contact: echoContact,
+    recipient: echoContact,
+    sender_name: 'Echo',
+    recipient_name: 'Echo',
+    lastMessage: 'Your AI teammate - ask me anything!',
+    lastMessageAt: new Date().toISOString(),
+    is_ai: true,
+    is_echo: true,
+    online: true
+  } : null
+  
+  // Put Echo first, then other conversations (excluding Echo duplicates)
+  const displayConversations = [
+    ...(echoConversation ? [echoConversation] : []),
+    ...baseConversations.filter(c => !c.is_ai && !c.is_echo)
+  ]
 
   // Filter conversations
   const filteredConversations = displayConversations.filter(conv => {
@@ -686,8 +841,16 @@ export default function Messages() {
   const handleSelectConversation = async (conversation) => {
     setActiveConversation(conversation)
     setShowNewConversation(false)
+    setStoreActiveConversation?.(conversation.id) // Track for realtime updates
     
-    // Fetch thread messages
+    // Handle Echo conversation
+    if (conversation.is_echo || conversation.is_ai) {
+      await fetchEchoMessages()
+      setChatMessages(echoMessages)
+      return
+    }
+    
+    // Fetch thread messages for regular conversations
     if (conversation.id) {
       const result = await fetchMessage(conversation.id)
       if (result.success && result.data?.thread) {
@@ -733,7 +896,17 @@ export default function Messages() {
     }
     setChatMessages(prev => [...prev, tempMessage])
     
-    // Send to server
+    // Use Echo-specific method for AI conversations
+    if (activeConversation.is_echo || activeConversation.is_ai) {
+      const result = await sendToEcho({ content })
+      if (result.success) {
+        // Echo messages are updated via the store, which triggers our useEffect
+        fetchConversations()
+      }
+      return
+    }
+    
+    // Send to server for regular conversations
     const messageData = {
       recipientId,
       subject: activeConversation.subject || 'New message',
@@ -760,7 +933,23 @@ export default function Messages() {
         {/* Header */}
         <div className="p-4 border-b border-[var(--glass-border)]">
           <div className="flex items-center justify-between mb-4">
-            <h1 className="text-xl font-bold text-[var(--text-primary)]">Messages</h1>
+            <div className="flex items-center gap-2">
+              <h1 className="text-xl font-bold text-[var(--text-primary)]">Messages</h1>
+              {/* Realtime connection indicator */}
+              <TooltipProvider>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <span className={cn(
+                      "w-2 h-2 rounded-full",
+                      realtimeConnected ? "bg-green-500 animate-pulse" : "bg-gray-400"
+                    )} />
+                  </TooltipTrigger>
+                  <TooltipContent>
+                    {realtimeConnected ? "Live updates active" : "Connecting..."}
+                  </TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
+            </div>
             <div className="flex items-center gap-1">
               <TooltipProvider>
                 <Tooltip>
@@ -860,6 +1049,13 @@ export default function Messages() {
             onSendMessage={handleSendMessage}
             isLoading={isLoading}
             currentUserId={user?.id}
+            typingUsers={typingUsers}
+            onTyping={(isTyping) => {
+              const conversationId = activeConversation?.id || activeConversation?.contact?.id
+              if (conversationId) {
+                sendTypingIndicator(conversationId, isTyping)
+              }
+            }}
           />
         ) : (
           <EmptyState onNewMessage={() => setShowNewConversation(true)} />

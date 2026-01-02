@@ -167,11 +167,11 @@ const Billing = () => {
   }, [])
   
   // Set default tab based on user type
-  const { currentOrg, currentProject } = useAuthStore()
-  // Agency org (Uptrade Media) should show admin view, client orgs show tenant view
-  const isAgencyOrg = currentOrg?.org_type === 'agency'
-  const isInTenantContext = !!currentProject || (!!currentOrg && !isAgencyOrg)
-  const computedIsAdmin = user?.role === 'admin' && !isInTenantContext
+  const { currentOrg, currentProject, isSuperAdmin } = useAuthStore()
+  // Uptrade Media org should show admin view, client orgs show tenant view
+  const isUptradeMediaOrg = currentOrg?.slug === 'uptrade-media' || currentOrg?.domain === 'uptrademedia.com' || currentOrg?.org_type === 'agency'
+  const isInTenantContext = (!!currentProject && !isUptradeMediaOrg) || (!!currentOrg && !isUptradeMediaOrg)
+  const computedIsAdmin = (user?.role === 'admin' || isSuperAdmin) && !isInTenantContext
   
   useEffect(() => {
     // Set appropriate default tab when component mounts or user type changes

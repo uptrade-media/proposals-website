@@ -75,6 +75,11 @@ export const useSignalStore = create(
       activeWidgetConversation: null,
       activeWidgetMessages: [],
       
+      // Analytics state (from dedicated endpoint)
+      analytics: null,
+      analyticsLoading: false,
+      analyticsError: null,
+      
       // Learning suggestions state
       suggestions: [],
       suggestionsLoading: false,
@@ -516,6 +521,29 @@ export const useSignalStore = create(
       },
       
       // ─────────────────────────────────────────────────────────────────────────
+      // Analytics Actions
+      // ─────────────────────────────────────────────────────────────────────────
+      
+      fetchAnalytics: async (projectId, options = {}) => {
+        set({ analyticsLoading: true, analyticsError: null })
+        try {
+          const params = new URLSearchParams({ projectId, ...options })
+          const res = await axios.get(`${MODULE_BASE}/signal-analytics?${params}`)
+          set({ 
+            analytics: res.data,
+            analyticsLoading: false
+          })
+          return res.data
+        } catch (error) {
+          set({ 
+            analyticsError: error.message,
+            analyticsLoading: false 
+          })
+          throw error
+        }
+      },
+      
+      // ─────────────────────────────────────────────────────────────────────────
       // Learning Suggestions Actions
       // ─────────────────────────────────────────────────────────────────────────
       
@@ -655,5 +683,7 @@ export const selectWidgetConversations = (state) => state.widgetConversations
 export const selectWidgetConversationsStats = (state) => state.widgetConversationsStats
 export const selectSuggestions = (state) => state.suggestions
 export const selectSuggestionsStats = (state) => state.suggestionsStats
+export const selectAnalytics = (state) => state.analytics
+export const selectAnalyticsLoading = (state) => state.analyticsLoading
 
 export default useSignalStore

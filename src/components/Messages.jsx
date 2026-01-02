@@ -33,6 +33,7 @@ import useAuthStore from '@/lib/auth-store'
 import { EchoAvatar, EchoThreadItem, EchoConversation } from '@/components/echo'
 // Live Chat components
 import { LiveChatAvatar, LiveChatThreadItem, LiveChatConversation } from '@/components/livechat'
+import ContactAvatar, { getContactType } from '@/components/ui/ContactAvatar'
 
 const Messages = () => {
   const { user } = useAuthStore()
@@ -81,6 +82,8 @@ const Messages = () => {
   const [selectedConversation, setSelectedConversation] = useState(null)
   const [showEchoChat, setShowEchoChat] = useState(false)
   const [showLiveChatSession, setShowLiveChatSession] = useState(null) // Holds the live chat session being viewed
+  const [conversationFilter, setConversationFilter] = useState('all') // all | team | client | live | echo
+  const [contactFilter, setContactFilter] = useState('all')
   const [composeForm, setComposeForm] = useState({
     recipient_id: '',
     subject: '',
@@ -171,6 +174,31 @@ const Messages = () => {
       message.recipient_name.toLowerCase().includes(searchLower)
     )
   })
+
+  const conversationMatchesFilter = (conversation) => {
+    if (conversationFilter === 'all') return true
+    if (conversationFilter === 'echo') return isEchoContact(conversation)
+    if (conversationFilter === 'live') return isLiveChat(conversation)
+    const contactType = getContactType({
+      contact_type: conversation.partner_type || conversation.contact?.contact_type,
+      org_type: conversation.contact?.org_type,
+      is_uptrade: conversation.contact?.is_uptrade,
+      is_team_member: conversation.contact?.is_team_member
+    })
+    if (conversationFilter === 'team') return contactType === 'team' || contactType === 'uptrade'
+    if (conversationFilter === 'client') return contactType === 'client'
+    return true
+  }
+
+  const contactMatchesFilter = (contact) => {
+    if (contactFilter === 'all') return true
+    if (contactFilter === 'echo') return isEchoContact(contact)
+    const contactType = getContactType(contact)
+    if (contactFilter === 'live') return contactType === 'livechat'
+    if (contactFilter === 'team') return contactType === 'team' || contactType === 'uptrade'
+    if (contactFilter === 'client') return contactType === 'client'
+    return true
+  }
 
   const getMessageStatusIcon = (message) => {
     if (message.recipient_id === user?.id) {
@@ -494,8 +522,25 @@ const Messages = () => {
             </Card>
           ) : (
             <>
+              <div className="flex items-center gap-2 mb-3">
+                {['all', 'team', 'client', 'live', 'echo'].map((f) => (
+                  <Button
+                    key={f}
+                    size="sm"
+                    variant={conversationFilter === f ? 'glass-primary' : 'outline'}
+                    onClick={() => setConversationFilter(f)}
+                  >
+                    {f === 'all' && 'All'}
+                    {f === 'team' && 'Team'}
+                    {f === 'client' && 'Clients'}
+                    {f === 'live' && 'Live Chat'}
+                    {f === 'echo' && 'Echo'}
+                  </Button>
+                ))}
+              </div>
+
               {/* Echo thread - always pinned at top */}
-              {echoContact && (
+              {echoContact && (conversationFilter === 'all' || conversationFilter === 'echo') && (
                 <Card 
                   className="cursor-pointer hover:shadow-md transition-shadow border-emerald-200 dark:border-emerald-800 bg-gradient-to-r from-emerald-50/50 to-transparent dark:from-emerald-950/20"
                   onClick={() => {
@@ -530,7 +575,7 @@ const Messages = () => {
               )}
 
               {/* Live Chat Sessions - show pending first */}
-              {liveChatSessions.filter(s => s.chat_status !== 'closed').map((session) => (
+              {(conversationFilter === 'all' || conversationFilter === 'live') && liveChatSessions.filter(s => s.chat_status !== 'closed').map((session) => (
                 <LiveChatThreadItem
                   key={session.id}
                   session={session}
@@ -558,7 +603,10 @@ const Messages = () => {
                 </Card>
               ) : (
                 <div className="space-y-2">
-                  {conversations.filter(c => !isEchoContact(c) && !isLiveChat(c)).map((conversation) => (
+                  {conversations
+                    .filter(c => !isEchoContact(c) && !isLiveChat(c))
+                    .filter(conversationMatchesFilter)
+                    .map((conversation) => (
                     <Card 
                       key={conversation.partner_id} 
                       className="cursor-pointer hover:shadow-md transition-shadow"
@@ -567,9 +615,16 @@ const Messages = () => {
                       <CardContent className="p-4">
                         <div className="flex items-start justify-between">
                           <div className="flex items-start space-x-3 flex-1">
-                            <div className="w-10 h-10 bg-gradient-to-r from-[var(--brand-primary)] to-[var(--brand-secondary)] rounded-full flex items-center justify-center text-white font-medium">
-                              {conversation.partner_name.charAt(0)}
-                            </div>
+                            <ContactAvatar 
+                              contact={{ 
+                                name: conversation.partner_name,
+                                email: conversation.partner_email,
+                                contact_type: conversation.partner_type
+                              }}
+                              size="md"
+                              status={conversation.partner_online ? 'online' : 'offline'}
+                              showBadge
+                            />
                             <div className="flex-1 min-w-0">
                               <div className="flex items-center justify-between mb-1">
                                 <span className="font-medium text-[var(--text-primary)]">
@@ -604,6 +659,23 @@ const Messages = () => {
         </TabsContent>
 
         <TabsContent value="contacts" className="space-y-4">
+          <div className="flex items-center gap-2">
+            {['all', 'team', 'client', 'live', 'echo'].map((f) => (
+              <Button
+                key={f}
+                size="sm"
+                variant={contactFilter === f ? 'glass-primary' : 'outline'}
+                onClick={() => setContactFilter(f)}
+              >
+                {f === 'all' && 'All'}
+                {f === 'team' && 'Team'}
+                {f === 'client' && 'Clients'}
+                {f === 'live' && 'Live Chat'}
+                {f === 'echo' && 'Echo'}
+              </Button>
+            ))}
+          </div>
+
           {contacts.length === 0 && !echoContact ? (
             <Card>
               <CardContent className="flex flex-col items-center justify-center py-12">
@@ -617,7 +689,7 @@ const Messages = () => {
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
               {/* Echo contact card - always first */}
-              {echoContact && (
+              {echoContact && (contactFilter === 'all' || contactFilter === 'echo') && (
                 <Card className="hover:shadow-md transition-shadow border-emerald-200 dark:border-emerald-800">
                   <CardContent className="p-4">
                     <div className="flex items-center space-x-3">
@@ -657,13 +729,19 @@ const Messages = () => {
               )}
 
               {/* Regular contacts */}
-              {contacts.filter(c => !isEchoContact(c)).map((contact) => (
+              {contacts
+                .filter(c => !isEchoContact(c))
+                .filter(contactMatchesFilter)
+                .map((contact) => (
                 <Card key={contact.id} className="hover:shadow-md transition-shadow">
                   <CardContent className="p-4">
                     <div className="flex items-center space-x-3">
-                      <div className="w-10 h-10 bg-gradient-to-r from-[var(--brand-primary)] to-[var(--brand-secondary)] rounded-full flex items-center justify-center text-white font-medium">
-                        {contact.name.charAt(0)}
-                      </div>
+                      <ContactAvatar 
+                        contact={contact}
+                        size="md"
+                        status={contact.status || 'offline'}
+                        showBadge
+                      />
                       <div className="flex-1 min-w-0">
                         <h4 className="font-medium text-[var(--text-primary)] truncate">
                           {contact.name}

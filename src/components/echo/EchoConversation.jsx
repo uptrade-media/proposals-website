@@ -2,6 +2,7 @@
 // Full Echo conversation view with messaging interface
 
 import { useState, useEffect, useRef } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
@@ -41,6 +42,7 @@ export function EchoConversation({
   onBack,
   className 
 }) {
+  const navigate = useNavigate()
   const { user } = useAuthStore()
   const { sendToEcho, echoTyping, clearEchoTyping } = useMessagesStore()
   
@@ -181,6 +183,27 @@ export function EchoConversation({
                 message={message}
                 isOwn={message.sender_id === user?.id}
                 onSuggestionClick={handleSuggestionClick}
+                onAction={(action) => {
+                  // Handle Echo action buttons
+                  if (action.type === 'openElement') {
+                    // Navigate to Engage and open the element
+                    // First navigate to the Engage page with the right params
+                    navigate(`/engage?tab=elements&project=${action.projectId}`)
+                    // Then dispatch an event to open the element editor
+                    // Use setTimeout to ensure navigation completes first
+                    setTimeout(() => {
+                      window.dispatchEvent(new CustomEvent('echo:openElement', {
+                        detail: {
+                          projectId: action.projectId,
+                          elementId: action.elementId,
+                          elementName: action.elementName
+                        }
+                      }))
+                    }, 100)
+                  } else if (action.type === 'navigate' && action.route) {
+                    navigate(action.route)
+                  }
+                }}
                 className="group"
               />
             ))}

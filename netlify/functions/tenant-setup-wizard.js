@@ -53,9 +53,9 @@ const AVAILABLE_MODULES = {
     requiresSetup: []
   },
   email_manager: { 
-    label: 'Email Campaigns',
-    tables: ['email_campaigns', 'email_templates', 'email_subscribers'],
-    requiresSetup: ['resend_api_key', 'resend_from_email']
+    label: 'Outreach',
+    tables: ['email_campaigns', 'email_templates', 'email_subscribers', 'sms_campaigns'],
+    requiresSetup: ['resend_api_key', 'resend_from_email', 'twilio_account_sid', 'twilio_auth_token']
   },
 }
 

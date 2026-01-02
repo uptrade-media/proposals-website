@@ -14,7 +14,7 @@ const AVAILABLE_FEATURES = {
   ecommerce: { label: 'Products & Orders', tables: ['products', 'orders', 'order_items'] },
   files: { label: 'File Manager', tables: ['files'] },
   messages: { label: 'Messages', tables: ['messages'] },
-  email_manager: { label: 'Email Campaigns', tables: ['email_campaigns', 'email_tracking'] },
+  email_manager: { label: 'Outreach', tables: ['email_campaigns', 'email_tracking', 'sms_campaigns'] },
   seo: { label: 'SEO Manager', tables: ['seo_sites', 'seo_pages', 'seo_queries'] }
 }
 

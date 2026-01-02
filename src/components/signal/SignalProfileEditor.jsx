@@ -1,6 +1,6 @@
 // src/components/signal/SignalProfileEditor.jsx
 // Edit client profile snapshot - brand, services, tone, contact info, CTA rules
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
   Building2,
@@ -18,7 +18,10 @@ import {
   Plus,
   X,
   Sparkles,
-  AlertCircle
+  AlertCircle,
+  RefreshCw,
+  Check,
+  Gauge
 } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -28,8 +31,63 @@ import { Label } from '@/components/ui/label'
 import { Badge } from '@/components/ui/badge'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Alert, AlertDescription } from '@/components/ui/alert'
+import { Progress } from '@/components/ui/progress'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
 import { useSignalStore } from '@/lib/signal-store'
+import { getIndustryOptions, applyIndustryTemplate } from '@/lib/signal-industry-templates'
 import { cn } from '@/lib/utils'
+import api from '@/lib/api'
+
+// =============================================================================
+// TOKEN COUNTING - Estimate tokens from profile content
+// =============================================================================
+const RECOMMENDED_MAX_TOKENS = 1500
+const WARNING_THRESHOLD = 1200
+
+/**
+ * Estimate token count from text (roughly 4 characters per token for English)
+ * This is a simple heuristic that works well for most content.
+ */
+function estimateTokens(text) {
+  if (!text) return 0
+  // Remove extra whitespace and count
+  const cleaned = String(text).replace(/\s+/g, ' ').trim()
+  return Math.ceil(cleaned.length / 4)
+}
+
+/**
+ * Calculate total tokens for entire profile snapshot
+ */
+function calculateProfileTokens(profile) {
+  let totalChars = 0
+  
+  // String fields
+  const stringFields = ['brandName', 'shortDescription', 'address', 'phone', 'email', 'pricingModel', 'bookingFlow']
+  stringFields.forEach(field => {
+    if (profile[field]) totalChars += String(profile[field]).length
+  })
+  
+  // Array fields (joined)
+  const arrayFields = ['toneRules', 'primaryServices', 'serviceCategories', 'serviceArea', 'ctaRules', 'doNotOffer', 'complianceNotes', 'requiredFields', 'optionalFields', 'qualifyingQuestions']
+  arrayFields.forEach(field => {
+    if (Array.isArray(profile[field])) {
+      totalChars += profile[field].join(' ').length
+    }
+  })
+  
+  // Hours object
+  if (profile.hours) {
+    totalChars += Object.values(profile.hours).filter(Boolean).join(' ').length
+  }
+  
+  return Math.ceil(totalChars / 4)
+}
 
 const SECTION_ICONS = {
   identity: Building2,
@@ -42,6 +100,7 @@ const SECTION_ICONS = {
 
 export default function SignalProfileEditor({ 
   projectId, 
+  siteId,
   initialProfile,
   onSave,
   className 
@@ -71,8 +130,14 @@ export default function SignalProfileEditor({
   
   const [activeTab, setActiveTab] = useState('identity')
   const [saving, setSaving] = useState(false)
+  const [refreshing, setRefreshing] = useState(false)
   const [error, setError] = useState(null)
+  const [successMessage, setSuccessMessage] = useState(null)
   const [hasChanges, setHasChanges] = useState(false)
+  const [selectedIndustry, setSelectedIndustry] = useState('')
+
+  // Industry options for dropdown
+  const industryOptions = getIndustryOptions()
 
   // Load initial profile
   useEffect(() => {
@@ -80,6 +145,10 @@ export default function SignalProfileEditor({
       setProfile(prev => ({ ...prev, ...initialProfile }))
     } else if (moduleConfig?.profile_snapshot) {
       setProfile(prev => ({ ...prev, ...moduleConfig.profile_snapshot }))
+    }
+    // Set industry from config
+    if (moduleConfig?.industry) {
+      setSelectedIndustry(moduleConfig.industry)
     }
   }, [initialProfile, moduleConfig])
 
@@ -119,15 +188,72 @@ export default function SignalProfileEditor({
     setHasChanges(true)
   }
 
+  // Handle industry change - apply template
+  const handleIndustryChange = (industry) => {
+    setSelectedIndustry(industry)
+    const updatedProfile = applyIndustryTemplate(industry, profile)
+    setProfile(updatedProfile)
+    setHasChanges(true)
+  }
+
+  // Refresh profile from website content
+  const handleRefreshFromWebsite = async () => {
+    setRefreshing(true)
+    setError(null)
+    setSuccessMessage(null)
+    
+    try {
+      // First, re-extract the profile
+      await api.post('/.netlify/functions/signal-profile-extract', {
+        projectId,
+        siteId
+      })
+      
+      // Then sync to profile_snapshot
+      const syncRes = await api.post('/.netlify/functions/signal-profile-sync', {
+        projectId,
+        siteId,
+        forceRefresh: true
+      })
+      
+      if (syncRes.data.synced && syncRes.data.profileSnapshot) {
+        // Update local profile with synced data
+        setProfile(prev => ({
+          ...prev,
+          ...syncRes.data.profileSnapshot
+        }))
+        
+        if (syncRes.data.industry) {
+          setSelectedIndustry(syncRes.data.industry)
+        }
+        
+        setSuccessMessage(`Profile refreshed! Updated: ${syncRes.data.syncedFields?.join(', ') || 'all fields'}`)
+        setHasChanges(true)
+        
+        // Clear success message after 5 seconds
+        setTimeout(() => setSuccessMessage(null), 5000)
+      } else {
+        throw new Error(syncRes.data.message || 'No changes to sync')
+      }
+    } catch (err) {
+      setError(err.response?.data?.error || err.message || 'Failed to refresh from website')
+    } finally {
+      setRefreshing(false)
+    }
+  }
+
   const handleSave = async () => {
     setSaving(true)
     setError(null)
     
     try {
       await updateModuleConfig(projectId, {
-        profile_snapshot: profile
+        profile_snapshot: profile,
+        industry: selectedIndustry
       })
       setHasChanges(false)
+      setSuccessMessage('Profile saved successfully!')
+      setTimeout(() => setSuccessMessage(null), 3000)
       onSave?.(profile)
     } catch (err) {
       setError(err.message || 'Failed to save profile')
@@ -135,6 +261,18 @@ export default function SignalProfileEditor({
       setSaving(false)
     }
   }
+
+  // Check if profile was auto-populated
+  const isAutoPopulated = moduleConfig?.auto_populated_at
+  const autoPopulatedDate = isAutoPopulated 
+    ? new Date(moduleConfig.auto_populated_at).toLocaleDateString()
+    : null
+
+  // Calculate token count from current profile
+  const tokenCount = useMemo(() => calculateProfileTokens(profile), [profile])
+  const tokenPercentage = Math.min(100, (tokenCount / RECOMMENDED_MAX_TOKENS) * 100)
+  const isOverRecommended = tokenCount > RECOMMENDED_MAX_TOKENS
+  const isNearLimit = tokenCount > WARNING_THRESHOLD
 
   return (
     <Card className={cn('overflow-hidden', className)}>
@@ -145,31 +283,97 @@ export default function SignalProfileEditor({
               <Sparkles className="h-5 w-5 text-emerald-400" />
             </div>
             <div>
-              <CardTitle>Client Profile Snapshot</CardTitle>
-              <CardDescription>
-                Core knowledge injected into every AI response (~500-1,500 tokens)
+              <div className="flex items-center gap-2">
+                <CardTitle>Client Profile Snapshot</CardTitle>
+                {isAutoPopulated && (
+                  <Badge variant="secondary" className="gap-1 bg-emerald-500/20 text-emerald-400">
+                    <Check className="h-3 w-3" />
+                    Auto-populated
+                  </Badge>
+                )}
+              </div>
+              <CardDescription className="flex items-center gap-2">
+                <span>Core knowledge injected into every AI response</span>
+                {autoPopulatedDate && (
+                  <span className="text-xs text-muted-foreground">
+                    • Synced {autoPopulatedDate}
+                  </span>
+                )}
               </CardDescription>
+              
+              {/* Token Count Display */}
+              <div className="flex items-center gap-3 mt-2">
+                <div className="flex items-center gap-1.5">
+                  <Gauge className={cn(
+                    "h-4 w-4",
+                    isOverRecommended ? "text-red-500" : isNearLimit ? "text-amber-500" : "text-emerald-500"
+                  )} />
+                  <span className={cn(
+                    "text-sm font-medium",
+                    isOverRecommended ? "text-red-500" : isNearLimit ? "text-amber-500" : "text-emerald-500"
+                  )}>
+                    {tokenCount.toLocaleString()} / {RECOMMENDED_MAX_TOKENS.toLocaleString()} tokens
+                  </span>
+                </div>
+                <Progress 
+                  value={tokenPercentage} 
+                  className={cn(
+                    "w-24 h-2",
+                    isOverRecommended && "[&>div]:bg-red-500",
+                    isNearLimit && !isOverRecommended && "[&>div]:bg-amber-500",
+                    !isNearLimit && "[&>div]:bg-emerald-500"
+                  )}
+                />
+                {isOverRecommended && (
+                  <Badge variant="destructive" className="text-xs">
+                    Over recommended max
+                  </Badge>
+                )}
+              </div>
             </div>
           </div>
           
-          <Button
-            onClick={handleSave}
-            disabled={!hasChanges || saving}
-            className="gap-2"
-          >
-            {saving ? (
-              <Loader2 className="h-4 w-4 animate-spin" />
-            ) : (
-              <Save className="h-4 w-4" />
-            )}
-            Save Changes
-          </Button>
+          <div className="flex items-center gap-2">
+            <Button
+              variant="outline"
+              onClick={handleRefreshFromWebsite}
+              disabled={refreshing}
+              className="gap-2"
+            >
+              {refreshing ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <RefreshCw className="h-4 w-4" />
+              )}
+              Re-extract from Website
+            </Button>
+            
+            <Button
+              onClick={handleSave}
+              disabled={!hasChanges || saving}
+              className="gap-2"
+            >
+              {saving ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <Save className="h-4 w-4" />
+              )}
+              Save Changes
+            </Button>
+          </div>
         </div>
         
         {error && (
           <Alert variant="destructive" className="mt-4">
             <AlertCircle className="h-4 w-4" />
             <AlertDescription>{error}</AlertDescription>
+          </Alert>
+        )}
+        
+        {successMessage && (
+          <Alert className="mt-4 border-emerald-500/30 bg-emerald-500/10">
+            <Check className="h-4 w-4 text-emerald-400" />
+            <AlertDescription className="text-emerald-400">{successMessage}</AlertDescription>
           </Alert>
         )}
       </CardHeader>
@@ -206,6 +410,29 @@ export default function SignalProfileEditor({
           {/* Identity Tab */}
           <TabsContent value="identity" className="space-y-4">
             <div className="grid gap-4">
+              {/* Industry Selector */}
+              <div className="space-y-2">
+                <Label htmlFor="industry">Industry</Label>
+                <Select value={selectedIndustry} onValueChange={handleIndustryChange}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select an industry for smart defaults..." />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {industryOptions.map(opt => (
+                      <SelectItem key={opt.value} value={opt.value}>
+                        <div className="flex flex-col">
+                          <span>{opt.label}</span>
+                          <span className="text-xs text-muted-foreground">{opt.description}</span>
+                        </div>
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <p className="text-xs text-muted-foreground">
+                  Selecting an industry will pre-fill smart defaults for tone, CTAs, and lead capture
+                </p>
+              </div>
+
               <div className="space-y-2">
                 <Label htmlFor="brandName">Brand Name</Label>
                 <Input

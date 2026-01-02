@@ -1,3 +1,4 @@
+// DEPRECATED: This skill wrapper is no longer used.
 /**
  * Signal Content Skill
  * ═══════════════════════════════════════════════════════════════════════════════

@@ -26,7 +26,7 @@ import {
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
-import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
+import ContactAvatar from '@/components/ui/ContactAvatar'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import useMessagesStore from '@/lib/messages-store'
 import useAuthStore from '@/lib/auth-store'
@@ -59,12 +59,6 @@ function formatMessageTime(date) {
   })
 }
 
-// Get initials from name
-function getInitials(name) {
-  if (!name) return '?'
-  return name.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2)
-}
-
 // Message Bubble Component
 function MessageBubble({ message, isOwn, showAvatar = true }) {
   return (
@@ -73,12 +67,14 @@ function MessageBubble({ message, isOwn, showAvatar = true }) {
       isOwn ? "ml-auto flex-row-reverse" : ""
     )}>
       {showAvatar && !isOwn && (
-        <Avatar className="h-8 w-8 flex-shrink-0">
-          <AvatarImage src={message.sender?.avatar} />
-          <AvatarFallback className="text-xs bg-[var(--glass-bg)] text-[var(--text-secondary)]">
-            {getInitials(message.sender?.name)}
-          </AvatarFallback>
-        </Avatar>
+        <ContactAvatar 
+          contact={message.sender}
+          size="sm"
+          showBadge={false}
+          status={message.sender?.status}
+          isLiveChatActive={message.sender?.contact_type === 'visitor'}
+          className="flex-shrink-0"
+        />
       )}
       
       <div className={cn(
@@ -123,6 +119,7 @@ function MessageBubble({ message, isOwn, showAvatar = true }) {
 // Conversation List Item
 function ConversationItem({ conversation, isActive, onClick }) {
   const hasUnread = conversation.unreadCount > 0
+  const isEcho = conversation.is_ai || conversation.is_echo
 
   return (
     <button
@@ -130,31 +127,37 @@ function ConversationItem({ conversation, isActive, onClick }) {
       className={cn(
         "w-full flex items-center gap-3 p-3 rounded-xl transition-all",
         "hover:bg-[var(--glass-bg-hover)]",
-        isActive && "bg-[var(--brand-primary)]/10 border border-[var(--brand-primary)]/30"
+        isActive && "bg-[var(--brand-primary)]/10 border border-[var(--brand-primary)]/30",
+        isEcho && "border border-emerald-200 dark:border-emerald-800 bg-gradient-to-r from-emerald-50/30 to-transparent dark:from-emerald-950/20"
       )}
     >
-      <div className="relative">
-        <Avatar className="h-10 w-10">
-          <AvatarImage src={conversation.contact?.avatar} />
-          <AvatarFallback className="bg-gradient-to-br from-teal-500 to-green-500 text-white">
-            {getInitials(conversation.contact?.name)}
-          </AvatarFallback>
-        </Avatar>
-        {conversation.online && (
-          <span className="absolute bottom-0 right-0 w-3 h-3 bg-green-500 rounded-full border-2 border-[var(--surface-primary)]" />
-        )}
-      </div>
+      <ContactAvatar
+        contact={isEcho ? { name: 'Echo', contact_type: 'ai', is_ai: true } : conversation.contact}
+        type={isEcho ? 'echo' : undefined}
+        size="md"
+        status={conversation.online ? 'online' : 'offline'}
+        isLiveChatActive={conversation.contact?.contact_type === 'visitor'}
+        showBadge
+        className="shrink-0"
+      />
       
       <div className="flex-1 min-w-0 text-left">
         <div className="flex items-center justify-between">
-          <span className={cn(
-            "text-sm truncate",
-            hasUnread ? "font-semibold text-[var(--text-primary)]" : "text-[var(--text-secondary)]"
-          )}>
-            {conversation.contact?.name || conversation.name}
-          </span>
+          <div className="flex items-center gap-1.5">
+            <span className={cn(
+              "text-sm truncate",
+              hasUnread ? "font-semibold text-[var(--text-primary)]" : "text-[var(--text-secondary)]"
+            )}>
+              {isEcho ? 'Echo' : (conversation.contact?.name || conversation.name)}
+            </span>
+            {isEcho && (
+              <Badge className="text-[9px] px-1 py-0 h-3.5 bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400 border-0">
+                AI
+              </Badge>
+            )}
+          </div>
           <span className="text-[10px] text-[var(--text-tertiary)]">
-            {formatRelativeTime(conversation.lastMessageAt)}
+            {isEcho ? 'Always on' : formatRelativeTime(conversation.lastMessageAt)}
           </span>
         </div>
         <div className="flex items-center justify-between gap-2">
@@ -162,7 +165,7 @@ function ConversationItem({ conversation, isActive, onClick }) {
             "text-xs truncate",
             hasUnread ? "text-[var(--text-primary)]" : "text-[var(--text-tertiary)]"
           )}>
-            {conversation.lastMessage || 'No messages yet'}
+            {conversation.lastMessage || (isEcho ? 'Your AI teammate' : 'No messages yet')}
           </p>
           {hasUnread && (
             <Badge className="h-5 min-w-5 px-1.5 text-[10px] bg-[var(--brand-primary)] text-white border-0">
@@ -213,12 +216,7 @@ function NewConversationView({ contacts, onSelect, onBack }) {
               onClick={() => onSelect(contact)}
               className="w-full flex items-center gap-3 p-3 rounded-xl hover:bg-[var(--glass-bg-hover)] transition-colors"
             >
-              <Avatar className="h-10 w-10">
-                <AvatarImage src={contact.avatar} />
-                <AvatarFallback className="bg-gradient-to-br from-teal-500 to-green-500 text-white">
-                  {getInitials(contact.name)}
-                </AvatarFallback>
-              </Avatar>
+              <ContactAvatar contact={contact} size="md" showBadge={false} />
               <div className="text-left">
                 <p className="text-sm font-medium text-[var(--text-primary)]">{contact.name}</p>
                 <p className="text-xs text-[var(--text-tertiary)]">{contact.email}</p>
@@ -242,6 +240,9 @@ function ActiveChatView({ conversation, messages, onBack, onSend, isLoading, cur
   const [message, setMessage] = useState('')
   const messagesEndRef = useRef(null)
   const inputRef = useRef(null)
+  const scrollAreaRef = useRef(null)
+  
+  const isEcho = conversation?.is_ai || conversation?.is_echo
 
   // Auto-scroll to bottom on new messages
   useEffect(() => {
@@ -269,24 +270,38 @@ function ActiveChatView({ conversation, messages, onBack, onSend, isLoading, cur
   return (
     <div className="flex flex-col h-full">
       {/* Chat Header */}
-      <div className="flex items-center gap-3 p-3 border-b border-[var(--glass-border)] bg-[var(--glass-bg)]/50">
+      <div className={cn(
+        "flex items-center gap-3 p-3 border-b border-[var(--glass-border)]",
+        isEcho ? "bg-gradient-to-r from-emerald-50/50 to-transparent dark:from-emerald-950/30" : "bg-[var(--glass-bg)]/50"
+      )}>
         <Button variant="ghost" size="sm" className="p-1 lg:hidden" onClick={onBack}>
           <ChevronLeft className="h-5 w-5" />
         </Button>
         
-        <Avatar className="h-9 w-9">
-          <AvatarImage src={conversation?.contact?.avatar} />
-          <AvatarFallback className="bg-[var(--glass-bg)] text-[var(--text-secondary)]">
-            {getInitials(conversation?.contact?.name)}
-          </AvatarFallback>
-        </Avatar>
+        <ContactAvatar
+          contact={isEcho ? { name: 'Echo', contact_type: 'ai', is_ai: true } : conversation?.contact}
+          type={isEcho ? 'echo' : undefined}
+          size="md"
+          status={isEcho ? 'online' : conversation?.online ? 'online' : 'offline'}
+          isLiveChatActive={conversation?.contact?.contact_type === 'visitor'}
+          showBadge
+        />
         
         <div className="flex-1 min-w-0">
-          <h3 className="font-semibold text-sm text-[var(--text-primary)] truncate">
-            {conversation?.contact?.name}
-          </h3>
+          <div className="flex items-center gap-1.5">
+            <h3 className="font-semibold text-sm text-[var(--text-primary)] truncate">
+              {isEcho ? 'Echo' : conversation?.contact?.name}
+            </h3>
+            {isEcho && (
+              <Badge className="text-[9px] px-1 py-0 h-3.5 bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400 border-0">
+                AI
+              </Badge>
+            )}
+          </div>
           <p className="text-xs text-[var(--text-tertiary)]">
-            {conversation?.online ? (
+            {isEcho ? (
+              <span className="text-emerald-500">Always online</span>
+            ) : conversation?.online ? (
               <span className="text-green-400">Online</span>
             ) : (
               `Last seen ${formatRelativeTime(conversation?.lastSeen)}`
@@ -294,27 +309,44 @@ function ActiveChatView({ conversation, messages, onBack, onSend, isLoading, cur
           </p>
         </div>
         
-        <div className="flex items-center gap-1">
-          <Button variant="ghost" size="sm" className="p-2 text-[var(--text-tertiary)]">
-            <Phone className="h-4 w-4" />
-          </Button>
-          <Button variant="ghost" size="sm" className="p-2 text-[var(--text-tertiary)]">
-            <Video className="h-4 w-4" />
-          </Button>
-          <Button variant="ghost" size="sm" className="p-2 text-[var(--text-tertiary)]">
-            <MoreVertical className="h-4 w-4" />
-          </Button>
-        </div>
+        {!isEcho && (
+          <div className="flex items-center gap-1">
+            <Button variant="ghost" size="sm" className="p-2 text-[var(--text-tertiary)]">
+              <Phone className="h-4 w-4" />
+            </Button>
+            <Button variant="ghost" size="sm" className="p-2 text-[var(--text-tertiary)]">
+              <Video className="h-4 w-4" />
+            </Button>
+            <Button variant="ghost" size="sm" className="p-2 text-[var(--text-tertiary)]">
+              <MoreVertical className="h-4 w-4" />
+            </Button>
+          </div>
+        )}
       </div>
 
-      {/* Messages Area */}
-      <ScrollArea className="flex-1 p-4">
-        <div className="space-y-4">
+      {/* Messages Area - with proper overflow handling */}
+      <div className="flex-1 min-h-0 overflow-hidden">
+        <ScrollArea className="h-full" ref={scrollAreaRef}>
+          <div className="p-4 space-y-4">
           {messages.length === 0 ? (
             <div className="text-center py-12 text-[var(--text-tertiary)]">
-              <MessageCircle className="h-12 w-12 mx-auto mb-3 opacity-30" />
-              <p className="text-sm">No messages yet</p>
-              <p className="text-xs">Send a message to start the conversation</p>
+              {isEcho ? (
+                <>
+                  <div className="w-12 h-12 mx-auto mb-3 rounded-full bg-gradient-to-br from-emerald-400 to-teal-500 flex items-center justify-center">
+                    <svg className="w-6 h-6 text-white" viewBox="0 0 24 24" fill="currentColor">
+                      <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/>
+                    </svg>
+                  </div>
+                  <p className="text-sm font-medium text-[var(--text-primary)]">Hey! I'm Echo</p>
+                  <p className="text-xs mt-1">Your AI teammate. Ask me anything about SEO, projects, or data.</p>
+                </>
+              ) : (
+                <>
+                  <MessageCircle className="h-12 w-12 mx-auto mb-3 opacity-30" />
+                  <p className="text-sm">No messages yet</p>
+                  <p className="text-xs">Send a message to start the conversation</p>
+                </>
+              )}
             </div>
           ) : (
             messages.map((msg, idx) => {
@@ -334,8 +366,9 @@ function ActiveChatView({ conversation, messages, onBack, onSend, isLoading, cur
             })
           )}
           <div ref={messagesEndRef} />
-        </div>
-      </ScrollArea>
+          </div>
+        </ScrollArea>
+      </div>
 
       {/* Message Input */}
       <div className="p-3 border-t border-[var(--glass-border)] bg-[var(--glass-bg)]/30">
@@ -380,7 +413,7 @@ function ActiveChatView({ conversation, messages, onBack, onSend, isLoading, cur
 }
 
 // Main ChatBubble Component
-export default function ChatBubble() {
+export default function ChatBubble({ hidden = false }) {
   const [isOpen, setIsOpen] = useState(false)
   const [isExpanded, setIsExpanded] = useState(false)
   const [view, setView] = useState('list') // 'list' | 'chat' | 'new'
@@ -396,25 +429,99 @@ export default function ChatBubble() {
     fetchContacts,
     fetchMessage,
     sendMessage,
-    isLoading 
+    isLoading,
+    // Echo support
+    echoContact,
+    echoMessages,
+    fetchEchoContact,
+    fetchEchoMessages,
+    sendToEcho,
+    // Realtime support
+    subscribeToMessages,
+    unsubscribeFromMessages,
+    realtimeConnected,
+    // Prefetch support
+    prefetchAll,
+    hasPrefetched,
+    // Live chat handoffs
+    pendingHandoffs,
+    claimHandoff,
+    dismissHandoff
   } = useMessagesStore()
 
-  // Fetch data when opened
+  // Note: prefetchAll and subscribeToMessages are now called in MainLayout on app mount
+  // This ensures messaging is ready before the widget is ever opened
+  
+  // Listen for external requests to open with Echo
   useEffect(() => {
-    if (isOpen) {
+    const handleOpenWithEcho = (event) => {
+      setIsOpen(true)
+      // Select Echo conversation
+      if (echoConversation) {
+        setActiveConversation(echoConversation)
+        setView('chat')
+        // Pre-fill message if provided
+        if (event.detail?.message) {
+          // Store initial message to send after Echo is loaded
+          setTimeout(() => {
+            const input = document.querySelector('[data-echo-input]')
+            if (input) {
+              input.value = event.detail.message
+              input.focus()
+            }
+          }, 100)
+        }
+      }
+    }
+    
+    window.addEventListener('messages:openWithEcho', handleOpenWithEcho)
+    return () => window.removeEventListener('messages:openWithEcho', handleOpenWithEcho)
+  }, [echoConversation])
+  
+  // Refresh data when opened (in case of stale cache)
+  useEffect(() => {
+    if (isOpen && hasPrefetched) {
+      // Soft refresh in background - data is already displayed from cache
       fetchConversations()
-      fetchContacts()
     }
   }, [isOpen])
 
-  // Transform messages to conversations format if not available
-  const displayConversations = conversations.length > 0 ? conversations : []
+  // Update chat messages from echoMessages for Echo conversations
+  useEffect(() => {
+    if (activeConversation?.is_echo && echoMessages.length > 0) {
+      setChatMessages(echoMessages)
+    }
+  }, [echoMessages, activeConversation?.is_echo])
+
+  // Create Echo conversation entry
+  const echoConversation = echoContact ? {
+    id: echoContact.id,
+    contact: echoContact,
+    is_echo: true,
+    is_ai: true,
+    online: true,
+    lastMessage: 'Your AI teammate - ask me anything!',
+    lastMessageAt: new Date().toISOString()
+  } : null
+
+  // Transform messages to conversations format - Echo first
+  const displayConversations = [
+    ...(echoConversation ? [echoConversation] : []),
+    ...conversations.filter(c => !c.is_ai && !c.is_echo)
+  ]
 
   const handleOpenConversation = async (conversation) => {
     setActiveConversation(conversation)
     setView('chat')
     
-    // Fetch messages for this conversation
+    // Handle Echo conversation
+    if (conversation.is_echo || conversation.is_ai) {
+      await fetchEchoMessages()
+      setChatMessages(echoMessages)
+      return
+    }
+    
+    // Fetch messages for regular conversations
     if (conversation.id) {
       const result = await fetchMessage(conversation.id)
       if (result.success && result.data?.thread) {
@@ -447,7 +554,16 @@ export default function ChatBubble() {
     }
     setChatMessages(prev => [...prev, tempMessage])
     
-    // Send to server
+    // Use Echo-specific method for AI conversations
+    if (activeConversation.is_echo || activeConversation.is_ai) {
+      const result = await sendToEcho({ content })
+      if (result.success) {
+        fetchConversations()
+      }
+      return
+    }
+    
+    // Send to server for regular conversations
     const result = await sendMessage({
       recipientId: activeConversation.contact?.id,
       subject: activeConversation.subject || 'Chat message',
@@ -478,6 +594,15 @@ export default function ChatBubble() {
       : "bottom-4 right-4 w-[380px] h-[500px] rounded-2xl"
   )
 
+  // If hidden, render nothing but keep the component mounted for realtime
+  if (hidden) {
+    return null
+  }
+  
+  // Calculate badge display - prioritize live chat handoffs
+  const hasLiveHandoffs = pendingHandoffs.length > 0
+  const totalBadgeCount = unreadCount + pendingHandoffs.length
+
   return (
     <>
       {/* Floating Bubble Button */}
@@ -487,17 +612,31 @@ export default function ChatBubble() {
           className={cn(
             "fixed bottom-6 right-6 z-50",
             "w-14 h-14 rounded-full",
-            "bg-[var(--brand-primary)] hover:bg-[var(--brand-primary-hover)]",
+            hasLiveHandoffs 
+              ? "bg-amber-500 hover:bg-amber-600 animate-pulse"
+              : "bg-[var(--brand-primary)] hover:bg-[var(--brand-primary-hover)]",
             "text-white shadow-lg hover:shadow-xl",
             "flex items-center justify-center",
             "transition-all duration-200 hover:scale-105",
-            "focus:outline-none focus:ring-2 focus:ring-[var(--brand-primary)] focus:ring-offset-2"
+            "focus:outline-none focus:ring-2 focus:ring-offset-2",
+            hasLiveHandoffs 
+              ? "focus:ring-amber-500" 
+              : "focus:ring-[var(--brand-primary)]"
           )}
         >
           <MessageCircle className="h-6 w-6" />
-          {unreadCount > 0 && (
-            <span className="absolute -top-1 -right-1 w-5 h-5 bg-red-500 text-white text-xs font-bold rounded-full flex items-center justify-center">
-              {unreadCount > 9 ? '9+' : unreadCount}
+          {totalBadgeCount > 0 && (
+            <span className={cn(
+              "absolute -top-1 -right-1 w-5 h-5 text-white text-xs font-bold rounded-full flex items-center justify-center",
+              hasLiveHandoffs ? "bg-red-500 animate-bounce" : "bg-red-500"
+            )}>
+              {totalBadgeCount > 9 ? '9+' : totalBadgeCount}
+            </span>
+          )}
+          {/* Live visitor indicator */}
+          {hasLiveHandoffs && (
+            <span className="absolute -bottom-6 left-1/2 -translate-x-1/2 whitespace-nowrap text-[10px] font-semibold text-amber-600 dark:text-amber-400 bg-amber-100 dark:bg-amber-900/50 px-2 py-0.5 rounded-full">
+              Live Visitor
             </span>
           )}
         </button>
@@ -509,13 +648,28 @@ export default function ChatBubble() {
           {/* Header */}
           <div className="flex items-center justify-between p-4 border-b border-[var(--glass-border)] bg-[var(--glass-bg)]">
             <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-xl bg-[var(--brand-primary)]/10 flex items-center justify-center">
-                <MessageCircle className="h-5 w-5 text-[var(--brand-primary)]" />
+              <div className={cn(
+                "w-10 h-10 rounded-xl flex items-center justify-center",
+                hasLiveHandoffs 
+                  ? "bg-amber-500/20" 
+                  : "bg-[var(--brand-primary)]/10"
+              )}>
+                <MessageCircle className={cn(
+                  "h-5 w-5",
+                  hasLiveHandoffs 
+                    ? "text-amber-500" 
+                    : "text-[var(--brand-primary)]"
+                )} />
               </div>
               <div>
                 <h2 className="font-semibold text-[var(--text-primary)]">Messages</h2>
                 <p className="text-xs text-[var(--text-tertiary)]">
-                  {unreadCount > 0 ? `${unreadCount} unread` : 'All caught up'}
+                  {hasLiveHandoffs 
+                    ? <span className="text-amber-500 font-medium">{pendingHandoffs.length} live visitor{pendingHandoffs.length > 1 ? 's' : ''} waiting</span>
+                    : unreadCount > 0 
+                      ? `${unreadCount} unread` 
+                      : 'All caught up'
+                  }
                 </p>
               </div>
             </div>
@@ -543,6 +697,52 @@ export default function ChatBubble() {
           <div className="flex-1 overflow-hidden">
             {view === 'list' && (
               <div className="flex flex-col h-full">
+                {/* Pending Handoffs Alert */}
+                {pendingHandoffs.length > 0 && (
+                  <div className="p-2 border-b border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-950/30">
+                    <div className="text-xs font-semibold text-amber-700 dark:text-amber-400 mb-2 flex items-center gap-1">
+                      <span className="w-2 h-2 rounded-full bg-amber-500 animate-pulse" />
+                      Live Visitors Need Response
+                    </div>
+                    <div className="space-y-1">
+                      {pendingHandoffs.map(session => (
+                        <div
+                          key={session.id}
+                          className="flex items-center justify-between p-2 bg-white dark:bg-zinc-900 rounded-lg border border-amber-200 dark:border-amber-800"
+                        >
+                          <div className="flex-1 min-w-0">
+                            <div className="text-sm font-medium truncate">
+                              {session.visitor_name || 'Website Visitor'}
+                            </div>
+                            <div className="text-xs text-muted-foreground truncate">
+                              {session.ai_summary || 'Requested human assistance'}
+                            </div>
+                          </div>
+                          <Button
+                            size="sm"
+                            className="ml-2 bg-amber-500 hover:bg-amber-600 text-white"
+                            onClick={() => {
+                              claimHandoff(session.id)
+                              // Open the chat with this session
+                              setActiveConversation({
+                                id: session.id,
+                                is_live_chat: true,
+                                contact: {
+                                  name: session.visitor_name || 'Website Visitor',
+                                  email: session.visitor_email
+                                }
+                              })
+                              setView('chat')
+                            }}
+                          >
+                            Respond
+                          </Button>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+                
                 {/* Search & New Message */}
                 <div className="p-3 space-y-2">
                   <div className="relative">

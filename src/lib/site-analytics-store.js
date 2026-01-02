@@ -1,8 +1,12 @@
 import { create } from 'zustand'
 import api from './api'
+import { supabase } from './supabase-auth'
 
 // Use analytics-query to fetch from Portal's own database
 const ANALYTICS_QUERY = '/.netlify/functions/analytics-query'
+
+// Realtime subscription reference (kept outside store to persist across re-renders)
+let analyticsRealtimeSubscription = null
 
 // Helper to build query URL with tenant ID
 const buildQueryUrl = (endpoint, params = {}, tenantId = null) => {
@@ -27,6 +31,10 @@ const useSiteAnalyticsStore = create((set, get) => ({
   heatmap: null,
   isLoading: false,
   error: null,
+  
+  // Realtime state
+  realtimeConnected: false,
+  lastUpdated: null,
   
   // Settings
   dateRange: 30, // days
@@ -220,6 +228,15 @@ const useSiteAnalyticsStore = create((set, get) => ({
       const scrollDepth = scrollDepthRes.status === 'fulfilled' ? scrollDepthRes.value.data : null
       const heatmap = heatmapRes.status === 'fulfilled' ? heatmapRes.value.data : null
       
+      console.log('[SiteAnalytics] Fetch complete:', {
+        tenantId,
+        overviewStatus: overviewRes.status,
+        overviewHasSummary: !!overview?.summary,
+        pageViewsCount: topPages?.length,
+        daysSampleCount: pageViewsByDay?.length,
+        errors: [overviewRes, topPagesRes, dailyRes].filter(r => r.status === 'rejected').map(r => r.reason?.message)
+      })
+      
       set({ 
         overview,
         topPages,
@@ -271,6 +288,169 @@ const useSiteAnalyticsStore = create((set, get) => ({
       change: Math.abs(change).toFixed(1),
       direction: change > 0 ? 'up' : change < 0 ? 'down' : 'neutral'
     }
+  },
+
+  // =====================================================
+  // REALTIME SUBSCRIPTIONS
+  // =====================================================
+
+  /**
+   * Subscribe to realtime analytics updates for live dashboard
+   * Watches: analytics_page_views, analytics_events, analytics_sessions
+   * 
+   * @param {string} tenantId - The tenant/project ID to filter analytics for
+   */
+  subscribeToAnalytics: async (tenantId = null) => {
+    const filterTenantId = tenantId || get().tenantId
+    
+    // Don't subscribe if already subscribed
+    if (analyticsRealtimeSubscription) {
+      console.log('[Analytics Realtime] Already subscribed')
+      return
+    }
+
+    console.log('[Analytics Realtime] Subscribing for tenant:', filterTenantId || 'all')
+
+    // Build filter for tenant-specific or all analytics
+    const filter = filterTenantId ? `tenant_id=eq.${filterTenantId}` : undefined
+
+    // Subscribe to multiple analytics tables
+    analyticsRealtimeSubscription = supabase
+      .channel('analytics-realtime')
+      // Page views - increment counter and refresh metrics
+      .on(
+        'postgres_changes',
+        {
+          event: 'INSERT',
+          schema: 'public',
+          table: 'analytics_page_views',
+          ...(filter && { filter })
+        },
+        (payload) => {
+          console.log('[Analytics Realtime] New page view:', payload.new.path)
+          const state = get()
+          
+          // Update overview with new page view
+          if (state.overview) {
+            set({
+              overview: {
+                ...state.overview,
+                pageViews: (state.overview.pageViews || 0) + 1,
+                uniqueVisitors: state.overview.uniqueVisitors // Will be accurate on next fetch
+              },
+              lastUpdated: new Date().toISOString()
+            })
+          }
+
+          // Update top pages if this page is in the list
+          if (state.topPages && Array.isArray(state.topPages)) {
+            const pagePath = payload.new.path
+            const updatedTopPages = [...state.topPages]
+            const existingIdx = updatedTopPages.findIndex(p => p.path === pagePath)
+            
+            if (existingIdx >= 0) {
+              updatedTopPages[existingIdx] = {
+                ...updatedTopPages[existingIdx],
+                views: (updatedTopPages[existingIdx].views || 0) + 1
+              }
+            }
+            
+            set({ topPages: updatedTopPages })
+          }
+        }
+      )
+      // Events - track conversions and engagement
+      .on(
+        'postgres_changes',
+        {
+          event: 'INSERT',
+          schema: 'public',
+          table: 'analytics_events',
+          ...(filter && { filter })
+        },
+        (payload) => {
+          console.log('[Analytics Realtime] New event:', payload.new.event_name)
+          const state = get()
+          
+          // Update overview with new event
+          if (state.overview) {
+            set({
+              overview: {
+                ...state.overview,
+                totalEvents: (state.overview.totalEvents || 0) + 1
+              },
+              lastUpdated: new Date().toISOString()
+            })
+          }
+        }
+      )
+      // Sessions - track new visitors in real-time
+      .on(
+        'postgres_changes',
+        {
+          event: 'INSERT',
+          schema: 'public',
+          table: 'analytics_sessions',
+          ...(filter && { filter })
+        },
+        (payload) => {
+          console.log('[Analytics Realtime] New session started')
+          const state = get()
+          
+          // Update overview with new session
+          if (state.overview) {
+            set({
+              overview: {
+                ...state.overview,
+                totalSessions: (state.overview.totalSessions || 0) + 1
+              },
+              lastUpdated: new Date().toISOString()
+            })
+          }
+        }
+      )
+      // Session updates - track completed sessions with duration
+      .on(
+        'postgres_changes',
+        {
+          event: 'UPDATE',
+          schema: 'public',
+          table: 'analytics_sessions',
+          ...(filter && { filter })
+        },
+        (payload) => {
+          console.log('[Analytics Realtime] Session updated:', payload.new.id)
+          // Session completed - could update avg session duration
+          // For now, just mark as updated so UI knows data is fresh
+          set({ lastUpdated: new Date().toISOString() })
+        }
+      )
+      .subscribe((status) => {
+        console.log('[Analytics Realtime] Subscription status:', status)
+        set({ realtimeConnected: status === 'SUBSCRIBED' })
+      })
+  },
+
+  /**
+   * Unsubscribe from realtime analytics updates
+   * Call this when leaving the analytics page or on unmount
+   */
+  unsubscribeFromAnalytics: async () => {
+    if (analyticsRealtimeSubscription) {
+      console.log('[Analytics Realtime] Unsubscribing')
+      await supabase.removeChannel(analyticsRealtimeSubscription)
+      analyticsRealtimeSubscription = null
+    }
+    set({ realtimeConnected: false })
+  },
+
+  /**
+   * Refresh all analytics data (manual refresh or after realtime updates pile up)
+   * Useful for getting accurate aggregates after many realtime updates
+   */
+  refreshAnalytics: async () => {
+    console.log('[Analytics] Manual refresh triggered')
+    return get().fetchAllAnalytics()
   }
 }))
 

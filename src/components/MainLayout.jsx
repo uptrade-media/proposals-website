@@ -1,7 +1,8 @@
-import { useState, lazy, Suspense } from 'react'
+import { useState, useEffect, lazy, Suspense } from 'react'
 import Sidebar from './Sidebar'
 import UptradeLoading from './UptradeLoading'
 import useAuthStore from '@/lib/auth-store'
+import useMessagesStore from '@/lib/messages-store'
 import { Menu, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 
@@ -19,7 +20,7 @@ const ClientManagement = lazy(() => import('./ClientManagement'))
 const TenantClients = lazy(() => import('./TenantClients'))
 const TeamTab = lazy(() => import('./crm/TeamTab'))
 const TeamModule = lazy(() => import('./team/TeamModule'))
-const EmailManager = lazy(() => import('@/pages/EmailManager'))
+const Outreach = lazy(() => import('@/pages/Outreach'))
 const BlogManagement = lazy(() => import('./BlogManagement'))
 const PortfolioManagement = lazy(() => import('./PortfolioManagement'))
 const Audits = lazy(() => import('@/pages/Audits'))
@@ -44,6 +45,30 @@ const MainLayout = () => {
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false)
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false)
   const { user, isLoading } = useAuthStore()
+  
+  // Get messaging methods for global initialization
+  const { prefetchAll, subscribeToMessages, unsubscribeFromMessages, realtimeConnected } = useMessagesStore()
+
+  // Initialize messaging system on app mount (before widget is opened)
+  // This ensures conversations are loaded and realtime is subscribed immediately
+  useEffect(() => {
+    if (!user?.id || !user?.org_id || isLoading) return
+    
+    console.log('[MainLayout] Initializing messaging system for user:', user.email)
+    
+    // Prefetch all messaging data in background
+    prefetchAll()
+    
+    // Subscribe to realtime updates
+    if (!realtimeConnected) {
+      subscribeToMessages(user.id, user.org_id, user.name || 'User')
+    }
+    
+    // Cleanup on unmount
+    return () => {
+      unsubscribeFromMessages()
+    }
+  }, [user?.id, user?.org_id, isLoading])
 
   // Navigation function that can pass data
   const navigateTo = (section, data = null) => {
@@ -92,7 +117,7 @@ const MainLayout = () => {
       case 'portfolio':
         return <PortfolioManagement />
       case 'email':
-        return <EmailManager />
+        return <Outreach />
       case 'forms':
         return <FormsManager />
       case 'my-sales':
@@ -185,12 +210,10 @@ const MainLayout = () => {
         </div>
       </main>
 
-      {/* Floating Chat Bubble - Hidden on messages and proposal editor pages */}
-      {activeSection !== 'messages' && activeSection !== 'proposal-editor' && (
-        <Suspense fallback={null}>
-          <ChatBubble />
-        </Suspense>
-      )}
+      {/* Floating Chat Bubble - Always mounted for realtime, hidden on messages/proposal-editor pages */}
+      <Suspense fallback={null}>
+        <ChatBubble hidden={activeSection === 'messages' || activeSection === 'proposal-editor'} />
+      </Suspense>
     </div>
   )
 }

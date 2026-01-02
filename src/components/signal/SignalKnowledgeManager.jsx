@@ -115,7 +115,7 @@ export default function SignalKnowledgeManager({ projectId, className }) {
     if (projectId) {
       fetchKnowledge(projectId, {
         search: searchQuery || undefined,
-        type: activeType !== 'all' ? activeType : undefined
+        contentType: activeType !== 'all' ? activeType : undefined
       })
     }
   }, [projectId, searchQuery, activeType])

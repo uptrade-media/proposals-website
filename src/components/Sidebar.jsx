@@ -77,17 +77,17 @@ const Sidebar = ({
   const orgName = currentOrg?.name || 'Organization'
   
   // Check for org context or project context (when to show org/project view vs admin view)
-  // Agency org (Uptrade Media) should show admin view, client orgs show tenant view
-  const isAgencyOrg = currentOrg?.org_type === 'agency'
-  const isClientOrg = isInOrg && !isAgencyOrg
+  // Uptrade Media org should show admin view, client orgs show tenant view
+  const isUptradeMediaOrg = currentOrg?.slug === 'uptrade-media' || currentOrg?.domain === 'uptrademedia.com' || currentOrg?.org_type === 'agency'
+  const isClientOrg = isInOrg && !isUptradeMediaOrg
   // Only show tenant context for CLIENT orgs and their projects
-  // Agency org (Uptrade Media) and its projects should ALWAYS show admin view
-  const isInTenantContext = isClientOrg || (isInProject && currentOrg && !isAgencyOrg)
+  // Uptrade Media and its projects should ALWAYS show admin view
+  const isInTenantContext = isClientOrg || (isInProject && currentOrg && !isUptradeMediaOrg)
   const tenantName = isInProject ? projectName : (currentOrg?.name || 'Tenant')
   const tenantFeatures = isInProject ? projectFeatures : (currentOrg?.features || [])
   
   // DEBUG: Log org context and type
-  console.log('[Sidebar] DEBUG - currentOrg:', currentOrg?.name, 'org_type:', currentOrg?.org_type, 'isAgencyOrg:', isAgencyOrg, 'isInTenantContext:', isInTenantContext)
+  console.log('[Sidebar] DEBUG - currentOrg:', currentOrg?.name, 'org_type:', currentOrg?.org_type, 'slug:', currentOrg?.slug, 'isUptradeMediaOrg:', isUptradeMediaOrg, 'isInTenantContext:', isInTenantContext)
   
   // Debug: Log context when viewing project
   if (isInProject && projectFeatures) {
@@ -185,7 +185,7 @@ const Sidebar = ({
     ...(tenantHasFeature('engage') ? [{ id: 'engage', label: 'Engage', icon: Zap, badge: null, route: null }] : []),
     ...(tenantHasFeature('signal') ? [{ id: 'signal', label: 'Signal AI', icon: Brain, badge: null, route: null }] : []),
     ...(tenantHasFeature('forms') ? [{ id: 'forms', label: 'Forms', icon: ClipboardList, badge: null, route: null }] : []),
-    ...(tenantHasFeature('email') ? [{ id: 'email', label: 'Email Manager', icon: Mail, badge: null, route: null }] : []),
+    ...(tenantHasFeature('email') ? [{ id: 'email', label: 'Outreach', icon: Mail, badge: null, route: null }] : []),
     ...(tenantHasFeature('blog') ? [{ id: 'blog', label: 'Blog', icon: BookOpen, badge: null, route: null }] : []),
     ...(tenantHasFeature('analytics') ? [{ id: 'analytics', label: 'Analytics', icon: BarChart3, badge: null, route: null }] : []),
   ] : []
@@ -232,7 +232,7 @@ const Sidebar = ({
     ...(hasFeature('forms') ? [{ id: 'forms', label: 'Forms', icon: ClipboardList, badge: null, route: null }] : []),
     ...(hasFeature('blog') ? [{ id: 'blog', label: 'Blog', icon: BookOpen, badge: null, route: null }] : []),
     ...(hasFeature('portfolio') ? [{ id: 'portfolio', label: 'Portfolio', icon: Briefcase, badge: null, route: null }] : []),
-    ...(hasFeature('email') ? [{ id: 'email', label: 'Email Manager', icon: Mail, badge: null, route: null }] : []),
+    ...(hasFeature('email') ? [{ id: 'email', label: 'Outreach', icon: Mail, badge: null, route: null }] : []),
     ...(hasFeature('analytics') ? [{ id: 'analytics', label: 'Analytics', icon: BarChart3, badge: null, route: null }] : []),
   ] : []
 

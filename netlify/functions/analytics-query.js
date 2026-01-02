@@ -62,7 +62,7 @@ export async function handler(event) {
     // The analytics tables store tenant_id as the project UUID (not domain)
     const tenantIdFilter = contextId || domain
 
-    console.log('[analytics-query] Filter context:', { contextId, tenantIdFilter })
+    console.log('[analytics-query] Filter context:', { contextId, tenantIdFilter, hasProjectId: !!event.headers['x-project-id'], hasOrgId: !!event.headers['x-organization-id'] })
 
     // Build filter condition helper - use tenant_id which maps to project UUID
     // Returns the query with filter applied (still needs to be awaited)
@@ -71,7 +71,9 @@ export async function handler(event) {
         // Filter by tenant_id which is the project UUID
         return query.eq('tenant_id', tenantIdFilter)
       }
-      return query.eq('tenant_id', 'uptrade')
+      // When no tenant specified, don't filter by tenant_id
+      // This allows viewing aggregate analytics when in admin/org view
+      return query
     }
 
     // Route to appropriate query
@@ -154,7 +156,14 @@ export async function handler(event) {
           sessionsCount: sessionsResult.data?.length,
           sessionsError: sessionsResult.error?.message,
           tenantIdFilter,
-          startDateStr
+          startDateStr,
+          applyingFilter: tenantIdFilter ? `eq(tenant_id, ${tenantIdFilter})` : 'NO FILTER - returning all data',
+          uniqueVisitors,
+          activeNow,
+          sample: {
+            firstPageView: pageViewsResult.data?.[0],
+            firstSession: sessionsResult.data?.[0]
+          }
         })
 
         // Calculate unique visitors
@@ -236,6 +245,23 @@ export async function handler(event) {
           percentage: totalDevices > 0 ? ((count / totalDevices) * 100).toFixed(1) : 0
         }))
         
+        // Count active sessions (last 5 minutes)
+        const fiveMinutesAgo = new Date(Date.now() - 5 * 60 * 1000).toISOString()
+        const { data: activeSessions, error: activeError } = await applyTenantFilter(
+          supabase
+            .from('analytics_sessions')
+            .select('id', { count: 'exact' })
+            .gte('started_at', fiveMinutesAgo)
+        )
+        
+        const activeNow = activeSessions?.length || 0
+        
+        console.log('[analytics-query] Active sessions check:', {
+          fiveMinutesAgo,
+          activeCount: activeNow,
+          error: activeError?.message
+        })
+        
         // Page views by day for chart
         const dailyCounts = {}
         pageViews.forEach(pv => {
@@ -261,7 +287,8 @@ export async function handler(event) {
               conversionRate: parseFloat(conversionRate),
               avgScrollDepth,
               events: eventsResult.count || 0,
-              conversions
+              conversions,
+              activeNow
             },
             topPages,
             topReferrers,

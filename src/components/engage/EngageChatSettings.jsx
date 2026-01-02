@@ -40,6 +40,7 @@ import {
   Plus
 } from 'lucide-react'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
+import EchoNudgeSettings from './EchoNudgeSettings'
 
 // Widget icon options
 const WIDGET_ICONS = [
@@ -402,7 +403,7 @@ export default function EngageChatSettings({ projectId, onClose }) {
 
           {/* Settings Tabs */}
           <Tabs value={activeTab} onValueChange={setActiveTab}>
-            <TabsList className="grid w-full grid-cols-4">
+            <TabsList className="grid w-full grid-cols-5">
               <TabsTrigger value="general">
                 <Settings className="w-4 h-4 mr-2" />
                 General
@@ -418,6 +419,10 @@ export default function EngageChatSettings({ projectId, onClose }) {
               <TabsTrigger value="routing">
                 <Users className="w-4 h-4 mr-2" />
                 Routing
+              </TabsTrigger>
+              <TabsTrigger value="nudges">
+                <Sparkles className="w-4 h-4 mr-2" />
+                Nudges
               </TabsTrigger>
             </TabsList>
 
@@ -988,6 +993,11 @@ export default function EngageChatSettings({ projectId, onClose }) {
                   )}
                 </CardContent>
               </Card>
+            </TabsContent>
+
+            {/* Echo Nudges Tab */}
+            <TabsContent value="nudges" className="space-y-4 mt-4">
+              <EchoNudgeSettings projectId={projectId} />
             </TabsContent>
           </Tabs>
 

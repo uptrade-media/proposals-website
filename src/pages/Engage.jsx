@@ -24,6 +24,25 @@ export default function Engage() {
   const activeTab = searchParams.get('tab') || 'inbox'
   const { user } = useAuthStore()
 
+  // Listen for Echo navigation requests to open elements
+  useEffect(() => {
+    const handleOpenElement = (event) => {
+      const { projectId, elementId } = event.detail
+      // Update project if different
+      if (projectId && projectId !== selectedProjectId) {
+        setSelectedProjectId(projectId)
+        setSearchParams({ tab: 'elements', project: projectId })
+      }
+      // Open the element editor
+      if (elementId) {
+        setEditingElementId(elementId)
+      }
+    }
+    
+    window.addEventListener('echo:openElement', handleOpenElement)
+    return () => window.removeEventListener('echo:openElement', handleOpenElement)
+  }, [selectedProjectId, setSearchParams])
+
   // Fetch projects on mount
   useEffect(() => {
     fetchProjects()

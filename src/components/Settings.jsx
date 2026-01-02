@@ -123,8 +123,8 @@ const AVAILABLE_MODULES = [
   },
   {
     key: 'email',
-    label: 'Email Manager',
-    description: 'Email campaign management',
+    label: 'Outreach',
+    description: 'Email and SMS campaign management',
     icon: Mail,
     category: 'marketing'
   }
@@ -149,7 +149,9 @@ export default function Settings() {
   const activeContext = currentProject || currentOrg
   
   // Check if viewing a project-based tenant (e.g., GWA)
-  const isProjectTenant = activeContext?.isProjectTenant === true || !!currentProject
+  // Admin users in Uptrade Media org should see admin view even when project selected
+  const isUptradeMediaOrg = currentOrg?.slug === 'uptrade-media' || currentOrg?.domain === 'uptrademedia.com' || currentOrg?.org_type === 'agency'
+  const isProjectTenant = (activeContext?.isProjectTenant === true || !!currentProject) && !isUptradeMediaOrg
   
   // Initialize local features from current context
   useEffect(() => {

@@ -51,7 +51,7 @@ export async function handler(event) {
 
     // Parse query parameters
     const queryParams = event.queryStringParameters || {}
-    const { projectId, unreadOnly } = queryParams
+    const { projectId, unreadOnly, threadType } = queryParams
     
     // Organization-level filtering (messages are between Uptrade and the org)
     const orgId = event.headers['x-organization-id']
@@ -61,8 +61,8 @@ export async function handler(event) {
       .from('messages')
       .select(`
         *,
-        sender:contacts!messages_sender_id_fkey (id, name, email, avatar),
-        recipient:contacts!messages_recipient_id_fkey (id, name, email, avatar),
+        sender:contacts!messages_sender_id_fkey (id, name, email, avatar, is_ai, contact_type),
+        recipient:contacts!messages_recipient_id_fkey (id, name, email, avatar, is_ai, contact_type),
         project:projects (id, title)
       `)
       .is('parent_id', null)
@@ -87,6 +87,28 @@ export async function handler(event) {
     
     if (unreadOnly === 'true') {
       query = query.is('read_at', null)
+    }
+    
+    // Filter by thread type (e.g., 'echo' for Echo AI messages)
+    if (threadType) {
+      query = query.eq('thread_type', threadType)
+      // For Echo threads, fetch ALL messages (including replies) for the current user
+      if (threadType === 'echo') {
+        // Remove the parent_id IS NULL filter - we want all messages in Echo threads
+        // The filter was applied earlier with .is('parent_id', null)
+        // So we need to re-build the query without that filter
+        query = supabase
+          .from('messages')
+          .select(`
+            *,
+            sender:contacts!messages_sender_id_fkey (id, name, email, avatar, is_ai, contact_type),
+            recipient:contacts!messages_recipient_id_fkey (id, name, email, avatar, is_ai, contact_type),
+            project:projects (id, title)
+          `)
+          .eq('thread_type', 'echo')
+          .or(`sender_id.eq.${contact.id},recipient_id.eq.${contact.id}`)
+          .order('created_at', { ascending: true }) // Chronological for chat view
+      }
     }
 
     const { data: messages, error: fetchError } = await query

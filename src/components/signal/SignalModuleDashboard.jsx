@@ -8,13 +8,10 @@ import {
   HelpCircle,
   Lightbulb,
   BarChart3,
-  Copy,
-  Check,
   Loader2,
   AlertCircle,
   ChevronRight,
   Sparkles,
-  Code2,
   Wand2
 } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
@@ -22,13 +19,6 @@ import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Alert, AlertDescription } from '@/components/ui/alert'
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-} from '@/components/ui/dialog'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { useSignalStore } from '@/lib/signal-store'
 import useAuthStore from '@/lib/auth-store'
@@ -74,8 +64,6 @@ export default function SignalModuleDashboard({ projectId: propProjectId, siteUr
   } = useSignalStore()
 
   const [activeTab, setActiveTab] = useState('overview')
-  const [embedDialogOpen, setEmbedDialogOpen] = useState(false)
-  const [copied, setCopied] = useState(false)
   
   // Fetch projects if no project context
   useEffect(() => {
@@ -108,13 +96,6 @@ export default function SignalModuleDashboard({ projectId: propProjectId, siteUr
       fetchModuleConfig(projectId)
     }
   }, [projectId])
-
-  const handleCopyEmbed = () => {
-    const embedCode = generateEmbedCode(projectId, moduleConfig)
-    navigator.clipboard.writeText(embedCode)
-    setCopied(true)
-    setTimeout(() => setCopied(false), 2000)
-  }
   
   // Loading projects state
   if (loadingProjects) {
@@ -197,16 +178,6 @@ export default function SignalModuleDashboard({ projectId: propProjectId, siteUr
               </SelectContent>
             </Select>
           )}
-          
-          <Button
-            variant="outline"
-            onClick={() => setEmbedDialogOpen(true)}
-            disabled={!isEnabled}
-            className="gap-2"
-          >
-            <Code2 className="h-4 w-4" />
-            Get Embed Code
-          </Button>
         </div>
       </div>
 
@@ -245,6 +216,7 @@ export default function SignalModuleDashboard({ projectId: propProjectId, siteUr
 
           <TabsContent value="setup" className="mt-0">
             <SignalSetupWizard 
+              siteId={moduleConfig?.seoIntegration?.siteId}
               projectId={projectId}
               domain={siteUrl || currentProject?.tenant_domain || moduleConfig?.seoIntegration?.domain}
               onComplete={() => {
@@ -277,52 +249,7 @@ export default function SignalModuleDashboard({ projectId: propProjectId, siteUr
         </div>
       </Tabs>
 
-      {/* Embed Code Dialog */}
-      <Dialog open={embedDialogOpen} onOpenChange={setEmbedDialogOpen}>
-        <DialogContent className="max-w-2xl">
-          <DialogHeader>
-            <DialogTitle>Embed Signal Widget</DialogTitle>
-            <DialogDescription>
-              Add this code to your website to enable the Signal AI chat widget
-            </DialogDescription>
-          </DialogHeader>
-
-          <div className="space-y-4 py-4">
-            <div className="relative">
-              <pre className="p-4 rounded-lg bg-muted text-sm overflow-x-auto">
-                <code>{generateEmbedCode(projectId, moduleConfig)}</code>
-              </pre>
-              <Button
-                size="sm"
-                variant="secondary"
-                className="absolute top-2 right-2 gap-1"
-                onClick={handleCopyEmbed}
-              >
-                {copied ? (
-                  <>
-                    <Check className="h-3 w-3" />
-                    Copied!
-                  </>
-                ) : (
-                  <>
-                    <Copy className="h-3 w-3" />
-                    Copy
-                  </>
-                )}
-              </Button>
-            </div>
-
-            <div className="space-y-2 text-sm text-muted-foreground">
-              <p><strong>Installation:</strong></p>
-              <ol className="list-decimal list-inside space-y-1">
-                <li>Copy the code above</li>
-                <li>Paste it before the closing <code className="text-xs bg-muted px-1 rounded">&lt;/body&gt;</code> tag on your website</li>
-                <li>The widget will appear in the bottom-right corner</li>
-              </ol>
-            </div>
-          </div>
-        </DialogContent>
-      </Dialog>
+      {/* Embed code is now handled by Engage module */}
     </div>
   )
 }
@@ -462,25 +389,4 @@ function OverviewTab({ projectId, config, knowledgeStats, faqsStats, suggestions
       </Card>
     </div>
   )
-}
-
-// Generate embed code
-function generateEmbedCode(projectId, config) {
-  const widgetConfig = {
-    projectId,
-    position: config?.widget_position || 'bottom-right',
-    primaryColor: config?.widget_color || '#10b981',
-    greeting: config?.widget_greeting || 'Hi! How can I help you today?'
-  }
-
-  return `<!-- Signal AI Widget -->
-<script>
-  (function(w,d,s,o,f,js,fjs){
-    w['SignalWidget']=o;w[o]=w[o]||function(){
-    (w[o].q=w[o].q||[]).push(arguments)};
-    js=d.createElement(s),fjs=d.getElementsByTagName(s)[0];
-    js.id=o;js.src=f;js.async=1;fjs.parentNode.insertBefore(js,fjs);
-  }(window,document,'script','signal','https://portal.uptrademedia.com/widget/signal.js'));
-  signal('init', ${JSON.stringify(widgetConfig, null, 2)});
-</script>`
 }

@@ -146,13 +146,13 @@ const TENANT_MODULES = {
   },
   email_manager: {
     key: 'email_manager',
-    label: 'Email Campaigns',
-    description: 'Send newsletters and marketing emails with automation',
+    label: 'Outreach',
+    description: 'Send email campaigns and SMS messages with automation',
     icon: Mail,
     recommended: false,
     requiresSetup: ['resend_api_key', 'resend_from_email'],
-    tables: ['email_campaigns', 'email_templates', 'email_tracking'],
-    features: ['Newsletter campaigns', 'Email templates', 'Subscriber lists', 'Analytics']
+    tables: ['email_campaigns', 'email_templates', 'email_tracking', 'sms_campaigns'],
+    features: ['Email campaigns', 'SMS messaging', 'Email templates', 'Subscriber lists', 'Analytics']
   },
 }
 

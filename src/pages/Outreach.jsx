@@ -1,6 +1,6 @@
 import EmailPlatform from '@/components/email/EmailPlatform'
 
-export default function EmailManager() {
+export default function Outreach() {
   return <EmailPlatform />
 }
 

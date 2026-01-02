@@ -2,6 +2,7 @@
 // Create and manage chat sessions (for widget submissions)
 
 import { createSupabaseAdmin, getAuthenticatedUser } from './utils/supabase.js'
+import { findProject } from './utils/projectLookup.js'
 import { Resend } from 'resend'
 
 const CORS_HEADERS = {
@@ -35,7 +36,10 @@ export async function handler(event) {
         sourceUrl,
         referrer,
         userAgent,
-        deviceType
+        deviceType,
+        chatMode: requestedChatMode, // 'handoff' when coming from AI chat
+        aiConversationId,
+        aiSummary
       } = body
 
       if (!projectId || !visitorId || !sessionId) {
@@ -47,13 +51,9 @@ export async function handler(event) {
       }
 
       // Get project and chat config
-      const { data: project, error: projectError } = await supabase
-        .from('projects')
-        .select('id, title, org_id')
-        .eq('id', projectId)
-        .single()
+      const { project } = await findProject({ supabase, projectId })
 
-      if (projectError || !project) {
+      if (!project) {
         return {
           statusCode: 404,
           headers: CORS_HEADERS,
@@ -77,6 +77,11 @@ export async function handler(event) {
       }
 
       // Create the session
+      // If coming from AI chat handoff, immediately create as human session
+      const isHandoff = requestedChatMode === 'handoff'
+      const sessionChatMode = isHandoff ? 'handoff_from_ai' : chatConfig.chat_mode
+      const sessionStatus = isHandoff ? 'pending_handoff' : (chatConfig.chat_mode === 'ai' ? 'ai' : 'active')
+      
       const { data: session, error: sessionError } = await supabase
         .from('engage_chat_sessions')
         .insert({
@@ -91,13 +96,34 @@ export async function handler(event) {
           referrer,
           user_agent: userAgent,
           device_type: deviceType,
-          chat_mode: chatConfig.chat_mode,
-          status: chatConfig.chat_mode === 'ai' ? 'ai' : 'active'
+          chat_mode: sessionChatMode,
+          status: sessionStatus,
+          ai_conversation_id: aiConversationId || null,
+          ai_summary: aiSummary || null
         })
         .select()
         .single()
 
       if (sessionError) throw sessionError
+      
+      // If this is a handoff from AI, immediately create the handoff
+      if (isHandoff && visitorName && visitorEmail) {
+        const handoffResult = await createHandoff(supabase, session, chatConfig, {
+          visitorName,
+          visitorEmail,
+          visitorPhone,
+          initialMessage: aiSummary || initialMessage
+        })
+        
+        return {
+          statusCode: 200,
+          headers: CORS_HEADERS,
+          body: JSON.stringify({
+            session: { ...session, ...handoffResult },
+            handoffCreated: true
+          })
+        }
+      }
 
       // If there's an initial message, save it
       if (initialMessage) {

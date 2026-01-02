@@ -5,6 +5,7 @@
 // DELETE: Remove config
 
 import { createSupabaseAdmin, getAuthenticatedUser } from './utils/supabase.js'
+import { findProject } from './utils/projectLookup.js'
 
 const CORS_HEADERS = {
   'Access-Control-Allow-Origin': '*',
@@ -336,11 +337,7 @@ async function handleDelete(event, supabase, contact) {
 async function verifyAccess(supabase, contactId, projectId, orgId) {
   // If projectId provided, get the org from project
   if (projectId) {
-    const { data: project } = await supabase
-      .from('projects')
-      .select('org_id')
-      .eq('id', projectId)
-      .single()
+    const { project } = await findProject({ supabase, projectId, select: 'id, org_id' })
 
     if (!project) {
       return { allowed: false }

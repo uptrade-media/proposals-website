@@ -4,7 +4,7 @@
  * This registry defines all transactional/system emails that are sent by the portal.
  * These are NOT marketing emails - they are functional emails triggered by system events.
  * 
- * Each email can be viewed and customized through the Email Manager.
+ * Each email can be viewed and customized through the Outreach module.
  */
 
 // Brand colors - consistent with email templates

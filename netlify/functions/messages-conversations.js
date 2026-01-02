@@ -44,11 +44,42 @@ export async function handler(event) {
     const userId = contact.id
     const orgId = contact.org_id
 
+    console.log('[messages-conversations] User:', userId, 'Org:', orgId, 'Is team member:', contact.is_team_member)
+
     if (!userId) {
       return {
         statusCode: 401,
         headers,
-        body: JSON.stringify({ error: 'INVALID_TOKEN' })
+        body: JSON.stringify({ error: 'INVALID_TOKEN', details: 'User ID not found in contact' })
+      }
+    }
+
+    // Team members don't have org_id directly - they belong to Uptrade Media org
+    const isTeamMember = contact.is_team_member === true
+    let effectiveOrgId = orgId
+    
+    // For team members, look up Uptrade Media's organization
+    if (!effectiveOrgId && isTeamMember) {
+      const { data: uptradeOrg } = await supabase
+        .from('organizations')
+        .select('id')
+        .ilike('name', '%uptrade%')
+        .limit(1)
+        .single()
+      
+      if (uptradeOrg) {
+        effectiveOrgId = uptradeOrg.id
+        console.log('[messages-conversations] Team member using Uptrade org:', effectiveOrgId)
+      }
+    }
+    
+    if (!effectiveOrgId) {
+      console.warn('[messages-conversations] No org context for user:', userId)
+      // Return empty conversations if no org context
+      return {
+        statusCode: 200,
+        headers,
+        body: JSON.stringify({ conversations: [] })
       }
     }
 
@@ -63,31 +94,41 @@ export async function handler(event) {
     // 1. ECHO - AI Teammate (always first)
     // =====================================================
     try {
-      const { data: echoContact } = await supabase
+      console.log('[messages-conversations] Looking for Echo in org:', effectiveOrgId)
+      
+      const { data: echoContacts, error: echoQueryError } = await supabase
         .from('contacts')
-        .select('id, name, email, avatar_url')
-        .eq('org_id', orgId)
+        .select('id, name, email, avatar, is_ai')
+        .eq('org_id', effectiveOrgId)
         .eq('is_ai', true)
-        .single()
+        .limit(1)
+      
+      if (echoQueryError) {
+        console.log('[messages-conversations] Echo query error:', echoQueryError.message)
+      }
+      
+      const echoContact = echoContacts?.[0]
+      console.log('[messages-conversations] Echo found:', echoContact ? echoContact.id : 'none')
       
       if (echoContact) {
-        // Get last Echo message
-        const { data: lastEchoMsg } = await supabase
+        // Get last Echo message (don't use .single() - it throws if no rows)
+        const { data: echoMessages } = await supabase
           .from('messages')
           .select('content, created_at')
-          .eq('org_id', orgId)
+          .eq('org_id', effectiveOrgId)
           .eq('thread_type', 'echo')
           .or(`sender_id.eq.${userId},recipient_id.eq.${userId}`)
           .order('created_at', { ascending: false })
           .limit(1)
-          .single()
+        
+        const lastEchoMsg = echoMessages?.[0]
         
         conversations.push({
           id: echoContact.id,
           partner_id: echoContact.id,
           partner_name: 'Echo',
           partner_email: echoContact.email,
-          partner_avatar: echoContact.avatar_url || '/echo-avatar.svg',
+          partner_avatar: echoContact.avatar || '/echo-avatar.svg',
           thread_type: 'echo',
           thread_source: 'echo',
           is_ai: true,
@@ -103,6 +144,7 @@ export async function handler(event) {
             is_from_partner: true
           }
         })
+        console.log('[messages-conversations] Echo added to conversations')
       }
     } catch (echoError) {
       // Echo not configured for this org - that's OK
@@ -128,7 +170,7 @@ export async function handler(event) {
           created_at,
           project:projects(id, title)
         `)
-        .eq('org_id', orgId)
+        .eq('org_id', effectiveOrgId)
         .or(`status.neq.closed,updated_at.gt.${new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString()}`)
         .order('last_message_at', { ascending: false, nullsFirst: false })
         .order('created_at', { ascending: false })
@@ -202,10 +244,9 @@ export async function handler(event) {
           read_at,
           sender_id,
           recipient_id,
-          thread_type,
-          thread_source
+          thread_type
         `)
-        .eq('org_id', orgId)
+        .eq('org_id', effectiveOrgId)
         .or(`sender_id.eq.${userId},recipient_id.eq.${userId}`)
         .neq('thread_type', 'echo') // Exclude Echo messages
         .order('created_at', { ascending: false })

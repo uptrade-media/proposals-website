@@ -745,6 +745,11 @@ function StatCard({ label, value, icon: Icon, color }) {
 // =============================================================================
 // MAIN WIZARD COMPONENT
 // =============================================================================
+
+// LocalStorage key for wizard progress persistence
+const getWizardStorageKey = (projectId, siteId) => 
+  `signal-wizard-${projectId || 'global'}-${siteId || 'pending'}`
+
 export default function SignalSetupWizard({ siteId: propSiteId, projectId, domain: propDomain, onComplete, onSkip }) {
   // Track the actual siteId and domain (resolved from props or fetched)
   const [siteId, setSiteId] = useState(propSiteId)
@@ -752,6 +757,7 @@ export default function SignalSetupWizard({ siteId: propSiteId, projectId, domai
   const [siteLoading, setSiteLoading] = useState(false)
   const [siteError, setSiteError] = useState(null)
   const [hasStarted, setHasStarted] = useState(false) // Track if user clicked Start
+  const [restoredFromStorage, setRestoredFromStorage] = useState(false)
   
   const [currentStep, setCurrentStep] = useState(0)
   const [currentPhase, setCurrentPhase] = useState('discovery')
@@ -776,6 +782,80 @@ export default function SignalSetupWizard({ siteId: propSiteId, projectId, domai
   // State for manual domain entry
   const [manualDomain, setManualDomain] = useState('')
   const [creatingFromDomain, setCreatingFromDomain] = useState(false)
+
+  // =========================================================================
+  // PROGRESS PERSISTENCE - Save/Restore from localStorage
+  // =========================================================================
+  
+  // Restore progress from localStorage on mount
+  useEffect(() => {
+    const storageKey = getWizardStorageKey(projectId, siteId || propSiteId)
+    try {
+      const saved = localStorage.getItem(storageKey)
+      if (saved) {
+        const parsed = JSON.parse(saved)
+        // Only restore if there's meaningful progress
+        if (parsed.stepStatuses && Object.keys(parsed.stepStatuses).length > 0) {
+          console.log('[SignalSetupWizard] Restoring progress from localStorage:', parsed)
+          setStepStatuses(parsed.stepStatuses || {})
+          setCurrentStep(parsed.currentStep || 0)
+          setProgress(parsed.progress || 0)
+          setStats(parsed.stats || {
+            pagesDiscovered: 0,
+            keywordsTracked: 0,
+            issuesFound: 0,
+            opportunitiesDetected: 0,
+            schemaGenerated: 0,
+            recommendationsCreated: 0
+          })
+          setHasStarted(parsed.hasStarted || false)
+          setRestoredFromStorage(true)
+          
+          // If there was a failed step, restore it
+          if (parsed.failedStep) {
+            setFailedStep(parsed.failedStep)
+          }
+        }
+      }
+    } catch (err) {
+      console.warn('[SignalSetupWizard] Failed to restore progress:', err)
+    }
+  }, [projectId, siteId, propSiteId])
+  
+  // Save progress to localStorage whenever key state changes
+  useEffect(() => {
+    // Don't save if we haven't started or if there's no progress
+    if (!hasStarted && Object.keys(stepStatuses).length === 0) return
+    
+    const storageKey = getWizardStorageKey(projectId, siteId)
+    const saveData = {
+      stepStatuses,
+      currentStep,
+      progress,
+      stats,
+      hasStarted,
+      failedStep,
+      savedAt: new Date().toISOString()
+    }
+    
+    try {
+      localStorage.setItem(storageKey, JSON.stringify(saveData))
+      console.log('[SignalSetupWizard] Progress saved to localStorage')
+    } catch (err) {
+      console.warn('[SignalSetupWizard] Failed to save progress:', err)
+    }
+  }, [stepStatuses, currentStep, progress, stats, hasStarted, failedStep, projectId, siteId])
+  
+  // Clear saved progress when wizard completes successfully
+  const clearSavedProgress = useCallback(() => {
+    const storageKey = getWizardStorageKey(projectId, siteId)
+    try {
+      localStorage.removeItem(storageKey)
+      console.log('[SignalSetupWizard] Cleared saved progress')
+    } catch (err) {
+      console.warn('[SignalSetupWizard] Failed to clear progress:', err)
+    }
+  }, [projectId, siteId])
 
   // Handle manual domain submission
   const handleDomainSubmit = async () => {
@@ -835,6 +915,11 @@ export default function SignalSetupWizard({ siteId: propSiteId, projectId, domai
             domainToUse = project.tenant_domain
             setDomain(domainToUse)
             console.log('[SignalSetupWizard] Got domain from project:', domainToUse)
+          } else if (project?.title?.toLowerCase().includes('uptrade')) {
+            // Default domain for Uptrade Media project
+            domainToUse = 'uptrademedia.com'
+            setDomain(domainToUse)
+            console.log('[SignalSetupWizard] Using default Uptrade Media domain:', domainToUse)
           }
         } catch (err) {
           console.error('[SignalSetupWizard] Error fetching project:', err)
@@ -1821,13 +1906,14 @@ export default function SignalSetupWizard({ siteId: propSiteId, projectId, domai
         }
         break
 
-      case 'ai-knowledge':
+      case 'ai-knowledge': {
         // Force refresh
         const knowledgeRes = await api.get(`/.netlify/functions/seo-ai-knowledge?siteId=${siteId}&refresh=true`)
         if (knowledgeRes.data.knowledge) {
           stepLog(`  └ Knowledge base loaded`)
         }
         break
+      }
 
       case 'topic-clusters':
         // This now returns 202 and runs in background
@@ -2007,6 +2093,94 @@ export default function SignalSetupWizard({ siteId: propSiteId, projectId, domai
         } catch (scheduleErr) {
           // If schedule table doesn't exist, just skip
           stepLog(`  └ Scheduling will be configured later`)
+        }
+        break
+
+      // =====================================================================
+      // SIGNAL MODULE STEPS - Custom handlers with profile sync
+      // =====================================================================
+      
+      case 'signal-profile-extract':
+        // Extract business profile from crawled content
+        const extractRes = await api.post('/.netlify/functions/signal-profile-extract', { 
+          siteId,
+          projectId 
+        })
+        
+        if (extractRes.data.extracted) {
+          stepLog(`  └ Extracted profile from ${extractRes.data.pagesAnalyzed} pages`)
+          
+          // IMPORTANT: Sync the extracted profile to signal_config
+          // This bridges the gap between seo_knowledge_base and the profile editor
+          try {
+            const syncRes = await api.post('/.netlify/functions/signal-profile-sync', {
+              siteId,
+              projectId,
+              forceRefresh: true
+            })
+            
+            if (syncRes.data.synced) {
+              stepLog(`  └ Profile auto-populated: ${syncRes.data.syncedFields?.join(', ') || 'all fields'}`)
+              if (syncRes.data.industry && syncRes.data.industry !== 'other') {
+                stepLog(`  └ Detected industry: ${syncRes.data.industry}`)
+              }
+            }
+          } catch (syncErr) {
+            // Profile sync is not critical, log and continue
+            stepLog(`  └ Profile sync will complete in background`)
+          }
+        } else {
+          stepLog(`  └ ${extractRes.data.message || 'Profile extraction queued'}`)
+        }
+        break
+        
+      case 'signal-knowledge-sync': {
+        // Sync knowledge base with AI classification
+        const knowledgeRes = await api.post('/.netlify/functions/signal-knowledge-sync', { 
+          siteId,
+          projectId,
+          forceRefresh: true
+        })
+        
+        if (knowledgeRes.data.synced > 0) {
+          stepLog(`  └ Created ${knowledgeRes.data.synced} knowledge chunks`)
+          if (knowledgeRes.data.classified > 0) {
+            stepLog(`  └ AI classified ${knowledgeRes.data.classified} chunks by content type`)
+          }
+          // Log type breakdown if available
+          if (knowledgeRes.data.typeBreakdown) {
+            const types = Object.entries(knowledgeRes.data.typeBreakdown)
+              .filter(([type]) => type !== 'general')
+              .map(([type, count]) => `${type}: ${count}`)
+              .slice(0, 3)
+            if (types.length > 0) {
+              stepLog(`  └ Types: ${types.join(', ')}`)
+            }
+          }
+        } else {
+          stepLog(`  └ ${knowledgeRes.data.message || 'Knowledge already synced'}`)
+        }
+        break
+      }
+        
+      case 'signal-faq-generate':
+        // Generate FAQs with confidence-based auto-approval
+        const faqRes = await api.post('/.netlify/functions/signal-faq-generate', { 
+          siteId,
+          projectId,
+          count: 12  // Generate up to 12 FAQs
+        })
+        
+        if (faqRes.data.generated > 0) {
+          stepLog(`  └ Generated ${faqRes.data.generated} FAQs`)
+          if (faqRes.data.autoApproved > 0) {
+            stepLog(`  └ Auto-approved ${faqRes.data.autoApproved} high-confidence FAQs`)
+          }
+          if (faqRes.data.pendingReview > 0) {
+            stepLog(`  └ ${faqRes.data.pendingReview} FAQs pending review`)
+          }
+        } else {
+          stepLog(`  └ ${faqRes.data.message || 'FAQs already generated'}`)
         }
         break
 
@@ -2365,14 +2539,46 @@ export default function SignalSetupWizard({ siteId: propSiteId, projectId, domai
                 className="gap-2 bg-gradient-to-r from-[#95d47d] to-[#238b95] hover:opacity-90"
               >
                 <Rocket className="w-5 h-5" />
-                Start Signal Learning
+                {restoredFromStorage ? 'Resume Signal Learning' : 'Start Signal Learning'}
               </Button>
+              {restoredFromStorage && (
+                <Button 
+                  variant="outline" 
+                  onClick={() => {
+                    clearSavedProgress()
+                    setStepStatuses({})
+                    setCurrentStep(0)
+                    setProgress(0)
+                    setStats({
+                      pagesDiscovered: 0,
+                      keywordsTracked: 0,
+                      issuesFound: 0,
+                      opportunitiesDetected: 0,
+                      schemaGenerated: 0,
+                      recommendationsCreated: 0
+                    })
+                    setFailedStep(null)
+                    setRestoredFromStorage(false)
+                    setHasStarted(true)
+                  }}
+                  className="gap-2"
+                >
+                  <RefreshCw className="w-4 h-4" />
+                  Start Fresh
+                </Button>
+              )}
               {onSkip && (
                 <Button variant="ghost" onClick={onSkip}>
                   Skip for Now
                 </Button>
               )}
             </div>
+
+            {restoredFromStorage && (
+              <p className="text-center text-sm text-amber-600 dark:text-amber-400 mt-4">
+                ⚡ Previous progress found — you can resume where you left off or start fresh.
+              </p>
+            )}
           </Card>
 
           <p className="text-center text-sm text-[var(--text-tertiary)]">
@@ -2570,7 +2776,10 @@ export default function SignalSetupWizard({ siteId: propSiteId, projectId, domai
               <div className="flex gap-3">
                 <Button 
                   size="lg"
-                  onClick={onComplete}
+                  onClick={() => {
+                    clearSavedProgress()
+                    onComplete?.()
+                  }}
                   className="bg-gradient-to-r from-[#95d47d] to-[#238b95] hover:from-[#7bc064] hover:to-[#1a7a83] text-white"
                 >
                   <Rocket className="w-5 h-5 mr-2" />

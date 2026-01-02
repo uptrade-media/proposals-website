@@ -71,8 +71,28 @@ export async function handler(event) {
 
     // Project-level filtering (preferred) or org-level fallback
     if (projectId) {
-      query = query.eq('project_id', projectId)
-      console.log('[Blog API] Filtering by project_id:', projectId)
+      // When project is selected, show:
+      // 1. Posts explicitly assigned to this project (project_id matches)
+      // 2. Org-level posts (project_id is NULL but org_id matches the project's org)
+      
+      // First, get the project to find its org_id
+      const { data: project } = await supabase
+        .from('projects')
+        .select('organization_id')
+        .eq('id', projectId)
+        .single()
+      
+      if (project?.organization_id) {
+        // Show posts that are either:
+        // - Directly assigned to this project, OR
+        // - Org-level posts (NULL project_id with matching org_id)
+        query = query.or(`project_id.eq.${projectId},and(project_id.is.null,org_id.eq.${project.organization_id})`)
+        console.log('[Blog API] Filtering by project_id:', projectId, 'OR org-level posts for org:', project.organization_id)
+      } else {
+        // Fallback to simple project filter if we can't find the org
+        query = query.eq('project_id', projectId)
+        console.log('[Blog API] Filtering by project_id only:', projectId)
+      }
     } else if (orgId) {
       query = query.eq('org_id', orgId)
       console.log('[Blog API] Filtering by org_id:', orgId)

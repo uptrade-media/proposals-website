@@ -64,7 +64,12 @@ export default function Analytics() {
     formatNumber,
     formatDuration,
     formatPercent,
-    clearError
+    clearError,
+    // Realtime methods
+    subscribeToAnalytics,
+    unsubscribeFromAnalytics,
+    realtimeConnected,
+    lastUpdated
   } = useSiteAnalyticsStore()
 
   const hasFetchedRef = useRef(false)
@@ -97,6 +102,20 @@ export default function Analytics() {
       fetchAllAnalytics()
     }
   }, [dateRange])
+
+  // Subscribe to realtime analytics updates
+  useEffect(() => {
+    if (!tenantReady) return
+    
+    // Subscribe with current tenant context
+    const tenantId = isProjectTenant ? activeContext?.id : null
+    subscribeToAnalytics(tenantId)
+    
+    // Cleanup on unmount
+    return () => {
+      unsubscribeFromAnalytics()
+    }
+  }, [tenantReady, isProjectTenant, activeContext?.id])
   
   // Handle refresh
   const handleRefresh = async () => {
@@ -255,6 +274,8 @@ export default function Analytics() {
         onToggleComparison={() => setShowComparison(!showComparison)}
         siteName={isProjectTenant ? tenantName : null}
         siteDomain={isProjectTenant ? tenantDomain : 'uptrademedia.com'}
+        realtimeConnected={realtimeConnected}
+        lastUpdated={lastUpdated}
       />
 
       {/* Key Metrics */}

@@ -1,6 +1,14 @@
 // public/engage-widget.js
-// Embeddable chat widget for client websites
+// Embeddable Echo chat widget for tenant websites
 // Include via: <script src="https://portal.uptrademedia.com/engage-widget.js" data-project="PROJECT_ID" async></script>
+//
+// Features:
+// - AI chat powered by Signal knowledge base
+// - Echo branding with animated logo
+// - Tenant-specific colors and greeting
+// - Human handoff capability
+// - Popup/banner display engine
+// - Full offline support
 
 (function() {
   'use strict';
@@ -8,7 +16,84 @@
   // Configuration
   const PORTAL_URL = 'https://portal.uptrademedia.com';
   const API_BASE = '/.netlify/functions';
+  const SUPABASE_URL = 'https://qxnfswulhjrwinosjxon.supabase.co';
+  const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InF4bmZzd3VsaGpyd2lub3NqeG9uIiwicm9sZSI6ImFub24iLCJpYXQiOjE3MjkyODE3NDcsImV4cCI6MjA0NDg1Nzc0N30.8kNJeWgNopRYhLQ0CVkg7KQsILzfXX8baZFiGfLwzBY';
   
+  // ═══════════════════════════════════════════════════════════════════════════════
+  // ANIMATED ECHO LOGO SVG
+  // ═══════════════════════════════════════════════════════════════════════════════
+  const ECHO_LOGO_SVG = `
+<svg viewBox="0 0 484.21 482.45" class="echo-logo-svg">
+  <defs>
+    <filter id="echo-glow" x="-50%" y="-50%" width="200%" height="200%">
+      <feGaussianBlur stdDeviation="8" result="coloredBlur"/>
+      <feMerge>
+        <feMergeNode in="coloredBlur"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+  </defs>
+  <g fill="currentColor">
+    <!-- Outer chat bubble shell -->
+    <path d="M484.21,242.1c0,116.93-82.77,215.11-193.12,237.15-8.5,1.7-18.93,2.74-29.05,3.2-.63.03-.91-.79-.39-1.15,4.47-3.13,11.01-8.54,15.99-16.11,4.08-6.21,6.24-12.12,7.42-16.45.06-.22.24-.39.46-.44,97.61-22.45,166.95-108.92,166.95-206.2,0-129.41-116.85-231.53-250.79-206.61C117.63,51.14,51.44,117.13,35.6,201.14c-18.34,97.26,30.34,185.56,107.86,226.8,6.63,3.62,14.61,7.41,23.88,10.76,9.6,3.46,18.34,6.39,26.05,7.12,2.11.2,13.32-.21,22.39-9.25,5.74-5.72,9.3-13.62,9.33-22.35h0v-45.17s0,0,0,0v-5.38s0-.02,0-.03V90.55c0-9.34,7.64-16.98,16.98-16.98s16.98,7.64,16.98,16.98v273.08s0,.02,0,.03v57.02c0,32.62-26.46,59.62-59.08,59.02-5.34-.1-10.5-.93-15.39-2.37,0,0,0,0,0,0C61.86,447.43-24.26,323.97,6.14,186.74,26.3,95.74,98.33,24.71,189.55,5.53c156.66-32.94,294.66,85.7,294.66,236.57Z">
+      <animateTransform attributeName="transform" type="scale" values="1;1.02;1" dur="4s" repeatCount="indefinite" additive="sum"/>
+    </path>
+    
+    <!-- Left sound bar -->
+    <path class="echo-bar echo-bar-left" d="M204.49,350.68v-212.7c0-9.34-7.64-16.98-16.98-16.98h0c-9.34,0-16.98,7.64-16.98,16.98v212.7c0,9.34,7.64,16.98,16.98,16.98h0c9.34,0,16.98-7.64,16.98-16.98Z">
+      <animateTransform attributeName="transform" type="scale" values="1 1;1 0.85;1 1" dur="2s" repeatCount="indefinite"/>
+    </path>
+    
+    <!-- Right sound bar -->
+    <path class="echo-bar echo-bar-right" d="M313.68,350.68v-212.7c0-9.34-7.64-16.98-16.98-16.98h0c-9.34,0-16.98,7.64-16.98,16.98v212.7c0,9.34,7.64,16.98,16.98,16.98h0c9.34,0,16.98-7.64,16.98-16.98Z">
+      <animateTransform attributeName="transform" type="scale" values="1 1;1 0.9;1 1" dur="2.5s" repeatCount="indefinite"/>
+    </path>
+    
+    <!-- Left echo wave -->
+    <path class="echo-wave echo-wave-left" d="M149.35,297.17v-105.68c0-7.21-7.64-13.1-16.98-13.1h0c-9.34,0-16.98,5.9-16.98,13.1,0,52.76-54.06,49.84-54.06,52.84,0,3.49,54.06,0,54.06,52.84,0,7.21,7.64,13.1,16.98,13.1h0c9.34,0,16.98-5.9,16.98-13.1Z">
+      <animateTransform attributeName="transform" type="translate" values="0 0;-8 0;0 0" dur="3s" repeatCount="indefinite" additive="sum"/>
+      <animate attributeName="opacity" values="1;0.8;1" dur="3s" repeatCount="indefinite"/>
+    </path>
+    
+    <!-- Right echo wave -->
+    <path class="echo-wave echo-wave-right" d="M351.84,310.27h0c9.34,0,16.98-5.9,16.98-13.1,0-52.84,54.06-49.3,54.06-52.84,0-3.1-54.06-.08-54.06-52.84,0-7.21-7.64-13.1-16.98-13.1h0c-9.34,0-16.98,5.9-16.98,13.1v105.68c0,7.21,7.64,13.1,16.98,13.1Z">
+      <animateTransform attributeName="transform" type="translate" values="0 0;8 0;0 0" dur="3s" repeatCount="indefinite" additive="sum"/>
+      <animate attributeName="opacity" values="1;0.8;1" dur="3s" repeatCount="indefinite"/>
+    </path>
+  </g>
+</svg>`;
+
+  // Listening state (faster animation) - used when AI is processing
+  const ECHO_LOGO_LISTENING_SVG = `
+<svg viewBox="0 0 484.21 482.45" class="echo-logo-svg echo-listening">
+  <defs>
+    <filter id="echo-glow-active" x="-50%" y="-50%" width="200%" height="200%">
+      <feGaussianBlur stdDeviation="10" result="coloredBlur"/>
+      <feMerge>
+        <feMergeNode in="coloredBlur"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+  </defs>
+  <g fill="currentColor" style="filter: url(#echo-glow-active)">
+    <path d="M484.21,242.1c0,116.93-82.77,215.11-193.12,237.15-8.5,1.7-18.93,2.74-29.05,3.2-.63.03-.91-.79-.39-1.15,4.47-3.13,11.01-8.54,15.99-16.11,4.08-6.21,6.24-12.12,7.42-16.45.06-.22.24-.39.46-.44,97.61-22.45,166.95-108.92,166.95-206.2,0-129.41-116.85-231.53-250.79-206.61C117.63,51.14,51.44,117.13,35.6,201.14c-18.34,97.26,30.34,185.56,107.86,226.8,6.63,3.62,14.61,7.41,23.88,10.76,9.6,3.46,18.34,6.39,26.05,7.12,2.11.2,13.32-.21,22.39-9.25,5.74-5.72,9.3-13.62,9.33-22.35h0v-45.17s0,0,0,0v-5.38s0-.02,0-.03V90.55c0-9.34,7.64-16.98,16.98-16.98s16.98,7.64,16.98,16.98v273.08s0,.02,0,.03v57.02c0,32.62-26.46,59.62-59.08,59.02-5.34-.1-10.5-.93-15.39-2.37,0,0,0,0,0,0C61.86,447.43-24.26,323.97,6.14,186.74,26.3,95.74,98.33,24.71,189.55,5.53c156.66-32.94,294.66,85.7,294.66,236.57Z"/>
+    <path class="echo-bar" d="M204.49,350.68v-212.7c0-9.34-7.64-16.98-16.98-16.98h0c-9.34,0-16.98,7.64-16.98,16.98v212.7c0,9.34,7.64,16.98,16.98,16.98h0c9.34,0,16.98-7.64,16.98-16.98Z">
+      <animateTransform attributeName="transform" type="scale" values="1 1;1 0.6;1 0.85;1 0.5;1 1" dur="1s" repeatCount="indefinite"/>
+    </path>
+    <path class="echo-bar" d="M313.68,350.68v-212.7c0-9.34-7.64-16.98-16.98-16.98h0c-9.34,0-16.98,7.64-16.98,16.98v212.7c0,9.34,7.64,16.98,16.98,16.98h0c9.34,0,16.98-7.64,16.98-16.98Z">
+      <animateTransform attributeName="transform" type="scale" values="1 1;1 0.5;1 0.9;1 0.4;1 1" dur="0.8s" repeatCount="indefinite"/>
+    </path>
+    <path class="echo-wave" d="M149.35,297.17v-105.68c0-7.21-7.64-13.1-16.98-13.1h0c-9.34,0-16.98,5.9-16.98,13.1,0,52.76-54.06,49.84-54.06,52.84,0,3.49,54.06,0,54.06,52.84,0,7.21,7.64,13.1,16.98,13.1h0c9.34,0,16.98-5.9,16.98-13.1Z">
+      <animateTransform attributeName="transform" type="translate" values="0 0;-8 0;0 0" dur="0.5s" repeatCount="indefinite" additive="sum"/>
+      <animate attributeName="opacity" values="1;0.6;1;0.4;1" dur="0.5s" repeatCount="indefinite"/>
+    </path>
+    <path class="echo-wave" d="M351.84,310.27h0c9.34,0,16.98-5.9,16.98-13.1,0-52.84,54.06-49.3,54.06-52.84,0-3.1-54.06-.08-54.06-52.84,0-7.21-7.64-13.1-16.98-13.1h0c-9.34,0-16.98,5.9-16.98,13.1v105.68c0,7.21,7.64,13.1,16.98,13.1Z">
+      <animateTransform attributeName="transform" type="translate" values="0 0;8 0;0 0" dur="0.5s" repeatCount="indefinite" additive="sum"/>
+      <animate attributeName="opacity" values="1;0.4;1;0.6;1" dur="0.5s" repeatCount="indefinite"/>
+    </path>
+  </g>
+</svg>`;
+
   // State
   let config = null;
   let projectId = null;
@@ -18,6 +103,10 @@
   let messages = [];
   let pollingInterval = null;
   let lastMessageTime = null;
+  let realtimeChannel = null;
+  let isWaitingForAI = false;
+  let aiConversationHistory = [];
+  let activeElements = []; // Popups, banners, etc. // Track conversation for AI context
 
   // Get project ID from script tag
   const scriptTag = document.currentScript || document.querySelector('script[data-project]');
@@ -31,6 +120,8 @@
     console.error('[Engage] Missing data-project attribute');
     return;
   }
+
+  const WIDGET_ORIGIN = scriptTag.src ? new URL(scriptTag.src).origin : PORTAL_URL;
 
   // Generate or retrieve visitor/session IDs
   function getVisitorId() {
@@ -54,11 +145,39 @@
   visitorId = getVisitorId();
   sessionId = getSessionId();
 
+  // ═══════════════════════════════════════════════════════════════════════════════
+  // UTILITY FUNCTIONS
+  // ═══════════════════════════════════════════════════════════════════════════════
+  
+  // Darken a hex color by percentage
+  function darkenColor(hex, percent) {
+    const num = parseInt(hex.replace('#', ''), 16);
+    const amt = Math.round(2.55 * percent);
+    const R = Math.max(0, (num >> 16) - amt);
+    const G = Math.max(0, (num >> 8 & 0x00FF) - amt);
+    const B = Math.max(0, (num & 0x0000FF) - amt);
+    return '#' + (0x1000000 + R * 0x10000 + G * 0x100 + B).toString(16).slice(1);
+  }
+
+  // Update FAB to show listening animation
+  function setFabListening(isListening) {
+    const fab = document.querySelector('.engage-widget-fab');
+    if (!fab || fab.classList.contains('open')) return;
+    
+    const currentLogo = fab.querySelector('.echo-logo-svg');
+    if (currentLogo) {
+      const newLogo = isListening ? ECHO_LOGO_LISTENING_SVG : ECHO_LOGO_SVG;
+      const temp = document.createElement('div');
+      temp.innerHTML = newLogo;
+      const newSvg = temp.querySelector('svg');
+      currentLogo.replaceWith(newSvg);
+    }
+  }
+
   // Fetch widget configuration
   async function fetchConfig() {
     try {
-      const baseUrl = scriptTag.src ? new URL(scriptTag.src).origin : PORTAL_URL;
-      const response = await fetch(`${baseUrl}${API_BASE}/engage-chat-widget?projectId=${projectId}`);
+      const response = await fetch(`${WIDGET_ORIGIN}${API_BASE}/engage-chat-widget?projectId=${projectId}`);
       const data = await response.json();
       
       if (data.enabled) {
@@ -91,7 +210,18 @@
   // Inject CSS styles
   function injectStyles() {
     const accent = config.theme?.accent || '#4bbf39';
+    const accentDark = config.theme?.accentDark || darkenColor(accent, 15);
+    const textOnAccent = config.theme?.textOnAccent || '#ffffff';
+    const fabStyle = config.theme?.fabStyle || 'solid'; // 'solid' or 'gradient'
+    const fabGradient = config.theme?.fabGradient || `linear-gradient(135deg, ${accent} 0%, ${accentDark} 100%)`;
+    
     const styles = `
+      /* ═══════════════════════════════════════════════════════════════════════════════
+       * ECHO CHAT WIDGET - Self-contained styles for tenant websites
+       * Powered by Signal AI
+       * ═══════════════════════════════════════════════════════════════════════════════ */
+      
+      /* FAB Button */
       .engage-widget-fab {
         position: fixed;
         ${config.position === 'bottom-left' ? 'left' : 'right'}: 20px;
@@ -99,31 +229,58 @@
         width: 60px;
         height: 60px;
         border-radius: 50%;
-        background: ${accent};
+        background: ${fabStyle === 'gradient' ? fabGradient : accent};
         border: none;
         cursor: pointer;
-        box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
+        box-shadow: 0 4px 20px rgba(0, 0, 0, 0.2), 0 0 0 0 ${accent}40;
         z-index: 999998;
         display: flex;
         align-items: center;
         justify-content: center;
         transition: transform 0.2s, box-shadow 0.2s;
+        color: ${textOnAccent};
+        overflow: visible;
       }
       .engage-widget-fab:hover {
-        transform: scale(1.05);
-        box-shadow: 0 6px 24px rgba(0, 0, 0, 0.2);
+        transform: scale(1.08);
+        box-shadow: 0 6px 28px rgba(0, 0, 0, 0.25), 0 0 0 8px ${accent}20;
       }
-      .engage-widget-fab svg {
+      .engage-widget-fab::before {
+        content: '';
+        position: absolute;
+        inset: -8px;
+        border-radius: 50%;
+        background: ${accent};
+        opacity: 0;
+        z-index: -1;
+        animation: engage-fab-pulse 2s infinite;
+      }
+      @keyframes engage-fab-pulse {
+        0%, 100% { transform: scale(1); opacity: 0; }
+        50% { transform: scale(1.15); opacity: 0.2; }
+      }
+      .engage-widget-fab .echo-logo-svg {
+        width: 36px;
+        height: 36px;
+        color: ${textOnAccent};
+      }
+      .engage-widget-fab .echo-logo-svg .echo-bar,
+      .engage-widget-fab .echo-logo-svg .echo-wave {
+        transform-origin: center;
+      }
+      .engage-widget-fab svg.close-icon {
         width: 28px;
         height: 28px;
-        fill: white;
+        fill: ${textOnAccent};
       }
-      .engage-widget-fab.open svg.chat-icon {
+      .engage-widget-fab.open .echo-logo-svg {
         display: none;
       }
       .engage-widget-fab:not(.open) svg.close-icon {
         display: none;
       }
+      
+      /* Widget Container */
       .engage-widget-container {
         position: fixed;
         ${config.position === 'bottom-left' ? 'left' : 'right'}: 20px;
@@ -155,37 +312,71 @@
           transform: translateY(0);
         }
       }
+      
+      /* Header with Echo branding */
       .engage-widget-header {
-        background: ${accent};
-        color: white;
+        background: ${fabStyle === 'gradient' ? fabGradient : accent};
+        color: ${textOnAccent};
         padding: 16px 20px;
         display: flex;
         align-items: center;
         gap: 12px;
       }
       .engage-widget-header-avatar {
-        width: 40px;
-        height: 40px;
+        width: 44px;
+        height: 44px;
         border-radius: 50%;
         background: rgba(255,255,255,0.2);
         display: flex;
         align-items: center;
         justify-content: center;
+        flex-shrink: 0;
       }
-      .engage-widget-header-avatar svg {
-        width: 24px;
-        height: 24px;
-        fill: white;
+      .engage-widget-header-avatar .echo-logo-svg {
+        width: 28px;
+        height: 28px;
+        color: ${textOnAccent};
+      }
+      .engage-widget-header-text {
+        flex: 1;
+        min-width: 0;
       }
       .engage-widget-header-text h3 {
         margin: 0;
         font-size: 16px;
         font-weight: 600;
+        display: flex;
+        align-items: center;
+        gap: 6px;
+      }
+      .engage-widget-header-text h3 .echo-name {
+        font-weight: 700;
       }
       .engage-widget-header-text p {
         margin: 2px 0 0;
-        font-size: 13px;
+        font-size: 12px;
         opacity: 0.9;
+      }
+      .engage-widget-header-close {
+        background: rgba(255,255,255,0.2);
+        border: none;
+        width: 32px;
+        height: 32px;
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        cursor: pointer;
+        transition: background 0.2s;
+        flex-shrink: 0;
+      }
+      .engage-widget-header-close:hover {
+        background: rgba(255,255,255,0.3);
+      }
+      .engage-widget-header-close svg {
+        width: 18px;
+        height: 18px;
+        fill: ${textOnAccent};
       }
       .engage-widget-body {
         flex: 1;
@@ -340,18 +531,109 @@
       }
       .engage-widget-powered {
         text-align: center;
-        padding: 8px;
+        padding: 8px 12px;
         font-size: 11px;
-        color: #999;
-        background: white;
+        color: #888;
+        background: #fafafa;
         border-top: 1px solid #f0f0f0;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 6px;
+      }
+      .engage-widget-powered .echo-mini-logo {
+        width: 14px;
+        height: 14px;
+        color: ${accent};
       }
       .engage-widget-powered a {
         color: #666;
         text-decoration: none;
+        font-weight: 500;
       }
       .engage-widget-powered a:hover {
         text-decoration: underline;
+        color: ${accent};
+      }
+      .engage-widget-powered .signal-badge {
+        display: inline-flex;
+        align-items: center;
+        gap: 3px;
+        background: linear-gradient(90deg, ${accent}15, ${accent}08);
+        padding: 2px 6px;
+        border-radius: 4px;
+        font-size: 10px;
+        color: ${accent};
+        font-weight: 600;
+      }
+      /* Typing indicator */
+      .engage-widget-message.typing {
+        padding: 16px 20px;
+        display: flex;
+        gap: 4px;
+      }
+      .engage-widget-message.typing span {
+        width: 8px;
+        height: 8px;
+        background: #888;
+        border-radius: 50%;
+        animation: typing-bounce 1.4s infinite ease-in-out both;
+      }
+      .engage-widget-message.typing span:nth-child(1) { animation-delay: -0.32s; }
+      .engage-widget-message.typing span:nth-child(2) { animation-delay: -0.16s; }
+      @keyframes typing-bounce {
+        0%, 80%, 100% { transform: scale(0.6); opacity: 0.5; }
+        40% { transform: scale(1); opacity: 1; }
+      }
+      /* Connect to agent button */
+      .engage-connect-agent {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 8px;
+        width: 100%;
+        padding: 10px 16px;
+        margin-top: 12px;
+        background: transparent;
+        border: 1px solid #ddd;
+        border-radius: 20px;
+        font-size: 13px;
+        color: #666;
+        cursor: pointer;
+        transition: all 0.2s;
+      }
+      .engage-connect-agent:hover {
+        background: #f5f5f5;
+        border-color: #bbb;
+        color: #333;
+      }
+      .engage-connect-agent svg {
+        width: 16px;
+        height: 16px;
+        fill: currentColor;
+      }
+      /* Handoff form */
+      .engage-widget-handoff-form {
+        background: white;
+        border-radius: 12px;
+        padding: 16px;
+        margin-top: 12px;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+      }
+      .engage-widget-handoff-form .engage-widget-field {
+        margin-bottom: 10px;
+      }
+      .engage-widget-handoff-form input {
+        width: 100%;
+        padding: 10px 12px;
+        border: 1px solid #ddd;
+        border-radius: 8px;
+        font-size: 14px;
+        box-sizing: border-box;
+      }
+      .engage-widget-handoff-form input:focus {
+        outline: none;
+        border-color: ${accent};
       }
       @media (max-width: 480px) {
         .engage-widget-container {
@@ -378,39 +660,58 @@
 
   // Create widget DOM
   function createWidget() {
-    // FAB button
+    // FAB button with animated Echo logo
     const fab = document.createElement('button');
     fab.className = 'engage-widget-fab';
     fab.innerHTML = `
-      <svg class="chat-icon" viewBox="0 0 24 24"><path d="M20 2H4c-1.1 0-2 .9-2 2v18l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zm0 14H5.17L4 17.17V4h16v12z"/><path d="M7 9h10v2H7zm0-3h10v2H7z"/></svg>
+      ${ECHO_LOGO_SVG}
       <svg class="close-icon" viewBox="0 0 24 24"><path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
     `;
     fab.onclick = toggleWidget;
     document.body.appendChild(fab);
     
-    // Widget container
+    // Widget container with Echo branding
     const container = document.createElement('div');
     container.className = 'engage-widget-container';
     container.id = 'engage-widget';
     
+    // Echo mini logo for header
+    const echoMiniLogo = `<svg viewBox="0 0 484.21 482.45" class="echo-logo-svg" style="width: 24px; height: 24px;">
+      <g fill="currentColor">
+        <path d="M484.21,242.1c0,116.93-82.77,215.11-193.12,237.15-8.5,1.7-18.93,2.74-29.05,3.2-.63.03-.91-.79-.39-1.15,4.47-3.13,11.01-8.54,15.99-16.11,4.08-6.21,6.24-12.12,7.42-16.45.06-.22.24-.39.46-.44,97.61-22.45,166.95-108.92,166.95-206.2,0-129.41-116.85-231.53-250.79-206.61C117.63,51.14,51.44,117.13,35.6,201.14c-18.34,97.26,30.34,185.56,107.86,226.8,6.63,3.62,14.61,7.41,23.88,10.76,9.6,3.46,18.34,6.39,26.05,7.12,2.11.2,13.32-.21,22.39-9.25,5.74-5.72,9.3-13.62,9.33-22.35h0v-45.17s0,0,0,0v-5.38s0-.02,0-.03V90.55c0-9.34,7.64-16.98,16.98-16.98s16.98,7.64,16.98,16.98v273.08s0,.02,0,.03v57.02c0,32.62-26.46,59.62-59.08,59.02-5.34-.1-10.5-.93-15.39-2.37,0,0,0,0,0,0C61.86,447.43-24.26,323.97,6.14,186.74,26.3,95.74,98.33,24.71,189.55,5.53c156.66-32.94,294.66,85.7,294.66,236.57Z"/>
+        <path d="M204.49,350.68v-212.7c0-9.34-7.64-16.98-16.98-16.98h0c-9.34,0-16.98,7.64-16.98,16.98v212.7c0,9.34,7.64,16.98,16.98,16.98h0c9.34,0,16.98-7.64,16.98-16.98Z"/>
+        <path d="M313.68,350.68v-212.7c0-9.34-7.64-16.98-16.98-16.98h0c-9.34,0-16.98,7.64-16.98,16.98v212.7c0,9.34,7.64,16.98,16.98,16.98h0c9.34,0,16.98-7.64,16.98-16.98Z"/>
+      </g>
+    </svg>`;
+    
     container.innerHTML = `
       <div class="engage-widget-header">
         <div class="engage-widget-header-avatar">
-          <svg viewBox="0 0 24 24"><path d="M20 2H4c-1.1 0-2 .9-2 2v18l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2z"/></svg>
+          ${echoMiniLogo}
         </div>
         <div class="engage-widget-header-text">
-          <h3>${config.projectName || 'Chat Support'}</h3>
-          <p>We typically reply in a few minutes</p>
+          <h3><span class="echo-name">Echo</span></h3>
+          <p>${config.projectName ? `${config.projectName} Assistant` : 'AI Assistant'}</p>
         </div>
+        <button class="engage-widget-header-close" onclick="document.querySelector('.engage-widget-fab').click()">
+          <svg viewBox="0 0 24 24"><path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
       </div>
       <div class="engage-widget-body" id="engage-body">
         ${renderFormOrChat()}
       </div>
-      ${config.showPoweredBy ? `
-        <div class="engage-widget-powered">
-          Powered by <a href="https://uptrademedia.com" target="_blank" rel="noopener">Uptrade Media</a>
-        </div>
-      ` : ''}
+      <div class="engage-widget-powered">
+        <span class="signal-badge">
+          <svg viewBox="0 0 484.21 482.45" class="echo-mini-logo" style="width: 12px; height: 12px;">
+            <g fill="currentColor">
+              <path d="M484.21,242.1c0,116.93-82.77,215.11-193.12,237.15-8.5,1.7-18.93,2.74-29.05,3.2-.63.03-.91-.79-.39-1.15,4.47-3.13,11.01-8.54,15.99-16.11,4.08-6.21,6.24-12.12,7.42-16.45.06-.22.24-.39.46-.44,97.61-22.45,166.95-108.92,166.95-206.2,0-129.41-116.85-231.53-250.79-206.61C117.63,51.14,51.44,117.13,35.6,201.14c-18.34,97.26,30.34,185.56,107.86,226.8,6.63,3.62,14.61,7.41,23.88,10.76,9.6,3.46,18.34,6.39,26.05,7.12,2.11.2,13.32-.21,22.39-9.25,5.74-5.72,9.3-13.62,9.33-22.35h0v-45.17s0,0,0,0v-5.38s0-.02,0-.03V90.55c0-9.34,7.64-16.98,16.98-16.98s16.98,7.64,16.98,16.98v273.08s0,.02,0,.03v57.02c0,32.62-26.46,59.62-59.08,59.02-5.34-.1-10.5-.93-15.39-2.37,0,0,0,0,0,0C61.86,447.43-24.26,323.97,6.14,186.74,26.3,95.74,98.33,24.71,189.55,5.53c156.66-32.94,294.66,85.7,294.66,236.57Z"/>
+            </g>
+          </svg>
+          Signal AI
+        </span>
+        <span>•</span>
+        <a href="https://uptrademedia.com" target="_blank" rel="noopener">Uptrade Media</a>
+      </div>
     `;
     
     document.body.appendChild(container);
@@ -621,8 +922,16 @@
       actionsHtml += '</div>';
     }
     
+    // Show connect to agent button if handoff is enabled
+    const connectAgentHtml = config.handoffEnabled ? `
+      <button class="engage-connect-agent" id="engage-connect-agent">
+        <svg viewBox="0 0 24 24"><path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"/></svg>
+        Talk to a person
+      </button>
+    ` : '';
+    
     return `
-      <div class="engage-widget-messages">
+      <div class="engage-widget-messages" id="engage-messages">
         <div class="engage-widget-message ai">
           ${config.initialMessage || "Hi! 👋 How can I help you today?"}
         </div>
@@ -635,6 +944,7 @@
             <svg viewBox="0 0 24 24"><path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/></svg>
           </button>
         </div>
+        ${connectAgentHtml}
       </div>
     `;
   }
@@ -649,6 +959,16 @@
     
     messagesHtml += '</div>';
     
+    // Only show connect button if in AI mode (no live session) and handoff enabled
+    const chatSessionId = sessionStorage.getItem('engage_chat_session');
+    const isAIMode = !chatSessionId && (config.chatMode === 'ai' || config.chatMode === 'ai_first');
+    const connectAgentHtml = (config.handoffEnabled && isAIMode) ? `
+      <button class="engage-connect-agent" id="engage-connect-agent">
+        <svg viewBox="0 0 24 24"><path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"/></svg>
+        Talk to a person
+      </button>
+    ` : '';
+    
     return `
       ${messagesHtml}
       <div class="engage-widget-footer" style="margin-top: auto;">
@@ -658,6 +978,7 @@
             <svg viewBox="0 0 24 24"><path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/></svg>
           </button>
         </div>
+        ${connectAgentHtml}
       </div>
     `;
   }
@@ -723,6 +1044,7 @@
   function attachChatHandlers() {
     const input = document.getElementById('engage-input');
     const sendBtn = document.getElementById('engage-send');
+    const connectBtn = document.getElementById('engage-connect-agent');
     
     if (input && sendBtn) {
       sendBtn.onclick = () => sendMessage();
@@ -739,6 +1061,26 @@
         input.style.height = Math.min(input.scrollHeight, 120) + 'px';
       };
     }
+    
+    // Connect to agent button
+    if (connectBtn) {
+      connectBtn.onclick = () => {
+        trackEvent('connect_agent_clicked');
+        showHandoffForm('user_requested');
+      };
+    }
+    
+    // Quick action buttons
+    document.querySelectorAll('.engage-quick-action').forEach(btn => {
+      btn.onclick = () => {
+        const action = btn.dataset.action || btn.textContent;
+        const input = document.getElementById('engage-input');
+        if (input) {
+          input.value = action;
+          sendMessage();
+        }
+      };
+    });
   }
 
   // Create chat session
@@ -784,23 +1126,132 @@
     const input = document.getElementById('engage-input');
     const content = input.value.trim();
     
-    if (!content) return;
-    
-    const chatSessionId = sessionStorage.getItem('engage_chat_session');
-    
-    // If no session yet, create one first (for AI mode)
-    if (!chatSessionId && config.chatMode === 'ai') {
-      // TODO: Handle AI mode session creation
-      return;
-    }
+    if (!content || isWaitingForAI) return;
     
     input.value = '';
     input.style.height = 'auto';
     
-    // Optimistically add message to UI
+    // Add message to UI immediately
     messages.push({ role: 'visitor', content });
+    aiConversationHistory.push({ role: 'user', content });
     updateMessagesUI();
     
+    // Check if in AI mode (no session yet, or chatMode is 'ai')
+    const chatSessionId = sessionStorage.getItem('engage_chat_session');
+    const isAIMode = config.chatMode === 'ai' || config.chatMode === 'ai_first';
+    
+    if (isAIMode && !chatSessionId) {
+      // AI mode - send to Signal for AI response
+      await sendAIMessage(content);
+    } else if (chatSessionId) {
+      // Live chat mode with existing session - send to human agent
+      await sendLiveMessage(chatSessionId, content);
+    }
+  }
+
+  // Send message to AI with streaming (Echo public chat endpoint)
+  async function sendAIMessage(content) {
+    isWaitingForAI = true;
+    showTypingIndicator();
+    setFabListening(true);
+    
+    try {
+      const baseUrl = scriptTag.src ? new URL(scriptTag.src).origin : PORTAL_URL;
+      const response = await fetch(`${baseUrl}${API_BASE}/echo-chat-public`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          projectId,
+          sessionId,
+          message: content,
+          history: aiConversationHistory.slice(-10),
+          source: 'engage_widget',
+          pageUrl: window.location.href
+        })
+      });
+      
+      if (!response.ok) {
+        throw new Error('Failed to get AI response');
+      }
+
+      // Parse SSE response
+      const text = await response.text();
+      const events = parseSSEEvents(text);
+      
+      hideTypingIndicator();
+      
+      // Process events
+      let fullResponse = '';
+      let metadata = {};
+      
+      // Add placeholder message that we'll update
+      const aiMessageIndex = messages.length;
+      messages.push({ role: 'ai', content: '' });
+      
+      for (const event of events) {
+        if (event.type === 'token') {
+          fullResponse += event.data.content;
+          messages[aiMessageIndex].content = fullResponse;
+          updateMessagesUI();
+        } else if (event.type === 'complete') {
+          metadata = event.data;
+        } else if (event.type === 'start') {
+          if (event.data.conversationId) {
+            sessionStorage.setItem('engage_signal_conversation', event.data.conversationId);
+          }
+        }
+      }
+      
+      // Update conversation history
+      if (fullResponse) {
+        aiConversationHistory.push({ role: 'assistant', content: fullResponse });
+      }
+      
+      // Check if AI triggered handoff
+      if (metadata.handoffRequested) {
+        handleAIHandoff(metadata.handoffReason);
+      }
+      
+      trackEvent('ai_message_sent');
+    } catch (error) {
+      console.error('[Engage] AI message error:', error);
+      hideTypingIndicator();
+      messages.push({ 
+        role: 'system', 
+        content: 'Sorry, I had trouble processing that. Please try again.' 
+      });
+      updateMessagesUI();
+    } finally {
+      isWaitingForAI = false;
+      setFabListening(false);
+    }
+  }
+
+  // Parse SSE events from response text
+  function parseSSEEvents(text) {
+    const events = [];
+    const lines = text.split('\n');
+    let currentEvent = null;
+    
+    for (const line of lines) {
+      if (line.startsWith('event: ')) {
+        currentEvent = { type: line.slice(7).trim() };
+      } else if (line.startsWith('data: ') && currentEvent) {
+        try {
+          currentEvent.data = JSON.parse(line.slice(6));
+          events.push(currentEvent);
+        } catch (e) {
+          console.warn('[Engage] Failed to parse SSE data:', line);
+        }
+        currentEvent = null;
+      }
+    }
+    
+    return events;
+  }
+
+  // Send message to live agent
+  async function sendLiveMessage(chatSessionId, content) {
     try {
       const baseUrl = scriptTag.src ? new URL(scriptTag.src).origin : PORTAL_URL;
       await fetch(`${baseUrl}${API_BASE}/engage-chat-widget/message`, {
@@ -815,6 +1266,213 @@
       trackEvent('message_sent');
     } catch (error) {
       console.error('[Engage] Send message error:', error);
+    }
+  }
+
+  // Show typing indicator
+  function showTypingIndicator() {
+    const messagesContainer = document.getElementById('engage-messages');
+    if (!messagesContainer) return;
+    
+    const indicator = document.createElement('div');
+    indicator.id = 'engage-typing';
+    indicator.className = 'engage-widget-message ai typing';
+    indicator.innerHTML = '<span></span><span></span><span></span>';
+    messagesContainer.appendChild(indicator);
+    messagesContainer.scrollTop = messagesContainer.scrollHeight;
+  }
+
+  // Hide typing indicator
+  function hideTypingIndicator() {
+    const indicator = document.getElementById('engage-typing');
+    if (indicator) indicator.remove();
+  }
+
+  // Handle AI-triggered handoff to human
+  async function handleAIHandoff(reason) {
+    messages.push({
+      role: 'system',
+      content: 'I\'m connecting you with a team member who can help further.'
+    });
+    updateMessagesUI();
+    
+    // Show form to collect contact info for handoff
+    showHandoffForm(reason);
+  }
+
+  // Request handoff to human agent
+  async function requestHandoff(visitorData = {}) {
+    const signalConversation = sessionStorage.getItem('engage_signal_conversation');
+    
+    try {
+      const baseUrl = scriptTag.src ? new URL(scriptTag.src).origin : PORTAL_URL;
+      const response = await fetch(`${baseUrl}${API_BASE}/engage-chat-session`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          projectId,
+          visitorId,
+          sessionId,
+          sourceUrl: window.location.href,
+          referrer: document.referrer,
+          userAgent: navigator.userAgent,
+          deviceType: getDeviceType(),
+          chatMode: 'handoff', // Signal this is a handoff from AI
+          aiConversationId: signalConversation,
+          aiSummary: summarizeConversation(),
+          ...visitorData
+        })
+      });
+      
+      const data = await response.json();
+      sessionStorage.setItem('engage_chat_session', data.session.id);
+      
+      // Subscribe to realtime updates for this session
+      subscribeToSession(data.session.id);
+      
+      messages.push({
+        role: 'system',
+        content: 'You\'re connected! A team member will respond shortly.'
+      });
+      updateMessagesUI();
+      
+      // Start polling as fallback
+      startPolling();
+      
+      trackEvent('handoff_requested', { from: 'ai' });
+    } catch (error) {
+      console.error('[Engage] Handoff error:', error);
+      messages.push({
+        role: 'system',
+        content: 'Sorry, we couldn\'t connect you right now. Please try again or email us directly.'
+      });
+      updateMessagesUI();
+    }
+  }
+
+  // Summarize AI conversation for handoff
+  function summarizeConversation() {
+    if (aiConversationHistory.length === 0) return 'No prior AI conversation';
+    
+    const userMessages = aiConversationHistory
+      .filter(m => m.role === 'user')
+      .map(m => m.content)
+      .slice(-5)
+      .join(' | ');
+    
+    return `Visitor asked about: ${userMessages.slice(0, 500)}`;
+  }
+
+  // Show handoff form to collect contact info
+  function showHandoffForm(reason) {
+    const body = document.getElementById('engage-body');
+    body.innerHTML = `
+      <div class="engage-widget-messages" id="engage-messages">
+        ${messages.map(msg => `<div class="engage-widget-message ${msg.role}">${escapeHtml(msg.content)}</div>`).join('')}
+      </div>
+      <form class="engage-widget-handoff-form" id="engage-handoff-form" onsubmit="return false;">
+        <p style="margin: 0 0 12px; font-size: 14px; color: #666;">Enter your details to connect with our team:</p>
+        <div class="engage-widget-field">
+          <input type="text" name="name" required placeholder="Your name">
+        </div>
+        <div class="engage-widget-field">
+          <input type="email" name="email" required placeholder="Your email">
+        </div>
+        <div class="engage-widget-field">
+          <input type="tel" name="phone" placeholder="Phone (optional)">
+        </div>
+        <button type="submit" class="engage-widget-submit">Connect with Team</button>
+      </form>
+    `;
+    
+    attachHandoffFormHandlers();
+  }
+
+  // Attach handlers to handoff form
+  function attachHandoffFormHandlers() {
+    const form = document.getElementById('engage-handoff-form');
+    if (form) {
+      form.onsubmit = async (e) => {
+        e.preventDefault();
+        const formData = new FormData(form);
+        const submitBtn = form.querySelector('.engage-widget-submit');
+        submitBtn.disabled = true;
+        submitBtn.textContent = 'Connecting...';
+        
+        await requestHandoff({
+          visitorName: formData.get('name'),
+          visitorEmail: formData.get('email'),
+          visitorPhone: formData.get('phone')
+        });
+        
+        showChatView();
+      };
+    }
+  }
+
+  // Subscribe to Supabase Realtime for live updates
+  function subscribeToSession(sessionId) {
+    // Load Supabase client if not already loaded
+    if (!window.supabase && typeof createClient === 'undefined') {
+      const script = document.createElement('script');
+      script.src = 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js';
+      script.onload = () => setupRealtime(sessionId);
+      document.head.appendChild(script);
+    } else {
+      setupRealtime(sessionId);
+    }
+  }
+
+  // Setup Supabase Realtime subscription
+  function setupRealtime(chatSessionId) {
+    try {
+      const client = window.supabase?.createClient?.(SUPABASE_URL, SUPABASE_ANON_KEY) ||
+                     createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+      
+      // Subscribe to messages table changes for this session
+      realtimeChannel = client
+        .channel(`engage_session_${chatSessionId}`)
+        .on(
+          'postgres_changes',
+          {
+            event: 'INSERT',
+            schema: 'public',
+            table: 'engage_chat_messages',
+            filter: `session_id=eq.${chatSessionId}`
+          },
+          (payload) => {
+            const newMessage = payload.new;
+            // Only add if not from visitor (avoid duplicates)
+            if (newMessage.role !== 'visitor') {
+              if (!messages.find(m => m.id === newMessage.id)) {
+                messages.push({
+                  id: newMessage.id,
+                  role: newMessage.role,
+                  content: newMessage.content
+                });
+                updateMessagesUI();
+                
+                if (config.playSoundOnMessage) {
+                  playNotificationSound();
+                }
+              }
+            }
+          }
+        )
+        .subscribe();
+      
+      console.log('[Engage] Realtime subscription active');
+    } catch (error) {
+      console.error('[Engage] Realtime setup failed:', error);
+      // Fallback to polling
+    }
+  }
+
+  // Cleanup realtime subscription
+  function cleanupRealtime() {
+    if (realtimeChannel) {
+      realtimeChannel.unsubscribe();
+      realtimeChannel = null;
     }
   }
 

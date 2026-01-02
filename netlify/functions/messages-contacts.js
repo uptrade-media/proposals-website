@@ -41,13 +41,29 @@ export async function handler(event) {
 
   try {
     const userId = contact.id
-    const orgId = event.headers['x-organization-id']
+    let orgId = event.headers['x-organization-id'] || contact.org_id
+    const isTeamMember = contact.is_team_member === true
 
     if (!userId) {
       return {
         statusCode: 401,
         headers,
         body: JSON.stringify({ error: 'INVALID_TOKEN' })
+      }
+    }
+
+    // For team members without org context, use Uptrade Media org
+    if (!orgId && isTeamMember) {
+      const { data: uptradeOrg } = await supabase
+        .from('organizations')
+        .select('id')
+        .ilike('name', '%uptrade%')
+        .limit(1)
+        .single()
+      
+      if (uptradeOrg) {
+        orgId = uptradeOrg.id
+        console.log('[messages-contacts] Team member using Uptrade org:', orgId)
       }
     }
 
@@ -153,20 +169,27 @@ export async function handler(event) {
       }
       
       // Add Echo contact for this organization
-      const { data: echoContact } = await supabase
+      const { data: echoContacts, error: echoError } = await supabase
         .from('contacts')
         .select('id, name, email, company, role, avatar, is_ai, contact_type')
         .eq('org_id', orgId)
         .eq('is_ai', true)
-        .eq('contact_type', 'ai')
-        .single()
+        .limit(1)
       
-      if (echoContact) {
+      if (echoError) {
+        console.warn('[messages-contacts] Error fetching Echo:', echoError.message)
+      }
+      
+      if (echoContacts && echoContacts.length > 0) {
+        const echoContact = echoContacts[0]
+        console.log('[messages-contacts] ✅ Found Echo for org', orgId, ':', echoContact.name)
         contacts.push({ 
           ...echoContact, 
           contactType: 'echo',
           status: 'always_available'
         })
+      } else {
+        console.warn('[messages-contacts] ❌ No Echo contact found for org', orgId)
       }
       
       // Remove duplicates (keep first occurrence which has correct contactType)

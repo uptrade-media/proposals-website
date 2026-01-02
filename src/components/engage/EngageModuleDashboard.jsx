@@ -30,6 +30,8 @@ import EngageElementEditor from './EngageElementEditor'
 import EngageAnalytics from './EngageAnalytics'
 import EngageChatSettings from './EngageChatSettings'
 import EngageChatInbox from './EngageChatInbox'
+import { EngageVisualEditor } from './visual-editor'
+import EchoLogo from '@/components/echo/EchoLogo'
 
 const TABS = [
   { id: 'overview', label: 'Overview', icon: Zap },
@@ -42,6 +44,7 @@ const TABS = [
 export default function EngageModuleDashboard({ projectId: propProjectId, onNavigate }) {
   const [activeTab, setActiveTab] = useState('overview')
   const [editingElement, setEditingElement] = useState(null)
+  const [useVisualEditor, setUseVisualEditor] = useState(true) // Default to visual editor
   const [projects, setProjects] = useState([])
   const [selectedProjectId, setSelectedProjectId] = useState(null)
   const [loadingProjects, setLoadingProjects] = useState(false)
@@ -50,6 +53,9 @@ export default function EngageModuleDashboard({ projectId: propProjectId, onNavi
   // Get project ID from props, current context, or selected
   const projectId = propProjectId || currentProject?.id || selectedProjectId
   const orgId = currentOrg?.id
+  
+  // Get site URL for visual editor preview
+  const siteUrl = currentProject?.siteUrl || projects.find(p => p.id === projectId)?.siteUrl
   
   // Fetch projects if no project context
   useEffect(() => {
@@ -76,10 +82,11 @@ export default function EngageModuleDashboard({ projectId: propProjectId, onNavi
     }
   }
 
-  // Handle element editing
-  const handleEditElement = (element) => {
+  // Handle element editing - use visual editor by default
+  const handleEditElement = (element, visual = true) => {
     setEditingElement(element)
-    setActiveTab('editor')
+    setUseVisualEditor(visual)
+    setActiveTab(visual ? 'visual-editor' : 'editor')
   }
 
   const handleCloseEditor = () => {
@@ -87,9 +94,10 @@ export default function EngageModuleDashboard({ projectId: propProjectId, onNavi
     setActiveTab('elements')
   }
 
-  const handleCreateElement = () => {
+  const handleCreateElement = (useVisual = true) => {
     setEditingElement({ isNew: true })
-    setActiveTab('editor')
+    setUseVisualEditor(useVisual)
+    setActiveTab(useVisual ? 'visual-editor' : 'editor')
   }
   
   // Loading state
@@ -141,10 +149,25 @@ export default function EngageModuleDashboard({ projectId: propProjectId, onNavi
           )}
           
           {activeTab === 'elements' && (
-            <Button onClick={handleCreateElement} className="gap-2">
-              <Sparkles className="w-4 h-4" />
-              Create Element
-            </Button>
+            <>
+              <Button 
+                variant="outline" 
+                onClick={() => {
+                  // Open Messages widget with Echo selected
+                  window.dispatchEvent(new CustomEvent('messages:openWithEcho', {
+                    detail: { context: 'engage', projectId }
+                  }))
+                }} 
+                className="gap-2 border-emerald-500/30 hover:bg-emerald-500/10"
+              >
+                <EchoLogo size={16} animated={false} />
+                Ask Echo
+              </Button>
+              <Button onClick={handleCreateElement} className="gap-2">
+                <Sparkles className="w-4 h-4" />
+                Create Element
+              </Button>
+            </>
           )}
         </div>
       </div>
@@ -189,6 +212,11 @@ export default function EngageModuleDashboard({ projectId: propProjectId, onNavi
                 projectId={projectId} 
                 onNavigate={setActiveTab}
                 onCreateElement={handleCreateElement}
+                onAskEcho={() => {
+                  window.dispatchEvent(new CustomEvent('messages:openWithEcho', {
+                    detail: { context: 'engage', projectId }
+                  }))
+                }}
               />
             </motion.div>
           )}
@@ -217,6 +245,27 @@ export default function EngageModuleDashboard({ projectId: propProjectId, onNavi
               <EngageElementEditor 
                 projectId={projectId}
                 element={editingElement}
+                onClose={handleCloseEditor}
+                onSave={() => {
+                  handleCloseEditor()
+                }}
+              />
+            </motion.div>
+          )}
+
+          {activeTab === 'visual-editor' && (
+            <motion.div
+              key="visual-editor"
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -10 }}
+              className="h-full -m-6"
+            >
+              <EngageVisualEditor 
+                projectId={projectId}
+                elementId={editingElement?.id}
+                element={editingElement?.isNew ? null : editingElement}
+                siteUrl={siteUrl}
                 onClose={handleCloseEditor}
                 onSave={() => {
                   handleCloseEditor()
@@ -264,7 +313,7 @@ export default function EngageModuleDashboard({ projectId: propProjectId, onNavi
 }
 
 // Overview component
-function EngageOverview({ projectId, onNavigate, onCreateElement }) {
+function EngageOverview({ projectId, onNavigate, onCreateElement, onAskEcho }) {
   const stats = [
     { label: 'Active Elements', value: '3', icon: Megaphone, color: 'text-blue-500' },
     { label: 'Total Impressions', value: '1,247', icon: BarChart2, color: 'text-green-500' },
@@ -273,6 +322,13 @@ function EngageOverview({ projectId, onNavigate, onCreateElement }) {
   ]
 
   const quickActions = [
+    { 
+      label: 'Ask Echo to Design', 
+      description: 'Describe what you want in plain English',
+      icon: Sparkles,
+      gradient: 'from-emerald-500 to-teal-600',
+      onClick: onAskEcho 
+    },
     { 
       label: 'Create Popup', 
       description: 'Create a new popup or modal',
@@ -331,14 +387,25 @@ function EngageOverview({ projectId, onNavigate, onCreateElement }) {
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
             {quickActions.map((action) => {
               const Icon = action.icon
+              const hasGradient = action.gradient
               return (
                 <button
                   key={action.label}
                   onClick={action.onClick}
-                  className="flex items-center gap-3 p-4 rounded-lg bg-[var(--surface-secondary)] hover:bg-[var(--glass-bg-hover)] transition-colors text-left group"
+                  className={cn(
+                    "flex items-center gap-3 p-4 rounded-lg transition-colors text-left group",
+                    hasGradient 
+                      ? "bg-gradient-to-r from-emerald-500/10 to-teal-500/10 hover:from-emerald-500/20 hover:to-teal-500/20 border border-emerald-500/20"
+                      : "bg-[var(--surface-secondary)] hover:bg-[var(--glass-bg-hover)]"
+                  )}
                 >
-                  <div className="w-10 h-10 rounded-lg bg-[var(--accent)]/10 flex items-center justify-center">
-                    <Icon className="w-5 h-5 text-[var(--accent)]" />
+                  <div className={cn(
+                    "w-10 h-10 rounded-lg flex items-center justify-center",
+                    hasGradient 
+                      ? "bg-gradient-to-br from-emerald-500 to-teal-600"
+                      : "bg-[var(--accent)]/10"
+                  )}>
+                    <Icon className={cn("w-5 h-5", hasGradient ? "text-white" : "text-[var(--accent)]")} />
                   </div>
                   <div className="flex-1">
                     <p className="font-medium text-[var(--text-primary)]">{action.label}</p>

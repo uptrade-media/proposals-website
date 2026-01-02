@@ -86,8 +86,8 @@ const TENANT_MODULES = {
   email: {
     key: 'email',
     feature: 'email',
-    label: 'Email Manager',
-    description: 'Email campaigns',
+    label: 'Outreach',
+    description: 'Email & SMS campaigns',
     icon: Mail,
     color: 'from-pink-500 to-pink-600',
     bgColor: 'bg-pink-500/10',

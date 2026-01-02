@@ -1,3 +1,17 @@
+// ============================================================================
+// DEPRECATED: This function is now redundant - use Signal API directly
+// ============================================================================
+// Portal now calls Signal API (NestJS) instead of internal Signal implementation.
+// This function remains for backward compatibility but should not be used in new code.
+//
+// Migration:
+//   Old: /.netlify/functions/signal-xxx
+//   New: Signal API endpoints (see SIGNAL-API-MIGRATION.md)
+//
+// Signal API Base URL: $SIGNAL_API_URL (http://localhost:3001 or https://signal-api.uptrademedia.com)
+// ============================================================================
+
+
 // netlify/functions/signal-faq-generate.js
 // Signal Module: Auto-generate FAQs from website content
 // Uses AI to identify common questions visitors might ask
@@ -121,7 +135,7 @@ export async function handler(event) {
       context += pages.map(p => `- ${p.title}: ${p.meta_description || ''}`).join('\n')
     }
 
-    // Generate FAQs with AI
+    // Generate FAQs with AI including confidence scores
     const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY })
 
     const completion = await openai.chat.completions.create({
@@ -136,11 +150,20 @@ For each FAQ, provide:
 - answer: A helpful, accurate answer based on the provided context
 - category: One of: general, services, pricing, location, hours, process, support
 - priority: 1-10 (10 = most common/important)
+- confidence: 1-10 (how confident you are the answer is accurate based on the content)
+  - 10: Information is directly stated word-for-word in the content
+  - 8-9: Information is clearly stated or strongly implied
+  - 6-7: Information can be reasonably inferred
+  - 4-5: Educated guess based on context
+  - 1-3: Uncertain, definitely needs human review
+- source_url: The URL of the page where you found the information (or null if general)
+- source_quote: A brief quote from the content that supports this answer (or null if none)
 
 Return a JSON object with an "faqs" array.
 Make questions natural and conversational.
 Only include information that can be inferred from the context provided.
-If pricing or specific details aren't available, provide general guidance or suggest contacting them.`
+If pricing or specific details aren't available, provide general guidance or suggest contacting them.
+Be conservative with confidence scores - only score 8+ if you're certain the information is accurate.`
         },
         {
           role: 'user',
@@ -182,21 +205,31 @@ If pricing or specific details aren't available, provide general guidance or sug
       .eq('id', site.project_id || projectId)
       .single()
 
-    // Insert FAQs with pending status for review
+    // Insert FAQs with confidence-based auto-approval
+    const AUTO_APPROVE_THRESHOLD = 8
     const faqInserts = faqs
       .filter(faq => !existingQuestions.includes(faq.question.toLowerCase()))
-      .map(faq => ({
-        project_id: site.project_id || projectId,
-        org_id: project?.org_id || site.org_id,
-        question: faq.question,
-        answer: faq.answer,
-        category: faq.category || 'general',
-        priority: faq.priority || 5,
-        status: 'pending',
-        is_auto_generated: true,
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString()
-      }))
+      .map(faq => {
+        const confidence = faq.confidence || 5
+        const shouldAutoApprove = confidence >= AUTO_APPROVE_THRESHOLD
+        
+        return {
+          project_id: site.project_id || projectId,
+          org_id: project?.org_id || site.org_id,
+          question: faq.question,
+          answer: faq.answer,
+          category: faq.category || 'general',
+          priority: faq.priority || 5,
+          confidence: confidence,
+          source_url: faq.source_url || null,
+          source_quote: faq.source_quote || null,
+          status: shouldAutoApprove ? 'approved' : 'pending',
+          auto_approved: shouldAutoApprove,
+          is_auto_generated: true,
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString()
+        }
+      })
 
     if (faqInserts.length === 0) {
       return {
@@ -219,13 +252,21 @@ If pricing or specific details aren't available, provide general guidance or sug
       throw insertError
     }
 
+    // Count auto-approved vs pending
+    const autoApprovedCount = insertedFaqs?.filter(f => f.auto_approved).length || 0
+    const pendingCount = insertedFaqs?.filter(f => f.status === 'pending').length || 0
+
     return {
       statusCode: 200,
       headers: CORS_HEADERS,
       body: JSON.stringify({
         generated: insertedFaqs?.length || faqInserts.length,
+        autoApproved: autoApprovedCount,
+        pendingReview: pendingCount,
         faqs: insertedFaqs,
-        status: 'pending_review'
+        message: autoApprovedCount > 0 
+          ? `${autoApprovedCount} high-confidence FAQs auto-approved, ${pendingCount} pending review`
+          : `${pendingCount} FAQs generated and pending review`
       })
     }
 

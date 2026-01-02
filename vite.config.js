@@ -58,6 +58,9 @@ export default defineConfig(({ mode }) => {
           if (warning.code === 'MODULE_LEVEL_DIRECTIVE' && warning.message.includes('"use client"')) {
             return
           }
+          if (warning.code === 'MODULE_LEVEL_DIRECTIVE' && warning.message.includes('"use"')) {
+            return
+          }
           warn(warning)
         },
         output: {
@@ -69,6 +72,12 @@ export default defineConfig(({ mode }) => {
       },
       // Enable minification with esbuild (faster than terser, no extra dep)
       minify: 'esbuild',
+      // Suppress esbuild warnings about directives
+      esbuild: {
+        logOverride: {
+          'this-is-undefined-in-esm': 'silent',
+        },
+      },
     },
 
     // Some libs reference process.env in the browser; this avoids undefined errors.

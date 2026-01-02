@@ -46,20 +46,21 @@ const TIME_PERIODS = [
 
 export default function SignalAnalytics({ projectId, className }) {
   const { 
-    widgetConversationsStats, 
-    fetchWidgetConversations,
-    widgetConversationsLoading 
+    analytics: storeAnalytics, 
+    analyticsLoading,
+    fetchAnalytics: fetchStoreAnalytics
   } = useSignalStore()
   
   const [period, setPeriod] = useState('30d')
   const [loading, setLoading] = useState(false)
   const [analytics, setAnalytics] = useState({
-    conversations: { total: 0, change: 0 },
+    conversations: { total: 0, change: 0, byStatus: {} },
     leads: { total: 0, conversionRate: 0, change: 0 },
     satisfaction: { score: 0, totalRatings: 0 },
-    avgResponseTime: { seconds: 0, change: 0 },
+    performance: { avgResponseTime: 0, totalTokens: 0, avgTokensPerConversation: 0 },
     topQuestions: [],
     hourlyDistribution: Array(24).fill(0),
+    peakHour: 0,
     dailyTrend: []
   })
 
@@ -73,45 +74,24 @@ export default function SignalAnalytics({ projectId, className }) {
   const fetchAnalytics = async () => {
     setLoading(true)
     try {
-      // Fetch conversations with stats
-      await fetchWidgetConversations(projectId, { period })
+      const data = await fetchStoreAnalytics(projectId, { period })
       
-      // In production, this would call a dedicated analytics endpoint
-      // For now, derive from widgetConversationsStats
-      const stats = widgetConversationsStats || {}
-      
+      // Map endpoint response to component state
       setAnalytics({
-        conversations: {
-          total: stats.total || 0,
-          change: calculateChange(stats.total, stats.previousTotal)
-        },
-        leads: {
-          total: stats.leadsCreated || 0,
-          conversionRate: stats.total > 0 
-            ? Math.round((stats.leadsCreated / stats.total) * 100) 
-            : 0,
-          change: calculateChange(stats.leadsCreated, stats.previousLeads)
-        },
-        satisfaction: {
-          score: stats.avgRating || 0,
-          totalRatings: stats.totalRatings || 0
-        },
-        avgResponseTime: {
-          seconds: stats.avgResponseTime || 0,
-          change: calculateChange(stats.previousResponseTime, stats.avgResponseTime)
-        },
-        topQuestions: stats.topQuestions || [],
-        hourlyDistribution: stats.hourlyDistribution || Array(24).fill(0),
-        dailyTrend: stats.dailyTrend || []
+        conversations: data.conversations || { total: 0, change: 0, byStatus: {} },
+        leads: data.leads || { total: 0, conversionRate: 0, change: 0 },
+        satisfaction: data.satisfaction || { score: 0, totalRatings: 0 },
+        performance: data.performance || { avgResponseTime: 0, totalTokens: 0, avgTokensPerConversation: 0 },
+        topQuestions: data.topQuestions || [],
+        hourlyDistribution: data.hourlyDistribution || Array(24).fill(0),
+        peakHour: data.peakHour || 0,
+        dailyTrend: data.dailyTrend || []
       })
+    } catch (error) {
+      console.error('Failed to fetch analytics:', error)
     } finally {
       setLoading(false)
     }
-  }
-
-  const calculateChange = (current, previous) => {
-    if (!previous || previous === 0) return 0
-    return Math.round(((current - previous) / previous) * 100)
   }
 
   return (
@@ -191,9 +171,7 @@ export default function SignalAnalytics({ projectId, className }) {
           />
           <MetricCard
             title="Avg Response"
-            value={formatDuration(analytics.avgResponseTime.seconds)}
-            change={analytics.avgResponseTime.change}
-            invertChange
+            value={formatDuration(analytics.performance.avgResponseTime)}
             icon={Clock}
             color="text-purple-400"
             bg="bg-purple-500/20"
@@ -465,31 +443,49 @@ function ConversionFunnel({ analytics, loading }) {
 
 // AI Performance component
 function AIPerformance({ analytics, loading }) {
+  const perf = analytics.performance || {}
+  const convStats = analytics.conversations || {}
+  
+  // Calculate escalation rate from byStatus
+  const totalConversations = convStats.total || 0
+  const escalatedCount = convStats.byStatus?.escalated || 0
+  const escalationRate = totalConversations > 0 
+    ? Math.round((escalatedCount / totalConversations) * 100) 
+    : 0
+  
   const metrics = [
     {
-      label: 'Questions Answered',
-      value: 94,
-      target: 95,
-      color: 'bg-emerald-500'
+      label: 'Avg Response Time',
+      value: formatDuration(perf.avgResponseTime || 0),
+      description: 'Time to generate AI response',
+      isRaw: true
     },
     {
-      label: 'Escalations',
-      value: 6,
+      label: 'Tokens Per Chat',
+      value: perf.avgTokensPerConversation || 0,
+      description: `${(perf.totalTokens || 0).toLocaleString()} total tokens`,
+      isRaw: true
+    },
+    {
+      label: 'Escalation Rate',
+      value: escalationRate,
       target: 10,
       color: 'bg-yellow-500',
-      inverted: true
+      inverted: true,
+      suffix: '%'
     },
     {
       label: 'User Satisfaction',
-      value: analytics.satisfaction.score * 20, // Convert 5-star to percentage
+      value: Math.round((analytics.satisfaction?.score || 0) * 20), // Convert 5-star to percentage
       target: 90,
-      color: 'bg-blue-500'
+      color: 'bg-blue-500',
+      suffix: '%'
     }
   ]
 
   if (loading) {
     return (
-      <div className="grid md:grid-cols-3 gap-4">
+      <div className="grid md:grid-cols-4 gap-4">
         {metrics.map((_, i) => (
           <div key={i} className="space-y-2">
             <div className="h-4 w-32 bg-muted animate-pulse rounded" />
@@ -501,8 +497,20 @@ function AIPerformance({ analytics, loading }) {
   }
 
   return (
-    <div className="grid md:grid-cols-3 gap-6">
+    <div className="grid md:grid-cols-4 gap-6">
       {metrics.map((metric) => {
+        // Raw metrics (no progress bar)
+        if (metric.isRaw) {
+          return (
+            <div key={metric.label} className="space-y-1">
+              <span className="text-sm text-muted-foreground">{metric.label}</span>
+              <div className="text-xl font-semibold">{metric.value}</div>
+              <p className="text-xs text-muted-foreground">{metric.description}</p>
+            </div>
+          )
+        }
+        
+        // Progress bar metrics
         const isGood = metric.inverted 
           ? metric.value <= metric.target 
           : metric.value >= metric.target
@@ -515,19 +523,23 @@ function AIPerformance({ analytics, loading }) {
                 'text-sm font-medium',
                 isGood ? 'text-emerald-400' : 'text-yellow-400'
               )}>
-                {metric.value}%
+                {metric.value}{metric.suffix || ''}
               </span>
             </div>
             <div className="relative">
-              <Progress value={metric.value} className="h-2" />
-              <div 
-                className="absolute top-0 w-0.5 h-full bg-white/50"
-                style={{ left: `${metric.target}%` }}
-              />
+              <Progress value={Math.min(metric.value, 100)} className="h-2" />
+              {metric.target && (
+                <div 
+                  className="absolute top-0 w-0.5 h-full bg-white/50"
+                  style={{ left: `${metric.target}%` }}
+                />
+              )}
             </div>
-            <p className="text-xs text-muted-foreground">
-              Target: {metric.target}%
-            </p>
+            {metric.target && (
+              <p className="text-xs text-muted-foreground">
+                Target: {metric.inverted ? '≤' : '≥'} {metric.target}%
+              </p>
+            )}
           </div>
         )
       })}
@@ -535,9 +547,12 @@ function AIPerformance({ analytics, loading }) {
   )
 }
 
-// Helper function to format duration
-function formatDuration(seconds) {
-  if (seconds < 60) return `${Math.round(seconds)}s`
+// Helper function to format duration (input is milliseconds)
+function formatDuration(ms) {
+  if (!ms || ms === 0) return '0ms'
+  if (ms < 1000) return `${Math.round(ms)}ms`
+  const seconds = ms / 1000
+  if (seconds < 60) return `${seconds.toFixed(1)}s`
   if (seconds < 3600) return `${Math.round(seconds / 60)}m`
   return `${(seconds / 3600).toFixed(1)}h`
 }

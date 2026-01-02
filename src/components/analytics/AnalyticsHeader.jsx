@@ -9,7 +9,7 @@ import {
   SelectTrigger, 
   SelectValue 
 } from '@/components/ui/select'
-import { RefreshCw, Calendar, TrendingUp } from 'lucide-react'
+import { RefreshCw, Calendar, TrendingUp, Wifi, WifiOff } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
 export function AnalyticsHeader({ 
@@ -19,7 +19,8 @@ export function AnalyticsHeader({
   isRefreshing = false,
   lastUpdated = null,
   siteName = null,
-  siteDomain = null
+  siteDomain = null,
+  realtimeConnected = false
 }) {
   return (
     <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
@@ -50,6 +51,32 @@ export function AnalyticsHeader({
       </div>
       
       <div className="flex items-center gap-3">
+        {/* Realtime Status Indicator */}
+        <div 
+          className={cn(
+            "flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium",
+            realtimeConnected 
+              ? "bg-emerald-500/10 text-emerald-500" 
+              : "bg-yellow-500/10 text-yellow-500"
+          )}
+          title={realtimeConnected ? "Live updates enabled" : "Connecting..."}
+        >
+          {realtimeConnected ? (
+            <>
+              <span className="relative flex h-2 w-2">
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+              </span>
+              Live
+            </>
+          ) : (
+            <>
+              <WifiOff className="h-3 w-3" />
+              Offline
+            </>
+          )}
+        </div>
+
         {/* Date Range Selector */}
         <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-[var(--glass-bg)] border border-[var(--glass-border)]">
           <Calendar className="h-4 w-4 text-[var(--text-tertiary)]" />

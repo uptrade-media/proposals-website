@@ -3,6 +3,7 @@
 // Handles: get active elements for a page, track events
 
 import { createSupabaseAdmin } from './utils/supabase.js'
+import { findProject } from './utils/projectLookup.js'
 
 const CORS_HEADERS = {
   'Access-Control-Allow-Origin': '*',
@@ -54,41 +55,7 @@ export async function handler(event) {
 async function handleGetElements(event, supabase) {
   const { projectId, slug, domain, url, device, source, visitor } = event.queryStringParameters || {}
 
-  // Find project
-  let project = null
-
-  if (projectId) {
-    const { data } = await supabase
-      .from('projects')
-      .select('id, title, org_id')
-      .eq('id', projectId)
-      .single()
-    project = data
-  } else if (slug) {
-    const { data } = await supabase
-      .from('projects')
-      .select('id, title, org_id')
-      .eq('slug', slug)
-      .single()
-    project = data
-  } else if (domain) {
-    const { data: org } = await supabase
-      .from('organizations')
-      .select('id')
-      .eq('domain', domain)
-      .single()
-    
-    if (org) {
-      const { data } = await supabase
-        .from('projects')
-        .select('id, title, org_id')
-        .eq('org_id', org.id)
-        .order('created_at', { ascending: true })
-        .limit(1)
-        .single()
-      project = data
-    }
-  }
+  const { project } = await findProject({ supabase, projectId, slug, domain })
 
   if (!project) {
     return {

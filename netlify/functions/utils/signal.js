@@ -116,6 +116,11 @@ export class Signal {
       // Build params from legacy fields
       actualParams = config.params || {}
       
+      // For chat tool, pass the userPrompt as the message
+      if (actualTool === 'chat' && config.userPrompt) {
+        actualParams.message = config.userPrompt
+      }
+      
       // Build the tool prompt from systemPrompt + userPrompt
       const promptParts = []
       if (config.systemPrompt) promptParts.push(config.systemPrompt)
@@ -135,6 +140,7 @@ export class Signal {
         trackAction: config.trackAction || false,
         additionalContext: {
           tool_prompt: toolPrompt,
+          legacy_system_prompt: config.systemPrompt, // Pass system prompt for chat override
           legacy_temperature: config.temperature,
           legacy_response_format: config.responseFormat
         }
@@ -269,8 +275,11 @@ export class Signal {
    * Chat with a skill (conversational interface)
    */
   async chat(skill, message, context) {
+    // Use legacy system prompt if provided, otherwise use skill's system prompt
+    const systemPrompt = context.legacy_system_prompt || skill.system_prompt
+    
     const messages = [
-      { role: 'system', content: skill.system_prompt }
+      { role: 'system', content: systemPrompt }
     ]
 
     // Load conversation history if we have a conversation

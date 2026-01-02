@@ -54,7 +54,7 @@ const AVAILABLE_FEATURES = [
   { key: 'ecommerce', label: 'E-commerce', description: 'Products, orders, inventory' },
   { key: 'files', label: 'File Manager', description: 'Upload and share files' },
   { key: 'messages', label: 'Messages', description: 'Internal messaging' },
-  { key: 'email_manager', label: 'Email Campaigns', description: 'Send and track email campaigns' },
+  { key: 'email_manager', label: 'Outreach', description: 'Email and SMS campaign management' },
   { key: 'seo', label: 'SEO Manager', description: 'Search engine optimization tools' },
 ]
 

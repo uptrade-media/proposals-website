@@ -33,10 +33,12 @@ export async function handler(event) {
     } = data
 
     // Get tenant/org context
-    const tenantId = event.headers['x-tenant-id'] || payload.tenantId
-    const orgId = event.headers['x-organization-id'] || payload.orgId || tenantId
+    const inputTenantId = event.headers['x-tenant-id'] || payload.tenantId
+    const inputOrgId = event.headers['x-organization-id'] || payload.orgId
 
-    if (!orgId && !tenantId) {
+    console.log('[analytics-ingest] Received:', { type, inputTenantId, inputOrgId, payloadKeys: Object.keys(payload).slice(0, 5) })
+
+    if (!inputOrgId && !inputTenantId) {
       return {
         statusCode: 400,
         headers,
@@ -46,38 +48,51 @@ export async function handler(event) {
 
     const supabase = createSupabaseAdmin()
     
-    // Resolve org_id if only tenant_id provided
-    let resolvedOrgId = orgId
-    if (!resolvedOrgId && tenantId) {
-      resolvedOrgId = await resolveOrgId(supabase, tenantId)
+    // Resolve org_id and tenant_id (project UUID)
+    const { orgId: resolvedOrgId, tenantId: resolvedTenantId } = await resolveTenant(supabase, inputTenantId)
+    
+    // Use provided orgId if available, otherwise use resolved
+    const finalOrgId = inputOrgId || resolvedOrgId
+    const finalTenantId = resolvedTenantId // Always use resolved project UUID
+    
+    // If we couldn't resolve to an org, skip silently (don't break analytics)
+    if (!finalOrgId) {
+      console.log(`[analytics-ingest] Skipping - unresolved tenant: ${inputTenantId}`)
+      return {
+        statusCode: 200,
+        headers,
+        body: JSON.stringify({ success: true, skipped: 'unresolved_tenant' })
+      }
     }
+
+    console.log('[analytics-ingest] Resolved tenant:', { finalOrgId, finalTenantId })
 
     // Route to appropriate handler
     switch (type) {
       case 'page_view':
-        await handlePageView(supabase, resolvedOrgId, tenantId, payload)
+        await handlePageView(supabase, finalOrgId, finalTenantId, payload)
         break
       case 'event':
-        await handleEvent(supabase, resolvedOrgId, tenantId, payload)
+        await handleEvent(supabase, finalOrgId, finalTenantId, payload)
         break
       case 'session':
-        await handleSession(supabase, resolvedOrgId, tenantId, payload)
+        await handleSession(supabase, finalOrgId, finalTenantId, payload)
         break
       case 'scroll_depth':
-        await handleScrollDepth(supabase, resolvedOrgId, tenantId, payload)
+        await handleScrollDepth(supabase, finalOrgId, finalTenantId, payload)
         break
       case 'web_vitals':
-        await handleWebVitals(supabase, resolvedOrgId, tenantId, payload)
+        await handleWebVitals(supabase, finalOrgId, finalTenantId, payload)
         break
       case 'heatmap_click':
-        await handleHeatmapClick(supabase, resolvedOrgId, tenantId, payload)
+        await handleHeatmapClick(supabase, finalOrgId, finalTenantId, payload)
         break
       case 'identify':
-        await handleIdentify(supabase, resolvedOrgId, tenantId, payload)
+        await handleIdentify(supabase, finalOrgId, finalTenantId, payload)
         break
       default:
         // For backwards compatibility, treat unknown types as events
-        await handleEvent(supabase, resolvedOrgId, tenantId, { ...payload, event: type })
+        await handleEvent(supabase, finalOrgId, finalTenantId, { ...payload, event: type })
     }
 
     return {
@@ -98,29 +113,63 @@ export async function handler(event) {
 }
 
 /**
- * Resolve org_id from tenant_id by checking projects and organizations
+ * Resolve org_id and tenant_id (project UUID) from tenantId identifier
+ * Returns { orgId, tenantId } where tenantId is the project UUID
  */
-async function resolveOrgId(supabase, tenantId) {
-  // Try projects first (for tenant sites like GWA)
+async function resolveTenant(supabase, tenantId) {
+  // First, try to find a project by tenant_tracking_id or id
   const { data: project } = await supabase
     .from('projects')
-    .select('id, org_id, tenant_tracking_id')
-    .or(`tenant_tracking_id.eq.${tenantId},id.eq.${tenantId}`)
+    .select('id, org_id, tenant_tracking_id, tenant_domain')
+    .or(`tenant_tracking_id.eq.${tenantId},id.eq.${tenantId},tenant_domain.eq.${tenantId}`)
     .eq('is_tenant', true)
     .single()
 
   if (project) {
-    return project.org_id || project.id
+    return { orgId: project.org_id, tenantId: project.id }
   }
-
-  // Try organizations
+  
+  // Handle main Uptrade Media site - look up by multiple identifiers
+  // Main site can send: 'UM-MAIN0001', 'UM-UPTRADE01', 'uptrade', 'uptrade-media', etc.
+  const mainSiteIdentifiers = ['uptrade', 'uptrade-media', 'uptrademedia', 'uptrademedia.com', 'um-main0001', 'um-uptrade01']
+  const isMainSite = mainSiteIdentifiers.includes(tenantId?.toLowerCase())
+  
+  if (isMainSite) {
+    // Look for Uptrade Media project by domain or title
+    const { data: umProject } = await supabase
+      .from('projects')
+      .select('id, org_id')
+      .eq('tenant_domain', 'uptrademedia.com')
+      .eq('is_tenant', true)
+      .single()
+    
+    if (umProject) {
+      return { orgId: umProject.org_id, tenantId: umProject.id }
+    }
+  }
+  
+  // Try organizations (for org-level tracking without a specific project)
   const { data: org } = await supabase
     .from('organizations')
-    .select('id')
-    .or(`slug.eq.${tenantId},id.eq.${tenantId}`)
+    .select('id, slug')
+    .or(`slug.eq.${tenantId},id.eq.${tenantId}${isMainSite ? ',slug.ilike.%uptrade%' : ''}`)
+    .limit(1)
     .single()
 
-  return org?.id || tenantId
+  if (org) {
+    // For org-level, tenant_id will be null (no specific project)
+    return { orgId: org.id, tenantId: null }
+  }
+  
+  // If we still can't resolve, check if tenantId is a valid UUID
+  const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+  if (uuidRegex.test(tenantId)) {
+    return { orgId: tenantId, tenantId: null }
+  }
+
+  // Return null for non-UUID strings - will need to handle gracefully
+  console.warn(`[analytics-ingest] Could not resolve tenant: ${tenantId}`)
+  return { orgId: null, tenantId: null }
 }
 
 /**

@@ -66,11 +66,12 @@ export async function handler(event) { }
 Files: `auth-verify.js`, `auth-forgot.js`, `contact-support.js`
 
 ### Authentication
-- **HttpOnly cookies only** - Session token: `um_session`
+- **Supabase Auth only** - Validate Supabase JWTs (from `sb-access-token` cookie or Authorization header)
+- **Use HttpOnly cookies** - Supabase auth cookies; do not use `um_session`
 - **Never store auth tokens** in localStorage (OK for UI prefs like "remember email")
 - **Two auth types**:
-  1. Google OAuth users (db-backed, type='google')
-  2. Legacy proposal clients (domain-mapped passwords, type='proposal')
+  1. Google OAuth users (type='google')
+  2. Legacy proposal clients (type='proposal')
 - **Edge protection**: Only `/p/*` routes via `netlify/edge-functions/login-auth.js`
 
 ### Database
@@ -114,8 +115,8 @@ Files: `auth-verify.js`, `auth-forgot.js`, `contact-support.js`
 // Domain-mapped proposal clients
 { type: 'proposal', email, slugs: ['row94', 'mbfm'] }
 
-// Verify session in functions
-const token = event.headers.cookie?.match(/um_session=([^;]+)/)?.[1]
+// Verify session in functions (Supabase Auth)
+const token = event.headers.cookie?.match(/sb-access-token=([^;]+)/)?.[1]
 const payload = jwt.verify(token, process.env.AUTH_JWT_SECRET)
 ```
 
@@ -391,62 +392,85 @@ if (!user.password && user.googleId) {
 
 ---
 
-## 5. Netlify Blobs (File Storage)
+## 5. Supabase Storage (File Storage)
 
 ### Purpose
-Serverless file storage for:
-- Audit PDFs
-- Proposal documents (if any)
-- Project files
+File storage for:
+- Client documents (proposals, invoices)
+- Profile avatars
+- Project assets
 - Message attachments
-- Invoice documents
+
+### Buckets
+- `client-files` - Private: Proposals, invoices, project files
+- `avatars` - Public: Profile pictures  
+- `project-assets` - Private: Project-specific assets
 
 ### Implementation
-Files stored in Netlify Blobs, metadata in `files` table
+Files stored in Supabase Storage with metadata in `files` table
 
 ### Upload Pattern
 ```javascript
 // In Netlify function
-import { getStore } from '@netlify/blobs'
+const buffer = Buffer.from(base64Data, 'base64')
+const storagePath = `${orgId}/${category}/${Date.now()}-${filename}`
 
-export async function handler(event) {
-  const store = getStore('uploads')
-  const { filename, base64Data, category } = JSON.parse(event.body)
-  
-  // Upload to Netlify Blobs
-  const blobPath = `${category}/${Date.now()}-${filename}`
-  await store.set(blobPath, Buffer.from(base64Data, 'base64'))
-  
-  // Save metadata to database
-  const file = await db.insert(files).values({
-    contactId,
+// Upload to Supabase Storage
+const { data, error } = await supabase.storage
+  .from('client-files')
+  .upload(storagePath, buffer, {
+    contentType: mimeType,
+    cacheControl: '3600'
+  })
+
+// Get public URL
+const { data: { publicUrl } } = supabase.storage
+  .from('client-files')
+  .getPublicUrl(storagePath)
+
+// Save metadata to database
+const { data: file } = await supabase
+  .from('files')
+  .insert({
     filename,
-    blobPath,
-    mimeType,
-    size,
-    category
-  }).returning()
+    storage_path: storagePath,
+    storage_bucket: 'client-files',
+    public_url: publicUrl,
+    mime_type: mimeType,
+    size: buffer.length,
+    org_id: orgId
+  })
   
-  return {
-    statusCode: 200,
-    body: JSON.stringify({ file })
-  }
+return {
+  statusCode: 200,
+  body: JSON.stringify({ file })
 }
 ```
 
 ### Download Pattern
 ```javascript
-// In Netlify function
-const store = getStore('uploads')
-const fileData = await store.get(blobPath)
+// Get file metadata
+const { data: file } = await supabase
+  .from('files')
+  .select('*')
+  .eq('id', fileId)
+  .single()
+
+// Download from Supabase Storage
+const { data: blob } = await supabase.storage
+  .from(file.storage_bucket)
+  .download(file.storage_path)
+
+const arrayBuffer = await blob.arrayBuffer()
+const buffer = Buffer.from(arrayBuffer)
 
 return {
   statusCode: 200,
   headers: {
-    'Content-Type': mimeType,
-    'Content-Disposition': `attachment; filename="${filename}"`
+    'Content-Type': file.mime_type,
+    'Content-Disposition': `attachment; filename="${file.original_name}"`
   },
-  body: fileData.toString('base64'),
+  body: buffer.toString('base64'),
   isBase64Encoded: true
 }
 ```
@@ -457,10 +481,12 @@ return {
 // 1. Always validate file types and sizes before upload
 // 2. Sanitize filenames to prevent path traversal
 // 3. Store metadata in database for permissions checks
-// 4. Use category field to organize storage
-// 5. Implement proper access control in download functions
-// 6. Clean up orphaned blobs periodically
-// 7. Set appropriate MIME types for browser rendering
+// 4. Use org_id/category structure for organizing storage
+// 5. Implement proper RLS policies for access control
+// 6. Clean up storage if database insert fails
+// 7. Set appropriate MIME types and cache headers
+// 8. Use public URLs for email attachments and images
+// 9. Monitor storage usage (Free: 1GB, Pro: 100GB)
 
 // File validation:
 const MAX_SIZE = 10 * 1024 * 1024 // 10MB

@@ -1,5 +1,6 @@
 // src/components/signal/SignalFAQManager.jsx
 // FAQ management with approval workflow - pending/approved/rejected tabs
+// Now includes confidence badges, source attribution, and bulk approval
 import { useState, useEffect, useCallback } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
@@ -19,7 +20,10 @@ import {
   TrendingUp,
   Loader2,
   MoreVertical,
-  Sparkles
+  Sparkles,
+  ExternalLink,
+  Zap,
+  Shield
 } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -124,6 +128,9 @@ export default function SignalFAQManager({ projectId, className }) {
 
   // Action loading state
   const [actionLoading, setActionLoading] = useState({})
+  
+  // Bulk approval state
+  const [bulkApproving, setBulkApproving] = useState(false)
 
   // Fetch FAQs on mount and when filters change
   useEffect(() => {
@@ -134,6 +141,28 @@ export default function SignalFAQManager({ projectId, className }) {
       })
     }
   }, [projectId, activeTab, searchQuery])
+  
+  // Calculate high-confidence pending FAQs (for bulk approve)
+  const highConfidencePending = faqs.filter(f => 
+    f.status === 'pending' && f.confidence >= 8
+  )
+  
+  // Handle bulk approve all high-confidence FAQs
+  const handleBulkApproveHighConfidence = async () => {
+    if (highConfidencePending.length === 0) return
+    
+    setBulkApproving(true)
+    try {
+      // Approve each one in sequence to avoid rate limits
+      for (const faq of highConfidencePending) {
+        await approveFaq(projectId, faq.id)
+      }
+      // Refresh the list
+      await fetchFaqs(projectId, { status: 'pending' })
+    } finally {
+      setBulkApproving(false)
+    }
+  }
 
   const handleSearch = useCallback((e) => {
     setSearchQuery(e.target.value)
@@ -210,10 +239,38 @@ export default function SignalFAQManager({ projectId, className }) {
             </div>
           </div>
           
-          <Button onClick={handleOpenAdd} className="gap-2">
-            <Plus className="h-4 w-4" />
-            Add FAQ
-          </Button>
+          <div className="flex items-center gap-2">
+            {/* Bulk approve high-confidence FAQs */}
+            {activeTab === 'pending' && highConfidencePending.length > 0 && (
+              <TooltipProvider>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button 
+                      variant="outline" 
+                      onClick={handleBulkApproveHighConfidence}
+                      disabled={bulkApproving}
+                      className="gap-2 border-emerald-500/30 text-emerald-400 hover:bg-emerald-500/20"
+                    >
+                      {bulkApproving ? (
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                      ) : (
+                        <Zap className="h-4 w-4" />
+                      )}
+                      Approve High-Confidence ({highConfidencePending.length})
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent>
+                    <p>Auto-approve all FAQs with confidence score ≥ 8</p>
+                  </TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
+            )}
+            
+            <Button onClick={handleOpenAdd} className="gap-2">
+              <Plus className="h-4 w-4" />
+              Add FAQ
+            </Button>
+          </div>
         </div>
 
         {/* Search bar */}
@@ -414,10 +471,19 @@ export default function SignalFAQManager({ projectId, className }) {
   )
 }
 
+// Helper to get confidence badge styling
+function getConfidenceBadge(confidence) {
+  if (!confidence) return null
+  if (confidence >= 8) return { color: 'bg-emerald-500/20 text-emerald-400', label: 'High', icon: Shield }
+  if (confidence >= 5) return { color: 'bg-yellow-500/20 text-yellow-400', label: 'Medium', icon: AlertCircle }
+  return { color: 'bg-red-500/20 text-red-400', label: 'Low', icon: AlertCircle }
+}
+
 // FAQ card component
 function FAQCard({ faq, onEdit, onDelete, onApprove, onReject, actionLoading }) {
   const statusConfig = STATUS_CONFIG[faq.status] || STATUS_CONFIG.pending
   const isPending = faq.status === 'pending'
+  const confidenceBadge = getConfidenceBadge(faq.confidence)
 
   return (
     <motion.div
@@ -439,7 +505,7 @@ function FAQCard({ faq, onEdit, onDelete, onApprove, onReject, actionLoading }) 
         </div>
 
         <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-2 mb-2">
+          <div className="flex items-center gap-2 mb-2 flex-wrap">
             <Badge variant="secondary" className={cn('text-xs', statusConfig.bg, statusConfig.color)}>
               {statusConfig.label}
             </Badge>
@@ -463,6 +529,38 @@ function FAQCard({ faq, onEdit, onDelete, onApprove, onReject, actionLoading }) 
                 </Tooltip>
               </TooltipProvider>
             )}
+            {/* Confidence score badge */}
+            {confidenceBadge && (
+              <TooltipProvider>
+                <Tooltip>
+                  <TooltipTrigger>
+                    <Badge variant="secondary" className={cn('text-xs gap-1', confidenceBadge.color)}>
+                      <confidenceBadge.icon className="h-3 w-3" />
+                      {faq.confidence}/10
+                    </Badge>
+                  </TooltipTrigger>
+                  <TooltipContent>
+                    AI Confidence: {confidenceBadge.label} ({faq.confidence}/10)
+                  </TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
+            )}
+            {/* Auto-approved badge */}
+            {faq.auto_approved && (
+              <TooltipProvider>
+                <Tooltip>
+                  <TooltipTrigger>
+                    <Badge variant="secondary" className="text-xs gap-1 bg-blue-500/20 text-blue-400">
+                      <Zap className="h-3 w-3" />
+                      Auto
+                    </Badge>
+                  </TooltipTrigger>
+                  <TooltipContent>
+                    Auto-approved due to high confidence score
+                  </TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
+            )}
           </div>
 
           <p className="font-medium text-foreground mb-1">
@@ -472,6 +570,15 @@ function FAQCard({ faq, onEdit, onDelete, onApprove, onReject, actionLoading }) 
           <p className="text-sm text-muted-foreground line-clamp-2">
             {faq.answer}
           </p>
+
+          {/* Source quote attribution */}
+          {faq.source_quote && (
+            <div className="mt-2 p-2 bg-muted/50 rounded border-l-2 border-muted-foreground/30">
+              <p className="text-xs text-muted-foreground italic line-clamp-2">
+                "{faq.source_quote}"
+              </p>
+            </div>
+          )}
 
           <div className="flex items-center gap-3 mt-2 text-xs text-muted-foreground">
             <span className="flex items-center gap-1">
@@ -483,6 +590,18 @@ function FAQCard({ faq, onEdit, onDelete, onApprove, onReject, actionLoading }) 
                 <TrendingUp className="h-3 w-3" />
                 Used {faq.usage_count}×
               </span>
+            )}
+            {/* Source URL link */}
+            {faq.source_url && (
+              <a 
+                href={faq.source_url} 
+                target="_blank" 
+                rel="noopener noreferrer"
+                className="flex items-center gap-1 text-blue-400 hover:text-blue-300 transition-colors"
+              >
+                <ExternalLink className="h-3 w-3" />
+                Source
+              </a>
             )}
           </div>
         </div>

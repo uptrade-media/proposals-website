@@ -1,10 +1,14 @@
 // netlify/functions/routes/files.js
 // ═══════════════════════════════════════════════════════════════════════════════
-// Files Routes - Upload, download, Netlify Blobs
+// Files Routes - Upload, download via Supabase Storage
 // ═══════════════════════════════════════════════════════════════════════════════
 
 import { response } from '../api.js'
-import { getStore } from '@netlify/blobs'
+
+// Supabase Storage buckets:
+// - client-files: General client documents, proposals, invoices
+// - avatars: Profile pictures
+// - project-assets: Project-specific files
 
 export async function handle(ctx) {
   const { method, segments, supabase, query, body, contact, orgId } = ctx
@@ -37,17 +41,8 @@ export async function handle(ctx) {
 }
 
 async function uploadFile(ctx) {
-  const { body, supabase, contact, orgId, event } = ctx
-  
-  // Check content type for multipart
-  const contentType = event.headers['content-type'] || ''
-  
-  if (contentType.includes('multipart/form-data')) {
-    return await handleMultipartUpload(ctx)
-  }
-  
-  // Base64 upload
-  const { filename, content, category = 'general', projectId, contactId } = body
+  const { body, supabase, contact, orgId } = ctx
+  const { filename, content, category = 'general', projectId, contactId, bucket = 'client-files' } = body
   
   if (!filename || !content) {
     return response(400, { error: 'filename and content (base64) are required' })
@@ -77,27 +72,36 @@ async function uploadFile(ctx) {
   
   // Sanitize filename
   const safeFilename = filename.replace(/[^a-zA-Z0-9.-]/g, '_')
-  const blobPath = `${category}/${orgId}/${Date.now()}-${safeFilename}`
+  const storagePath = `${orgId}/${category}/${Date.now()}-${safeFilename}`
   
   try {
-    // Store in Netlify Blobs
-    const store = getStore('uploads')
-    await store.set(blobPath, buffer, {
-      metadata: {
-        originalName: filename,
-        mimeType,
-        uploadedBy: contact.id,
-        orgId
-      }
-    })
+    // Upload to Supabase Storage
+    const { data: uploadData, error: uploadError } = await supabase.storage
+      .from(bucket)
+      .upload(storagePath, buffer, {
+        contentType: mimeType,
+        cacheControl: '3600',
+        upsert: false
+      })
+    
+    if (uploadError) {
+      return response(500, { error: 'Upload failed: ' + uploadError.message })
+    }
+    
+    // Get public URL
+    const { data: { publicUrl } } = supabase.storage
+      .from(bucket)
+      .getPublicUrl(storagePath)
     
     // Save metadata to database
-    const { data: file, error } = await supabase
+    const { data: file, error: dbError } = await supabase
       .from('files')
       .insert({
         filename: safeFilename,
         original_name: filename,
-        blob_path: blobPath,
+        storage_path: storagePath,
+        storage_bucket: bucket,
+        public_url: publicUrl,
         mime_type: mimeType,
         size: buffer.length,
         category,
@@ -109,22 +113,16 @@ async function uploadFile(ctx) {
       .select()
       .single()
     
-    if (error) {
-      // Cleanup blob if DB fails
-      await store.delete(blobPath)
-      return response(500, { error: error.message })
+    if (dbError) {
+      // Cleanup storage if DB fails
+      await supabase.storage.from(bucket).remove([storagePath])
+      return response(500, { error: dbError.message })
     }
     
     return response(201, { file })
   } catch (err) {
     return response(500, { error: 'Failed to upload file: ' + err.message })
   }
-}
-
-async function handleMultipartUpload(ctx) {
-  // For multipart, we'd need to parse the body differently
-  // This is a placeholder - actual implementation would use a library like busboy
-  return response(501, { error: 'Multipart upload not yet implemented. Use base64 encoding.' })
 }
 
 async function listFiles(ctx) {
@@ -135,7 +133,7 @@ async function listFiles(ctx) {
     .from('files')
     .select('*, uploaded_by_user:contacts!uploaded_by(id, name, avatar)')
     .order('created_at', { ascending: false })
-    .limit(limit)
+    .limit(parseInt(limit))
   
   if (orgId) q = q.eq('org_id', orgId)
   if (category) q = q.eq('category', category)
@@ -176,12 +174,18 @@ async function downloadFile(ctx, id) {
   }
   
   try {
-    const store = getStore('uploads')
-    const blob = await store.get(file.blob_path, { type: 'arrayBuffer' })
+    // Download from Supabase Storage
+    const { data: blob, error: downloadError } = await supabase.storage
+      .from(file.storage_bucket)
+      .download(file.storage_path)
     
-    if (!blob) {
+    if (downloadError || !blob) {
       return response(404, { error: 'File content not found' })
     }
+    
+    // Convert blob to buffer
+    const arrayBuffer = await blob.arrayBuffer()
+    const buffer = Buffer.from(arrayBuffer)
     
     // Update download count
     await supabase
@@ -197,9 +201,9 @@ async function downloadFile(ctx, id) {
       headers: {
         'Content-Type': file.mime_type || 'application/octet-stream',
         'Content-Disposition': `attachment; filename="${file.original_name || file.filename}"`,
-        'Content-Length': file.size?.toString()
+        'Content-Length': buffer.length.toString()
       },
-      body: Buffer.from(blob).toString('base64'),
+      body: buffer.toString('base64'),
       isBase64Encoded: true
     }
   } catch (err) {
@@ -212,15 +216,16 @@ async function updateFile(ctx, id) {
   
   // Only allow updating metadata, not the file content
   const { filename, category, projectId } = body
+  const updates = {}
+  
+  if (filename) updates.filename = filename
+  if (category) updates.category = category
+  if (projectId !== undefined) updates.project_id = projectId
+  updates.updated_at = new Date().toISOString()
   
   const { data, error } = await supabase
     .from('files')
-    .update({ 
-      filename,
-      category,
-      project_id: projectId,
-      updated_at: new Date().toISOString()
-    })
+    .update(updates)
     .eq('id', id)
     .select()
     .single()
@@ -232,10 +237,10 @@ async function updateFile(ctx, id) {
 async function deleteFile(ctx, id) {
   const { supabase } = ctx
   
-  // Get file to find blob path
+  // Get file to find storage path
   const { data: file, error: fetchError } = await supabase
     .from('files')
-    .select('blob_path')
+    .select('storage_path, storage_bucket')
     .eq('id', id)
     .single()
   
@@ -243,13 +248,18 @@ async function deleteFile(ctx, id) {
     return response(404, { error: 'File not found' })
   }
   
-  // Delete from Blobs
+  // Delete from Supabase Storage
   try {
-    const store = getStore('uploads')
-    await store.delete(file.blob_path)
+    const { error: storageError } = await supabase.storage
+      .from(file.storage_bucket)
+      .remove([file.storage_path])
+    
+    if (storageError) {
+      console.error('Failed to delete from storage:', storageError)
+      // Continue anyway to delete DB record
+    }
   } catch (err) {
-    console.error('Failed to delete blob:', err)
-    // Continue anyway to delete DB record
+    console.error('Storage delete error:', err)
   }
   
   // Delete from database

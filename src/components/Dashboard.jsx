@@ -39,7 +39,7 @@ import TrendIndicators from './TrendIndicators'
 const Dashboard = ({ onNavigate }) => {
   console.log('[Dashboard] Component mounting')
   
-  const { user, currentOrg, currentProject, switchOrganization } = useAuthStore()
+  const { user, currentOrg, currentProject, switchOrganization, isSuperAdmin } = useAuthStore()
   const isAdmin = user?.role === 'admin'
   const lastUserIdRef = useRef(null)
   const [isLoading, setIsLoading] = useState(false)
@@ -47,10 +47,10 @@ const Dashboard = ({ onNavigate }) => {
   
   // Check if we're viewing an org or project context (not Uptrade admin)
   // Use TenantDashboard when:
-  // 1. In a specific project (currentProject exists)
-  // 2. In a CLIENT org context (not agency org like Uptrade Media)
-  const isAgencyOrg = currentOrg?.org_type === 'agency'
-  const isInTenantContext = !!currentProject || (!!currentOrg && !isAgencyOrg)
+  // 1. In a CLIENT org context (not Uptrade Media org)
+  // 2. In a specific project ONLY if user is not Uptrade admin
+  const isUptradeMediaOrg = currentOrg?.slug === 'uptrade-media' || currentOrg?.domain === 'uptrademedia.com' || currentOrg?.org_type === 'agency'
+  const isInTenantContext = (!!currentProject && !isUptradeMediaOrg) || (!!currentOrg && !isUptradeMediaOrg)
   const tenantName = currentProject?.name || currentOrg?.name
   
   // Use dedicated TenantDashboard for org/project context

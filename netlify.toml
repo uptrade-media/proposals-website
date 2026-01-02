@@ -48,6 +48,13 @@
   status = 200
 
 [functions]
+  # Signal AI API integration (development - local, production - Render)
+  # In development: Run Signal API locally with `pnpm dev` on port 3001
+  # In production: Set SIGNAL_API_URL to Render deployment URL
+  #
+  # Environment variables needed:
+  # - SIGNAL_API_URL: http://localhost:3001 (dev) or https://signal-api.uptrademedia.com (prod)
+  # - SIGNAL_API_KEY: Shared secret for Portal ↔ Signal API authentication
   node_bundler = "esbuild"
   included_files = ["netlify/functions/assets/**"]
 
