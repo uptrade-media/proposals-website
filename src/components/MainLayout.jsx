@@ -25,7 +25,7 @@ const BlogManagement = lazy(() => import('./BlogManagement'))
 const PortfolioManagement = lazy(() => import('./PortfolioManagement'))
 const Audits = lazy(() => import('@/pages/Audits'))
 const ProposalEditor = lazy(() => import('./ProposalEditor'))
-const ChatBubble = lazy(() => import('./ChatBubble'))
+import ChatBubble from './ChatBubble'
 const FormsManager = lazy(() => import('./forms/FormsManager'))
 const TenantSales = lazy(() => import('./tenant/TenantSales'))
 // SEO Module sections
