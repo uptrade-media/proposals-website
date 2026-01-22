@@ -22,7 +22,7 @@ import axios from 'axios'
 import { supabase } from './supabase-auth'
 
 // Signal API URL - AI brain for Echo, skills, knowledge
-const SIGNAL_API_URL = import.meta.env.VITE_SIGNAL_API_URL || 'http://localhost:3001'
+const SIGNAL_API_URL = import.meta.env.VITE_SIGNAL_API_URL || 'https://signal.uptrademedia.com'
 
 // Helper to get Signal API URL (used by SSE connections)
 export function getSignalApiUrl() {

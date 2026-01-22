@@ -13,7 +13,7 @@ import axios from 'axios'
 import { supabase } from './supabase-auth'
 
 // Portal API URL - uses NestJS backend for real-time features
-const PORTAL_API_URL = import.meta.env.VITE_PORTAL_API_URL || 'http://localhost:3002'
+const PORTAL_API_URL = import.meta.env.VITE_PORTAL_API_URL || 'https://api.uptrademedia.com'
 
 // Helper to get Portal API URL (used by WebSocket connections)
 export function getPortalApiUrl() {

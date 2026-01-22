@@ -21,7 +21,7 @@ import { supabase } from './supabase-auth'
 // Signal API Direct Access
 // ─────────────────────────────────────────────────────────────────────────────
 // Signal API runs on NestJS - all requests go directly there
-const SIGNAL_API_URL = import.meta.env.VITE_SIGNAL_API_URL || 'http://localhost:3001'
+const SIGNAL_API_URL = import.meta.env.VITE_SIGNAL_API_URL || 'https://signal.uptrademedia.com'
 
 // Create Signal API axios instance
 const signalApi = axios.create({
