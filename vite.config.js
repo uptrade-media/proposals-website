@@ -21,10 +21,14 @@ export default defineConfig(({ mode }) => {
     resolve: {
       alias: {
         '@': path.resolve(process.cwd(), './src'),
+        // Force all React imports to use a single instance (fixes recharts forwardRef error)
+        'react': path.resolve(process.cwd(), 'node_modules/react'),
+        'react-dom': path.resolve(process.cwd(), 'node_modules/react-dom'),
+        'react-is': path.resolve(process.cwd(), 'node_modules/react-is'),
       },
       extensions: ['.mjs', '.js', '.ts', '.jsx', '.tsx', '.json', '.mdx'],
       // Force single React instance to prevent "forwardRef" errors from recharts
-      dedupe: ['react', 'react-dom'],
+      dedupe: ['react', 'react-dom', 'react-is', 'react/jsx-runtime', 'react/jsx-dev-runtime'],
     },
 
     assetsInclude: ['**/*.mdx'],
