@@ -23,6 +23,8 @@ export default defineConfig(({ mode }) => {
         '@': path.resolve(process.cwd(), './src'),
       },
       extensions: ['.mjs', '.js', '.ts', '.jsx', '.tsx', '.json', '.mdx'],
+      // Force single React instance to prevent "forwardRef" errors from recharts
+      dedupe: ['react', 'react-dom'],
     },
 
     assetsInclude: ['**/*.mdx'],
