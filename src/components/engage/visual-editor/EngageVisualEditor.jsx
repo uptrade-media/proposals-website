@@ -52,7 +52,7 @@ import { Separator } from '@/components/ui/separator'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { toast } from '@/lib/toast'
-import api from '@/lib/api'
+import { engageApi } from '@/lib/portal-api'
 import { cn } from '@/lib/utils'
 
 import ElementOverlay from './ElementOverlay'
@@ -120,7 +120,7 @@ export default function EngageVisualEditor({
   // STATE
   // ─────────────────────────────────────────────────────────────────────────────
   
-  const [element, setElement] = useState(initialElement || {
+  const defaultElement = {
     element_type: 'popup',
     name: '',
     headline: 'Your Headline Here',
@@ -146,7 +146,9 @@ export default function EngageVisualEditor({
     device_targets: ['desktop', 'mobile', 'tablet'],
     is_active: false,
     is_draft: true
-  })
+  }
+  
+  const [element, setElement] = useState(initialElement || defaultElement)
   
   const [loading, setLoading] = useState(false)
   const [saving, setSaving] = useState(false)
@@ -159,7 +161,7 @@ export default function EngageVisualEditor({
   const [iframeError, setIframeError] = useState(null)
   const [isDragging, setIsDragging] = useState(false)
   const [isEditing, setIsEditing] = useState(false)
-  const [showTemplates, setShowTemplates] = useState(!initialElement)
+  const [showTemplates, setShowTemplates] = useState(!initialElement && !elementId)
   const [showMediaLibrary, setShowMediaLibrary] = useState(false)
   const [history, setHistory] = useState([])
   const [historyIndex, setHistoryIndex] = useState(-1)
@@ -167,6 +169,39 @@ export default function EngageVisualEditor({
   
   const iframeRef = useRef(null)
   const containerRef = useRef(null)
+  
+  // ─────────────────────────────────────────────────────────────────────────────
+  // FETCH ELEMENT IF ID PROVIDED
+  // ─────────────────────────────────────────────────────────────────────────────
+  
+  useEffect(() => {
+    const fetchElement = async () => {
+      // If we have a full element already, use it
+      if (initialElement && Object.keys(initialElement).length > 2) {
+        setElement(initialElement)
+        return
+      }
+      
+      // If we have an elementId (either from prop or from initialElement.id), fetch it
+      const idToFetch = elementId || initialElement?.id
+      if (idToFetch) {
+        try {
+          setLoading(true)
+          const { data } = await engageApi.getElement(idToFetch)
+          if (data?.element) {
+            setElement(data.element)
+          }
+        } catch (error) {
+          console.error('Failed to fetch element:', error)
+          toast.error('Failed to load element')
+        } finally {
+          setLoading(false)
+        }
+      }
+    }
+    
+    fetchElement()
+  }, [elementId, initialElement?.id])
   
   // ─────────────────────────────────────────────────────────────────────────────
   // IFRAME COMMUNICATION
@@ -287,12 +322,9 @@ export default function EngageVisualEditor({
       }
       
       if (elementId) {
-        await api.put('/.netlify/functions/engage-elements', {
-          elementId,
-          ...payload
-        })
+        await engageApi.updateElement(elementId, payload)
       } else {
-        await api.post('/.netlify/functions/engage-elements', payload)
+        await engageApi.createElement(payload)
       }
       
       toast.success(publish ? 'Element published!' : 'Element saved as draft')
@@ -340,9 +372,10 @@ export default function EngageVisualEditor({
   // RENDER
   // ─────────────────────────────────────────────────────────────────────────────
 
-  // Proxy URL for iframe
+  // Proxy URL for iframe - using Portal API instead of Netlify function
+  const apiUrl = import.meta.env.VITE_PORTAL_API_URL || 'https://api.uptrademedia.com'
   const proxyUrl = siteUrl 
-    ? `/.netlify/functions/engage-website-proxy?url=${encodeURIComponent(siteUrl)}&projectId=${projectId}`
+    ? `${apiUrl}/engage/proxy?url=${encodeURIComponent(siteUrl)}&projectId=${projectId}`
     : null
 
   return (

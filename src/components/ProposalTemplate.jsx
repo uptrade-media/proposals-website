@@ -1,6 +1,6 @@
 import { useEffect, useRef } from 'react'
 import ProposalView from './ProposalView'
-import api from '@/lib/api'
+import { proposalsApi } from '@/lib/portal-api'
 
 /**
  * ProposalTemplate - Wrapper for public/client proposal views
@@ -19,17 +19,7 @@ const ProposalTemplate = ({ proposal, proposalId, proposalSlug, isPublicView = f
     if (!isPublicView || !proposal?.id) return
     
     try {
-      await api.post('/.netlify/functions/proposals-track-view', {
-        proposalId: proposal.id,
-        event: eventType,
-        metadata: {
-          ...metadata,
-          userAgent: navigator.userAgent,
-          referrer: document.referrer,
-          screenWidth: window.innerWidth,
-          timestamp: new Date().toISOString()
-        }
-      })
+      await proposalsApi.trackView(proposal.id)
     } catch (err) {
       // Silently fail - analytics shouldn't break the user experience
       console.warn('Failed to track event:', err)

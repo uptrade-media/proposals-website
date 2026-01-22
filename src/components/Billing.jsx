@@ -40,7 +40,7 @@ import useProjectsStore from '@/lib/projects-store'
 import useAuthStore from '@/lib/auth-store'
 import useReportsStore from '@/lib/reports-store'
 import InvoicePaymentDialog from './InvoicePaymentDialog'
-import api from '@/lib/api'
+import { adminApi, billingApi } from '@/lib/portal-api'
 
 const Billing = () => {
   const { user } = useAuthStore()
@@ -70,6 +70,8 @@ const Billing = () => {
     error, 
     clearError 
   } = useBillingStore()
+
+  const safeOverdueInvoices = Array.isArray(overdueInvoices) ? overdueInvoices : []
   
   const { 
     financialReport,
@@ -160,18 +162,34 @@ const Billing = () => {
     fetchBillingSummary()
     fetchInvoices()
     fetchOverdueInvoices()
-    if (isAdmin) {
-      fetchClients()
-      fetchOrganizations()
-    }
   }, [])
   
   // Set default tab based on user type
   const { currentOrg, currentProject, isSuperAdmin } = useAuthStore()
+  
   // Uptrade Media org should show admin view, client orgs show tenant view
   const isUptradeMediaOrg = currentOrg?.slug === 'uptrade-media' || currentOrg?.domain === 'uptrademedia.com' || currentOrg?.org_type === 'agency'
-  const isInTenantContext = (!!currentProject && !isUptradeMediaOrg) || (!!currentOrg && !isUptradeMediaOrg)
-  const computedIsAdmin = (user?.role === 'admin' || isSuperAdmin) && !isInTenantContext
+  
+  // Billing is ORG-LEVEL ONLY - not accessible to project-level users
+  const isInProjectContext = !!currentProject && !isUptradeMediaOrg
+  const isOrgLevelUser = !!currentOrg && !isInProjectContext
+  const computedIsAdmin = (user?.role === 'admin' || isSuperAdmin) && isUptradeMediaOrg
+  
+  // Restrict access: Billing is for org-level users only
+  if (!isOrgLevelUser && !computedIsAdmin) {
+    return (
+      <div className="flex flex-col items-center justify-center min-h-[50vh] space-y-4">
+        <AlertTriangle className="h-16 w-16 text-yellow-500" />
+        <h2 className="text-2xl font-bold text-[var(--text-primary)]">Access Restricted</h2>
+        <p className="text-[var(--text-secondary)] text-center max-w-md">
+          Billing is only available at the organization level. Project-level users do not have access to billing information.
+        </p>
+        <p className="text-sm text-[var(--text-tertiary)]">
+          Please contact your organization administrator if you need access.
+        </p>
+      </div>
+    )
+  }
   
   useEffect(() => {
     // Set appropriate default tab when component mounts or user type changes
@@ -180,10 +198,18 @@ const Billing = () => {
     }
   }, [computedIsAdmin])
 
+  // Fetch clients and organizations for admin users
+  useEffect(() => {
+    if (computedIsAdmin) {
+      fetchClients()
+      fetchOrganizations()
+    }
+  }, [computedIsAdmin])
+
   const fetchClients = async () => {
     try {
-      const response = await api.get('/.netlify/functions/admin-clients-list')
-      setClients(response.data.clients || [])
+      const response = await adminApi.listClients()
+      setClients(response.data.clients || response.data || [])
     } catch (err) {
       console.error('Failed to fetch clients:', err)
     }
@@ -191,10 +217,12 @@ const Billing = () => {
 
   const fetchOrganizations = async () => {
     try {
-      const response = await api.get('/.netlify/functions/admin-org-list')
-      setOrganizations(response.data.organizations || [])
+      const response = await adminApi.listOrganizations()
+      const orgs = response.data?.organizations || response.data || []
+      setOrganizations(Array.isArray(orgs) ? orgs : [])
     } catch (err) {
       console.error('Failed to fetch organizations:', err)
+      setOrganizations([])
     }
   }
 
@@ -204,8 +232,8 @@ const Billing = () => {
       return
     }
     try {
-      const response = await api.get(`/.netlify/functions/admin-org-members?organizationId=${orgId}`)
-      setOrgMembers(response.data.members || [])
+      const response = await adminApi.listOrgMembers(orgId)
+      setOrgMembers(response.data.members || response.data || [])
     } catch (err) {
       console.error('Failed to fetch org members:', err)
       setOrgMembers([])
@@ -297,7 +325,7 @@ const Billing = () => {
     setQuickInvoiceSuccess(null)
     
     try {
-      const response = await api.post('/.netlify/functions/invoices-create-quick', quickInvoiceData)
+      const response = await billingApi.createQuickInvoice(quickInvoiceData)
       
       if (response.data.success) {
         setQuickInvoiceSuccess({
@@ -769,7 +797,7 @@ const Billing = () => {
                       <SelectValue placeholder="Select organization" />
                     </SelectTrigger>
                     <SelectContent>
-                      {organizations.filter(org => org.id).map((org) => (
+                      {(Array.isArray(organizations) ? organizations : []).filter(org => org.id).map((org) => (
                         <SelectItem key={org.id} value={org.id}>
                           {org.name}
                         </SelectItem>
@@ -1375,7 +1403,7 @@ const Billing = () => {
         </TabsContent>
 
         <TabsContent value="overdue" className="space-y-4">
-          {(!overdueInvoices || overdueInvoices.length === 0) ? (
+          {(safeOverdueInvoices.length === 0) ? (
             <Card>
               <CardContent className="flex flex-col items-center justify-center py-12">
                 <CheckCircle className="h-12 w-12 text-green-400 mb-4" />
@@ -1394,7 +1422,7 @@ const Billing = () => {
                 </AlertDescription>
               </Alert>
               
-              {(overdueInvoices || []).map((invoice) => (
+              {safeOverdueInvoices.map((invoice) => (
                 <Card key={invoice.id} className="border-red-200 bg-red-50">
                   <CardContent className="p-6">
                     <div className="flex items-center justify-between">

@@ -1,7 +1,7 @@
 // src/lib/team-store.js
 // Zustand store for team management
 import { create } from 'zustand'
-import api from './api'
+import { adminApi } from './portal-api'
 
 const useTeamStore = create((set, get) => ({
   // State
@@ -14,13 +14,15 @@ const useTeamStore = create((set, get) => ({
   fetchTeamMembers: async () => {
     set({ isLoading: true, error: null })
     try {
-      const response = await api.get('/.netlify/functions/admin-team-list')
+      const response = await adminApi.listTeamMembers()
+      const data = response.data || response
+      
       set({ 
-        teamMembers: response.data.teamMembers || [],
-        summary: response.data.summary || null,
+        teamMembers: data.teamMembers || data.members || data || [],
+        summary: data.summary || null,
         isLoading: false 
       })
-      return response.data
+      return data
     } catch (error) {
       const errorMessage = error.response?.data?.error || error.message
       set({ error: errorMessage, isLoading: false })
@@ -32,8 +34,9 @@ const useTeamStore = create((set, get) => ({
   createTeamMember: async (memberData) => {
     set({ isLoading: true, error: null })
     try {
-      const response = await api.post('/.netlify/functions/admin-team-create', memberData)
-      const newMember = response.data.teamMember
+      const response = await adminApi.createTeamMember(memberData)
+      const data = response.data || response
+      const newMember = data.teamMember || data.member || data
       
       // Add to local state
       set(state => ({
@@ -49,7 +52,7 @@ const useTeamStore = create((set, get) => ({
         isLoading: false
       }))
       
-      return response.data
+      return data
     } catch (error) {
       const errorMessage = error.response?.data?.error || error.message
       set({ error: errorMessage, isLoading: false })
@@ -61,8 +64,9 @@ const useTeamStore = create((set, get) => ({
   updateTeamMember: async (id, updates) => {
     set({ isLoading: true, error: null })
     try {
-      const response = await api.put('/.netlify/functions/admin-team-update', { id, ...updates })
-      const updatedMember = response.data.teamMember
+      const response = await adminApi.updateTeamMember(id, updates)
+      const data = response.data || response
+      const updatedMember = data.teamMember || data.member || data
       
       // Update local state
       set(state => ({
@@ -72,7 +76,7 @@ const useTeamStore = create((set, get) => ({
         isLoading: false
       }))
       
-      return response.data
+      return data
     } catch (error) {
       const errorMessage = error.response?.data?.error || error.message
       set({ error: errorMessage, isLoading: false })
@@ -83,11 +87,8 @@ const useTeamStore = create((set, get) => ({
   // Resend invite to a pending team member
   resendInvite: async (id) => {
     try {
-      const response = await api.put('/.netlify/functions/admin-team-update', { 
-        id, 
-        resendInvite: true 
-      })
-      return response.data
+      const response = await adminApi.resendInvite(id)
+      return response.data || response
     } catch (error) {
       const errorMessage = error.response?.data?.error || error.message
       set({ error: errorMessage })

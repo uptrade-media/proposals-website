@@ -1,0 +1,1092 @@
+[
+  {
+    "id": 1,
+    "session_id": "1764058360973-d9xfiv3ty",
+    "journey_steps": "[{\"step\":1,\"type\":\"page_view\",\"data\":{\"path\":\"/\"},\"timestamp\":1764058361231,\"timeFromStart\":263},{\"step\":2,\"type\":\"new_visit\",\"data\":{\"firstTime\":true},\"timestamp\":1764058361233,\"timeFromStart\":265},{\"step\":3,\"type\":\"page_view\",\"data\":{\"path\":\"/\"},\"timestamp\":1764058361382,\"timeFromStart\":414},{\"step\":4,\"type\":\"return_visit\",\"data\":{\"visitCount\":2,\"daysSince\":0},\"timestamp\":1764058361383,\"timeFromStart\":415}]",
+    "outcome": "exited",
+    "total_steps": 4,
+    "duration": 12968,
+    "converted": false,
+    "created_at": "2025-11-25T08:12:54.071455"
+  },
+  {
+    "id": 2,
+    "session_id": "1764055969199-3ebgmem9s",
+    "journey_steps": "[{\"step\":1,\"type\":\"page_view\",\"data\":{\"path\":\"/\"},\"timestamp\":1764058422080,\"timeFromStart\":374},{\"step\":2,\"type\":\"return_visit\",\"data\":{\"visitCount\":17,\"daysSince\":0},\"timestamp\":1764058422081,\"timeFromStart\":375},{\"step\":3,\"type\":\"page_view\",\"data\":{\"path\":\"/\"},\"timestamp\":1764058422332,\"timeFromStart\":626},{\"step\":4,\"type\":\"return_visit\",\"data\":{\"visitCount\":18,\"daysSince\":0},\"timestamp\":1764058422333,\"timeFromStart\":627},{\"step\":5,\"type\":\"exit_intent\",\"data\":{\"name\":{\"timeOnPage\":30,\"scrollDepth\":100,\"lastSection\":\"unknown\"}},\"timestamp\":1764058451927,\"timeFromStart\":30221},{\"step\":6,\"type\":\"exit_intent\",\"data\":{\"name\":{\"timeOnPage\":30,\"scrollDepth\":100,\"lastSection\":\"unknown\"}},\"timestamp\":1764058451928,\"timeFromStart\":30222}]",
+    "outcome": "exited",
+    "total_steps": 6,
+    "duration": 595132,
+    "converted": false,
+    "created_at": "2025-11-25T08:12:57.465766"
+  },
+  {
+    "id": 3,
+    "session_id": "1764059075975-sznwthcwc",
+    "journey_steps": "[{\"step\":1,\"type\":\"page_view\",\"data\":{\"path\":\"/\"},\"timestamp\":1764059076286,\"timeFromStart\":327},{\"step\":2,\"type\":\"new_visit\",\"data\":{\"firstTime\":true},\"timestamp\":1764059076288,\"timeFromStart\":329},{\"step\":3,\"type\":\"page_view\",\"data\":{\"path\":\"/\"},\"timestamp\":1764059076733,\"timeFromStart\":774},{\"step\":4,\"type\":\"return_visit\",\"data\":{\"visitCount\":2,\"daysSince\":0},\"timestamp\":1764059076734,\"timeFromStart\":775}]",
+    "outcome": "exited",
+    "total_steps": 4,
+    "duration": 11998,
+    "converted": false,
+    "created_at": "2025-11-25T08:24:48.113055"
+  },
+  {
+    "id": 4,
+    "session_id": "1764080700370-pk7qkx8az",
+    "journey_steps": "[{\"step\":1,\"type\":\"page_view\",\"data\":{\"path\":\"/\"},\"timestamp\":1764080795986,\"timeFromStart\":246},{\"step\":2,\"type\":\"return_visit\",\"data\":{\"visitCount\":3,\"daysSince\":0},\"timestamp\":1764080795986,\"timeFromStart\":246},{\"step\":3,\"type\":\"page_view\",\"data\":{\"path\":\"/\"},\"timestamp\":1764080796300,\"timeFromStart\":560},{\"step\":4,\"type\":\"return_visit\",\"data\":{\"visitCount\":4,\"daysSince\":0},\"timestamp\":1764080796302,\"timeFromStart\":562},{\"step\":5,\"type\":\"exit_intent\",\"data\":{\"name\":{\"timeOnPage\":10,\"scrollDepth\":19,\"lastSection\":\"unknown\"}},\"timestamp\":1764080806140,\"timeFromStart\":10400},{\"step\":6,\"type\":\"exit_intent\",\"data\":{\"name\":{\"timeOnPage\":10,\"scrollDepth\":19,\"lastSection\":\"unknown\"}},\"timestamp\":1764080806142,\"timeFromStart\":10402}]",
+    "outcome": "exited",
+    "total_steps": 6,
+    "duration": 28198,
+    "converted": false,
+    "created_at": "2025-11-25T14:25:07.509438"
+  },
+  {
+    "id": 5,
+    "session_id": "1764082029917-ocfjrss74",
+    "journey_steps": "[{\"step\":1,\"type\":\"page_view\",\"data\":{\"path\":\"/\"},\"timestamp\":1764082030251,\"timeFromStart\":349},{\"step\":2,\"type\":\"new_visit\",\"data\":{\"firstTime\":true},\"timestamp\":1764082030254,\"timeFromStart\":352},{\"step\":3,\"type\":\"page_view\",\"data\":{\"path\":\"/\"},\"timestamp\":1764082030385,\"timeFromStart\":483},{\"step\":4,\"type\":\"return_visit\",\"data\":{\"visitCount\":2,\"daysSince\":0},\"timestamp\":1764082030387,\"timeFromStart\":485}]",
+    "outcome": "exited",
+    "total_steps": 4,
+    "duration": 10079,
+    "converted": false,
+    "created_at": "2025-11-25T14:47:20.126135"
+  },
+  {
+    "id": 6,
+    "session_id": "1764084621868-th9oiypno",
+    "journey_steps": "[{\"step\":1,\"type\":\"page_view\",\"data\":{\"path\":\"/\"},\"timestamp\":1764084622164,\"timeFromStart\":306},{\"step\":2,\"type\":\"new_visit\",\"data\":{\"firstTime\":true},\"timestamp\":1764084622168,\"timeFromStart\":310},{\"step\":3,\"type\":\"page_view\",\"data\":{\"path\":\"/\"},\"timestamp\":1764084622616,\"timeFromStart\":758},{\"step\":4,\"type\":\"return_visit\",\"data\":{\"visitCount\":2,\"daysSince\":0},\"timestamp\":1764084622618,\"timeFromStart\":760},{\"step\":5,\"type\":\"exit_intent\",\"data\":{\"name\":{\"timeOnPage\":79,\"scrollDepth\":3,\"lastSection\":\"unknown\"}},\"timestamp\":1764084701281,\"timeFromStart\":79423},{\"step\":6,\"type\":\"exit_intent\",\"data\":{\"name\":{\"timeOnPage\":79,\"scrollDepth\":3,\"lastSection\":\"unknown\"}},\"timestamp\":1764084701281,\"timeFromStart\":79424}]",
+    "outcome": "exited",
+    "total_steps": 6,
+    "duration": 1053290,
+    "converted": false,
+    "created_at": "2025-11-25T15:47:55.804477"
+  },
+  {
+    "id": 7,
+    "session_id": "1764085858988-w592oezta",
+    "journey_steps": "[{\"step\":1,\"type\":\"page_view\",\"data\":{\"path\":\"/\"},\"timestamp\":1764085859181,\"timeFromStart\":213},{\"step\":2,\"type\":\"new_visit\",\"data\":{\"firstTime\":true},\"timestamp\":1764085859184,\"timeFromStart\":216},{\"step\":3,\"type\":\"page_view\",\"data\":{\"path\":\"/\"},\"timestamp\":1764085862233,\"timeFromStart\":3265},{\"step\":4,\"type\":\"return_visit\",\"data\":{\"visitCount\":2,\"daysSince\":0},\"timestamp\":1764085862236,\"timeFromStart\":3268}]",
+    "outcome": "exited",
+    "total_steps": 4,
+    "duration": 12673,
+    "converted": false,
+    "created_at": "2025-11-25T15:51:11.812832"
+  },
+  {
+    "id": 8,
+    "session_id": "1764098915106-u4grj1jdf",
+    "journey_steps": "[{\"step\":1,\"type\":\"page_view\",\"data\":{\"path\":\"/\"},\"timestamp\":1764098915339,\"timeFromStart\":236},{\"step\":2,\"type\":\"new_visit\",\"data\":{\"firstTime\":true},\"timestamp\":1764098915342,\"timeFromStart\":239},{\"step\":3,\"type\":\"page_view\",\"data\":{\"path\":\"/\"},\"timestamp\":1764098915513,\"timeFromStart\":410},{\"step\":4,\"type\":\"return_visit\",\"data\":{\"visitCount\":2,\"daysSince\":0},\"timestamp\":1764098915515,\"timeFromStart\":412},{\"step\":5,\"type\":\"exit_intent\",\"data\":{\"name\":{\"timeOnPage\":203,\"scrollDepth\":39,\"lastSection\":\"unknown\"}},\"timestamp\":1764099117885,\"timeFromStart\":202782},{\"step\":6,\"type\":\"exit_intent\",\"data\":{\"name\":{\"timeOnPage\":203,\"scrollDepth\":39,\"lastSection\":\"unknown\"}},\"timestamp\":1764099117887,\"timeFromStart\":202784}]",
+    "outcome": "exited",
+    "total_steps": 6,
+    "duration": 270268,
+    "converted": false,
+    "created_at": "2025-11-25T19:33:05.540716"
+  },
+  {
+    "id": 9,
+    "session_id": "1764231988147-1xc7foclx",
+    "journey_steps": "[{\"step\":1,\"type\":\"page_view\",\"data\":{\"path\":\"/\"},\"timestamp\":1764231992650,\"timeFromStart\":4503},{\"step\":2,\"type\":\"new_visit\",\"data\":{\"firstTime\":true},\"timestamp\":1764231992661,\"timeFromStart\":4514},{\"step\":3,\"type\":\"page_view\",\"data\":{\"path\":\"/\"},\"timestamp\":1764231993248,\"timeFromStart\":5101},{\"step\":4,\"type\":\"return_visit\",\"data\":{\"visitCount\":2,\"daysSince\":0},\"timestamp\":1764231993250,\"timeFromStart\":5103}]",
+    "outcome": "exited",
+    "total_steps": 4,
+    "duration": 8705,
+    "converted": false,
+    "created_at": "2025-11-27T08:26:37.044197"
+  },
+  {
+    "id": 10,
+    "session_id": "1764261939698-405ckjk5c",
+    "journey_steps": "[{\"step\":1,\"type\":\"page_view\",\"data\":{\"path\":\"/\"},\"timestamp\":1764261943972,\"timeFromStart\":4276},{\"step\":2,\"type\":\"return_visit\",\"data\":{\"visitCount\":3,\"daysSince\":2},\"timestamp\":1764261943973,\"timeFromStart\":4277},{\"step\":3,\"type\":\"page_view\",\"data\":{\"path\":\"/\"},\"timestamp\":1764261944576,\"timeFromStart\":4880},{\"step\":4,\"type\":\"return_visit\",\"data\":{\"visitCount\":4,\"daysSince\":0},\"timestamp\":1764261944577,\"timeFromStart\":4881},{\"step\":5,\"type\":\"exit_intent\",\"data\":{\"name\":{\"timeOnPage\":13,\"scrollDepth\":76,\"lastSection\":\"unknown\"}},\"timestamp\":1764261953029,\"timeFromStart\":13333},{\"step\":6,\"type\":\"exit_intent\",\"data\":{\"name\":{\"timeOnPage\":13,\"scrollDepth\":76,\"lastSection\":\"unknown\"}},\"timestamp\":1764261953030,\"timeFromStart\":13334}]",
+    "outcome": "exited",
+    "total_steps": 6,
+    "duration": 20129,
+    "converted": false,
+    "created_at": "2025-11-27T16:46:00.283861"
+  },
+  {
+    "id": 11,
+    "session_id": "1764362406817-8q72ppiqu",
+    "journey_steps": "[{\"step\":1,\"type\":\"page_view\",\"data\":{\"path\":\"/\"},\"timestamp\":1764362411453,\"timeFromStart\":4786},{\"step\":2,\"type\":\"new_visit\",\"data\":{\"firstTime\":true},\"timestamp\":1764362411459,\"timeFromStart\":4792},{\"step\":3,\"type\":\"page_view\",\"data\":{\"path\":\"/\"},\"timestamp\":1764362411842,\"timeFromStart\":5175},{\"step\":4,\"type\":\"return_visit\",\"data\":{\"visitCount\":2,\"daysSince\":0},\"timestamp\":1764362411854,\"timeFromStart\":5187}]",
+    "outcome": "exited",
+    "total_steps": 4,
+    "duration": 12605,
+    "converted": false,
+    "created_at": "2025-11-28T20:40:19.507774"
+  },
+  {
+    "id": 12,
+    "session_id": "1764387231354-z1cqrqq4y",
+    "journey_steps": "[{\"step\":1,\"type\":\"page_view\",\"data\":{\"path\":\"/\"},\"timestamp\":1764387236693,\"timeFromStart\":5341},{\"step\":2,\"type\":\"new_visit\",\"data\":{\"firstTime\":true},\"timestamp\":1764387236697,\"timeFromStart\":5345}]",
+    "outcome": "exited",
+    "total_steps": 2,
+    "duration": 5444,
+    "converted": false,
+    "created_at": "2025-11-29T03:33:57.501431"
+  },
+  {
+    "id": 94,
+    "session_id": "1767983092853-0ekye7dbe",
+    "journey_steps": "[{\"step\":1,\"type\":\"page_view\",\"data\":{\"path\":\"/\"},\"timestamp\":1767983097656,\"timeFromStart\":4809},{\"step\":2,\"type\":\"return_visit\",\"data\":{\"visitCount\":5,\"daysSince\":2},\"timestamp\":1767983097659,\"timeFromStart\":4812},{\"step\":3,\"type\":\"page_view\",\"data\":{\"path\":\"/\"},\"timestamp\":1767983098186,\"timeFromStart\":5339},{\"step\":4,\"type\":\"return_visit\",\"data\":{\"visitCount\":6,\"daysSince\":0},\"timestamp\":1767983098191,\"timeFromStart\":5344}]",
+    "outcome": "exited",
+    "total_steps": 4,
+    "duration": 63474,
+    "converted": false,
+    "created_at": "2026-01-09T18:25:56.548702"
+  },
+  {
+    "id": 13,
+    "session_id": "1764461256952-7jj3th6jg",
+    "journey_steps": "[{\"step\":1,\"type\":\"page_view\",\"data\":{\"path\":\"/\"},\"timestamp\":1764461257645,\"timeFromStart\":702},{\"step\":2,\"type\":\"new_visit\",\"data\":{\"firstTime\":true},\"timestamp\":1764461257646,\"timeFromStart\":703},{\"step\":3,\"type\":\"device_info\",\"data\":{\"device\":\"tablet\",\"browser\":\"Chrome\"},\"timestamp\":1764461257848,\"timeFromStart\":905},{\"step\":4,\"type\":\"page_view\",\"data\":{\"path\":\"/\"},\"timestamp\":1764461258137,\"timeFromStart\":1194},{\"step\":5,\"type\":\"return_visit\",\"data\":{\"visitCount\":2,\"daysSince\":0},\"timestamp\":1764461258138,\"timeFromStart\":1195}]",
+    "outcome": "exited",
+    "total_steps": 5,
+    "duration": 2330,
+    "converted": false,
+    "created_at": "2025-11-30T00:07:39.463263"
+  },
+  {
+    "id": 14,
+    "session_id": "1764461617003-uk6ivzu3c",
+    "journey_steps": "[{\"step\":1,\"type\":\"page_view\",\"data\":{\"path\":\"/\"},\"timestamp\":1764461618510,\"timeFromStart\":1508},{\"step\":2,\"type\":\"new_visit\",\"data\":{\"firstTime\":true},\"timestamp\":1764461618512,\"timeFromStart\":1510}]",
+    "outcome": "exited",
+    "total_steps": 2,
+    "duration": 2403,
+    "converted": false,
+    "created_at": "2025-11-30T00:13:39.590216"
+  },
+  {
+    "id": 15,
+    "session_id": "1764464848197-kzx0g513z",
+    "journey_steps": "[{\"step\":1,\"type\":\"page_view\",\"data\":{\"path\":\"/\"},\"timestamp\":1764464852946,\"timeFromStart\":4768},{\"step\":2,\"type\":\"new_visit\",\"data\":{\"firstTime\":true},\"timestamp\":1764464852949,\"timeFromStart\":4771},{\"step\":3,\"type\":\"page_view\",\"data\":{\"path\":\"/\"},\"timestamp\":1764464853347,\"timeFromStart\":5169},{\"step\":4,\"type\":\"return_visit\",\"data\":{\"visitCount\":2,\"daysSince\":0},\"timestamp\":1764464853351,\"timeFromStart\":5173}]",
+    "outcome": "exited",
+    "total_steps": 4,
+    "duration": 12075,
+    "converted": false,
+    "created_at": "2025-11-30T01:07:39.563053"
+  },
+  {
+    "id": 16,
+    "session_id": "1764534784353-lelbfspe5",
+    "journey_steps": "[{\"step\":1,\"type\":\"page_view\",\"data\":{\"path\":\"/\"},\"timestamp\":1764535300304,\"timeFromStart\":1115},{\"step\":2,\"type\":\"return_visit\",\"data\":{\"visitCount\":7,\"daysSince\":0},\"timestamp\":1764535300306,\"timeFromStart\":1117},{\"step\":3,\"type\":\"page_view\",\"data\":{\"path\":\"/\"},\"timestamp\":1764535303963,\"timeFromStart\":4774},{\"step\":4,\"type\":\"return_visit\",\"data\":{\"visitCount\":8,\"daysSince\":0},\"timestamp\":1764535303966,\"timeFromStart\":4777},{\"step\":5,\"type\":\"exit_intent\",\"data\":{\"name\":{\"timeOnPage\":31,\"scrollDepth\":40,\"lastSection\":\"unknown\"}},\"timestamp\":1764535330640,\"timeFromStart\":31451},{\"step\":6,\"type\":\"exit_intent\",\"data\":{\"name\":{\"timeOnPage\":31,\"scrollDepth\":40,\"lastSection\":\"unknown\"}},\"timestamp\":1764535330641,\"timeFromStart\":31452}]",
+    "outcome": "exited",
+    "total_steps": 6,
+    "duration": 81419,
+    "converted": false,
+    "created_at": "2025-11-30T20:33:24.287139"
+  },
+  {
+    "id": 17,
+    "session_id": "1764549291515-76dijhprn",
+    "journey_steps": "[{\"step\":1,\"type\":\"page_view\",\"data\":{\"path\":\"/\"},\"timestamp\":1764549296537,\"timeFromStart\":5023},{\"step\":2,\"type\":\"new_visit\",\"data\":{\"firstTime\":true},\"timestamp\":1764549296539,\"timeFromStart\":5025},{\"step\":3,\"type\":\"page_view\",\"data\":{\"path\":\"/\"},\"timestamp\":1764549297256,\"timeFromStart\":5742},{\"step\":4,\"type\":\"return_visit\",\"data\":{\"visitCount\":2,\"daysSince\":0},\"timestamp\":1764549297258,\"timeFromStart\":5744}]",
+    "outcome": "exited",
+    "total_steps": 4,
+    "duration": 5883,
+    "converted": false,
+    "created_at": "2025-12-01T00:34:57.579684"
+  },
+  {
+    "id": 18,
+    "session_id": "1764573921181-w15azxrue",
+    "journey_steps": "[{\"step\":1,\"type\":\"page_view\",\"data\":{\"path\":\"/\"},\"timestamp\":1764573926594,\"timeFromStart\":5418},{\"step\":2,\"type\":\"new_visit\",\"data\":{\"firstTime\":true},\"timestamp\":1764573926597,\"timeFromStart\":5421},{\"step\":3,\"type\":\"page_view\",\"data\":{\"path\":\"/\"},\"timestamp\":1764573926929,\"timeFromStart\":5753},{\"step\":4,\"type\":\"return_visit\",\"data\":{\"visitCount\":2,\"daysSince\":0},\"timestamp\":1764573926931,\"timeFromStart\":5755}]",
+    "outcome": "exited",
+    "total_steps": 4,
+    "duration": 13718,
+    "converted": false,
+    "created_at": "2025-12-01T07:25:35.156206"
+  },
+  {
+    "id": 19,
+    "session_id": "1764616445154-qw3swfnzj",
+    "journey_steps": "[{\"step\":1,\"type\":\"page_view\",\"data\":{\"path\":\"/\"},\"timestamp\":1764616446377,\"timeFromStart\":1224},{\"step\":2,\"type\":\"new_visit\",\"data\":{\"firstTime\":true},\"timestamp\":1764616446380,\"timeFromStart\":1227},{\"step\":3,\"type\":\"page_view\",\"data\":{\"path\":\"/\"},\"timestamp\":1764616446738,\"timeFromStart\":1585},{\"step\":4,\"type\":\"return_visit\",\"data\":{\"visitCount\":2,\"daysSince\":0},\"timestamp\":1764616446740,\"timeFromStart\":1587},{\"step\":5,\"type\":\"device_info\",\"data\":{\"device\":\"mobile\",\"browser\":\"Other\"},\"timestamp\":1764616447732,\"timeFromStart\":2579},{\"step\":6,\"type\":\"device_info\",\"data\":{\"device\":\"mobile\",\"browser\":\"Other\"},\"timestamp\":1764616447732,\"timeFromStart\":2579},{\"step\":7,\"type\":\"device_info\",\"data\":{\"device\":\"desktop\",\"browser\":\"Other\"},\"timestamp\":1764616469731,\"timeFromStart\":24578},{\"step\":8,\"type\":\"device_info\",\"data\":{\"device\":\"desktop\",\"browser\":\"Other\"},\"timestamp\":1764616469731,\"timeFromStart\":24578}]",
+    "outcome": "exited",
+    "total_steps": 8,
+    "duration": 31483,
+    "converted": false,
+    "created_at": "2025-12-01T19:14:36.952982"
+  },
+  {
+    "id": 22,
+    "session_id": "1764708930554-jvvjuod9u",
+    "journey_steps": "[{\"step\":1,\"type\":\"page_view\",\"data\":{\"path\":\"/\"},\"timestamp\":1764708935460,\"timeFromStart\":4935},{\"step\":2,\"type\":\"new_visit\",\"data\":{\"firstTime\":true},\"timestamp\":1764708935464,\"timeFromStart\":4939},{\"step\":3,\"type\":\"page_view\",\"data\":{\"path\":\"/\"},\"timestamp\":1764708935741,\"timeFromStart\":5216},{\"step\":4,\"type\":\"return_visit\",\"data\":{\"visitCount\":2,\"daysSince\":0},\"timestamp\":1764708935744,\"timeFromStart\":5219},{\"step\":5,\"type\":\"exit_intent\",\"data\":{\"name\":{\"timeOnPage\":296,\"scrollDepth\":0,\"lastSection\":\"unknown\"}},\"timestamp\":1764709226885,\"timeFromStart\":296360},{\"step\":6,\"type\":\"exit_intent\",\"data\":{\"name\":{\"timeOnPage\":296,\"scrollDepth\":0,\"lastSection\":\"unknown\"}},\"timestamp\":1764709226886,\"timeFromStart\":296361}]",
+    "outcome": "exited",
+    "total_steps": 6,
+    "duration": 298212,
+    "converted": false,
+    "created_at": "2025-12-02T21:00:29.052827"
+  },
+  {
+    "id": 20,
+    "session_id": "1764687835575-8hg84vun0",
+    "journey_steps": "[{\"step\":1,\"type\":\"page_view\",\"data\":{\"path\":\"/\"},\"timestamp\":1764687840675,\"timeFromStart\":5113},{\"step\":2,\"type\":\"new_visit\",\"data\":{\"firstTime\":true},\"timestamp\":1764687840678,\"timeFromStart\":5116},{\"step\":3,\"type\":\"page_view\",\"data\":{\"path\":\"/\"},\"timestamp\":1764687841040,\"timeFromStart\":5478},{\"step\":4,\"type\":\"return_visit\",\"data\":{\"visitCount\":2,\"daysSince\":0},\"timestamp\":1764687841041,\"timeFromStart\":5479}]",
+    "outcome": "exited",
+    "total_steps": 4,
+    "duration": 71140,
+    "converted": false,
+    "created_at": "2025-12-02T15:04:06.999211"
+  },
+  {
+    "id": 21,
+    "session_id": "1764699452342-d5sgf1lc5",
+    "journey_steps": "[{\"step\":1,\"type\":\"page_view\",\"data\":{\"path\":\"/\"},\"timestamp\":1764699453785,\"timeFromStart\":1491},{\"step\":2,\"type\":\"new_visit\",\"data\":{\"firstTime\":true},\"timestamp\":1764699453792,\"timeFromStart\":1498},{\"step\":3,\"type\":\"page_view\",\"data\":{\"path\":\"/\"},\"timestamp\":1764699454097,\"timeFromStart\":1803},{\"step\":4,\"type\":\"return_visit\",\"data\":{\"visitCount\":2,\"daysSince\":0},\"timestamp\":1764699454101,\"timeFromStart\":1807}]",
+    "outcome": "exited",
+    "total_steps": 4,
+    "duration": 240487,
+    "converted": false,
+    "created_at": "2025-12-02T18:21:32.993513"
+  },
+  {
+    "id": 23,
+    "session_id": "1764788560359-jpj1nluoi",
+    "journey_steps": "[{\"step\":1,\"type\":\"page_view\",\"data\":{\"path\":\"/\"},\"timestamp\":1764788565196,\"timeFromStart\":4837},{\"step\":2,\"type\":\"new_visit\",\"data\":{\"firstTime\":true},\"timestamp\":1764788565197,\"timeFromStart\":4838},{\"step\":3,\"type\":\"page_view\",\"data\":{\"path\":\"/\"},\"timestamp\":1764788565513,\"timeFromStart\":5154},{\"step\":4,\"type\":\"return_visit\",\"data\":{\"visitCount\":2,\"daysSince\":0},\"timestamp\":1764788565514,\"timeFromStart\":5155},{\"step\":5,\"type\":\"exit_intent\",\"data\":{\"name\":{\"timeOnPage\":80,\"scrollDepth\":51,\"lastSection\":\"unknown\"}},\"timestamp\":1764788640302,\"timeFromStart\":79943},{\"step\":6,\"type\":\"exit_intent\",\"data\":{\"name\":{\"timeOnPage\":80,\"scrollDepth\":51,\"lastSection\":\"unknown\"}},\"timestamp\":1764788640306,\"timeFromStart\":79947}]",
+    "outcome": "exited",
+    "total_steps": 6,
+    "duration": 922375,
+    "converted": false,
+    "created_at": "2025-12-03T19:18:02.964008"
+  },
+  {
+    "id": 24,
+    "session_id": "1764818323567-05ns9ye2h",
+    "journey_steps": "[{\"step\":1,\"type\":\"page_view\",\"data\":{\"path\":\"/\"},\"timestamp\":1764818328738,\"timeFromStart\":5197},{\"step\":2,\"type\":\"new_visit\",\"data\":{\"firstTime\":true},\"timestamp\":1764818328746,\"timeFromStart\":5204},{\"step\":3,\"type\":\"page_view\",\"data\":{\"path\":\"/\"},\"timestamp\":1764818329161,\"timeFromStart\":5619},{\"step\":4,\"type\":\"return_visit\",\"data\":{\"visitCount\":2,\"daysSince\":0},\"timestamp\":1764818329164,\"timeFromStart\":5622}]",
+    "outcome": "exited",
+    "total_steps": 4,
+    "duration": 12800,
+    "converted": false,
+    "created_at": "2025-12-04T03:18:56.222417"
+  },
+  {
+    "id": 95,
+    "session_id": "1768074390501-fi8e9l47o",
+    "journey_steps": "[{\"step\":1,\"type\":\"page_view\",\"data\":{\"path\":\"/\"},\"timestamp\":1768074397166,\"timeFromStart\":2486},{\"step\":2,\"type\":\"return_visit\",\"data\":{\"visitCount\":3,\"daysSince\":0},\"timestamp\":1768074397169,\"timeFromStart\":2489},{\"step\":3,\"type\":\"page_view\",\"data\":{\"path\":\"/\"},\"timestamp\":1768074397390,\"timeFromStart\":2710},{\"step\":4,\"type\":\"return_visit\",\"data\":{\"visitCount\":4,\"daysSince\":0},\"timestamp\":1768074397392,\"timeFromStart\":2712}]",
+    "outcome": "exited",
+    "total_steps": 4,
+    "duration": 15175,
+    "converted": false,
+    "created_at": "2026-01-10T19:46:50.176988"
+  },
+  {
+    "id": 25,
+    "session_id": "1764852011792-exc8cx41f",
+    "journey_steps": "[{\"step\":1,\"type\":\"page_view\",\"data\":{\"path\":\"/\"},\"timestamp\":1764852016853,\"timeFromStart\":5073},{\"step\":2,\"type\":\"new_visit\",\"data\":{\"firstTime\":true},\"timestamp\":1764852016855,\"timeFromStart\":5075},{\"step\":3,\"type\":\"page_view\",\"data\":{\"path\":\"/\"},\"timestamp\":1764852016856,\"timeFromStart\":5076},{\"step\":4,\"type\":\"return_visit\",\"data\":{\"visitCount\":2,\"daysSince\":0},\"timestamp\":1764852016857,\"timeFromStart\":5077},{\"step\":5,\"type\":\"exit_intent\",\"data\":{\"name\":{\"timeOnPage\":224,\"scrollDepth\":36,\"lastSection\":\"unknown\"}},\"timestamp\":1764852235621,\"timeFromStart\":223841},{\"step\":6,\"type\":\"exit_intent\",\"data\":{\"name\":{\"timeOnPage\":224,\"scrollDepth\":36,\"lastSection\":\"unknown\"}},\"timestamp\":1764852235621,\"timeFromStart\":223841}]",
+    "outcome": "exited",
+    "total_steps": 6,
+    "duration": 225141,
+    "converted": false,
+    "created_at": "2025-12-04T12:44:00.237067"
+  },
+  {
+    "id": 26,
+    "session_id": "1764882101704-luecs014t",
+    "journey_steps": "[{\"step\":1,\"type\":\"page_view\",\"data\":{\"path\":\"/\"},\"timestamp\":1764882102783,\"timeFromStart\":1106},{\"step\":2,\"type\":\"new_visit\",\"data\":{\"firstTime\":true},\"timestamp\":1764882102785,\"timeFromStart\":1108},{\"step\":3,\"type\":\"page_view\",\"data\":{\"path\":\"/\"},\"timestamp\":1764882102944,\"timeFromStart\":1267},{\"step\":4,\"type\":\"return_visit\",\"data\":{\"visitCount\":2,\"daysSince\":0},\"timestamp\":1764882102945,\"timeFromStart\":1268},{\"step\":5,\"type\":\"exit_intent\",\"data\":{\"name\":{\"timeOnPage\":65,\"scrollDepth\":35,\"lastSection\":\"unknown\"}},\"timestamp\":1764882166935,\"timeFromStart\":65258},{\"step\":6,\"type\":\"exit_intent\",\"data\":{\"name\":{\"timeOnPage\":65,\"scrollDepth\":35,\"lastSection\":\"unknown\"}},\"timestamp\":1764882166935,\"timeFromStart\":65258}]",
+    "outcome": "exited",
+    "total_steps": 6,
+    "duration": 353252,
+    "converted": false,
+    "created_at": "2025-12-04T21:07:35.907986"
+  },
+  {
+    "id": 27,
+    "session_id": "1764958543147-9nuud6j3p",
+    "journey_steps": "[{\"step\":1,\"type\":\"page_view\",\"data\":{\"path\":\"/\"},\"timestamp\":1764958547967,\"timeFromStart\":4824},{\"step\":2,\"type\":\"new_visit\",\"data\":{\"firstTime\":true},\"timestamp\":1764958547970,\"timeFromStart\":4827},{\"step\":3,\"type\":\"page_view\",\"data\":{\"path\":\"/\"},\"timestamp\":1764958548290,\"timeFromStart\":5147},{\"step\":4,\"type\":\"return_visit\",\"data\":{\"visitCount\":2,\"daysSince\":0},\"timestamp\":1764958548293,\"timeFromStart\":5150}]",
+    "outcome": "exited",
+    "total_steps": 4,
+    "duration": 5100828,
+    "converted": false,
+    "created_at": "2025-12-05T18:16:19.104868"
+  },
+  {
+    "id": 28,
+    "session_id": "1764976679706-u0s5ypq4u",
+    "journey_steps": "[{\"step\":1,\"type\":\"page_view\",\"data\":{\"path\":\"/\"},\"timestamp\":1764976684581,\"timeFromStart\":4876},{\"step\":2,\"type\":\"new_visit\",\"data\":{\"firstTime\":true},\"timestamp\":1764976684582,\"timeFromStart\":4877},{\"step\":3,\"type\":\"page_view\",\"data\":{\"path\":\"/\"},\"timestamp\":1764976684974,\"timeFromStart\":5269},{\"step\":4,\"type\":\"return_visit\",\"data\":{\"visitCount\":2,\"daysSince\":0},\"timestamp\":1764976684975,\"timeFromStart\":5270},{\"step\":5,\"type\":\"exit_intent\",\"data\":{\"name\":{\"timeOnPage\":44,\"scrollDepth\":47,\"lastSection\":\"unknown\"}},\"timestamp\":1764976724181,\"timeFromStart\":44476},{\"step\":6,\"type\":\"exit_intent\",\"data\":{\"name\":{\"timeOnPage\":44,\"scrollDepth\":47,\"lastSection\":\"unknown\"}},\"timestamp\":1764976724182,\"timeFromStart\":44477}]",
+    "outcome": "exited",
+    "total_steps": 6,
+    "duration": 55380496,
+    "converted": false,
+    "created_at": "2025-12-06T14:41:00.719748"
+  },
+  {
+    "id": 29,
+    "session_id": "1765233581975-8gxwcle2s",
+    "journey_steps": "[{\"step\":1,\"type\":\"page_view\",\"data\":{\"path\":\"/\"},\"timestamp\":1765234508134,\"timeFromStart\":5398},{\"step\":2,\"type\":\"return_visit\",\"data\":{\"visitCount\":5,\"daysSince\":0},\"timestamp\":1765234508138,\"timeFromStart\":5402},{\"step\":3,\"type\":\"page_view\",\"data\":{\"path\":\"/\"},\"timestamp\":1765234508473,\"timeFromStart\":5737},{\"step\":4,\"type\":\"return_visit\",\"data\":{\"visitCount\":6,\"daysSince\":0},\"timestamp\":1765234508477,\"timeFromStart\":5741}]",
+    "outcome": "exited",
+    "total_steps": 4,
+    "duration": 16030,
+    "converted": false,
+    "created_at": "2025-12-08T22:55:18.213215"
+  },
+  {
+    "id": 30,
+    "session_id": "1765309285018-21bhaht8p",
+    "journey_steps": "[{\"step\":1,\"type\":\"page_view\",\"data\":{\"path\":\"/\"},\"timestamp\":1765309382041,\"timeFromStart\":581},{\"step\":2,\"type\":\"return_visit\",\"data\":{\"visitCount\":3,\"daysSince\":0},\"timestamp\":1765309382048,\"timeFromStart\":588},{\"step\":3,\"type\":\"exit_intent\",\"data\":{\"name\":{\"timeOnPage\":149,\"scrollDepth\":50,\"lastSection\":\"unknown\"}},\"timestamp\":1765309530275,\"timeFromStart\":148815}]",
+    "outcome": "exited",
+    "total_steps": 3,
+    "duration": 707177,
+    "converted": false,
+    "created_at": "2025-12-09T19:43:01.661885"
+  },
+  {
+    "id": 31,
+    "session_id": "1765398226014-4mltxa9tm",
+    "journey_steps": "[{\"step\":1,\"type\":\"page_view\",\"data\":{\"path\":\"/\"},\"timestamp\":1765398227636,\"timeFromStart\":1623},{\"step\":2,\"type\":\"new_visit\",\"data\":{\"firstTime\":true},\"timestamp\":1765398227638,\"timeFromStart\":1625},{\"step\":3,\"type\":\"page_view\",\"data\":{\"path\":\"/\"},\"timestamp\":1765398227914,\"timeFromStart\":1901},{\"step\":4,\"type\":\"return_visit\",\"data\":{\"visitCount\":2,\"daysSince\":0},\"timestamp\":1765398227915,\"timeFromStart\":1902},{\"step\":5,\"type\":\"exit_intent\",\"data\":{\"name\":{\"timeOnPage\":214,\"scrollDepth\":69,\"lastSection\":\"unknown\"}},\"timestamp\":1765398440196,\"timeFromStart\":214183},{\"step\":6,\"type\":\"exit_intent\",\"data\":{\"name\":{\"timeOnPage\":214,\"scrollDepth\":69,\"lastSection\":\"unknown\"}},\"timestamp\":1765398440197,\"timeFromStart\":214184}]",
+    "outcome": "exited",
+    "total_steps": 6,
+    "duration": 215254,
+    "converted": false,
+    "created_at": "2025-12-10T20:27:20.878966"
+  },
+  {
+    "id": 32,
+    "session_id": "1765436122294-qhjy7yztj",
+    "journey_steps": "[{\"step\":1,\"type\":\"page_view\",\"data\":{\"path\":\"/\"},\"timestamp\":1765436126901,\"timeFromStart\":4608},{\"step\":2,\"type\":\"new_visit\",\"data\":{\"firstTime\":true},\"timestamp\":1765436126908,\"timeFromStart\":4615},{\"step\":3,\"type\":\"page_view\",\"data\":{\"path\":\"/\"},\"timestamp\":1765436127205,\"timeFromStart\":4912},{\"step\":4,\"type\":\"return_visit\",\"data\":{\"visitCount\":2,\"daysSince\":0},\"timestamp\":1765436127208,\"timeFromStart\":4915}]",
+    "outcome": "exited",
+    "total_steps": 4,
+    "duration": 14036,
+    "converted": false,
+    "created_at": "2025-12-11T06:55:36.602875"
+  },
+  {
+    "id": 33,
+    "session_id": "1765478780323-66mtmuw7u",
+    "journey_steps": "[{\"step\":1,\"type\":\"page_view\",\"data\":{\"path\":\"/\"},\"timestamp\":1765478781234,\"timeFromStart\":913},{\"step\":2,\"type\":\"new_visit\",\"data\":{\"firstTime\":true},\"timestamp\":1765478781235,\"timeFromStart\":914},{\"step\":3,\"type\":\"page_view\",\"data\":{\"path\":\"/\"},\"timestamp\":1765478781438,\"timeFromStart\":1117},{\"step\":4,\"type\":\"return_visit\",\"data\":{\"visitCount\":2,\"daysSince\":0},\"timestamp\":1765478781438,\"timeFromStart\":1117}]",
+    "outcome": "exited",
+    "total_steps": 4,
+    "duration": 1569,
+    "converted": false,
+    "created_at": "2025-12-11T18:46:21.275376"
+  },
+  {
+    "id": 34,
+    "session_id": "1765559665410-3lohpci1h",
+    "journey_steps": "[{\"step\":1,\"type\":\"page_view\",\"data\":{\"path\":\"/\"},\"timestamp\":1765559665761,\"timeFromStart\":351},{\"step\":2,\"type\":\"return_visit\",\"data\":{\"visitCount\":7,\"daysSince\":0},\"timestamp\":1765559665761,\"timeFromStart\":351},{\"step\":3,\"type\":\"page_view\",\"data\":{\"path\":\"/\"},\"timestamp\":1765559666074,\"timeFromStart\":664},{\"step\":4,\"type\":\"return_visit\",\"data\":{\"visitCount\":8,\"daysSince\":0},\"timestamp\":1765559666075,\"timeFromStart\":665}]",
+    "outcome": "exited",
+    "total_steps": 4,
+    "duration": 269503,
+    "converted": false,
+    "created_at": "2025-12-12T17:18:55.124818"
+  },
+  {
+    "id": 35,
+    "session_id": "1765570325972-zcofwvle4",
+    "journey_steps": "[{\"step\":1,\"type\":\"page_view\",\"data\":{\"path\":\"/\"},\"timestamp\":1765570330552,\"timeFromStart\":4605},{\"step\":2,\"type\":\"new_visit\",\"data\":{\"firstTime\":true},\"timestamp\":1765570330560,\"timeFromStart\":4613},{\"step\":3,\"type\":\"page_view\",\"data\":{\"path\":\"/\"},\"timestamp\":1765570330851,\"timeFromStart\":4904},{\"step\":4,\"type\":\"return_visit\",\"data\":{\"visitCount\":2,\"daysSince\":0},\"timestamp\":1765570330858,\"timeFromStart\":4911}]",
+    "outcome": "exited",
+    "total_steps": 4,
+    "duration": 49672,
+    "converted": false,
+    "created_at": "2025-12-12T20:12:56.156649"
+  },
+  {
+    "id": 36,
+    "session_id": "1765722107765-k4spvv9d7",
+    "journey_steps": "[{\"step\":1,\"type\":\"page_view\",\"data\":{\"path\":\"/\"},\"timestamp\":1765722108338,\"timeFromStart\":574},{\"step\":2,\"type\":\"new_visit\",\"data\":{\"firstTime\":true},\"timestamp\":1765722108342,\"timeFromStart\":578},{\"step\":3,\"type\":\"page_view\",\"data\":{\"path\":\"/\"},\"timestamp\":1765722108633,\"timeFromStart\":869},{\"step\":4,\"type\":\"return_visit\",\"data\":{\"visitCount\":2,\"daysSince\":0},\"timestamp\":1765722108635,\"timeFromStart\":871},{\"step\":5,\"type\":\"device_info\",\"data\":{\"device\":\"desktop\",\"browser\":\"Chrome\"},\"timestamp\":1765722110056,\"timeFromStart\":2292},{\"step\":6,\"type\":\"device_info\",\"data\":{\"device\":\"desktop\",\"browser\":\"Chrome\"},\"timestamp\":1765722110066,\"timeFromStart\":2302},{\"step\":7,\"type\":\"device_info\",\"data\":{\"device\":\"desktop\",\"browser\":\"Chrome\"},\"timestamp\":1765722135080,\"timeFromStart\":27316},{\"step\":8,\"type\":\"device_info\",\"data\":{\"device\":\"desktop\",\"browser\":\"Chrome\"},\"timestamp\":1765722135081,\"timeFromStart\":27317}]",
+    "outcome": "exited",
+    "total_steps": 8,
+    "duration": 34771,
+    "converted": false,
+    "created_at": "2025-12-14T14:22:22.718789"
+  },
+  {
+    "id": 37,
+    "session_id": "1765752379021-t8ayfwodp",
+    "journey_steps": "[{\"step\":1,\"type\":\"page_view\",\"data\":{\"path\":\"/\"},\"timestamp\":1765752383586,\"timeFromStart\":4566},{\"step\":2,\"type\":\"new_visit\",\"data\":{\"firstTime\":true},\"timestamp\":1765752383586,\"timeFromStart\":4566},{\"step\":3,\"type\":\"page_view\",\"data\":{\"path\":\"/\"},\"timestamp\":1765752383867,\"timeFromStart\":4847},{\"step\":4,\"type\":\"return_visit\",\"data\":{\"visitCount\":2,\"daysSince\":0},\"timestamp\":1765752383867,\"timeFromStart\":4847},{\"step\":5,\"type\":\"exit_intent\",\"data\":{\"name\":{\"timeOnPage\":64,\"scrollDepth\":72,\"lastSection\":\"unknown\"}},\"timestamp\":1765752443186,\"timeFromStart\":64166},{\"step\":6,\"type\":\"exit_intent\",\"data\":{\"name\":{\"timeOnPage\":64,\"scrollDepth\":72,\"lastSection\":\"unknown\"}},\"timestamp\":1765752443186,\"timeFromStart\":64166}]",
+    "outcome": "exited",
+    "total_steps": 6,
+    "duration": 64597,
+    "converted": false,
+    "created_at": "2025-12-14T22:47:23.895056"
+  },
+  {
+    "id": 38,
+    "session_id": "1765757901877-k1azawbgn",
+    "journey_steps": "[{\"step\":1,\"type\":\"page_view\",\"data\":{\"path\":\"/\"},\"timestamp\":1765757906522,\"timeFromStart\":4810},{\"step\":2,\"type\":\"new_visit\",\"data\":{\"firstTime\":true},\"timestamp\":1765757906533,\"timeFromStart\":4821},{\"step\":3,\"type\":\"page_view\",\"data\":{\"path\":\"/\"},\"timestamp\":1765757906855,\"timeFromStart\":5143},{\"step\":4,\"type\":\"return_visit\",\"data\":{\"visitCount\":2,\"daysSince\":0},\"timestamp\":1765757906858,\"timeFromStart\":5146},{\"step\":5,\"type\":\"exit_intent\",\"data\":{\"name\":{\"timeOnPage\":52,\"scrollDepth\":50,\"lastSection\":\"unknown\"}},\"timestamp\":1765757953248,\"timeFromStart\":51536},{\"step\":6,\"type\":\"exit_intent\",\"data\":{\"name\":{\"timeOnPage\":52,\"scrollDepth\":50,\"lastSection\":\"unknown\"}},\"timestamp\":1765757953251,\"timeFromStart\":51539}]",
+    "outcome": "exited",
+    "total_steps": 6,
+    "duration": 52980,
+    "converted": false,
+    "created_at": "2025-12-15T00:19:15.835521"
+  },
+  {
+    "id": 39,
+    "session_id": "1765840811587-fmdn1tljt",
+    "journey_steps": "[{\"step\":1,\"type\":\"page_view\",\"data\":{\"path\":\"/\"},\"timestamp\":1765840812309,\"timeFromStart\":732},{\"step\":2,\"type\":\"new_visit\",\"data\":{\"firstTime\":true},\"timestamp\":1765840812311,\"timeFromStart\":734},{\"step\":3,\"type\":\"page_view\",\"data\":{\"path\":\"/\"},\"timestamp\":1765840812718,\"timeFromStart\":1141},{\"step\":4,\"type\":\"return_visit\",\"data\":{\"visitCount\":2,\"daysSince\":0},\"timestamp\":1765840812719,\"timeFromStart\":1142},{\"step\":5,\"type\":\"device_info\",\"data\":{\"device\":\"desktop\",\"browser\":\"Chrome\"},\"timestamp\":1765840813365,\"timeFromStart\":1788},{\"step\":6,\"type\":\"device_info\",\"data\":{\"device\":\"desktop\",\"browser\":\"Chrome\"},\"timestamp\":1765840813366,\"timeFromStart\":1789}]",
+    "outcome": "exited",
+    "total_steps": 6,
+    "duration": 5502,
+    "converted": false,
+    "created_at": "2025-12-15T23:20:17.290312"
+  },
+  {
+    "id": 40,
+    "session_id": "1765844093600-y9actoscq",
+    "journey_steps": "[{\"step\":1,\"type\":\"page_view\",\"data\":{\"path\":\"/\"},\"timestamp\":1765844098407,\"timeFromStart\":4824},{\"step\":2,\"type\":\"new_visit\",\"data\":{\"firstTime\":true},\"timestamp\":1765844098411,\"timeFromStart\":4828},{\"step\":3,\"type\":\"page_view\",\"data\":{\"path\":\"/\"},\"timestamp\":1765844098941,\"timeFromStart\":5358},{\"step\":4,\"type\":\"return_visit\",\"data\":{\"visitCount\":2,\"daysSince\":0},\"timestamp\":1765844098942,\"timeFromStart\":5359}]",
+    "outcome": "exited",
+    "total_steps": 4,
+    "duration": 7870,
+    "converted": false,
+    "created_at": "2025-12-16T00:15:01.642436"
+  },
+  {
+    "id": 41,
+    "session_id": "1765844104595-z2jesbu0g",
+    "journey_steps": "[{\"step\":1,\"type\":\"page_view\",\"data\":{\"path\":\"/\"},\"timestamp\":1765844104901,\"timeFromStart\":307},{\"step\":2,\"type\":\"new_visit\",\"data\":{\"firstTime\":true},\"timestamp\":1765844104904,\"timeFromStart\":310},{\"step\":3,\"type\":\"device_info\",\"data\":{\"device\":\"mobile\",\"browser\":\"Safari\"},\"timestamp\":1765844105183,\"timeFromStart\":589},{\"step\":4,\"type\":\"page_view\",\"data\":{\"path\":\"/\"},\"timestamp\":1765844105309,\"timeFromStart\":715},{\"step\":5,\"type\":\"return_visit\",\"data\":{\"visitCount\":2,\"daysSince\":0},\"timestamp\":1765844105310,\"timeFromStart\":716}]",
+    "outcome": "exited",
+    "total_steps": 5,
+    "duration": 3982,
+    "converted": false,
+    "created_at": "2025-12-16T00:15:08.731098"
+  },
+  {
+    "id": 42,
+    "session_id": "1765917406859-1c6ycol10",
+    "journey_steps": "[{\"step\":1,\"type\":\"page_view\",\"data\":{\"path\":\"/\"},\"timestamp\":1765917408144,\"timeFromStart\":1285},{\"step\":2,\"type\":\"new_visit\",\"data\":{\"firstTime\":true},\"timestamp\":1765917408146,\"timeFromStart\":1287},{\"step\":3,\"type\":\"page_view\",\"data\":{\"path\":\"/\"},\"timestamp\":1765917410780,\"timeFromStart\":3921},{\"step\":4,\"type\":\"return_visit\",\"data\":{\"visitCount\":2,\"daysSince\":0},\"timestamp\":1765917410782,\"timeFromStart\":3923},{\"step\":5,\"type\":\"exit_intent\",\"data\":{\"name\":{\"timeOnPage\":74,\"scrollDepth\":37,\"lastSection\":\"unknown\"}},\"timestamp\":1765917480956,\"timeFromStart\":74097},{\"step\":6,\"type\":\"exit_intent\",\"data\":{\"name\":{\"timeOnPage\":74,\"scrollDepth\":37,\"lastSection\":\"unknown\"}},\"timestamp\":1765917480957,\"timeFromStart\":74098}]",
+    "outcome": "exited",
+    "total_steps": 6,
+    "duration": 75294,
+    "converted": false,
+    "created_at": "2025-12-16T20:38:02.493121"
+  },
+  {
+    "id": 43,
+    "session_id": "1765921897912-j4d80cjp8",
+    "journey_steps": "[{\"step\":1,\"type\":\"page_view\",\"data\":{\"path\":\"/\"},\"timestamp\":1765921903272,\"timeFromStart\":5360},{\"step\":2,\"type\":\"new_visit\",\"data\":{\"firstTime\":true},\"timestamp\":1765921903273,\"timeFromStart\":5361},{\"step\":3,\"type\":\"page_view\",\"data\":{\"path\":\"/\"},\"timestamp\":1765921903693,\"timeFromStart\":5781},{\"step\":4,\"type\":\"return_visit\",\"data\":{\"visitCount\":2,\"daysSince\":0},\"timestamp\":1765921903695,\"timeFromStart\":5783},{\"step\":5,\"type\":\"exit_intent\",\"data\":{\"name\":{\"timeOnPage\":17,\"scrollDepth\":0,\"lastSection\":\"unknown\"}},\"timestamp\":1765921914501,\"timeFromStart\":16589},{\"step\":6,\"type\":\"exit_intent\",\"data\":{\"name\":{\"timeOnPage\":17,\"scrollDepth\":0,\"lastSection\":\"unknown\"}},\"timestamp\":1765921914501,\"timeFromStart\":16589}]",
+    "outcome": "exited",
+    "total_steps": 6,
+    "duration": 39844,
+    "converted": false,
+    "created_at": "2025-12-16T21:52:18.188079"
+  },
+  {
+    "id": 44,
+    "session_id": "1765993733898-j9iazvtiz",
+    "journey_steps": "[{\"step\":1,\"type\":\"page_view\",\"data\":{\"path\":\"/\"},\"timestamp\":1765993734492,\"timeFromStart\":604},{\"step\":2,\"type\":\"new_visit\",\"data\":{\"firstTime\":true},\"timestamp\":1765993734499,\"timeFromStart\":611},{\"step\":3,\"type\":\"page_view\",\"data\":{\"path\":\"/\"},\"timestamp\":1765993734539,\"timeFromStart\":651},{\"step\":4,\"type\":\"return_visit\",\"data\":{\"visitCount\":2,\"daysSince\":0},\"timestamp\":1765993734545,\"timeFromStart\":657},{\"step\":5,\"type\":\"device_info\",\"data\":{\"device\":\"desktop\",\"browser\":\"Chrome\"},\"timestamp\":1765993736140,\"timeFromStart\":2252},{\"step\":6,\"type\":\"device_info\",\"data\":{\"device\":\"desktop\",\"browser\":\"Chrome\"},\"timestamp\":1765993736149,\"timeFromStart\":2261},{\"step\":7,\"type\":\"device_info\",\"data\":{\"device\":\"desktop\",\"browser\":\"Chrome\"},\"timestamp\":1765993761421,\"timeFromStart\":27533},{\"step\":8,\"type\":\"device_info\",\"data\":{\"device\":\"desktop\",\"browser\":\"Chrome\"},\"timestamp\":1765993761437,\"timeFromStart\":27549}]",
+    "outcome": "exited",
+    "total_steps": 8,
+    "duration": 35062,
+    "converted": false,
+    "created_at": "2025-12-17T17:49:29.209008"
+  },
+  {
+    "id": 45,
+    "session_id": "1766079575747-v4s8tuqkx",
+    "journey_steps": "[{\"step\":1,\"type\":\"page_view\",\"data\":{\"path\":\"/\"},\"timestamp\":1766079580532,\"timeFromStart\":4813},{\"step\":2,\"type\":\"new_visit\",\"data\":{\"firstTime\":true},\"timestamp\":1766079580533,\"timeFromStart\":4814},{\"step\":3,\"type\":\"page_view\",\"data\":{\"path\":\"/\"},\"timestamp\":1766079581162,\"timeFromStart\":5443},{\"step\":4,\"type\":\"return_visit\",\"data\":{\"visitCount\":2,\"daysSince\":0},\"timestamp\":1766079581163,\"timeFromStart\":5444},{\"step\":5,\"type\":\"exit_intent\",\"data\":{\"name\":{\"timeOnPage\":59,\"scrollDepth\":13,\"lastSection\":\"unknown\"}},\"timestamp\":1766079634848,\"timeFromStart\":59129},{\"step\":6,\"type\":\"exit_intent\",\"data\":{\"name\":{\"timeOnPage\":59,\"scrollDepth\":13,\"lastSection\":\"unknown\"}},\"timestamp\":1766079634849,\"timeFromStart\":59130}]",
+    "outcome": "exited",
+    "total_steps": 6,
+    "duration": 1094711,
+    "converted": false,
+    "created_at": "2025-12-18T17:57:50.577623"
+  },
+  {
+    "id": 46,
+    "session_id": "1766185689399-o82na82rt",
+    "journey_steps": "[{\"step\":1,\"type\":\"page_view\",\"data\":{\"path\":\"/\"},\"timestamp\":1766185694243,\"timeFromStart\":4845},{\"step\":2,\"type\":\"new_visit\",\"data\":{\"firstTime\":true},\"timestamp\":1766185694247,\"timeFromStart\":4849},{\"step\":3,\"type\":\"page_view\",\"data\":{\"path\":\"/\"},\"timestamp\":1766185694449,\"timeFromStart\":5051},{\"step\":4,\"type\":\"return_visit\",\"data\":{\"visitCount\":2,\"daysSince\":0},\"timestamp\":1766185694450,\"timeFromStart\":5052},{\"step\":5,\"type\":\"exit_intent\",\"data\":{\"name\":{\"timeOnPage\":332,\"scrollDepth\":74,\"lastSection\":\"unknown\"}},\"timestamp\":1766186021893,\"timeFromStart\":332495},{\"step\":6,\"type\":\"exit_intent\",\"data\":{\"name\":{\"timeOnPage\":332,\"scrollDepth\":74,\"lastSection\":\"unknown\"}},\"timestamp\":1766186021894,\"timeFromStart\":332496}]",
+    "outcome": "exited",
+    "total_steps": 6,
+    "duration": 3319382,
+    "converted": false,
+    "created_at": "2025-12-20T00:03:29.087995"
+  },
+  {
+    "id": 47,
+    "session_id": "1766260353842-jjb83p6yq",
+    "journey_steps": "[{\"step\":1,\"type\":\"page_view\",\"data\":{\"path\":\"/\"},\"timestamp\":1766260358921,\"timeFromStart\":5079},{\"step\":2,\"type\":\"new_visit\",\"data\":{\"firstTime\":true},\"timestamp\":1766260358923,\"timeFromStart\":5081},{\"step\":3,\"type\":\"page_view\",\"data\":{\"path\":\"/\"},\"timestamp\":1766260359323,\"timeFromStart\":5481},{\"step\":4,\"type\":\"return_visit\",\"data\":{\"visitCount\":2,\"daysSince\":0},\"timestamp\":1766260359324,\"timeFromStart\":5482},{\"step\":5,\"type\":\"device_info\",\"data\":{\"device\":\"desktop\",\"browser\":\"Chrome\"},\"timestamp\":1766260377047,\"timeFromStart\":23205},{\"step\":6,\"type\":\"device_info\",\"data\":{\"device\":\"desktop\",\"browser\":\"Chrome\"},\"timestamp\":1766260377048,\"timeFromStart\":23206}]",
+    "outcome": "exited",
+    "total_steps": 6,
+    "duration": 30670,
+    "converted": false,
+    "created_at": "2025-12-20T19:53:04.811514"
+  },
+  {
+    "id": 48,
+    "session_id": "1766530476173-yegbz561u",
+    "journey_steps": "[{\"step\":1,\"type\":\"page_view\",\"data\":{\"path\":\"/\"},\"timestamp\":1766530478125,\"timeFromStart\":1953},{\"step\":2,\"type\":\"new_visit\",\"data\":{\"firstTime\":true},\"timestamp\":1766530478126,\"timeFromStart\":1954},{\"step\":3,\"type\":\"page_view\",\"data\":{\"path\":\"/\"},\"timestamp\":1766530478543,\"timeFromStart\":2371},{\"step\":4,\"type\":\"return_visit\",\"data\":{\"visitCount\":2,\"daysSince\":0},\"timestamp\":1766530478544,\"timeFromStart\":2372},{\"step\":5,\"type\":\"device_info\",\"data\":{\"device\":\"desktop\",\"browser\":\"Firefox\"},\"timestamp\":1766530478710,\"timeFromStart\":2538},{\"step\":6,\"type\":\"device_info\",\"data\":{\"device\":\"desktop\",\"browser\":\"Firefox\"},\"timestamp\":1766530500199,\"timeFromStart\":24027},{\"step\":7,\"type\":\"device_info\",\"data\":{\"device\":\"desktop\",\"browser\":\"Firefox\"},\"timestamp\":1766530500199,\"timeFromStart\":24027}]",
+    "outcome": "exited",
+    "total_steps": 7,
+    "duration": 31485,
+    "converted": false,
+    "created_at": "2025-12-23T22:55:07.823809"
+  },
+  {
+    "id": 49,
+    "session_id": "1766700729270-3vz6udtkm",
+    "journey_steps": "[{\"step\":1,\"type\":\"page_view\",\"data\":{\"path\":\"/\"},\"timestamp\":1766700730524,\"timeFromStart\":1265},{\"step\":2,\"type\":\"new_visit\",\"data\":{\"firstTime\":true},\"timestamp\":1766700730530,\"timeFromStart\":1271},{\"step\":3,\"type\":\"page_view\",\"data\":{\"path\":\"/\"},\"timestamp\":1766700734296,\"timeFromStart\":5037},{\"step\":4,\"type\":\"return_visit\",\"data\":{\"visitCount\":2,\"daysSince\":0},\"timestamp\":1766700734300,\"timeFromStart\":5041},{\"step\":5,\"type\":\"exit_intent\",\"data\":{\"name\":{\"timeOnPage\":71,\"scrollDepth\":37,\"lastSection\":\"unknown\"}},\"timestamp\":1766700800363,\"timeFromStart\":71104},{\"step\":6,\"type\":\"exit_intent\",\"data\":{\"name\":{\"timeOnPage\":71,\"scrollDepth\":37,\"lastSection\":\"unknown\"}},\"timestamp\":1766700800363,\"timeFromStart\":71104}]",
+    "outcome": "exited",
+    "total_steps": 6,
+    "duration": 508113,
+    "converted": false,
+    "created_at": "2025-12-25T22:20:37.937745"
+  },
+  {
+    "id": 50,
+    "session_id": "1766771564379-w8eb07p92",
+    "journey_steps": "[{\"step\":1,\"type\":\"page_view\",\"data\":{\"path\":\"/\"},\"timestamp\":1766771564570,\"timeFromStart\":192},{\"step\":2,\"type\":\"new_visit\",\"data\":{\"firstTime\":true},\"timestamp\":1766771564571,\"timeFromStart\":193},{\"step\":3,\"type\":\"page_view\",\"data\":{\"path\":\"/\"},\"timestamp\":1766771564946,\"timeFromStart\":568},{\"step\":4,\"type\":\"return_visit\",\"data\":{\"visitCount\":2,\"daysSince\":0},\"timestamp\":1766771564946,\"timeFromStart\":568},{\"step\":5,\"type\":\"exit_intent\",\"data\":{\"name\":{\"timeOnPage\":21,\"scrollDepth\":99,\"lastSection\":\"unknown\"}},\"timestamp\":1766771585532,\"timeFromStart\":21154},{\"step\":6,\"type\":\"exit_intent\",\"data\":{\"name\":{\"timeOnPage\":21,\"scrollDepth\":99,\"lastSection\":\"unknown\"}},\"timestamp\":1766771585532,\"timeFromStart\":21154}]",
+    "outcome": "exited",
+    "total_steps": 6,
+    "duration": 21907,
+    "converted": false,
+    "created_at": "2025-12-26T17:53:03.636289"
+  },
+  {
+    "id": 51,
+    "session_id": "1766816731648-7gjt24j69",
+    "journey_steps": "[{\"step\":1,\"type\":\"page_view\",\"data\":{\"path\":\"/\"},\"timestamp\":1766816732528,\"timeFromStart\":880},{\"step\":2,\"type\":\"new_visit\",\"data\":{\"firstTime\":true},\"timestamp\":1766816732530,\"timeFromStart\":882},{\"step\":3,\"type\":\"page_view\",\"data\":{\"path\":\"/\"},\"timestamp\":1766816732531,\"timeFromStart\":883},{\"step\":4,\"type\":\"return_visit\",\"data\":{\"visitCount\":2,\"daysSince\":0},\"timestamp\":1766816732532,\"timeFromStart\":884},{\"step\":5,\"type\":\"device_info\",\"data\":{\"device\":\"mobile\",\"browser\":\"Other\"},\"timestamp\":1766816734079,\"timeFromStart\":2431},{\"step\":6,\"type\":\"device_info\",\"data\":{\"device\":\"mobile\",\"browser\":\"Other\"},\"timestamp\":1766816734079,\"timeFromStart\":2431},{\"step\":7,\"type\":\"device_info\",\"data\":{\"device\":\"desktop\",\"browser\":\"Other\"},\"timestamp\":1766816756076,\"timeFromStart\":24428},{\"step\":8,\"type\":\"device_info\",\"data\":{\"device\":\"desktop\",\"browser\":\"Other\"},\"timestamp\":1766816756076,\"timeFromStart\":24428}]",
+    "outcome": "exited",
+    "total_steps": 8,
+    "duration": 31588,
+    "converted": false,
+    "created_at": "2025-12-27T06:26:03.560287"
+  },
+  {
+    "id": 52,
+    "session_id": "1766855082391-lb5piwyxd",
+    "journey_steps": "[{\"step\":1,\"type\":\"page_view\",\"data\":{\"path\":\"/\"},\"timestamp\":1766855084275,\"timeFromStart\":1884},{\"step\":2,\"type\":\"new_visit\",\"data\":{\"firstTime\":true},\"timestamp\":1766855084276,\"timeFromStart\":1885},{\"step\":3,\"type\":\"page_view\",\"data\":{\"path\":\"/\"},\"timestamp\":1766855087943,\"timeFromStart\":5552},{\"step\":4,\"type\":\"return_visit\",\"data\":{\"visitCount\":2,\"daysSince\":0},\"timestamp\":1766855087944,\"timeFromStart\":5553}]",
+    "outcome": "exited",
+    "total_steps": 4,
+    "duration": 73406,
+    "converted": false,
+    "created_at": "2025-12-27T17:05:56.859814"
+  },
+  {
+    "id": 53,
+    "session_id": "1766942023637-9ovph7q82",
+    "journey_steps": "[{\"step\":1,\"type\":\"page_view\",\"data\":{\"path\":\"/\"},\"timestamp\":1766942028326,\"timeFromStart\":4692},{\"step\":2,\"type\":\"return_visit\",\"data\":{\"visitCount\":3,\"daysSince\":31},\"timestamp\":1766942028328,\"timeFromStart\":4694},{\"step\":3,\"type\":\"page_view\",\"data\":{\"path\":\"/\"},\"timestamp\":1766942028727,\"timeFromStart\":5093},{\"step\":4,\"type\":\"return_visit\",\"data\":{\"visitCount\":4,\"daysSince\":0},\"timestamp\":1766942028728,\"timeFromStart\":5094},{\"step\":5,\"type\":\"exit_intent\",\"data\":{\"name\":{\"timeOnPage\":179,\"scrollDepth\":36,\"lastSection\":\"unknown\"}},\"timestamp\":1766942202171,\"timeFromStart\":178537},{\"step\":6,\"type\":\"exit_intent\",\"data\":{\"name\":{\"timeOnPage\":179,\"scrollDepth\":36,\"lastSection\":\"unknown\"}},\"timestamp\":1766942202172,\"timeFromStart\":178538}]",
+    "outcome": "exited",
+    "total_steps": 6,
+    "duration": 5438658,
+    "converted": false,
+    "created_at": "2025-12-28T18:44:22.841247"
+  },
+  {
+    "id": 54,
+    "session_id": "1766951149109-scdaoov3o",
+    "journey_steps": "[{\"step\":1,\"type\":\"page_view\",\"data\":{\"path\":\"/\"},\"timestamp\":1766951154053,\"timeFromStart\":4957},{\"step\":2,\"type\":\"new_visit\",\"data\":{\"firstTime\":true},\"timestamp\":1766951154056,\"timeFromStart\":4960},{\"step\":3,\"type\":\"page_view\",\"data\":{\"path\":\"/\"},\"timestamp\":1766951154329,\"timeFromStart\":5233},{\"step\":4,\"type\":\"return_visit\",\"data\":{\"visitCount\":2,\"daysSince\":0},\"timestamp\":1766951154335,\"timeFromStart\":5239},{\"step\":5,\"type\":\"device_info\",\"data\":{\"device\":\"desktop\",\"browser\":\"Other\"},\"timestamp\":1766951176246,\"timeFromStart\":27150},{\"step\":6,\"type\":\"device_info\",\"data\":{\"device\":\"desktop\",\"browser\":\"Other\"},\"timestamp\":1766951176247,\"timeFromStart\":27151}]",
+    "outcome": "exited",
+    "total_steps": 6,
+    "duration": 34028,
+    "converted": false,
+    "created_at": "2025-12-28T19:46:23.69596"
+  },
+  {
+    "id": 55,
+    "session_id": "1767204334461-fn6ze96mn",
+    "journey_steps": "[{\"step\":1,\"type\":\"page_view\",\"data\":{\"path\":\"/\"},\"timestamp\":1767204338999,\"timeFromStart\":4540},{\"step\":2,\"type\":\"new_visit\",\"data\":{\"firstTime\":true},\"timestamp\":1767204339002,\"timeFromStart\":4543},{\"step\":3,\"type\":\"page_view\",\"data\":{\"path\":\"/\"},\"timestamp\":1767204339552,\"timeFromStart\":5093},{\"step\":4,\"type\":\"return_visit\",\"data\":{\"visitCount\":2,\"daysSince\":0},\"timestamp\":1767204339553,\"timeFromStart\":5094},{\"step\":5,\"type\":\"exit_intent\",\"data\":{\"name\":{\"timeOnPage\":99,\"scrollDepth\":67,\"lastSection\":\"unknown\"}},\"timestamp\":1767204433950,\"timeFromStart\":99491},{\"step\":6,\"type\":\"exit_intent\",\"data\":{\"name\":{\"timeOnPage\":99,\"scrollDepth\":67,\"lastSection\":\"unknown\"}},\"timestamp\":1767204433951,\"timeFromStart\":99492}]",
+    "outcome": "exited",
+    "total_steps": 6,
+    "duration": 1540283,
+    "converted": false,
+    "created_at": "2025-12-31T18:31:15.069771"
+  },
+  {
+    "id": 56,
+    "session_id": "1767223287048-2la7m0pyb",
+    "journey_steps": "[{\"step\":1,\"type\":\"page_view\",\"data\":{\"path\":\"/\"},\"timestamp\":1767223291943,\"timeFromStart\":4896},{\"step\":2,\"type\":\"new_visit\",\"data\":{\"firstTime\":true},\"timestamp\":1767223291945,\"timeFromStart\":4898},{\"step\":3,\"type\":\"page_view\",\"data\":{\"path\":\"/\"},\"timestamp\":1767223292188,\"timeFromStart\":5141},{\"step\":4,\"type\":\"return_visit\",\"data\":{\"visitCount\":2,\"daysSince\":0},\"timestamp\":1767223292190,\"timeFromStart\":5143},{\"step\":5,\"type\":\"device_info\",\"data\":{\"device\":\"desktop\",\"browser\":\"Chrome\"},\"timestamp\":1767223310794,\"timeFromStart\":23747},{\"step\":6,\"type\":\"device_info\",\"data\":{\"device\":\"desktop\",\"browser\":\"Chrome\"},\"timestamp\":1767223310795,\"timeFromStart\":23748}]",
+    "outcome": "exited",
+    "total_steps": 6,
+    "duration": 31229,
+    "converted": false,
+    "created_at": "2025-12-31T23:21:58.4963"
+  },
+  {
+    "id": 57,
+    "session_id": "1767299120260-bwiv2c39l",
+    "journey_steps": "[{\"step\":1,\"type\":\"page_view\",\"data\":{\"path\":\"/\"},\"timestamp\":1767299121059,\"timeFromStart\":801},{\"step\":2,\"type\":\"new_visit\",\"data\":{\"firstTime\":true},\"timestamp\":1767299121060,\"timeFromStart\":802},{\"step\":3,\"type\":\"page_view\",\"data\":{\"path\":\"/\"},\"timestamp\":1767299124791,\"timeFromStart\":4533},{\"step\":4,\"type\":\"return_visit\",\"data\":{\"visitCount\":2,\"daysSince\":0},\"timestamp\":1767299124793,\"timeFromStart\":4535},{\"step\":5,\"type\":\"exit_intent\",\"data\":{\"name\":{\"timeOnPage\":42,\"scrollDepth\":42,\"lastSection\":\"unknown\"}},\"timestamp\":1767299161833,\"timeFromStart\":41575},{\"step\":6,\"type\":\"exit_intent\",\"data\":{\"name\":{\"timeOnPage\":42,\"scrollDepth\":42,\"lastSection\":\"unknown\"}},\"timestamp\":1767299161834,\"timeFromStart\":41576}]",
+    "outcome": "exited",
+    "total_steps": 6,
+    "duration": 42598,
+    "converted": false,
+    "created_at": "2026-01-01T20:26:03.076198"
+  },
+  {
+    "id": 58,
+    "session_id": "1767309071102-lypkbqlm3",
+    "journey_steps": "[{\"step\":1,\"type\":\"page_view\",\"data\":{\"path\":\"/\"},\"timestamp\":1767309072087,\"timeFromStart\":986},{\"step\":2,\"type\":\"new_visit\",\"data\":{\"firstTime\":true},\"timestamp\":1767309072092,\"timeFromStart\":991},{\"step\":3,\"type\":\"page_view\",\"data\":{\"path\":\"/\"},\"timestamp\":1767309072309,\"timeFromStart\":1208},{\"step\":4,\"type\":\"return_visit\",\"data\":{\"visitCount\":2,\"daysSince\":0},\"timestamp\":1767309072311,\"timeFromStart\":1210},{\"step\":5,\"type\":\"exit_intent\",\"data\":{\"name\":{\"timeOnPage\":147,\"scrollDepth\":100,\"lastSection\":\"unknown\"}},\"timestamp\":1767309217929,\"timeFromStart\":146828},{\"step\":6,\"type\":\"exit_intent\",\"data\":{\"name\":{\"timeOnPage\":147,\"scrollDepth\":100,\"lastSection\":\"unknown\"}},\"timestamp\":1767309217930,\"timeFromStart\":146829}]",
+    "outcome": "exited",
+    "total_steps": 6,
+    "duration": 287757,
+    "converted": false,
+    "created_at": "2026-01-01T23:15:59.460718"
+  },
+  {
+    "id": 59,
+    "session_id": "1767311671584-1nxixc17s",
+    "journey_steps": "[{\"step\":1,\"type\":\"page_view\",\"data\":{\"path\":\"/\"},\"timestamp\":1767311676859,\"timeFromStart\":5276},{\"step\":2,\"type\":\"new_visit\",\"data\":{\"firstTime\":true},\"timestamp\":1767311676861,\"timeFromStart\":5278},{\"step\":3,\"type\":\"page_view\",\"data\":{\"path\":\"/\"},\"timestamp\":1767311677108,\"timeFromStart\":5525},{\"step\":4,\"type\":\"return_visit\",\"data\":{\"visitCount\":2,\"daysSince\":0},\"timestamp\":1767311677109,\"timeFromStart\":5526},{\"step\":5,\"type\":\"device_info\",\"data\":{\"device\":\"desktop\",\"browser\":\"Safari\"},\"timestamp\":1767311696268,\"timeFromStart\":24685},{\"step\":6,\"type\":\"device_info\",\"data\":{\"device\":\"desktop\",\"browser\":\"Safari\"},\"timestamp\":1767311696268,\"timeFromStart\":24685}]",
+    "outcome": "exited",
+    "total_steps": 6,
+    "duration": 32123,
+    "converted": false,
+    "created_at": "2026-01-01T23:55:03.93117"
+  },
+  {
+    "id": 60,
+    "session_id": "1767379912131-j8gaekaxe",
+    "journey_steps": "[{\"step\":1,\"type\":\"page_view\",\"data\":{\"path\":\"/\"},\"timestamp\":1767379916544,\"timeFromStart\":4414},{\"step\":2,\"type\":\"new_visit\",\"data\":{\"firstTime\":true},\"timestamp\":1767379916546,\"timeFromStart\":4416},{\"step\":3,\"type\":\"page_view\",\"data\":{\"path\":\"/\"},\"timestamp\":1767379916878,\"timeFromStart\":4748},{\"step\":4,\"type\":\"return_visit\",\"data\":{\"visitCount\":2,\"daysSince\":0},\"timestamp\":1767379916879,\"timeFromStart\":4749},{\"step\":5,\"type\":\"exit_intent\",\"data\":{\"name\":{\"timeOnPage\":117,\"scrollDepth\":100,\"lastSection\":\"unknown\"}},\"timestamp\":1767380029428,\"timeFromStart\":117298},{\"step\":6,\"type\":\"exit_intent\",\"data\":{\"name\":{\"timeOnPage\":117,\"scrollDepth\":100,\"lastSection\":\"unknown\"}},\"timestamp\":1767380029428,\"timeFromStart\":117298}]",
+    "outcome": "exited",
+    "total_steps": 6,
+    "duration": 3753139,
+    "converted": false,
+    "created_at": "2026-01-02T19:54:28.399847"
+  },
+  {
+    "id": 61,
+    "session_id": "1767398891570-fsygeqtk8",
+    "journey_steps": "[{\"step\":1,\"type\":\"page_view\",\"data\":{\"path\":\"/\"},\"timestamp\":1767398892804,\"timeFromStart\":1238},{\"step\":2,\"type\":\"new_visit\",\"data\":{\"firstTime\":true},\"timestamp\":1767398892806,\"timeFromStart\":1240},{\"step\":3,\"type\":\"page_view\",\"data\":{\"path\":\"/\"},\"timestamp\":1767398892986,\"timeFromStart\":1420},{\"step\":4,\"type\":\"return_visit\",\"data\":{\"visitCount\":2,\"daysSince\":0},\"timestamp\":1767398892987,\"timeFromStart\":1421},{\"step\":5,\"type\":\"exit_intent\",\"data\":{\"name\":{\"timeOnPage\":37,\"scrollDepth\":44,\"lastSection\":\"unknown\"}},\"timestamp\":1767398928889,\"timeFromStart\":37323},{\"step\":6,\"type\":\"exit_intent\",\"data\":{\"name\":{\"timeOnPage\":37,\"scrollDepth\":44,\"lastSection\":\"unknown\"}},\"timestamp\":1767398928889,\"timeFromStart\":37323}]",
+    "outcome": "exited",
+    "total_steps": 6,
+    "duration": 2040491,
+    "converted": false,
+    "created_at": "2026-01-03T00:42:12.234675"
+  },
+  {
+    "id": 62,
+    "session_id": "1767400849772-mlvec58hg",
+    "journey_steps": "[{\"step\":1,\"type\":\"page_view\",\"data\":{\"path\":\"/\"},\"timestamp\":1767400850088,\"timeFromStart\":318},{\"step\":2,\"type\":\"return_visit\",\"data\":{\"visitCount\":3,\"daysSince\":0},\"timestamp\":1767400850089,\"timeFromStart\":319},{\"step\":3,\"type\":\"exit_intent\",\"data\":{\"name\":{\"timeOnPage\":2,\"scrollDepth\":0,\"lastSection\":\"unknown\"}},\"timestamp\":1767400851928,\"timeFromStart\":2158},{\"step\":4,\"type\":\"page_view\",\"data\":{\"path\":\"/\"},\"timestamp\":1767400853783,\"timeFromStart\":4013},{\"step\":5,\"type\":\"return_visit\",\"data\":{\"visitCount\":4,\"daysSince\":0},\"timestamp\":1767400853784,\"timeFromStart\":4014},{\"step\":6,\"type\":\"exit_intent\",\"data\":{\"name\":{\"timeOnPage\":11,\"scrollDepth\":45,\"lastSection\":\"unknown\"}},\"timestamp\":1767400861059,\"timeFromStart\":11289}]",
+    "outcome": "exited",
+    "total_steps": 6,
+    "duration": 82884,
+    "converted": false,
+    "created_at": "2026-01-03T00:42:12.811783"
+  },
+  {
+    "id": 63,
+    "session_id": "1767400900876-3my7i04n6",
+    "journey_steps": "[{\"step\":1,\"type\":\"page_view\",\"data\":{\"path\":\"/\"},\"timestamp\":1767400901214,\"timeFromStart\":338},{\"step\":2,\"type\":\"new_visit\",\"data\":{\"firstTime\":true},\"timestamp\":1767400901216,\"timeFromStart\":340},{\"step\":3,\"type\":\"page_view\",\"data\":{\"path\":\"/\"},\"timestamp\":1767400901390,\"timeFromStart\":514},{\"step\":4,\"type\":\"return_visit\",\"data\":{\"visitCount\":2,\"daysSince\":0},\"timestamp\":1767400901391,\"timeFromStart\":515},{\"step\":5,\"type\":\"device_info\",\"data\":{\"device\":\"mobile\",\"browser\":\"Chrome\"},\"timestamp\":1767400902928,\"timeFromStart\":2052},{\"step\":6,\"type\":\"device_info\",\"data\":{\"device\":\"mobile\",\"browser\":\"Chrome\"},\"timestamp\":1767400902928,\"timeFromStart\":2052},{\"step\":7,\"type\":\"device_info\",\"data\":{\"device\":\"desktop\",\"browser\":\"Chrome\"},\"timestamp\":1767400925926,\"timeFromStart\":25050},{\"step\":8,\"type\":\"device_info\",\"data\":{\"device\":\"desktop\",\"browser\":\"Chrome\"},\"timestamp\":1767400925926,\"timeFromStart\":25050}]",
+    "outcome": "exited",
+    "total_steps": 8,
+    "duration": 31913,
+    "converted": false,
+    "created_at": "2026-01-03T00:42:12.916176"
+  },
+  {
+    "id": 64,
+    "session_id": "1767466705900-uh66nvu46",
+    "journey_steps": "[{\"step\":1,\"type\":\"page_view\",\"data\":{\"path\":\"/\"},\"timestamp\":1767466706201,\"timeFromStart\":302},{\"step\":2,\"type\":\"new_visit\",\"data\":{\"firstTime\":true},\"timestamp\":1767466706204,\"timeFromStart\":305},{\"step\":3,\"type\":\"page_view\",\"data\":{\"path\":\"/\"},\"timestamp\":1767466706605,\"timeFromStart\":706},{\"step\":4,\"type\":\"return_visit\",\"data\":{\"visitCount\":2,\"daysSince\":0},\"timestamp\":1767466706606,\"timeFromStart\":707},{\"step\":5,\"type\":\"device_info\",\"data\":{\"device\":\"mobile\",\"browser\":\"Chrome\"},\"timestamp\":1767466708665,\"timeFromStart\":2766},{\"step\":6,\"type\":\"device_info\",\"data\":{\"device\":\"mobile\",\"browser\":\"Chrome\"},\"timestamp\":1767466708666,\"timeFromStart\":2767},{\"step\":7,\"type\":\"device_info\",\"data\":{\"device\":\"desktop\",\"browser\":\"Chrome\"},\"timestamp\":1767466731667,\"timeFromStart\":25768},{\"step\":8,\"type\":\"device_info\",\"data\":{\"device\":\"desktop\",\"browser\":\"Chrome\"},\"timestamp\":1767466731669,\"timeFromStart\":25770}]",
+    "outcome": "exited",
+    "total_steps": 8,
+    "duration": 33270,
+    "converted": false,
+    "created_at": "2026-01-03T18:59:00.031305"
+  },
+  {
+    "id": 65,
+    "session_id": "1767493120515-lsp8r7pzp",
+    "journey_steps": "[{\"step\":1,\"type\":\"page_view\",\"data\":{\"path\":\"/\"},\"timestamp\":1767493121580,\"timeFromStart\":1077},{\"step\":2,\"type\":\"new_visit\",\"data\":{\"firstTime\":true},\"timestamp\":1767493121588,\"timeFromStart\":1085},{\"step\":3,\"type\":\"page_view\",\"data\":{\"path\":\"/\"},\"timestamp\":1767493121861,\"timeFromStart\":1358},{\"step\":4,\"type\":\"return_visit\",\"data\":{\"visitCount\":2,\"daysSince\":0},\"timestamp\":1767493121866,\"timeFromStart\":1363}]",
+    "outcome": "exited",
+    "total_steps": 4,
+    "duration": 52369,
+    "converted": false,
+    "created_at": "2026-01-04T02:15:16.294136"
+  },
+  {
+    "id": 66,
+    "session_id": "1767493809478-mtgyvyb10",
+    "journey_steps": "[{\"step\":1,\"type\":\"page_view\",\"data\":{\"path\":\"/\"},\"timestamp\":1767493810555,\"timeFromStart\":1080},{\"step\":2,\"type\":\"new_visit\",\"data\":{\"firstTime\":true},\"timestamp\":1767493810564,\"timeFromStart\":1089},{\"step\":3,\"type\":\"page_view\",\"data\":{\"path\":\"/\"},\"timestamp\":1767493810732,\"timeFromStart\":1257},{\"step\":4,\"type\":\"return_visit\",\"data\":{\"visitCount\":2,\"daysSince\":0},\"timestamp\":1767493810736,\"timeFromStart\":1261}]",
+    "outcome": "exited",
+    "total_steps": 4,
+    "duration": 5671,
+    "converted": false,
+    "created_at": "2026-01-04T02:25:58.405632"
+  },
+  {
+    "id": 67,
+    "session_id": "1767500405635-62rogeldw",
+    "journey_steps": "[{\"step\":1,\"type\":\"page_view\",\"data\":{\"path\":\"/\"},\"timestamp\":1767500406066,\"timeFromStart\":431},{\"step\":2,\"type\":\"new_visit\",\"data\":{\"firstTime\":true},\"timestamp\":1767500406068,\"timeFromStart\":433},{\"step\":3,\"type\":\"page_view\",\"data\":{\"path\":\"/\"},\"timestamp\":1767500406233,\"timeFromStart\":598},{\"step\":4,\"type\":\"return_visit\",\"data\":{\"visitCount\":2,\"daysSince\":0},\"timestamp\":1767500406234,\"timeFromStart\":599},{\"step\":5,\"type\":\"device_info\",\"data\":{\"device\":\"mobile\",\"browser\":\"Safari\"},\"timestamp\":1767500408137,\"timeFromStart\":2502},{\"step\":6,\"type\":\"device_info\",\"data\":{\"device\":\"mobile\",\"browser\":\"Safari\"},\"timestamp\":1767500408138,\"timeFromStart\":2503},{\"step\":7,\"type\":\"device_info\",\"data\":{\"device\":\"desktop\",\"browser\":\"Safari\"},\"timestamp\":1767500431137,\"timeFromStart\":25502},{\"step\":8,\"type\":\"device_info\",\"data\":{\"device\":\"desktop\",\"browser\":\"Safari\"},\"timestamp\":1767500431137,\"timeFromStart\":25502}]",
+    "outcome": "exited",
+    "total_steps": 8,
+    "duration": 32484,
+    "converted": false,
+    "created_at": "2026-01-04T04:20:38.256617"
+  },
+  {
+    "id": 68,
+    "session_id": "1767543375815-73h5icryd",
+    "journey_steps": "[{\"step\":1,\"type\":\"page_view\",\"data\":{\"path\":\"/\"},\"timestamp\":1767543376741,\"timeFromStart\":927},{\"step\":2,\"type\":\"new_visit\",\"data\":{\"firstTime\":true},\"timestamp\":1767543376743,\"timeFromStart\":929},{\"step\":3,\"type\":\"page_view\",\"data\":{\"path\":\"/\"},\"timestamp\":1767543377524,\"timeFromStart\":1710},{\"step\":4,\"type\":\"return_visit\",\"data\":{\"visitCount\":2,\"daysSince\":0},\"timestamp\":1767543377526,\"timeFromStart\":1712},{\"step\":5,\"type\":\"device_info\",\"data\":{\"device\":\"mobile\",\"browser\":\"Safari\"},\"timestamp\":1767543378016,\"timeFromStart\":2202},{\"step\":6,\"type\":\"device_info\",\"data\":{\"device\":\"desktop\",\"browser\":\"Safari\"},\"timestamp\":1767543400015,\"timeFromStart\":24201},{\"step\":7,\"type\":\"device_info\",\"data\":{\"device\":\"desktop\",\"browser\":\"Safari\"},\"timestamp\":1767543400016,\"timeFromStart\":24202}]",
+    "outcome": "exited",
+    "total_steps": 7,
+    "duration": 31131,
+    "converted": false,
+    "created_at": "2026-01-04T16:16:47.110842"
+  },
+  {
+    "id": 69,
+    "session_id": "1767557626556-3yuo6lnib",
+    "journey_steps": "[{\"step\":1,\"type\":\"page_view\",\"data\":{\"path\":\"/\"},\"timestamp\":1767557626927,\"timeFromStart\":383},{\"step\":2,\"type\":\"new_visit\",\"data\":{\"firstTime\":true},\"timestamp\":1767557626929,\"timeFromStart\":385},{\"step\":3,\"type\":\"page_view\",\"data\":{\"path\":\"/\"},\"timestamp\":1767557630643,\"timeFromStart\":4099},{\"step\":4,\"type\":\"return_visit\",\"data\":{\"visitCount\":2,\"daysSince\":0},\"timestamp\":1767557630645,\"timeFromStart\":4101},{\"step\":5,\"type\":\"exit_intent\",\"data\":{\"name\":{\"timeOnPage\":193,\"scrollDepth\":35,\"lastSection\":\"unknown\"}},\"timestamp\":1767557819603,\"timeFromStart\":193060},{\"step\":6,\"type\":\"exit_intent\",\"data\":{\"name\":{\"timeOnPage\":193,\"scrollDepth\":35,\"lastSection\":\"unknown\"}},\"timestamp\":1767557819604,\"timeFromStart\":193060}]",
+    "outcome": "exited",
+    "total_steps": 6,
+    "duration": 342493,
+    "converted": false,
+    "created_at": "2026-01-04T20:19:29.562906"
+  },
+  {
+    "id": 70,
+    "session_id": "1767587379839-eco93vxay",
+    "journey_steps": "[{\"step\":1,\"type\":\"page_view\",\"data\":{\"path\":\"/\"},\"timestamp\":1767587380158,\"timeFromStart\":321},{\"step\":2,\"type\":\"new_visit\",\"data\":{\"firstTime\":true},\"timestamp\":1767587380160,\"timeFromStart\":323},{\"step\":3,\"type\":\"page_view\",\"data\":{\"path\":\"/\"},\"timestamp\":1767587380371,\"timeFromStart\":534},{\"step\":4,\"type\":\"return_visit\",\"data\":{\"visitCount\":2,\"daysSince\":0},\"timestamp\":1767587380373,\"timeFromStart\":536},{\"step\":5,\"type\":\"exit_intent\",\"data\":{\"name\":{\"timeOnPage\":303,\"scrollDepth\":100,\"lastSection\":\"unknown\"}},\"timestamp\":1767587682575,\"timeFromStart\":302738},{\"step\":6,\"type\":\"exit_intent\",\"data\":{\"name\":{\"timeOnPage\":303,\"scrollDepth\":100,\"lastSection\":\"unknown\"}},\"timestamp\":1767587682576,\"timeFromStart\":302739}]",
+    "outcome": "exited",
+    "total_steps": 6,
+    "duration": 305221,
+    "converted": false,
+    "created_at": "2026-01-05T04:34:45.935279"
+  },
+  {
+    "id": 71,
+    "session_id": "1767608810638-g44s3807e",
+    "journey_steps": "[{\"step\":1,\"type\":\"page_view\",\"data\":{\"path\":\"/\"},\"timestamp\":1767608815779,\"timeFromStart\":5142},{\"step\":2,\"type\":\"new_visit\",\"data\":{\"firstTime\":true},\"timestamp\":1767608815791,\"timeFromStart\":5154},{\"step\":3,\"type\":\"page_view\",\"data\":{\"path\":\"/\"},\"timestamp\":1767608816006,\"timeFromStart\":5369},{\"step\":4,\"type\":\"return_visit\",\"data\":{\"visitCount\":2,\"daysSince\":0},\"timestamp\":1767608816008,\"timeFromStart\":5371},{\"step\":5,\"type\":\"device_info\",\"data\":{\"device\":\"desktop\",\"browser\":\"Safari\"},\"timestamp\":1767608835147,\"timeFromStart\":24510},{\"step\":6,\"type\":\"device_info\",\"data\":{\"device\":\"desktop\",\"browser\":\"Safari\"},\"timestamp\":1767608835148,\"timeFromStart\":24511}]",
+    "outcome": "exited",
+    "total_steps": 6,
+    "duration": 31665,
+    "converted": false,
+    "created_at": "2026-01-05T10:27:22.505713"
+  },
+  {
+    "id": 72,
+    "session_id": "1767575218796-jzyfklglo",
+    "journey_steps": "[{\"step\":1,\"type\":\"page_view\",\"data\":{\"path\":\"/\"},\"timestamp\":1767575219210,\"timeFromStart\":440},{\"step\":2,\"type\":\"new_visit\",\"data\":{\"firstTime\":true},\"timestamp\":1767575219213,\"timeFromStart\":443},{\"step\":3,\"type\":\"page_view\",\"data\":{\"path\":\"/\"},\"timestamp\":1767575219520,\"timeFromStart\":750},{\"step\":4,\"type\":\"return_visit\",\"data\":{\"visitCount\":2,\"daysSince\":0},\"timestamp\":1767575219525,\"timeFromStart\":755},{\"step\":5,\"type\":\"exit_intent\",\"data\":{\"name\":{\"timeOnPage\":96,\"scrollDepth\":77,\"lastSection\":\"unknown\"}},\"timestamp\":1767575314468,\"timeFromStart\":95698},{\"step\":6,\"type\":\"exit_intent\",\"data\":{\"name\":{\"timeOnPage\":96,\"scrollDepth\":77,\"lastSection\":\"unknown\"}},\"timestamp\":1767575314469,\"timeFromStart\":95699}]",
+    "outcome": "exited",
+    "total_steps": 6,
+    "duration": 52911381,
+    "converted": false,
+    "created_at": "2026-01-05T15:48:50.59102"
+  },
+  {
+    "id": 74,
+    "session_id": "1767638188205-bvf8wx3us",
+    "journey_steps": "[{\"step\":1,\"type\":\"page_view\",\"data\":{\"path\":\"/\"},\"timestamp\":1767638188494,\"timeFromStart\":296},{\"step\":2,\"type\":\"new_visit\",\"data\":{\"firstTime\":true},\"timestamp\":1767638188497,\"timeFromStart\":299},{\"step\":3,\"type\":\"page_view\",\"data\":{\"path\":\"/\"},\"timestamp\":1767638188823,\"timeFromStart\":625},{\"step\":4,\"type\":\"return_visit\",\"data\":{\"visitCount\":2,\"daysSince\":0},\"timestamp\":1767638188824,\"timeFromStart\":626},{\"step\":5,\"type\":\"exit_intent\",\"data\":{\"name\":{\"timeOnPage\":238,\"scrollDepth\":48,\"lastSection\":\"unknown\"}},\"timestamp\":1767638426658,\"timeFromStart\":238460},{\"step\":6,\"type\":\"exit_intent\",\"data\":{\"name\":{\"timeOnPage\":238,\"scrollDepth\":48,\"lastSection\":\"unknown\"}},\"timestamp\":1767638426659,\"timeFromStart\":238461}]",
+    "outcome": "exited",
+    "total_steps": 6,
+    "duration": 490325,
+    "converted": false,
+    "created_at": "2026-01-05T18:44:38.559265"
+  },
+  {
+    "id": 73,
+    "session_id": "1767634104477-jo7uehuoh",
+    "journey_steps": "[{\"step\":1,\"type\":\"page_view\",\"data\":{\"path\":\"/\"},\"timestamp\":1767634104825,\"timeFromStart\":356},{\"step\":2,\"type\":\"new_visit\",\"data\":{\"firstTime\":true},\"timestamp\":1767634104827,\"timeFromStart\":358},{\"step\":3,\"type\":\"page_view\",\"data\":{\"path\":\"/\"},\"timestamp\":1767634104970,\"timeFromStart\":501},{\"step\":4,\"type\":\"return_visit\",\"data\":{\"visitCount\":2,\"daysSince\":0},\"timestamp\":1767634104971,\"timeFromStart\":502},{\"step\":5,\"type\":\"device_info\",\"data\":{\"device\":\"desktop\",\"browser\":\"Chrome\"},\"timestamp\":1767634106849,\"timeFromStart\":2380},{\"step\":6,\"type\":\"device_info\",\"data\":{\"device\":\"desktop\",\"browser\":\"Chrome\"},\"timestamp\":1767634106849,\"timeFromStart\":2380},{\"step\":7,\"type\":\"exit_intent\",\"data\":{\"name\":{\"timeOnPage\":394,\"scrollDepth\":100,\"lastSection\":\"unknown\"}},\"timestamp\":1767634498276,\"timeFromStart\":393807},{\"step\":8,\"type\":\"exit_intent\",\"data\":{\"name\":{\"timeOnPage\":394,\"scrollDepth\":100,\"lastSection\":\"unknown\"}},\"timestamp\":1767634498276,\"timeFromStart\":393807}]",
+    "outcome": "exited",
+    "total_steps": 8,
+    "duration": 599342,
+    "converted": false,
+    "created_at": "2026-01-05T17:37:06.016081"
+  },
+  {
+    "id": 75,
+    "session_id": "1767631667157-t7h5oxrvu",
+    "journey_steps": "[{\"step\":1,\"type\":\"page_view\",\"data\":{\"path\":\"/\"},\"timestamp\":1767631667816,\"timeFromStart\":690},{\"step\":2,\"type\":\"return_visit\",\"data\":{\"visitCount\":3,\"daysSince\":1},\"timestamp\":1767631667823,\"timeFromStart\":697},{\"step\":3,\"type\":\"page_view\",\"data\":{\"path\":\"/\"},\"timestamp\":1767631668197,\"timeFromStart\":1071},{\"step\":4,\"type\":\"return_visit\",\"data\":{\"visitCount\":4,\"daysSince\":0},\"timestamp\":1767631668199,\"timeFromStart\":1073},{\"step\":5,\"type\":\"exit_intent\",\"data\":{\"name\":{\"timeOnPage\":580,\"scrollDepth\":44,\"lastSection\":\"unknown\"}},\"timestamp\":1767632247368,\"timeFromStart\":580242},{\"step\":6,\"type\":\"exit_intent\",\"data\":{\"name\":{\"timeOnPage\":580,\"scrollDepth\":44,\"lastSection\":\"unknown\"}},\"timestamp\":1767632247369,\"timeFromStart\":580243}]",
+    "outcome": "exited",
+    "total_steps": 6,
+    "duration": 8236420,
+    "converted": false,
+    "created_at": "2026-01-05T19:05:03.79425"
+  },
+  {
+    "id": 76,
+    "session_id": "1767637180693-htlbg9i79",
+    "journey_steps": "[{\"step\":1,\"type\":\"page_view\",\"data\":{\"path\":\"/\"},\"timestamp\":1767637181153,\"timeFromStart\":461},{\"step\":2,\"type\":\"return_visit\",\"data\":{\"visitCount\":3,\"daysSince\":4},\"timestamp\":1767637181155,\"timeFromStart\":463},{\"step\":3,\"type\":\"page_view\",\"data\":{\"path\":\"/\"},\"timestamp\":1767637181364,\"timeFromStart\":672},{\"step\":4,\"type\":\"return_visit\",\"data\":{\"visitCount\":4,\"daysSince\":0},\"timestamp\":1767637181366,\"timeFromStart\":674},{\"step\":5,\"type\":\"exit_intent\",\"data\":{\"name\":{\"timeOnPage\":18,\"scrollDepth\":46,\"lastSection\":\"unknown\"}},\"timestamp\":1767637198693,\"timeFromStart\":18001},{\"step\":6,\"type\":\"exit_intent\",\"data\":{\"name\":{\"timeOnPage\":18,\"scrollDepth\":46,\"lastSection\":\"unknown\"}},\"timestamp\":1767637198694,\"timeFromStart\":18002}]",
+    "outcome": "exited",
+    "total_steps": 6,
+    "duration": 7924142,
+    "converted": false,
+    "created_at": "2026-01-05T20:31:45.023474"
+  },
+  {
+    "id": 77,
+    "session_id": "1767645385462-ivquzfe9e",
+    "journey_steps": "[{\"step\":1,\"type\":\"page_view\",\"data\":{\"path\":\"/\"},\"timestamp\":1767645385694,\"timeFromStart\":237},{\"step\":2,\"type\":\"new_visit\",\"data\":{\"firstTime\":true},\"timestamp\":1767645385695,\"timeFromStart\":238},{\"step\":3,\"type\":\"page_view\",\"data\":{\"path\":\"/\"},\"timestamp\":1767645385871,\"timeFromStart\":414},{\"step\":4,\"type\":\"return_visit\",\"data\":{\"visitCount\":2,\"daysSince\":0},\"timestamp\":1767645385872,\"timeFromStart\":415},{\"step\":5,\"type\":\"device_info\",\"data\":{\"device\":\"desktop\",\"browser\":\"Chrome\"},\"timestamp\":1767645385923,\"timeFromStart\":466},{\"step\":6,\"type\":\"exit_intent\",\"data\":{\"name\":{\"timeOnPage\":132,\"scrollDepth\":2,\"lastSection\":\"unknown\"}},\"timestamp\":1767645517245,\"timeFromStart\":131788},{\"step\":7,\"type\":\"exit_intent\",\"data\":{\"name\":{\"timeOnPage\":132,\"scrollDepth\":2,\"lastSection\":\"unknown\"}},\"timestamp\":1767645517245,\"timeFromStart\":131788}]",
+    "outcome": "exited",
+    "total_steps": 7,
+    "duration": 1042579,
+    "converted": false,
+    "created_at": "2026-01-05T20:53:48.197233"
+  },
+  {
+    "id": 78,
+    "session_id": "1767648690395-799dv5uzf",
+    "journey_steps": "[{\"step\":1,\"type\":\"page_view\",\"data\":{\"path\":\"/\"},\"timestamp\":1767648690668,\"timeFromStart\":282},{\"step\":2,\"type\":\"return_visit\",\"data\":{\"visitCount\":3,\"daysSince\":36},\"timestamp\":1767648690669,\"timeFromStart\":283},{\"step\":3,\"type\":\"page_view\",\"data\":{\"path\":\"/\"},\"timestamp\":1767648691052,\"timeFromStart\":666},{\"step\":4,\"type\":\"return_visit\",\"data\":{\"visitCount\":4,\"daysSince\":0},\"timestamp\":1767648691058,\"timeFromStart\":672},{\"step\":5,\"type\":\"exit_intent\",\"data\":{\"name\":{\"timeOnPage\":43,\"scrollDepth\":32,\"lastSection\":\"unknown\"}},\"timestamp\":1767648733701,\"timeFromStart\":43315},{\"step\":6,\"type\":\"exit_intent\",\"data\":{\"name\":{\"timeOnPage\":43,\"scrollDepth\":32,\"lastSection\":\"unknown\"}},\"timestamp\":1767648733701,\"timeFromStart\":43315}]",
+    "outcome": "exited",
+    "total_steps": 6,
+    "duration": 1384705,
+    "converted": false,
+    "created_at": "2026-01-05T21:54:35.342122"
+  },
+  {
+    "id": 79,
+    "session_id": "1767649419697-vzdimtl7p",
+    "journey_steps": "[{\"step\":1,\"type\":\"page_view\",\"data\":{\"path\":\"/\"},\"timestamp\":1767649420096,\"timeFromStart\":399},{\"step\":2,\"type\":\"return_visit\",\"data\":{\"visitCount\":3,\"daysSince\":0},\"timestamp\":1767649420097,\"timeFromStart\":400},{\"step\":3,\"type\":\"page_view\",\"data\":{\"path\":\"/\"},\"timestamp\":1767649420389,\"timeFromStart\":692},{\"step\":4,\"type\":\"return_visit\",\"data\":{\"visitCount\":4,\"daysSince\":0},\"timestamp\":1767649420390,\"timeFromStart\":693},{\"step\":5,\"type\":\"exit_intent\",\"data\":{\"name\":{\"timeOnPage\":81,\"scrollDepth\":3,\"lastSection\":\"unknown\"}},\"timestamp\":1767649500987,\"timeFromStart\":81290},{\"step\":6,\"type\":\"exit_intent\",\"data\":{\"name\":{\"timeOnPage\":81,\"scrollDepth\":3,\"lastSection\":\"unknown\"}},\"timestamp\":1767649500987,\"timeFromStart\":81290}]",
+    "outcome": "exited",
+    "total_steps": 6,
+    "duration": 1378048,
+    "converted": false,
+    "created_at": "2026-01-05T22:06:37.928484"
+  },
+  {
+    "id": 80,
+    "session_id": "1767714978312-8r3qj1x0l",
+    "journey_steps": "[{\"step\":1,\"type\":\"page_view\",\"data\":{\"path\":\"/\"},\"timestamp\":1767714983239,\"timeFromStart\":4929},{\"step\":2,\"type\":\"new_visit\",\"data\":{\"firstTime\":true},\"timestamp\":1767714983242,\"timeFromStart\":4932},{\"step\":3,\"type\":\"page_view\",\"data\":{\"path\":\"/\"},\"timestamp\":1767714983705,\"timeFromStart\":5395},{\"step\":4,\"type\":\"return_visit\",\"data\":{\"visitCount\":2,\"daysSince\":0},\"timestamp\":1767714983708,\"timeFromStart\":5398}]",
+    "outcome": "exited",
+    "total_steps": 4,
+    "duration": 113837,
+    "converted": false,
+    "created_at": "2026-01-06T15:58:11.984701"
+  },
+  {
+    "id": 81,
+    "session_id": "1767791990655-bu7bvj1eh",
+    "journey_steps": "[{\"step\":1,\"type\":\"page_view\",\"data\":{\"path\":\"/\"},\"timestamp\":1767791995545,\"timeFromStart\":4890},{\"step\":2,\"type\":\"new_visit\",\"data\":{\"firstTime\":true},\"timestamp\":1767791995547,\"timeFromStart\":4892},{\"step\":3,\"type\":\"page_view\",\"data\":{\"path\":\"/\"},\"timestamp\":1767791995931,\"timeFromStart\":5276},{\"step\":4,\"type\":\"return_visit\",\"data\":{\"visitCount\":2,\"daysSince\":0},\"timestamp\":1767791995932,\"timeFromStart\":5277},{\"step\":5,\"type\":\"exit_intent\",\"data\":{\"name\":{\"timeOnPage\":258,\"scrollDepth\":99,\"lastSection\":\"unknown\"}},\"timestamp\":1767792248843,\"timeFromStart\":258188},{\"step\":6,\"type\":\"exit_intent\",\"data\":{\"name\":{\"timeOnPage\":258,\"scrollDepth\":99,\"lastSection\":\"unknown\"}},\"timestamp\":1767792248843,\"timeFromStart\":258188}]",
+    "outcome": "exited",
+    "total_steps": 6,
+    "duration": 286761,
+    "converted": false,
+    "created_at": "2026-01-07T13:24:37.64326"
+  },
+  {
+    "id": 82,
+    "session_id": "1767802421341-0ghxq50ji",
+    "journey_steps": "[{\"step\":1,\"type\":\"page_view\",\"data\":{\"path\":\"/\"},\"timestamp\":1767802421767,\"timeFromStart\":426},{\"step\":2,\"type\":\"new_visit\",\"data\":{\"firstTime\":true},\"timestamp\":1767802421769,\"timeFromStart\":428},{\"step\":3,\"type\":\"device_info\",\"data\":{\"device\":\"mobile\",\"browser\":\"Safari\"},\"timestamp\":1767802424230,\"timeFromStart\":2889},{\"step\":4,\"type\":\"page_view\",\"data\":{\"path\":\"/\"},\"timestamp\":1767802425619,\"timeFromStart\":4278},{\"step\":5,\"type\":\"return_visit\",\"data\":{\"visitCount\":2,\"daysSince\":0},\"timestamp\":1767802425620,\"timeFromStart\":4279},{\"step\":6,\"type\":\"device_info\",\"data\":{\"device\":\"desktop\",\"browser\":\"Safari\"},\"timestamp\":1767802448229,\"timeFromStart\":26888},{\"step\":7,\"type\":\"device_info\",\"data\":{\"device\":\"desktop\",\"browser\":\"Safari\"},\"timestamp\":1767802448230,\"timeFromStart\":26889}]",
+    "outcome": "exited",
+    "total_steps": 7,
+    "duration": 33728,
+    "converted": false,
+    "created_at": "2026-01-07T16:14:15.229452"
+  },
+  {
+    "id": 83,
+    "session_id": "1767806578250-1zw7973wo",
+    "journey_steps": "[{\"step\":1,\"type\":\"page_view\",\"data\":{\"path\":\"/\"},\"timestamp\":1767806578475,\"timeFromStart\":226},{\"step\":2,\"type\":\"new_visit\",\"data\":{\"firstTime\":true},\"timestamp\":1767806578476,\"timeFromStart\":227},{\"step\":3,\"type\":\"page_view\",\"data\":{\"path\":\"/\"},\"timestamp\":1767806578678,\"timeFromStart\":429},{\"step\":4,\"type\":\"return_visit\",\"data\":{\"visitCount\":2,\"daysSince\":0},\"timestamp\":1767806578679,\"timeFromStart\":430},{\"step\":5,\"type\":\"exit_intent\",\"data\":{\"name\":{\"timeOnPage\":815,\"scrollDepth\":35,\"lastSection\":\"unknown\"}},\"timestamp\":1767807393017,\"timeFromStart\":814768},{\"step\":6,\"type\":\"exit_intent\",\"data\":{\"name\":{\"timeOnPage\":815,\"scrollDepth\":35,\"lastSection\":\"unknown\"}},\"timestamp\":1767807393017,\"timeFromStart\":814768}]",
+    "outcome": "exited",
+    "total_steps": 6,
+    "duration": 837821,
+    "converted": false,
+    "created_at": "2026-01-07T17:36:56.126267"
+  },
+  {
+    "id": 84,
+    "session_id": "1767809297882-hv0nz8bik",
+    "journey_steps": "[{\"step\":1,\"type\":\"page_view\",\"data\":{\"path\":\"/\"},\"timestamp\":1767809298548,\"timeFromStart\":667},{\"step\":2,\"type\":\"new_visit\",\"data\":{\"firstTime\":true},\"timestamp\":1767809298550,\"timeFromStart\":669},{\"step\":3,\"type\":\"page_view\",\"data\":{\"path\":\"/\"},\"timestamp\":1767809298921,\"timeFromStart\":1040},{\"step\":4,\"type\":\"return_visit\",\"data\":{\"visitCount\":2,\"daysSince\":0},\"timestamp\":1767809298922,\"timeFromStart\":1041},{\"step\":5,\"type\":\"device_info\",\"data\":{\"device\":\"mobile\",\"browser\":\"Safari\"},\"timestamp\":1767809300212,\"timeFromStart\":2331},{\"step\":6,\"type\":\"device_info\",\"data\":{\"device\":\"mobile\",\"browser\":\"Safari\"},\"timestamp\":1767809300212,\"timeFromStart\":2331},{\"step\":7,\"type\":\"device_info\",\"data\":{\"device\":\"desktop\",\"browser\":\"Safari\"},\"timestamp\":1767809323211,\"timeFromStart\":25330},{\"step\":8,\"type\":\"device_info\",\"data\":{\"device\":\"desktop\",\"browser\":\"Safari\"},\"timestamp\":1767809323212,\"timeFromStart\":25331}]",
+    "outcome": "exited",
+    "total_steps": 8,
+    "duration": 31863,
+    "converted": false,
+    "created_at": "2026-01-07T18:08:49.940727"
+  },
+  {
+    "id": 85,
+    "session_id": "1767813531108-lkre8zelm",
+    "journey_steps": "[{\"step\":1,\"type\":\"page_view\",\"data\":{\"path\":\"/\"},\"timestamp\":1767813531794,\"timeFromStart\":687},{\"step\":2,\"type\":\"new_visit\",\"data\":{\"firstTime\":true},\"timestamp\":1767813531796,\"timeFromStart\":689},{\"step\":3,\"type\":\"page_view\",\"data\":{\"path\":\"/\"},\"timestamp\":1767813532019,\"timeFromStart\":912},{\"step\":4,\"type\":\"return_visit\",\"data\":{\"visitCount\":2,\"daysSince\":0},\"timestamp\":1767813532020,\"timeFromStart\":913},{\"step\":5,\"type\":\"device_info\",\"data\":{\"device\":\"mobile\",\"browser\":\"Safari\"},\"timestamp\":1767813533992,\"timeFromStart\":2885},{\"step\":6,\"type\":\"device_info\",\"data\":{\"device\":\"mobile\",\"browser\":\"Safari\"},\"timestamp\":1767813533993,\"timeFromStart\":2886},{\"step\":7,\"type\":\"device_info\",\"data\":{\"device\":\"desktop\",\"browser\":\"Safari\"},\"timestamp\":1767813554991,\"timeFromStart\":23884},{\"step\":8,\"type\":\"device_info\",\"data\":{\"device\":\"desktop\",\"browser\":\"Safari\"},\"timestamp\":1767813554991,\"timeFromStart\":23884}]",
+    "outcome": "exited",
+    "total_steps": 8,
+    "duration": 31260,
+    "converted": false,
+    "created_at": "2026-01-07T19:19:22.635128"
+  },
+  {
+    "id": 86,
+    "session_id": "1767824482585-ke0hyhlq7",
+    "journey_steps": "[{\"step\":1,\"type\":\"page_view\",\"data\":{\"path\":\"/\"},\"timestamp\":1767824487091,\"timeFromStart\":4507},{\"step\":2,\"type\":\"return_visit\",\"data\":{\"visitCount\":5,\"daysSince\":5},\"timestamp\":1767824487093,\"timeFromStart\":4509},{\"step\":3,\"type\":\"page_view\",\"data\":{\"path\":\"/\"},\"timestamp\":1767824487634,\"timeFromStart\":5050},{\"step\":4,\"type\":\"return_visit\",\"data\":{\"visitCount\":6,\"daysSince\":0},\"timestamp\":1767824487635,\"timeFromStart\":5051},{\"step\":5,\"type\":\"exit_intent\",\"data\":{\"name\":{\"timeOnPage\":63,\"scrollDepth\":96,\"lastSection\":\"unknown\"}},\"timestamp\":1767824545643,\"timeFromStart\":63059},{\"step\":6,\"type\":\"exit_intent\",\"data\":{\"name\":{\"timeOnPage\":63,\"scrollDepth\":96,\"lastSection\":\"unknown\"}},\"timestamp\":1767824545644,\"timeFromStart\":63060}]",
+    "outcome": "exited",
+    "total_steps": 6,
+    "duration": 597036,
+    "converted": false,
+    "created_at": "2026-01-07T22:31:19.800695"
+  },
+  {
+    "id": 87,
+    "session_id": "1767797129055-8j65111mf",
+    "journey_steps": "[{\"step\":1,\"type\":\"page_view\",\"data\":{\"path\":\"/\"},\"timestamp\":1767797130101,\"timeFromStart\":1054},{\"step\":2,\"type\":\"return_visit\",\"data\":{\"visitCount\":3,\"daysSince\":2},\"timestamp\":1767797130104,\"timeFromStart\":1057},{\"step\":3,\"type\":\"page_view\",\"data\":{\"path\":\"/\"},\"timestamp\":1767797130384,\"timeFromStart\":1337},{\"step\":4,\"type\":\"return_visit\",\"data\":{\"visitCount\":4,\"daysSince\":0},\"timestamp\":1767797130386,\"timeFromStart\":1339},{\"step\":5,\"type\":\"exit_intent\",\"data\":{\"name\":{\"timeOnPage\":169,\"scrollDepth\":97,\"lastSection\":\"unknown\"}},\"timestamp\":1767797297838,\"timeFromStart\":168791},{\"step\":6,\"type\":\"exit_intent\",\"data\":{\"name\":{\"timeOnPage\":169,\"scrollDepth\":97,\"lastSection\":\"unknown\"}},\"timestamp\":1767797297839,\"timeFromStart\":168792}]",
+    "outcome": "exited",
+    "total_steps": 6,
+    "duration": 43818213,
+    "converted": false,
+    "created_at": "2026-01-08T02:55:51.445345"
+  },
+  {
+    "id": 88,
+    "session_id": "1767854415765-klosprlsg",
+    "journey_steps": "[{\"step\":1,\"type\":\"page_view\",\"data\":{\"path\":\"/\"},\"timestamp\":1767854421547,\"timeFromStart\":5783},{\"step\":2,\"type\":\"new_visit\",\"data\":{\"firstTime\":true},\"timestamp\":1767854421550,\"timeFromStart\":5786},{\"step\":3,\"type\":\"page_view\",\"data\":{\"path\":\"/\"},\"timestamp\":1767854423724,\"timeFromStart\":7960},{\"step\":4,\"type\":\"return_visit\",\"data\":{\"visitCount\":2,\"daysSince\":0},\"timestamp\":1767854423735,\"timeFromStart\":7971},{\"step\":5,\"type\":\"device_info\",\"data\":{\"device\":\"desktop\",\"browser\":\"Safari\"},\"timestamp\":1767854441112,\"timeFromStart\":25348},{\"step\":6,\"type\":\"device_info\",\"data\":{\"device\":\"desktop\",\"browser\":\"Safari\"},\"timestamp\":1767854441114,\"timeFromStart\":25350}]",
+    "outcome": "exited",
+    "total_steps": 6,
+    "duration": 32827,
+    "converted": false,
+    "created_at": "2026-01-08T06:40:48.799437"
+  },
+  {
+    "id": 89,
+    "session_id": "1767881024748-enwzqb3qe",
+    "journey_steps": "[{\"step\":1,\"type\":\"page_view\",\"data\":{\"path\":\"/\"},\"timestamp\":1767881026497,\"timeFromStart\":1751},{\"step\":2,\"type\":\"new_visit\",\"data\":{\"firstTime\":true},\"timestamp\":1767881026503,\"timeFromStart\":1757},{\"step\":3,\"type\":\"page_view\",\"data\":{\"path\":\"/\"},\"timestamp\":1767881026905,\"timeFromStart\":2159},{\"step\":4,\"type\":\"return_visit\",\"data\":{\"visitCount\":2,\"daysSince\":0},\"timestamp\":1767881026907,\"timeFromStart\":2161},{\"step\":5,\"type\":\"exit_intent\",\"data\":{\"name\":{\"timeOnPage\":158,\"scrollDepth\":3,\"lastSection\":\"unknown\"}},\"timestamp\":1767881182995,\"timeFromStart\":158249},{\"step\":6,\"type\":\"exit_intent\",\"data\":{\"name\":{\"timeOnPage\":158,\"scrollDepth\":3,\"lastSection\":\"unknown\"}},\"timestamp\":1767881182996,\"timeFromStart\":158250}]",
+    "outcome": "exited",
+    "total_steps": 6,
+    "duration": 808197,
+    "converted": false,
+    "created_at": "2026-01-08T14:17:13.138038"
+  },
+  {
+    "id": 90,
+    "session_id": "1767884247892-qh7cbo5j6",
+    "journey_steps": "[{\"step\":1,\"type\":\"page_view\",\"data\":{\"path\":\"/\"},\"timestamp\":1767884248547,\"timeFromStart\":658},{\"step\":2,\"type\":\"new_visit\",\"data\":{\"firstTime\":true},\"timestamp\":1767884248548,\"timeFromStart\":659},{\"step\":3,\"type\":\"page_view\",\"data\":{\"path\":\"/\"},\"timestamp\":1767884248977,\"timeFromStart\":1088},{\"step\":4,\"type\":\"return_visit\",\"data\":{\"visitCount\":2,\"daysSince\":0},\"timestamp\":1767884248978,\"timeFromStart\":1089},{\"step\":5,\"type\":\"exit_intent\",\"data\":{\"name\":{\"timeOnPage\":113,\"scrollDepth\":96,\"lastSection\":\"unknown\"}},\"timestamp\":1767884360815,\"timeFromStart\":112926},{\"step\":6,\"type\":\"exit_intent\",\"data\":{\"name\":{\"timeOnPage\":113,\"scrollDepth\":96,\"lastSection\":\"unknown\"}},\"timestamp\":1767884360816,\"timeFromStart\":112927}]",
+    "outcome": "exited",
+    "total_steps": 6,
+    "duration": 114116,
+    "converted": false,
+    "created_at": "2026-01-08T14:59:22.248058"
+  },
+  {
+    "id": 91,
+    "session_id": "1767903058185-md5ozdyf6",
+    "journey_steps": "[{\"step\":1,\"type\":\"page_view\",\"data\":{\"path\":\"/\"},\"timestamp\":1767903059652,\"timeFromStart\":1469},{\"step\":2,\"type\":\"new_visit\",\"data\":{\"firstTime\":true},\"timestamp\":1767903059658,\"timeFromStart\":1475},{\"step\":3,\"type\":\"page_view\",\"data\":{\"path\":\"/\"},\"timestamp\":1767903059866,\"timeFromStart\":1683},{\"step\":4,\"type\":\"return_visit\",\"data\":{\"visitCount\":2,\"daysSince\":0},\"timestamp\":1767903059868,\"timeFromStart\":1685},{\"step\":5,\"type\":\"exit_intent\",\"data\":{\"name\":{\"timeOnPage\":79,\"scrollDepth\":68,\"lastSection\":\"unknown\"}},\"timestamp\":1767903137456,\"timeFromStart\":79273},{\"step\":6,\"type\":\"exit_intent\",\"data\":{\"name\":{\"timeOnPage\":79,\"scrollDepth\":68,\"lastSection\":\"unknown\"}},\"timestamp\":1767903137457,\"timeFromStart\":79274}]",
+    "outcome": "exited",
+    "total_steps": 6,
+    "duration": 81287,
+    "converted": false,
+    "created_at": "2026-01-08T20:12:19.64164"
+  },
+  {
+    "id": 92,
+    "session_id": "1767974587767-88zhj5040",
+    "journey_steps": "[{\"step\":1,\"type\":\"page_view\",\"data\":{\"path\":\"/\"},\"timestamp\":1767974592896,\"timeFromStart\":5133},{\"step\":2,\"type\":\"new_visit\",\"data\":{\"firstTime\":true},\"timestamp\":1767974592897,\"timeFromStart\":5134},{\"step\":3,\"type\":\"page_view\",\"data\":{\"path\":\"/\"},\"timestamp\":1767974593193,\"timeFromStart\":5430},{\"step\":4,\"type\":\"return_visit\",\"data\":{\"visitCount\":2,\"daysSince\":0},\"timestamp\":1767974593194,\"timeFromStart\":5431},{\"step\":5,\"type\":\"exit_intent\",\"data\":{\"name\":{\"timeOnPage\":50,\"scrollDepth\":64,\"lastSection\":\"unknown\"}},\"timestamp\":1767974637382,\"timeFromStart\":49619},{\"step\":6,\"type\":\"exit_intent\",\"data\":{\"name\":{\"timeOnPage\":50,\"scrollDepth\":64,\"lastSection\":\"unknown\"}},\"timestamp\":1767974637383,\"timeFromStart\":49620}]",
+    "outcome": "exited",
+    "total_steps": 6,
+    "duration": 54031,
+    "converted": false,
+    "created_at": "2026-01-09T16:04:02.038391"
+  },
+  {
+    "id": 93,
+    "session_id": "1767976073322-5t71xc6um",
+    "journey_steps": "[{\"step\":1,\"type\":\"page_view\",\"data\":{\"path\":\"/\"},\"timestamp\":1767976075344,\"timeFromStart\":2023},{\"step\":2,\"type\":\"new_visit\",\"data\":{\"firstTime\":true},\"timestamp\":1767976075350,\"timeFromStart\":2029},{\"step\":3,\"type\":\"page_view\",\"data\":{\"path\":\"/\"},\"timestamp\":1767976075383,\"timeFromStart\":2062},{\"step\":4,\"type\":\"return_visit\",\"data\":{\"visitCount\":2,\"daysSince\":0},\"timestamp\":1767976075385,\"timeFromStart\":2064},{\"step\":5,\"type\":\"device_info\",\"data\":{\"device\":\"mobile\",\"browser\":\"Safari\"},\"timestamp\":1767976076009,\"timeFromStart\":2688},{\"step\":6,\"type\":\"device_info\",\"data\":{\"device\":\"mobile\",\"browser\":\"Safari\"},\"timestamp\":1767976076010,\"timeFromStart\":2689},{\"step\":7,\"type\":\"device_info\",\"data\":{\"device\":\"desktop\",\"browser\":\"Safari\"},\"timestamp\":1767976098756,\"timeFromStart\":25435},{\"step\":8,\"type\":\"device_info\",\"data\":{\"device\":\"desktop\",\"browser\":\"Safari\"},\"timestamp\":1767976098756,\"timeFromStart\":25435}]",
+    "outcome": "exited",
+    "total_steps": 8,
+    "duration": 32929,
+    "converted": false,
+    "created_at": "2026-01-09T16:28:26.457149"
+  },
+  {
+    "id": 96,
+    "session_id": "1768152618613-wybye4aer",
+    "journey_steps": "[{\"step\":1,\"type\":\"page_view\",\"data\":{\"path\":\"/\"},\"timestamp\":1768152619057,\"timeFromStart\":444},{\"step\":2,\"type\":\"return_visit\",\"data\":{\"visitCount\":21,\"daysSince\":8},\"timestamp\":1768152619058,\"timeFromStart\":445},{\"step\":3,\"type\":\"page_view\",\"data\":{\"path\":\"/\"},\"timestamp\":1768152619231,\"timeFromStart\":618},{\"step\":4,\"type\":\"return_visit\",\"data\":{\"visitCount\":22,\"daysSince\":0},\"timestamp\":1768152619231,\"timeFromStart\":618},{\"step\":5,\"type\":\"exit_intent\",\"data\":{\"name\":{\"timeOnPage\":173,\"scrollDepth\":36,\"lastSection\":\"unknown\"}},\"timestamp\":1768152792098,\"timeFromStart\":173485},{\"step\":6,\"type\":\"exit_intent\",\"data\":{\"name\":{\"timeOnPage\":173,\"scrollDepth\":36,\"lastSection\":\"unknown\"}},\"timestamp\":1768152792098,\"timeFromStart\":173485}]",
+    "outcome": "exited",
+    "total_steps": 6,
+    "duration": 5202917,
+    "converted": false,
+    "created_at": "2026-01-11T18:57:05.666388"
+  },
+  {
+    "id": 97,
+    "session_id": "1768186497018-e3i7alkf2",
+    "journey_steps": "[{\"step\":1,\"type\":\"page_view\",\"data\":{\"path\":\"/\"},\"timestamp\":1768186501874,\"timeFromStart\":4861},{\"step\":2,\"type\":\"new_visit\",\"data\":{\"firstTime\":true},\"timestamp\":1768186501878,\"timeFromStart\":4865},{\"step\":3,\"type\":\"page_view\",\"data\":{\"path\":\"/\"},\"timestamp\":1768186502177,\"timeFromStart\":5164},{\"step\":4,\"type\":\"return_visit\",\"data\":{\"visitCount\":2,\"daysSince\":0},\"timestamp\":1768186502179,\"timeFromStart\":5166}]",
+    "outcome": "exited",
+    "total_steps": 4,
+    "duration": 271268,
+    "converted": false,
+    "created_at": "2026-01-12T02:59:28.485885"
+  },
+  {
+    "id": 98,
+    "session_id": "1768226755414-i4zamq2jh",
+    "journey_steps": "[{\"step\":1,\"type\":\"page_view\",\"data\":{\"path\":\"/\"},\"timestamp\":1768226756888,\"timeFromStart\":1478},{\"step\":2,\"type\":\"return_visit\",\"data\":{\"visitCount\":9,\"daysSince\":8},\"timestamp\":1768226756896,\"timeFromStart\":1486},{\"step\":3,\"type\":\"page_view\",\"data\":{\"path\":\"/\"},\"timestamp\":1768226757181,\"timeFromStart\":1771},{\"step\":4,\"type\":\"return_visit\",\"data\":{\"visitCount\":10,\"daysSince\":0},\"timestamp\":1768226757186,\"timeFromStart\":1776}]",
+    "outcome": "exited",
+    "total_steps": 4,
+    "duration": 117182,
+    "converted": false,
+    "created_at": "2026-01-12T14:07:50.797648"
+  },
+  {
+    "id": 99,
+    "session_id": "1768231870866-7wmdr96mq",
+    "journey_steps": "[{\"step\":1,\"type\":\"page_view\",\"data\":{\"path\":\"/\"},\"timestamp\":1768231875453,\"timeFromStart\":4588},{\"step\":2,\"type\":\"new_visit\",\"data\":{\"firstTime\":true},\"timestamp\":1768231875455,\"timeFromStart\":4590},{\"step\":3,\"type\":\"page_view\",\"data\":{\"path\":\"/\"},\"timestamp\":1768231875993,\"timeFromStart\":5128},{\"step\":4,\"type\":\"return_visit\",\"data\":{\"visitCount\":2,\"daysSince\":0},\"timestamp\":1768231875995,\"timeFromStart\":5130},{\"step\":5,\"type\":\"device_info\",\"data\":{\"device\":\"desktop\",\"browser\":\"Other\"},\"timestamp\":1768231896695,\"timeFromStart\":25830},{\"step\":6,\"type\":\"device_info\",\"data\":{\"device\":\"desktop\",\"browser\":\"Other\"},\"timestamp\":1768231896695,\"timeFromStart\":25830}]",
+    "outcome": "exited",
+    "total_steps": 6,
+    "duration": 33190,
+    "converted": false,
+    "created_at": "2026-01-12T15:31:44.242709"
+  },
+  {
+    "id": 104,
+    "session_id": "1768334945779-s0xyl8xkw",
+    "journey_steps": "[{\"step\":1,\"type\":\"page_view\",\"data\":{\"path\":\"/\"},\"timestamp\":1768334946233,\"timeFromStart\":455},{\"step\":2,\"type\":\"new_visit\",\"data\":{\"firstTime\":true},\"timestamp\":1768334946235,\"timeFromStart\":457},{\"step\":3,\"type\":\"page_view\",\"data\":{\"path\":\"/\"},\"timestamp\":1768334946334,\"timeFromStart\":556},{\"step\":4,\"type\":\"return_visit\",\"data\":{\"visitCount\":2,\"daysSince\":0},\"timestamp\":1768334946335,\"timeFromStart\":557},{\"step\":5,\"type\":\"exit_intent\",\"data\":{\"name\":{\"timeOnPage\":65,\"scrollDepth\":4,\"lastSection\":\"unknown\"}},\"timestamp\":1768335011157,\"timeFromStart\":65379},{\"step\":6,\"type\":\"exit_intent\",\"data\":{\"name\":{\"timeOnPage\":65,\"scrollDepth\":4,\"lastSection\":\"unknown\"}},\"timestamp\":1768335011157,\"timeFromStart\":65379}]",
+    "outcome": "exited",
+    "total_steps": 6,
+    "duration": 67142,
+    "converted": false,
+    "created_at": "2026-01-13T20:11:33.87697"
+  },
+  {
+    "id": 100,
+    "session_id": "1768248950863-xufj7frao",
+    "journey_steps": "[{\"step\":1,\"type\":\"page_view\",\"data\":{\"path\":\"/\"},\"timestamp\":1768248951878,\"timeFromStart\":1015},{\"step\":2,\"type\":\"new_visit\",\"data\":{\"firstTime\":true},\"timestamp\":1768248951879,\"timeFromStart\":1016},{\"step\":3,\"type\":\"page_view\",\"data\":{\"path\":\"/\"},\"timestamp\":1768248951923,\"timeFromStart\":1060},{\"step\":4,\"type\":\"return_visit\",\"data\":{\"visitCount\":2,\"daysSince\":0},\"timestamp\":1768248951924,\"timeFromStart\":1061},{\"step\":5,\"type\":\"exit_intent\",\"data\":{\"name\":{\"timeOnPage\":38,\"scrollDepth\":66,\"lastSection\":\"unknown\"}},\"timestamp\":1768248988965,\"timeFromStart\":38102},{\"step\":6,\"type\":\"exit_intent\",\"data\":{\"name\":{\"timeOnPage\":38,\"scrollDepth\":66,\"lastSection\":\"unknown\"}},\"timestamp\":1768248988966,\"timeFromStart\":38103}]",
+    "outcome": "exited",
+    "total_steps": 6,
+    "duration": 1280030,
+    "converted": false,
+    "created_at": "2026-01-12T20:18:11.582199"
+  },
+  {
+    "id": 101,
+    "session_id": "1768268331906-ryehbb99a",
+    "journey_steps": "[{\"step\":1,\"type\":\"page_view\",\"data\":{\"path\":\"/\"},\"timestamp\":1768268332708,\"timeFromStart\":803},{\"step\":2,\"type\":\"new_visit\",\"data\":{\"firstTime\":true},\"timestamp\":1768268332711,\"timeFromStart\":806},{\"step\":3,\"type\":\"page_view\",\"data\":{\"path\":\"/\"},\"timestamp\":1768268333019,\"timeFromStart\":1114},{\"step\":4,\"type\":\"return_visit\",\"data\":{\"visitCount\":2,\"daysSince\":0},\"timestamp\":1768268333027,\"timeFromStart\":1122},{\"step\":5,\"type\":\"device_info\",\"data\":{\"device\":\"mobile\",\"browser\":\"Safari\"},\"timestamp\":1768268334730,\"timeFromStart\":2825},{\"step\":6,\"type\":\"device_info\",\"data\":{\"device\":\"mobile\",\"browser\":\"Safari\"},\"timestamp\":1768268334730,\"timeFromStart\":2825},{\"step\":7,\"type\":\"device_info\",\"data\":{\"device\":\"desktop\",\"browser\":\"Safari\"},\"timestamp\":1768268353730,\"timeFromStart\":21825},{\"step\":8,\"type\":\"device_info\",\"data\":{\"device\":\"desktop\",\"browser\":\"Safari\"},\"timestamp\":1768268353730,\"timeFromStart\":21825}]",
+    "outcome": "exited",
+    "total_steps": 8,
+    "duration": 28393,
+    "converted": false,
+    "created_at": "2026-01-13T01:39:20.875789"
+  },
+  {
+    "id": 102,
+    "session_id": "1768329279511-09s9wqa0z",
+    "journey_steps": "[{\"step\":1,\"type\":\"page_view\",\"data\":{\"path\":\"/\"},\"timestamp\":1768329280486,\"timeFromStart\":976},{\"step\":2,\"type\":\"new_visit\",\"data\":{\"firstTime\":true},\"timestamp\":1768329280487,\"timeFromStart\":977},{\"step\":3,\"type\":\"page_view\",\"data\":{\"path\":\"/\"},\"timestamp\":1768329280872,\"timeFromStart\":1362},{\"step\":4,\"type\":\"return_visit\",\"data\":{\"visitCount\":2,\"daysSince\":0},\"timestamp\":1768329280873,\"timeFromStart\":1363},{\"step\":5,\"type\":\"exit_intent\",\"data\":{\"name\":{\"timeOnPage\":75,\"scrollDepth\":77,\"lastSection\":\"unknown\"}},\"timestamp\":1768329354721,\"timeFromStart\":75211},{\"step\":6,\"type\":\"exit_intent\",\"data\":{\"name\":{\"timeOnPage\":75,\"scrollDepth\":77,\"lastSection\":\"unknown\"}},\"timestamp\":1768329354721,\"timeFromStart\":75211}]",
+    "outcome": "exited",
+    "total_steps": 6,
+    "duration": 120783,
+    "converted": false,
+    "created_at": "2026-01-13T18:36:40.86097"
+  },
+  {
+    "id": 103,
+    "session_id": "1768330716692-39fi9crcf",
+    "journey_steps": "[{\"step\":1,\"type\":\"page_view\",\"data\":{\"path\":\"/\"},\"timestamp\":1768330717178,\"timeFromStart\":490},{\"step\":2,\"type\":\"new_visit\",\"data\":{\"firstTime\":true},\"timestamp\":1768330717179,\"timeFromStart\":491},{\"step\":3,\"type\":\"page_view\",\"data\":{\"path\":\"/\"},\"timestamp\":1768330717441,\"timeFromStart\":753},{\"step\":4,\"type\":\"return_visit\",\"data\":{\"visitCount\":2,\"daysSince\":0},\"timestamp\":1768330717442,\"timeFromStart\":754},{\"step\":5,\"type\":\"exit_intent\",\"data\":{\"name\":{\"timeOnPage\":109,\"scrollDepth\":78,\"lastSection\":\"unknown\"}},\"timestamp\":1768330825522,\"timeFromStart\":108834},{\"step\":6,\"type\":\"exit_intent\",\"data\":{\"name\":{\"timeOnPage\":109,\"scrollDepth\":78,\"lastSection\":\"unknown\"}},\"timestamp\":1768330825523,\"timeFromStart\":108835}]",
+    "outcome": "exited",
+    "total_steps": 6,
+    "duration": 114230,
+    "converted": false,
+    "created_at": "2026-01-13T19:00:31.665164"
+  },
+  {
+    "id": 105,
+    "session_id": "1768332695301-30krr5r93",
+    "journey_steps": "[{\"step\":1,\"type\":\"page_view\",\"data\":{\"path\":\"/\"},\"timestamp\":1768332699934,\"timeFromStart\":4641},{\"step\":2,\"type\":\"new_visit\",\"data\":{\"firstTime\":true},\"timestamp\":1768332699936,\"timeFromStart\":4643},{\"step\":3,\"type\":\"page_view\",\"data\":{\"path\":\"/\"},\"timestamp\":1768332700173,\"timeFromStart\":4880},{\"step\":4,\"type\":\"return_visit\",\"data\":{\"visitCount\":2,\"daysSince\":0},\"timestamp\":1768332700174,\"timeFromStart\":4881},{\"step\":5,\"type\":\"exit_intent\",\"data\":{\"name\":{\"timeOnPage\":33,\"scrollDepth\":44,\"lastSection\":\"unknown\"}},\"timestamp\":1768332728610,\"timeFromStart\":33317},{\"step\":6,\"type\":\"exit_intent\",\"data\":{\"name\":{\"timeOnPage\":33,\"scrollDepth\":44,\"lastSection\":\"unknown\"}},\"timestamp\":1768332728611,\"timeFromStart\":33318}]",
+    "outcome": "exited",
+    "total_steps": 6,
+    "duration": 2999356,
+    "converted": false,
+    "created_at": "2026-01-13T20:21:34.92029"
+  },
+  {
+    "id": 106,
+    "session_id": "1768361008895-coly2fcag",
+    "journey_steps": "[{\"step\":1,\"type\":\"page_view\",\"data\":{\"path\":\"/\"},\"timestamp\":1768361013456,\"timeFromStart\":4562},{\"step\":2,\"type\":\"new_visit\",\"data\":{\"firstTime\":true},\"timestamp\":1768361013459,\"timeFromStart\":4565},{\"step\":3,\"type\":\"page_view\",\"data\":{\"path\":\"/\"},\"timestamp\":1768361014049,\"timeFromStart\":5155},{\"step\":4,\"type\":\"return_visit\",\"data\":{\"visitCount\":2,\"daysSince\":0},\"timestamp\":1768361014050,\"timeFromStart\":5156},{\"step\":5,\"type\":\"exit_intent\",\"data\":{\"name\":{\"timeOnPage\":187,\"scrollDepth\":98,\"lastSection\":\"unknown\"}},\"timestamp\":1768361195440,\"timeFromStart\":186546},{\"step\":6,\"type\":\"exit_intent\",\"data\":{\"name\":{\"timeOnPage\":187,\"scrollDepth\":98,\"lastSection\":\"unknown\"}},\"timestamp\":1768361195440,\"timeFromStart\":186546}]",
+    "outcome": "exited",
+    "total_steps": 6,
+    "duration": 4301243,
+    "converted": false,
+    "created_at": "2026-01-14T04:35:10.087135"
+  },
+  {
+    "id": 107,
+    "session_id": "1768417181654-kutat870p",
+    "journey_steps": "[{\"step\":1,\"type\":\"page_view\",\"data\":{\"path\":\"/\"},\"timestamp\":1768417182012,\"timeFromStart\":358},{\"step\":2,\"type\":\"new_visit\",\"data\":{\"firstTime\":true},\"timestamp\":1768417182013,\"timeFromStart\":359},{\"step\":3,\"type\":\"page_view\",\"data\":{\"path\":\"/\"},\"timestamp\":1768417185851,\"timeFromStart\":4197},{\"step\":4,\"type\":\"return_visit\",\"data\":{\"visitCount\":2,\"daysSince\":0},\"timestamp\":1768417185852,\"timeFromStart\":4198},{\"step\":5,\"type\":\"exit_intent\",\"data\":{\"name\":{\"timeOnPage\":1130,\"scrollDepth\":84,\"lastSection\":\"unknown\"}},\"timestamp\":1768418311359,\"timeFromStart\":1129705},{\"step\":6,\"type\":\"exit_intent\",\"data\":{\"name\":{\"timeOnPage\":1130,\"scrollDepth\":84,\"lastSection\":\"unknown\"}},\"timestamp\":1768418311359,\"timeFromStart\":1129705}]",
+    "outcome": "exited",
+    "total_steps": 6,
+    "duration": 8572217,
+    "converted": false,
+    "created_at": "2026-01-14T21:22:34.196283"
+  },
+  {
+    "id": 108,
+    "session_id": "1768426330973-2wweqn2jb",
+    "journey_steps": "[{\"step\":1,\"type\":\"page_view\",\"data\":{\"path\":\"/\"},\"timestamp\":1768426331260,\"timeFromStart\":287},{\"step\":2,\"type\":\"new_visit\",\"data\":{\"firstTime\":true},\"timestamp\":1768426331261,\"timeFromStart\":288},{\"step\":3,\"type\":\"page_view\",\"data\":{\"path\":\"/\"},\"timestamp\":1768426331437,\"timeFromStart\":464},{\"step\":4,\"type\":\"return_visit\",\"data\":{\"visitCount\":2,\"daysSince\":0},\"timestamp\":1768426331438,\"timeFromStart\":465},{\"step\":5,\"type\":\"exit_intent\",\"data\":{\"name\":{\"timeOnPage\":144,\"scrollDepth\":35,\"lastSection\":\"unknown\"}},\"timestamp\":1768426474989,\"timeFromStart\":144016},{\"step\":6,\"type\":\"exit_intent\",\"data\":{\"name\":{\"timeOnPage\":144,\"scrollDepth\":35,\"lastSection\":\"unknown\"}},\"timestamp\":1768426474989,\"timeFromStart\":144016}]",
+    "outcome": "exited",
+    "total_steps": 6,
+    "duration": 151665,
+    "converted": false,
+    "created_at": "2026-01-14T21:34:41.414024"
+  },
+  {
+    "id": 109,
+    "session_id": "1768436362212-efhx4esqn",
+    "journey_steps": "[{\"step\":1,\"type\":\"page_view\",\"data\":{\"path\":\"/\"},\"timestamp\":1768436362690,\"timeFromStart\":483},{\"step\":2,\"type\":\"return_visit\",\"data\":{\"visitCount\":3,\"daysSince\":3},\"timestamp\":1768436362694,\"timeFromStart\":487},{\"step\":3,\"type\":\"page_view\",\"data\":{\"path\":\"/\"},\"timestamp\":1768436362881,\"timeFromStart\":674},{\"step\":4,\"type\":\"return_visit\",\"data\":{\"visitCount\":4,\"daysSince\":0},\"timestamp\":1768436362885,\"timeFromStart\":678},{\"step\":5,\"type\":\"device_info\",\"data\":{\"device\":\"mobile\",\"browser\":\"Chrome\"},\"timestamp\":1768436363070,\"timeFromStart\":863},{\"step\":6,\"type\":\"device_info\",\"data\":{\"device\":\"mobile\",\"browser\":\"Chrome\"},\"timestamp\":1768436363071,\"timeFromStart\":864}]",
+    "outcome": "exited",
+    "total_steps": 6,
+    "duration": 349391,
+    "converted": false,
+    "created_at": "2026-01-15T00:25:11.873921"
+  }
+]

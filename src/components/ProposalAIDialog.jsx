@@ -67,7 +67,7 @@ import {
   getProposalTypesList, 
   getProposalTypeColors
 } from '../proposals/types'
-import api from '../lib/api'
+import { proposalsApi, auditsApi, filesApi, commerceApi } from '../lib/portal-api'
 import { cn } from '../lib/utils'
 import ProspectSelector from './ProspectSelector'
 import ProposalPreview from './ProposalPreview'
@@ -161,11 +161,17 @@ export default function ProposalAIDialog({
   const [showAddProspectDialog, setShowAddProspectDialog] = useState(false)
   const [prospectRevalidateKey, setProspectRevalidateKey] = useState(0)
   
+  // Commerce services state (for Phase 4 integration)
+  const [commerceServices, setCommerceServices] = useState([])
+  const [isLoadingServices, setIsLoadingServices] = useState(false)
+  const [selectedOffering, setSelectedOffering] = useState(null)
+  
   // AI conversation state
   const [aiMessages, setAiMessages] = useState([])
   const [aiInput, setAiInput] = useState('')
   const [isAiThinking, setIsAiThinking] = useState(false)
   const [aiClarificationsDone, setAiClarificationsDone] = useState(false)
+  const [aiConversationId, setAiConversationId] = useState(null)
   
   // Form state
   const [selectedType, setSelectedType] = useState(preselectedType || '')
@@ -201,6 +207,36 @@ export default function ProposalAIDialog({
     selectedType ? PROPOSAL_TYPES[selectedType] : null, 
     [selectedType]
   )
+
+  // Load commerce services when dialog opens (Phase 4 integration)
+  useEffect(() => {
+    if (isOpen) {
+      loadCommerceServices()
+    }
+  }, [isOpen])
+
+  const loadCommerceServices = async () => {
+    // Import auth store dynamically to get project ID
+    try {
+      const { default: useAuthStore } = await import('../lib/auth-store')
+      const projectId = useAuthStore.getState().currentProject?.id
+      
+      if (!projectId) {
+        console.warn('[ProposalAI] No project ID - cannot load commerce services')
+        return
+      }
+
+      setIsLoadingServices(true)
+      const response = await commerceApi.getServices(projectId)
+      setCommerceServices(response.data || [])
+      console.log('[ProposalAI] Loaded commerce services:', response.data?.length)
+    } catch (error) {
+      console.error('[ProposalAI] Failed to load commerce services:', error)
+      // Non-fatal - continue with hardcoded types
+    } finally {
+      setIsLoadingServices(false)
+    }
+  }
 
   // Suggested add-ons based on type
   const suggestedAddOns = useMemo(() => {
@@ -287,8 +323,8 @@ export default function ProposalAIDialog({
   // Custom add-on state
   const [customAddOn, setCustomAddOn] = useState({ name: '', price: '' })
   
-  // Monthly retainer state
-  const [monthlyRetainer, setMonthlyRetainer] = useState({ name: '', price: '' })
+  // Monthly retainer state (Default to Hosting & Maintenance $29/mo)
+  const [monthlyRetainer, setMonthlyRetainer] = useState({ name: 'Standard Hosting & Maintenance', price: '29' })
   
   // Add custom add-on
   const addCustomAddOn = () => {
@@ -342,34 +378,97 @@ export default function ProposalAIDialog({
   }
 
   // Search for existing audits when URL changes (Step 3 only)
+  const normalizeUrl = (value) => {
+    if (!value) return ''
+    try {
+      const normalized = value.startsWith('http') ? value : `https://${value}`
+      const urlObj = new URL(normalized)
+      const host = urlObj.hostname.replace(/^www\./i, '').toLowerCase()
+      const path = urlObj.pathname.replace(/\/+$/, '')
+      return `${host}${path}`.toLowerCase()
+    } catch {
+      return value
+        .replace(/^https?:\/\//i, '')
+        .replace(/^www\./i, '')
+        .replace(/\/+$/, '')
+        .toLowerCase()
+    }
+  }
+
+  const normalizeUrlForApi = (value) => {
+    if (!value) return null
+    try {
+      const normalized = value.startsWith('http') ? value : `https://${value}`
+      const urlObj = new URL(normalized)
+      if (!urlObj.hostname) return null
+      return urlObj.toString()
+    } catch {
+      return null
+    }
+  }
+
   const searchExistingAudit = async (url) => {
     if (!url || url.length < 5) {
       setExistingAudit(null)
       return
     }
-    
+
+    const apiUrl = normalizeUrlForApi(url)
+    const searchQuery = apiUrl ? null : normalizeUrl(url)
+
     setIsSearchingAudit(true)
     try {
       console.log('[ProposalAI] Calling audits-list with URL:', url)
-      const response = await api.get('/.netlify/functions/audits-list', {
-        params: { url }
+      const response = await auditsApi.list({
+        targetUrl: apiUrl || undefined,
+        search: searchQuery || undefined,
+        limit: 10,
+        sortBy: 'completed_at',
+        sortOrder: 'desc',
       })
       
       console.log('[ProposalAI] Audit search response:', response.data)
       const audits = response.data?.audits || []
-      if (audits.length > 0) {
-        // Use the most recent completed audit
-        const latestAudit = audits[0]
-        console.log('[ProposalAI] Found existing audit:', latestAudit.id, latestAudit.targetUrl)
-        setExistingAudit({
-          id: latestAudit.id,
-          targetUrl: latestAudit.targetUrl,
-          createdAt: latestAudit.createdAt,
-          performance: latestAudit.scores?.performance,
-          seo: latestAudit.scores?.seo,
-          accessibility: latestAudit.scores?.accessibility,
-          bestPractices: latestAudit.scores?.bestPractices,
-          fullAuditJson: latestAudit.fullAuditJson // Include full audit data for AI
+      const normalizedInput = normalizeUrl(url)
+      const matching = audits.find((audit) => {
+        const isCompleted = ['complete', 'completed'].includes(audit.status)
+        const targetUrl = audit.targetUrl || audit.target_url || ''
+        if (!isCompleted) return false
+        const normalizedTarget = normalizeUrl(targetUrl)
+        return apiUrl
+          ? normalizedTarget === normalizedInput
+          : normalizedTarget.includes(normalizedInput)
+      })
+
+      if (matching) {
+        console.log('[ProposalAI] Found existing audit:', matching.id, matching.targetUrl)
+        let fullAuditJson
+        try {
+          const fullResponse = await auditsApi.getFull(matching.id)
+          const fullAudit = fullResponse.data?.audit || fullResponse.data
+          fullAuditJson = fullAudit?.fullAuditJson || fullAudit?.full_audit_json
+        } catch (err) {
+          console.warn('[ProposalAI] Failed to load full audit JSON:', err)
+        }
+
+        const payload = {
+          id: matching.id,
+          targetUrl: matching.targetUrl || matching.target_url,
+          createdAt: matching.createdAt,
+          performance: matching.performanceScore,
+          seo: matching.seoScore,
+          accessibility: matching.accessibilityScore,
+          bestPractices: matching.bestPracticesScore,
+          fullAuditJson
+        }
+
+        setExistingAudit(payload)
+        setAuditResults({
+          performance: payload.performance,
+          seo: payload.seo,
+          accessibility: payload.accessibility,
+          bestPractices: payload.bestPractices,
+          fullAuditJson: payload.fullAuditJson
         })
       } else {
         console.log('[ProposalAI] No existing audit found for URL:', url)
@@ -418,7 +517,7 @@ export default function ProposalAIDialog({
     setIsRunningAudit(true)
     try {
       // Start the audit - this returns immediately with an auditId
-      const response = await api.post('/.netlify/functions/audits-internal', {
+      const response = await auditsApi.createInternal({
         url: formData.websiteUrl
       })
       
@@ -437,13 +536,22 @@ export default function ProposalAIDialog({
         attempts++
         console.log(`[ProposalAI] Polling attempt ${attempts}/${maxAttempts} for audit ${auditId}`)
         try {
-          const statusResponse = await api.get(`/.netlify/functions/audits-internal?auditId=${auditId}`)
+          const statusResponse = await auditsApi.getInternalStatus(auditId)
           console.log('[ProposalAI] Poll response:', statusResponse.data)
           const { status, audit } = statusResponse.data
           
           if ((status === 'complete' || status === 'completed') && audit) {
-            console.log('[ProposalAI] Audit complete, setting results:', audit)
-            setAuditResults(audit)
+            console.log('[ProposalAI] Audit complete, fetching full details...')
+            try {
+              // Fetch full audit data including JSON
+              const fullResponse = await auditsApi.getFull(auditId)
+              const fullAudit = fullResponse.data?.audit || fullResponse.data
+              console.log('[ProposalAI] Got full audit data:', fullAudit)
+              setAuditResults(fullAudit)
+            } catch (err) {
+              console.warn('[ProposalAI] Failed to get full audit data, using status result:', err)
+              setAuditResults(audit)
+            }
             setIsRunningAudit(false)
             return
           }
@@ -486,8 +594,9 @@ export default function ProposalAIDialog({
     setIsAiThinking(true)
     
     try {
-      const response = await api.post('/.netlify/functions/proposals-ai-clarify', {
+      const response = await proposalsApi.clarifyAI({
         proposalType: selectedType,
+        conversationId: aiConversationId || undefined,
         clientInfo: {
           name: formData.clientName,
           company: formData.clientCompany,
@@ -507,6 +616,12 @@ export default function ProposalAIDialog({
       
       if (response.data.message) {
         setAiMessages([{ role: 'assistant', content: response.data.message }])
+        if (response.data.conversationId) {
+          setAiConversationId(response.data.conversationId)
+        }
+        if (response.data.done) {
+          setAiClarificationsDone(true)
+        }
       } else {
         setAiClarificationsDone(true)
         setAiMessages([{
@@ -536,8 +651,10 @@ export default function ProposalAIDialog({
     setIsAiThinking(true)
     
     try {
-      const response = await api.post('/.netlify/functions/proposals-ai-clarify', {
+      const response = await proposalsApi.clarifyAI({
         proposalType: selectedType,
+        conversationId: aiConversationId || undefined,
+        userMessage,
         clientInfo: {
           name: formData.clientName,
           company: formData.clientCompany,
@@ -552,12 +669,14 @@ export default function ProposalAIDialog({
           challenges: formData.challenges,
           context: formData.context
         },
-        auditResults,
-        conversation: [...aiMessages, { role: 'user', content: userMessage }]
+        auditResults
       })
       
       if (response.data.message) {
         setAiMessages(prev => [...prev, { role: 'assistant', content: response.data.message }])
+        if (response.data.conversationId) {
+          setAiConversationId(response.data.conversationId)
+        }
         if (response.data.done) {
           setAiClarificationsDone(true)
         }
@@ -581,6 +700,7 @@ export default function ProposalAIDialog({
       setSelectedType(preselectedType || '')
       setAiMessages([])
       setAiClarificationsDone(false)
+      setAiConversationId(null)
       setAuditResults(null)
       setExistingAudit(null)
       setFormData({
@@ -654,29 +774,32 @@ export default function ProposalAIDialog({
     try {
       let heroImageUrl = null
       if (formData.heroImage) {
-        // Convert file to base64
-        const reader = new FileReader()
-        const base64Data = await new Promise((resolve, reject) => {
-          reader.onload = () => resolve(reader.result.split(',')[1])
-          reader.onerror = reject
-          reader.readAsDataURL(formData.heroImage)
-        })
-        
-        const uploadResponse = await api.post('/.netlify/functions/files-upload', {
-          filename: formData.heroImage.name,
-          mimeType: formData.heroImage.type,
-          fileSize: formData.heroImage.size,
-          base64Data,
-          category: 'proposal-hero',
-          isPublic: true
-        })
+        const formDataUpload = new FormData()
+        formDataUpload.append('file', formData.heroImage)
+        formDataUpload.append('category', 'proposal')
+        // Store in Proposals folder with brand name subfolder
+        const folderPath = `Proposals/${(formData.brandName || 'Unknown').replace(/[^a-zA-Z0-9\s-]/g, '').trim()}`
+        formDataUpload.append('folderPath', folderPath)
+        formDataUpload.append('isPublic', 'true')
+
+        const uploadResponse = await filesApi.uploadFileForm(formDataUpload)
         heroImageUrl = uploadResponse.data.url
       }
 
       // Start background generation - returns immediately with proposalId
-      const response = await api.post('/.netlify/functions/proposals-create-ai', {
+      const response = await proposalsApi.createAI({
         contactId: formData.contactId,
+        contactType: formData.contactType || undefined,
         proposalType: selectedType,
+        offeringId: selectedOffering?.id || undefined, // Phase 4: Link to commerce offering
+        offeringData: selectedOffering ? { // Phase 4: Pass offering context to AI
+          name: selectedOffering.name,
+          description: selectedOffering.description,
+          features: selectedOffering.features,
+          pricing: selectedOffering.pricing,
+          duration: selectedOffering.duration,
+          deliverables: selectedOffering.deliverables
+        } : undefined,
         pricing: {
           basePrice: parseFloat(formData.totalPrice),
           addOns: formData.addOns,
@@ -726,7 +849,7 @@ export default function ProposalAIDialog({
           await new Promise(resolve => setTimeout(resolve, 1000)) // 1 second
           
           try {
-            const statusResponse = await api.get(`/.netlify/functions/proposals-create-ai?proposalId=${proposalId}`)
+            const statusResponse = await proposalsApi.getAIStatus(proposalId)
             const { status: currentStatus, proposal, error } = statusResponse.data
             
             if (currentStatus === 'complete' && proposal) {
@@ -776,10 +899,7 @@ export default function ProposalAIDialog({
   const handleAIEdit = async (instruction, callback) => {
     try {
       // Call AI to regenerate proposal with edits
-      const response = await api.post('/.netlify/functions/proposals-update-ai', {
-        proposalId: generatedProposal.id,
-        instruction
-      })
+      const response = await proposalsApi.updateAI(generatedProposal.id, instruction)
       
       if (response.data.proposal) {
         setGeneratedProposal(response.data.proposal)
@@ -800,8 +920,7 @@ export default function ProposalAIDialog({
         ? recipients 
         : [formData.clientEmail]
         
-      const response = await api.post('/.netlify/functions/proposals-send', {
-        proposalId: generatedProposal.id,
+      const response = await proposalsApi.send(generatedProposal.id, {
         recipients: recipientList,
         subject: subjectLine,
         personalMessage: message
@@ -880,7 +999,7 @@ export default function ProposalAIDialog({
         </DialogTrigger>
       )}
       
-      <DialogContent className="max-w-[99vw] w-[2200px] max-h-[85vh] overflow-hidden flex flex-col glass-bg border-[var(--glass-border)]">
+      <DialogContent className="sm:max-w-none max-w-[95vw] w-[900px] max-h-[85vh] overflow-hidden flex flex-col glass-bg border-[var(--glass-border)]">
         <DialogHeader className="pb-2 border-b border-[var(--glass-border)]">
           <DialogTitle className="flex items-center gap-3 text-xl">
             <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-[var(--brand-primary)] to-[var(--brand-secondary)] flex items-center justify-center">

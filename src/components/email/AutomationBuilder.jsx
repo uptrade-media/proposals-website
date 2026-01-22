@@ -35,10 +35,17 @@ import {
   ArrowRight,
   Play,
   Pause,
-  Loader2
+  Loader2,
+  ShoppingBag,
+  Ticket,
+  Receipt,
+  FileSignature
 } from 'lucide-react'
 import { toast } from 'sonner'
 import { useEmailPlatformStore } from '@/lib/email-platform-store'
+import { formsApi } from '@/lib/portal-api'
+import useAuthStore from '@/lib/auth-store'
+import { getCommerceSettings } from '@/lib/commerce-store'
 
 // Trigger type definitions
 const triggerTypes = [
@@ -86,7 +93,9 @@ const triggerTypes = [
     icon: MessageSquare,
     color: 'bg-cyan-100 text-cyan-600',
     hasConfig: true,
-    configFields: [{ name: 'formId', label: 'Form ID', type: 'text' }]
+    configFields: [
+      { name: 'formId', label: 'Form', type: 'form' }
+    ]
   },
   {
     id: 'campaign_opened',
@@ -112,6 +121,63 @@ const triggerTypes = [
     description: 'Manually add subscribers to this automation',
     icon: Zap,
     color: 'bg-gray-100 text-gray-600'
+  },
+  // Commerce triggers - filtered by commerce_settings.enabled_types
+  {
+    id: 'product_purchased',
+    label: 'When product is purchased',
+    description: 'Trigger when a product sale is completed',
+    icon: ShoppingBag,
+    color: 'bg-emerald-100 text-emerald-600',
+    commerceType: 'product',
+    hasConfig: true,
+    configFields: [
+      { name: 'offeringId', label: 'Product (optional)', type: 'offering', offeringType: 'product' }
+    ]
+  },
+  {
+    id: 'event_registered',
+    label: 'When someone registers for event',
+    description: 'Trigger when a ticket is purchased for an event',
+    icon: Ticket,
+    color: 'bg-violet-100 text-violet-600',
+    commerceType: 'event',
+    hasConfig: true,
+    configFields: [
+      { name: 'offeringId', label: 'Event (optional)', type: 'offering', offeringType: 'event' }
+    ]
+  },
+  {
+    id: 'invoice_received',
+    label: 'When invoice is created',
+    description: 'Trigger when a new invoice is sent to a client',
+    icon: Receipt,
+    color: 'bg-amber-100 text-amber-600',
+    commerceType: 'service'
+  },
+  {
+    id: 'invoice_paid',
+    label: 'When invoice is paid',
+    description: 'Trigger when a client pays an invoice',
+    icon: Receipt,
+    color: 'bg-teal-100 text-teal-600',
+    commerceType: 'service'
+  },
+  {
+    id: 'contract_received',
+    label: 'When contract is sent',
+    description: 'Trigger when a new contract is sent for signature',
+    icon: FileSignature,
+    color: 'bg-blue-100 text-blue-600',
+    commerceType: 'service'
+  },
+  {
+    id: 'contract_signed',
+    label: 'When contract is signed',
+    description: 'Trigger when a client signs a contract',
+    icon: FileSignature,
+    color: 'bg-sky-100 text-sky-600',
+    commerceType: 'service'
   }
 ]
 
@@ -184,6 +250,7 @@ const stepTypes = [
 
 export default function AutomationBuilder({ automation, onSave, onBack }) {
   const { templates, lists, fetchTemplates, fetchLists } = useEmailPlatformStore()
+  const { currentProject } = useAuthStore()
   
   const [name, setName] = useState(automation?.name || '')
   const [description, setDescription] = useState(automation?.description || '')
@@ -194,11 +261,71 @@ export default function AutomationBuilder({ automation, onSave, onBack }) {
   const [isSaving, setIsSaving] = useState(false)
   const [showAddStep, setShowAddStep] = useState(false)
   const [editingStep, setEditingStep] = useState(null)
+  const [forms, setForms] = useState([])
+  const [formsLoading, setFormsLoading] = useState(false)
+  const [commerceSettings, setCommerceSettings] = useState(null)
+
+  // Fetch commerce settings to filter available triggers
+  useEffect(() => {
+    const fetchSettings = async () => {
+      if (!currentProject?.id) return
+      try {
+        const settings = await getCommerceSettings(currentProject.id)
+        setCommerceSettings(settings)
+      } catch (error) {
+        console.error('Failed to fetch commerce settings:', error)
+      }
+    }
+    fetchSettings()
+  }, [currentProject?.id])
+
+  // Filter trigger types based on commerce settings
+  const availableTriggerTypes = triggerTypes.filter(trigger => {
+    // If trigger has a commerceType requirement, check if it's enabled
+    if (trigger.commerceType) {
+      const enabledTypes = commerceSettings?.enabled_types || []
+      // enabled_types stores singular values: 'product', 'service', 'event'
+      return enabledTypes.includes(trigger.commerceType)
+    }
+    return true
+  })
+
+  // Fetch forms for the project
+  useEffect(() => {
+    const fetchForms = async () => {
+      if (!currentProject?.id) return
+      setFormsLoading(true)
+      try {
+        const res = await formsApi.list({ projectId: currentProject.id })
+        setForms(res.data?.forms || res.data || [])
+      } catch (error) {
+        console.error('Failed to fetch forms:', error)
+      } finally {
+        setFormsLoading(false)
+      }
+    }
+    fetchForms()
+  }, [currentProject?.id])
 
   useEffect(() => {
     fetchTemplates()
     fetchLists()
   }, [fetchTemplates, fetchLists])
+
+  // Auto-add Send Email step when form_submitted trigger is selected
+  useEffect(() => {
+    if (triggerType === 'form_submitted' && steps.length === 0) {
+      const confirmationStep = {
+        id: `step-${Date.now()}`,
+        step_type: 'send_email',
+        config: {
+          subject: 'Thank you for your submission'
+        }
+      }
+      setSteps([confirmationStep])
+      setEditingStep(0)
+    }
+  }, [triggerType])
 
   const selectedTrigger = triggerTypes.find(t => t.id === triggerType)
 
@@ -306,17 +433,28 @@ export default function AutomationBuilder({ automation, onSave, onBack }) {
           </Select>
         )
       case 'template':
+        // Only show transactional templates for automations
+        const transactionalTemplates = templates.filter(t => 
+          t.category === 'transactional' || 
+          (t.is_system && ['form-confirmation', 'thank-you'].includes(t.system_type))
+        )
         return (
           <Select value={value || ''} onValueChange={onChange}>
             <SelectTrigger>
-              <SelectValue placeholder="Select template" />
+              <SelectValue placeholder="Select transactional email" />
             </SelectTrigger>
             <SelectContent>
-              {templates.map(t => (
-                <SelectItem key={t.id} value={t.id}>
-                  {t.name}
+              {transactionalTemplates.length === 0 ? (
+                <SelectItem value="_none" disabled>
+                  No transactional emails yet
                 </SelectItem>
-              ))}
+              ) : (
+                transactionalTemplates.map(t => (
+                  <SelectItem key={t.id} value={t.id}>
+                    {t.name}
+                  </SelectItem>
+                ))
+              )}
             </SelectContent>
           </Select>
         )
@@ -334,6 +472,42 @@ export default function AutomationBuilder({ automation, onSave, onBack }) {
               ))}
             </SelectContent>
           </Select>
+        )
+      case 'form':
+        return (
+          <Select value={value || ''} onValueChange={onChange} disabled={formsLoading}>
+            <SelectTrigger>
+              <SelectValue placeholder={formsLoading ? "Loading forms..." : "Select form"} />
+            </SelectTrigger>
+            <SelectContent>
+              {forms.length === 0 && !formsLoading ? (
+                <SelectItem value="_none" disabled>
+                  No forms found
+                </SelectItem>
+              ) : (
+                forms.map(f => (
+                  <SelectItem key={f.id} value={f.id}>
+                    {f.name}
+                  </SelectItem>
+                ))
+              )}
+            </SelectContent>
+          </Select>
+        )
+      case 'checkbox':
+        return (
+          <div className="flex items-center gap-2">
+            <input
+              type="checkbox"
+              id={field.name}
+              checked={value || false}
+              onChange={(e) => onChange(e.target.checked)}
+              className="h-4 w-4 rounded border-gray-300 text-primary focus:ring-primary"
+            />
+            <Label htmlFor={field.name} className="text-sm font-normal cursor-pointer">
+              {field.label}
+            </Label>
+          </div>
         )
       default:
         return null
@@ -400,7 +574,7 @@ export default function AutomationBuilder({ automation, onSave, onBack }) {
                   <SelectValue placeholder="Select a trigger..." />
                 </SelectTrigger>
                 <SelectContent>
-                  {triggerTypes.map(trigger => (
+                  {availableTriggerTypes.map(trigger => (
                     <SelectItem key={trigger.id} value={trigger.id}>
                       <div className="flex items-center gap-2">
                         <trigger.icon className="h-4 w-4" />

@@ -34,7 +34,7 @@ import {
   Mail,
   Phone
 } from 'lucide-react'
-import api from '../lib/api'
+import { crmApi, adminApi } from '@/lib/portal-api'
 import { cn } from '../lib/utils'
 
 // Pipeline stage labels
@@ -82,13 +82,16 @@ export default function ProspectSelector({
     
     setIsLoading(true)
     try {
-      const [prospectsRes, clientsRes] = await Promise.all([
-        api.get('/.netlify/functions/crm-prospects-list'),
-        api.get('/.netlify/functions/admin-clients-list')
+      // Use listUsers instead of listClients to get ALL contacts including admins/team
+      const [prospectsRes, contactsRes] = await Promise.all([
+        crmApi.listProspects(),
+        adminApi.listUsers({ limit: 1000 })
       ])
       
-      setProspects(prospectsRes.data.prospects || [])
-      setClients(clientsRes.data.clients || [])
+      setProspects(prospectsRes.data.prospects || prospectsRes.data || [])
+      // Map contacts/users to client format
+      const contactsList = contactsRes.data.users || contactsRes.data || []
+      setClients(contactsList)
       setHasLoaded(true)
     } catch (error) {
       console.error('Failed to load contacts:', error)
@@ -193,7 +196,7 @@ export default function ProspectSelector({
                         : 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400'
                     )}
                   >
-                    {selectedItem.type === 'prospect' ? 'Prospect' : 'Client'}
+                    {selectedItem.type === 'prospect' ? 'Prospect' : (selectedItem.role === 'client' ? 'Client' : 'Contact')}
                   </Badge>
                 </div>
                 <div className="flex items-center gap-2 text-xs text-[var(--text-tertiary)]">
@@ -315,8 +318,8 @@ export default function ProspectSelector({
 
                 {/* Clients */}
                 {filteredClients.length > 0 && (
-                  <CommandGroup heading="Existing Clients">
-                    {filteredClients.slice(0, 10).map(client => (
+                  <CommandGroup heading="Existing Contacts & Clients">
+                    {filteredClients.slice(0, 50).map(client => (
                       <CommandItem
                         key={client.id}
                         value={client.id}
@@ -331,18 +334,21 @@ export default function ProspectSelector({
                             <span className="font-medium text-[var(--text-primary)] truncate">
                               {client.name}
                             </span>
-                            <Star className="h-3 w-3 text-yellow-500" />
+                            {client.role === 'client' && (
+                              <Badge variant="outline" className="text-[10px] px-1 py-0 h-4 border-green-500 text-green-500">
+                                Client
+                              </Badge>
+                            )}
+                            {client.company && (
+                              <span className="text-xs text-[var(--text-tertiary)] truncate">
+                                {client.company}
+                              </span>
+                            )}
                           </div>
                           <div className="flex items-center gap-2 text-xs text-[var(--text-tertiary)]">
-                            {client.company && (
-                              <>
-                                <Building2 className="h-3 w-3" />
-                                <span className="truncate">{client.company}</span>
-                              </>
-                            )}
                             {client.email && (
                               <>
-                                <Mail className="h-3 w-3 ml-1" />
+                                <Mail className="h-3 w-3" />
                                 <span className="truncate">{client.email}</span>
                               </>
                             )}
@@ -353,9 +359,9 @@ export default function ProspectSelector({
                         )}
                       </CommandItem>
                     ))}
-                    {filteredClients.length > 10 && (
+                    {filteredClients.length > 50 && (
                       <div className="py-2 px-4 text-xs text-[var(--text-tertiary)] text-center">
-                        Showing 10 of {filteredClients.length} clients. Refine your search.
+                        Showing 50 of {filteredClients.length} contacts. Refine your search.
                       </div>
                     )}
                   </CommandGroup>

@@ -4,7 +4,6 @@
  */
 
 // Re-export all analytics components for easy imports
-export { AnalyticsHeader } from './AnalyticsHeader'
 export { MetricsGrid } from './MetricsGrid'
 export { TrafficChart } from './TrafficChart'
 export { DeviceBreakdown } from './DeviceBreakdown'

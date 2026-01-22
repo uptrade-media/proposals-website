@@ -22,7 +22,7 @@ import { useSeoStore } from '@/lib/seo-store'
  * Shows on dashboard overview for easy access
  */
 export default function SEOQuickActionsBar({ 
-  siteId, 
+  projectId, 
   domain,
   onActionComplete,
   className 
@@ -78,9 +78,9 @@ export default function SEOQuickActionsBar({
       icon: Globe,
       description: 'Re-crawl all pages from sitemap',
       action: async () => {
-        if (siteId) {
-          await crawlSitemap(siteId)
-          await fetchPages(siteId, { limit: 100 })
+        if (projectId) {
+          await crawlSitemap(projectId)
+          await fetchPages(projectId, { limit: 100 })
         }
       }
     },
@@ -90,9 +90,9 @@ export default function SEOQuickActionsBar({
       icon: Target,
       description: 'Scan for quick wins and issues',
       action: async () => {
-        if (siteId) {
-          await detectOpportunities(siteId)
-          await fetchOpportunities(siteId, { limit: 20, status: 'open' })
+        if (projectId) {
+          await detectOpportunities(projectId)
+          await fetchOpportunities(projectId, { limit: 20, status: 'open' })
         }
       }
     },
@@ -103,8 +103,8 @@ export default function SEOQuickActionsBar({
       description: 'Run comprehensive AI analysis',
       variant: 'accent',
       action: async () => {
-        if (siteId) {
-          await runAiBrain(siteId, { analysisType: 'comprehensive' })
+        if (projectId) {
+          await runAiBrain(projectId, { analysisType: 'comprehensive' })
         }
       }
     },
@@ -114,8 +114,8 @@ export default function SEOQuickActionsBar({
       icon: Zap,
       description: 'Refresh Core Web Vitals',
       action: async () => {
-        if (siteId) {
-          await fetchCwvSummary(siteId)
+        if (projectId) {
+          await fetchCwvSummary(projectId)
         }
       }
     }
@@ -165,7 +165,7 @@ export default function SEOQuickActionsBar({
 /**
  * Compact version for use in header/toolbar
  */
-export function SEOQuickActionsCompact({ siteId, domain, onActionComplete }) {
+export function SEOQuickActionsCompact({ projectId, domain, onActionComplete }) {
   const { crawlSitemap, detectOpportunities, runAiBrain, fetchGscOverview, fetchGscQueries } = useSeoStore()
   const [running, setRunning] = useState(false)
 
@@ -175,8 +175,8 @@ export function SEOQuickActionsCompact({ siteId, domain, onActionComplete }) {
       await Promise.all([
         domain && fetchGscOverview(domain),
         domain && fetchGscQueries(domain, { limit: 50 }),
-        siteId && crawlSitemap(siteId),
-        siteId && detectOpportunities(siteId)
+        projectId && crawlSitemap(projectId),
+        projectId && detectOpportunities(projectId)
       ])
       onActionComplete?.('full-scan', 'Full scan complete')
     } catch (error) {

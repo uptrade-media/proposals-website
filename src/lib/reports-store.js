@@ -1,5 +1,5 @@
 import { create } from 'zustand'
-import api from './api'
+import { reportsApi } from './portal-api'
 
 const useReportsStore = create((set, get) => ({
   overviewReport: null,
@@ -21,8 +21,9 @@ const useReportsStore = create((set, get) => ({
     set({ isLoading: true, error: null })
     
     try {
-      const response = await api.get(`/.netlify/functions/reports-dashboard?period=${period}`)
-      const metrics = response.data.metrics || {}
+      const response = await reportsApi.dashboard({ period })
+      const data = response.data || response
+      const metrics = data.metrics || {}
       
       // Transform projectStatusBreakdown to chart format
       const projectStatusDistribution = (metrics.projectStatusBreakdown || []).map(s => ({
@@ -64,7 +65,7 @@ const useReportsStore = create((set, get) => ({
         projectStatusBreakdown: metrics.projectStatusBreakdown || [],
         invoiceStatusBreakdown: metrics.invoiceStatusBreakdown || [],
         monthlyRevenue: metrics.monthlyRevenue || [],
-        period: response.data.period
+        period: data.period
       }
       
       set({ 
@@ -72,9 +73,13 @@ const useReportsStore = create((set, get) => ({
         isLoading: false 
       })
       
-      return { success: true, data: response.data }
+      return { success: true, data }
     } catch (error) {
-      const errorMessage = error.response?.data?.error || 'Failed to fetch overview report'
+      const apiError = error.response?.data?.error
+      const errorMessage = typeof apiError === 'string' ? apiError : 
+                          apiError?.message || 
+                          error.message || 
+                          'Failed to fetch overview report'
       set({ 
         isLoading: false, 
         error: errorMessage 
@@ -88,8 +93,8 @@ const useReportsStore = create((set, get) => ({
     set({ isLoading: true, error: null })
     
     try {
-      const response = await api.get('/.netlify/functions/reports-projects')
-      const data = response.data || {}
+      const response = await reportsApi.projectReports()
+      const data = response.data || response
       
       // Transform to expected structure (snake_case) for the Reports component
       const projectReport = {
@@ -121,9 +126,13 @@ const useReportsStore = create((set, get) => ({
         isLoading: false 
       })
       
-      return { success: true, data: response.data }
+      return { success: true, data }
     } catch (error) {
-      const errorMessage = error.response?.data?.error || 'Failed to fetch project report'
+      const apiError = error.response?.data?.error
+      const errorMessage = typeof apiError === 'string' ? apiError : 
+                          apiError?.message || 
+                          error.message || 
+                          'Failed to fetch project report'
       set({ 
         isLoading: false, 
         error: errorMessage 
@@ -137,16 +146,21 @@ const useReportsStore = create((set, get) => ({
     set({ isLoading: true, error: null })
     
     try {
-      const response = await api.get(`/.netlify/functions/reports-revenue?period=${period}&groupBy=${groupBy}`)
+      const response = await reportsApi.revenue({ period, groupBy })
+      const data = response.data || response
       
       set({ 
-        financialReport: response.data,
+        financialReport: data,
         isLoading: false 
       })
       
-      return { success: true, data: response.data }
+      return { success: true, data }
     } catch (error) {
-      const errorMessage = error.response?.data?.error || 'Failed to fetch financial report'
+      const apiError = error.response?.data?.error
+      const errorMessage = typeof apiError === 'string' ? apiError : 
+                          apiError?.message || 
+                          error.message || 
+                          'Failed to fetch financial report'
       set({ 
         isLoading: false, 
         error: errorMessage 
@@ -160,8 +174,9 @@ const useReportsStore = create((set, get) => ({
     set({ isLoading: true, error: null })
     
     try {
-      const response = await api.get(`/.netlify/functions/reports-dashboard?period=${period}`)
-      const metrics = response.data.metrics || {}
+      const response = await reportsApi.dashboard({ period })
+      const data = response.data || response
+      const metrics = data.metrics || {}
       
       set({ 
         activityReport: {
@@ -180,9 +195,13 @@ const useReportsStore = create((set, get) => ({
         isLoading: false 
       })
       
-      return { success: true, data: response.data }
+      return { success: true, data }
     } catch (error) {
-      const errorMessage = error.response?.data?.error || 'Failed to fetch activity report'
+      const apiError = error.response?.data?.error
+      const errorMessage = typeof apiError === 'string' ? apiError : 
+                          apiError?.message || 
+                          error.message || 
+                          'Failed to fetch activity report'
       set({ 
         isLoading: false, 
         error: errorMessage 
@@ -196,15 +215,20 @@ const useReportsStore = create((set, get) => ({
     set({ isLoading: true, error: null })
     
     try {
-      const response = await api.get(`/.netlify/functions/reports-lighthouse?projectId=${projectId}`)
+      const response = await reportsApi.lighthouse({ projectId })
+      const data = response.data || response
       set({ 
-        lighthouseReport: response.data,
+        lighthouseReport: data,
         isLoading: false 
       })
       
-      return { success: true, data: response.data }
+      return { success: true, data }
     } catch (error) {
-      const errorMessage = error.response?.data?.error || 'Failed to fetch Lighthouse report'
+      const apiError = error.response?.data?.error
+      const errorMessage = typeof apiError === 'string' ? apiError : 
+                          apiError?.message || 
+                          error.message || 
+                          'Failed to fetch Lighthouse report'
       set({ 
         isLoading: false, 
         error: errorMessage 
@@ -218,15 +242,20 @@ const useReportsStore = create((set, get) => ({
     set({ isLoading: true, error: null })
     
     try {
-      const response = await api.get(`/.netlify/functions/reports-lighthouse?auditId=${auditId}`)
+      const response = await reportsApi.lighthouse({ auditId })
+      const data = response.data || response
       set({ 
-        lighthouseAudit: response.data.audit,
+        lighthouseAudit: data.audit,
         isLoading: false 
       })
       
-      return { success: true, data: response.data }
+      return { success: true, data }
     } catch (error) {
-      const errorMessage = error.response?.data?.error || 'Failed to fetch Lighthouse audit'
+      const apiError = error.response?.data?.error
+      const errorMessage = typeof apiError === 'string' ? apiError : 
+                          apiError?.message || 
+                          error.message || 
+                          'Failed to fetch Lighthouse audit'
       set({ 
         isLoading: false, 
         error: errorMessage 
@@ -240,17 +269,18 @@ const useReportsStore = create((set, get) => ({
     set({ isLoading: true, error: null })
     
     try {
-      const response = await api.post('/.netlify/functions/reports-lighthouse-run', {
-        projectId,
-        targetUrl,
-        deviceType
-      })
+      const response = await reportsApi.runLighthouse({ projectId, targetUrl, deviceType })
+      const data = response.data || response
       
       set({ isLoading: false })
       
-      return { success: true, data: response.data }
+      return { success: true, data }
     } catch (error) {
-      const errorMessage = error.response?.data?.error || 'Failed to start Lighthouse audit'
+      const apiError = error.response?.data?.error
+      const errorMessage = typeof apiError === 'string' ? apiError : 
+                          apiError?.message || 
+                          error.message || 
+                          'Failed to start Lighthouse audit'
       set({ 
         isLoading: false, 
         error: errorMessage 
@@ -267,18 +297,24 @@ const useReportsStore = create((set, get) => ({
     
     try {
       console.log('[reports-store] Fetching audits...')
-      const response = await api.get('/.netlify/functions/audits-list')
-      console.log('[reports-store] Audits response:', response.data)
+      // Increase limit to ensure we get a reasonable number of recent audits
+      const response = await reportsApi.listAudits({ limit: 50 })
+      const data = response.data || response
+      console.log('[reports-store] Audits response:', data)
       set({ 
-        audits: response.data.audits || [],
+        audits: data.audits || [],
         isLoading: false 
       })
       
-      return { success: true, data: response.data }
+      return { success: true, data }
     } catch (error) {
       console.error('[reports-store] Error fetching audits:', error)
       console.error('[reports-store] Error response:', error.response)
-      const errorMessage = error.response?.data?.error || error.message || 'Failed to fetch audits'
+      const apiError = error.response?.data?.error
+      const errorMessage = typeof apiError === 'string' ? apiError : 
+                          apiError?.message || 
+                          error.message || 
+                          'Failed to fetch audits'
       set({ 
         isLoading: false, 
         error: errorMessage 
@@ -292,15 +328,21 @@ const useReportsStore = create((set, get) => ({
     set({ isLoading: true, error: null })
     
     try {
-      const response = await api.get(`/.netlify/functions/audits-get?id=${auditId}`)
+      const response = await reportsApi.getAudit(auditId)
+      // Backend returns the audit object directly (not wrapped in { audit: ... })
+      const audit = response.data || response
       set({ 
-        currentAudit: response.data.audit,
+        currentAudit: audit,
         isLoading: false 
       })
       
-      return { success: true, data: response.data }
+      return { success: true, data: audit }
     } catch (error) {
-      const errorMessage = error.response?.data?.error || 'Failed to fetch audit'
+      const apiError = error.response?.data?.error
+      const errorMessage = typeof apiError === 'string' ? apiError : 
+                          apiError?.message || 
+                          error.message || 
+                          'Failed to fetch audit'
       set({ 
         isLoading: false, 
         error: errorMessage 
@@ -314,18 +356,23 @@ const useReportsStore = create((set, get) => ({
     set({ isLoading: true, error: null })
     
     try {
-      const response = await api.post('/.netlify/functions/audits-request', {
+      const response = await reportsApi.requestAudit({
         url: targetUrl,
         projectId: projectId || null,
         recipientEmail: email || null,
         recipientName: name || null
       })
+      const data = response.data || response
       
       set({ isLoading: false })
       
-      return { success: true, data: response.data }
+      return { success: true, data }
     } catch (error) {
-      const errorMessage = error.response?.data?.error || 'Failed to request audit'
+      const apiError = error.response?.data?.error
+      const errorMessage = typeof apiError === 'string' ? apiError : 
+                          apiError?.message || 
+                          error.message || 
+                          'Failed to request audit'
       set({ 
         isLoading: false, 
         error: errorMessage 
@@ -339,7 +386,7 @@ const useReportsStore = create((set, get) => ({
     set({ isLoading: true, error: null })
     
     try {
-      await api.delete(`/.netlify/functions/audits-delete?auditId=${auditId}`)
+      await reportsApi.deleteAudit(auditId)
       
       // Remove from local state
       set(state => ({
@@ -349,7 +396,11 @@ const useReportsStore = create((set, get) => ({
       
       return { success: true }
     } catch (error) {
-      const errorMessage = error.response?.data?.error || 'Failed to delete audit'
+      const apiError = error.response?.data?.error
+      const errorMessage = typeof apiError === 'string' ? apiError : 
+                          apiError?.message || 
+                          error.message || 
+                          'Failed to delete audit'
       set({ 
         isLoading: false, 
         error: errorMessage 

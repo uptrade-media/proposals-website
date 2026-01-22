@@ -18,7 +18,7 @@ import {
   TrendingUp
 } from 'lucide-react'
 
-export default function SEOBacklinks({ siteId }) {
+export default function SEOBacklinks({ projectId }) {
   const { 
     backlinkOpportunities, 
     backlinksSummary,
@@ -32,15 +32,15 @@ export default function SEOBacklinks({ siteId }) {
   const [filter, setFilter] = useState('all')
 
   useEffect(() => {
-    if (siteId) {
-      fetchBacklinkOpportunities(siteId)
+    if (projectId) {
+      fetchBacklinkOpportunities(projectId)
     }
-  }, [siteId])
+  }, [projectId])
 
   const handleDiscover = async () => {
     setIsDiscovering(true)
     try {
-      await discoverBacklinks(siteId)
+      await discoverBacklinks(projectId)
     } catch (error) {
       console.error('Discovery error:', error)
     }
@@ -77,10 +77,13 @@ export default function SEOBacklinks({ siteId }) {
     }
   }
 
-  const filteredOpportunities = backlinkOpportunities?.filter(opp => {
+  // Ensure backlinkOpportunities is always an array
+  const opportunitiesArray = Array.isArray(backlinkOpportunities) ? backlinkOpportunities : []
+  
+  const filteredOpportunities = opportunitiesArray.filter(opp => {
     if (filter === 'all') return true
     return opp.status === filter || opp.opportunity_type === filter
-  }) || []
+  })
 
   return (
     <div className="space-y-6">

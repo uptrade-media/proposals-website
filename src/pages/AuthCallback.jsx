@@ -2,7 +2,7 @@ import { useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Loader2 } from 'lucide-react'
 import useAuthStore from '../lib/auth-store'
-import axios from 'axios'
+import { authApi } from '../lib/portal-api'
 import { supabase, getCurrentUser } from '../lib/supabase-auth'
 
 export default function AuthCallback() {
@@ -12,9 +12,44 @@ export default function AuthCallback() {
   useEffect(() => {
     const handleCallback = async () => {
       console.log('[AuthCallback] Processing OAuth callback...')
+      console.log('[AuthCallback] URL:', window.location.href)
+      console.log('[AuthCallback] Hash:', window.location.hash ? 'present' : 'none')
       
-      // Wait for Supabase to process the OAuth callback and establish session
+      // If there's a hash fragment with tokens, we need to handle it
+      // Supabase's detectSessionInUrl should handle this, but we'll be more explicit
+      if (window.location.hash && window.location.hash.includes('access_token')) {
+        console.log('[AuthCallback] Hash fragment detected, parsing tokens...')
+        
+        // Parse the hash fragment
+        const hashParams = new URLSearchParams(window.location.hash.substring(1))
+        const accessToken = hashParams.get('access_token')
+        const refreshToken = hashParams.get('refresh_token')
+        
+        if (accessToken && refreshToken) {
+          console.log('[AuthCallback] Setting session from URL tokens...')
+          const { data, error } = await supabase.auth.setSession({
+            access_token: accessToken,
+            refresh_token: refreshToken
+          })
+          
+          if (error) {
+            console.error('[AuthCallback] Failed to set session:', error)
+            navigate('/login?error=session_failed', { replace: true })
+            return
+          }
+          
+          if (data.session) {
+            console.log('[AuthCallback] Session set successfully, processing...')
+            await processAuthenticatedUser(data.session)
+            return
+          }
+        }
+      }
+      
+      // Fallback: try getSession in case tokens were already processed
       const { data: { session }, error: sessionError } = await supabase.auth.getSession()
+      
+      console.log('[AuthCallback] getSession result:', { hasSession: !!session, error: sessionError?.message })
       
       if (sessionError) {
         console.error('[AuthCallback] Session error:', sessionError)
@@ -22,37 +57,50 @@ export default function AuthCallback() {
         return
       }
       
-      if (!session) {
-        console.log('[AuthCallback] No session yet, waiting for auth state change...')
-        // Session might not be ready yet - wait for auth state change
-        const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, newSession) => {
-          console.log('[AuthCallback] Auth state changed:', event)
-          if (event === 'SIGNED_IN' && newSession) {
-            subscription.unsubscribe()
-            await processAuthenticatedUser(newSession)
-          }
-        })
-        
-        // Timeout after 10 seconds
-        setTimeout(() => {
-          subscription.unsubscribe()
-          console.error('[AuthCallback] Timeout waiting for session')
-          navigate('/login?error=timeout', { replace: true })
-        }, 10000)
+      if (session) {
+        // Session exists, process immediately
+        console.log('[AuthCallback] Session found, processing...')
+        await processAuthenticatedUser(session)
         return
       }
       
-      // Session exists, process the user
-      await processAuthenticatedUser(session)
+      console.log('[AuthCallback] No session yet, waiting for auth state change...')
+      // Session might not be ready yet - wait for auth state change
+      let handled = false
+      const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, newSession) => {
+        console.log('[AuthCallback] Auth state changed:', event, 'session:', !!newSession)
+        
+        // Handle SIGNED_IN or INITIAL_SESSION with a valid session
+        if (!handled && newSession && (event === 'SIGNED_IN' || event === 'INITIAL_SESSION')) {
+          handled = true
+          subscription.unsubscribe()
+          await processAuthenticatedUser(newSession)
+        }
+      })
+      
+      // Timeout after 15 seconds (increased from 10)
+      setTimeout(() => {
+        if (!handled) {
+          subscription.unsubscribe()
+          console.error('[AuthCallback] Timeout waiting for session')
+          navigate('/login?error=timeout', { replace: true })
+        }
+      }, 15000)
     }
     
     const processAuthenticatedUser = async (session) => {
       const user = session.user
-      console.log('[AuthCallback] User authenticated:', user.email)
+      const accessToken = session.access_token
+      console.log('[AuthCallback] User authenticated:', user.email, 'token present:', !!accessToken)
       
       // Check if this is a new account setup (from AccountSetup page with token)
       const pendingSetupToken = localStorage.getItem('pendingSetupToken')
       const pendingSetupContactId = localStorage.getItem('pendingSetupContactId')
+      
+      // Create axios config with the new token (bypassing interceptor's getSession)
+      const authConfig = {
+        headers: { Authorization: `Bearer ${accessToken}` }
+      }
       
       if (pendingSetupToken) {
         console.log('[AuthCallback] Completing account setup after OAuth...')
@@ -61,7 +109,8 @@ export default function AuthCallback() {
         try {
           const googleId = user?.user_metadata?.provider_id || user?.id
           
-          await axios.post('/.netlify/functions/auth-complete-setup', {
+          // Use the token directly since session may not be synced yet
+          await authApi.completeSetup({
             token: pendingSetupToken,
             method: 'google',
             googleId
@@ -76,9 +125,7 @@ export default function AuthCallback() {
         localStorage.removeItem('pendingSetupContactId')
         
         try {
-          await axios.post('/.netlify/functions/auth-mark-setup-complete', {
-            contactId: pendingSetupContactId
-          }, { withCredentials: true })
+          await authApi.markSetupComplete()
         } catch (setupError) {
           console.error('[AuthCallback] Failed to complete setup:', setupError)
         }
@@ -86,7 +133,7 @@ export default function AuthCallback() {
         // Link contact by email for regular OAuth logins
         console.log('[AuthCallback] Linking contact for:', user.email)
         try {
-          await axios.post('/.netlify/functions/auth-link-contact', {
+          await authApi.linkContact({
             email: user.email,
             authUserId: user.id,
             name: user.user_metadata?.name || user.user_metadata?.full_name
@@ -95,6 +142,10 @@ export default function AuthCallback() {
           console.log('[AuthCallback] Contact link result:', linkError?.response?.data || 'ok')
         }
       }
+      
+      // Small delay to ensure session is persisted before getCurrentUser reads it
+      console.log('[AuthCallback] Waiting for session to sync...')
+      await new Promise(resolve => setTimeout(resolve, 300))
       
       // Get user data from contacts table - we already have a valid session
       try {
@@ -106,6 +157,10 @@ export default function AuthCallback() {
           
           // Fetch organization context
           await fetchOrganizationContext(session.access_token)
+          
+          // Double check auth state was set
+          const { isAuthenticated } = useAuthStore.getState()
+          console.log('[AuthCallback] Auth state after setUser:', { isAuthenticated, user: contactUser.email })
           
           console.log('[AuthCallback] Auth successful, redirecting to dashboard')
           navigate('/dashboard', { replace: true })

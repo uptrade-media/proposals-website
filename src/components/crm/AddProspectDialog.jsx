@@ -23,7 +23,7 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import { Loader2, UserPlus, Building2, Mail, Phone, Globe, Tag, FileText } from 'lucide-react'
-import api from '@/lib/api'
+import { adminApi } from '@/lib/portal-api'
 import { toast } from '@/lib/toast'
 
 const LEAD_SOURCES = [
@@ -68,7 +68,7 @@ export default function AddProspectDialog({ open, onOpenChange, onSuccess }) {
 
     setIsSubmitting(true)
     try {
-      await api.post('/.netlify/functions/admin-clients-create', {
+      await adminApi.createClient({
         ...formData,
         pipeline_stage: 'new_lead'
       })

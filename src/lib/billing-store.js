@@ -1,5 +1,5 @@
 import { create } from 'zustand'
-import api from './api'
+import { billingApi } from './portal-api'
 
 const useBillingStore = create((set, get) => ({
   invoices: [],
@@ -25,19 +25,23 @@ const useBillingStore = create((set, get) => ({
     set({ isLoading: true, error: null })
     
     try {
-      const params = new URLSearchParams()
-      if (filters.status) params.append('status', filters.status)
-      if (filters.projectId) params.append('projectId', filters.projectId)
-      
-      const url = `/.netlify/functions/invoices-list${params.toString() ? `?${params.toString()}` : ''}`
-      const response = await api.get(url)
+      // For Billing module, only show invoices sent FROM Uptrade TO client
+      // Set recipientView and showInBilling to filter appropriately
+      const params = {
+        ...filters,
+        recipientView: filters.recipientView !== false ? true : filters.recipientView,
+        showInBilling: filters.showInBilling !== false ? true : filters.showInBilling,
+      }
+
+      const response = await billingApi.listInvoices(params)
+      const data = response.data || response
       
       set({ 
-        invoices: response.data.invoices,
+        invoices: data.invoices || data,
         isLoading: false 
       })
       
-      return { success: true, data: response.data }
+      return { success: true, data }
     } catch (error) {
       const errorMessage = error.response?.data?.error || 'Failed to fetch invoices'
       set({ 
@@ -53,14 +57,9 @@ const useBillingStore = create((set, get) => ({
     set({ isLoading: true, error: null })
     
     try {
-      // fetchInvoice currently uses the list endpoint
-      // Individual invoice fetch can be added later if needed
-      const response = await api.get(`/.netlify/functions/invoices-list`)
-      const invoice = response.data.invoices.find(inv => inv.id === invoiceId)
-      
-      if (!invoice) {
-        throw new Error('Invoice not found')
-      }
+      const response = await billingApi.getInvoice(invoiceId)
+      const data = response.data || response
+      const invoice = data.invoice || data
       
       set({ 
         currentInvoice: invoice,
@@ -83,15 +82,16 @@ const useBillingStore = create((set, get) => ({
     set({ isLoading: true, error: null })
     
     try {
-      const response = await api.post('/.netlify/functions/invoices-create', invoiceData)
+      const response = await billingApi.createInvoice(invoiceData)
+      const data = response.data || response
       
       // Add new invoice to the list
       set(state => ({ 
-        invoices: [response.data.invoice, ...state.invoices],
+        invoices: [data.invoice || data, ...state.invoices],
         isLoading: false 
       }))
       
-      return { success: true, data: response.data }
+      return { success: true, data }
     } catch (error) {
       const errorMessage = error.response?.data?.error || 'Failed to create invoice'
       set({ 
@@ -107,20 +107,22 @@ const useBillingStore = create((set, get) => ({
     set({ isLoading: true, error: null })
     
     try {
-      const response = await api.put(`/invoices/${invoiceId}`, invoiceData)
+      const response = await billingApi.updateInvoice(invoiceId, invoiceData)
+      const data = response.data || response
+      const invoice = data.invoice || data
       
       // Update invoice in the list
       set(state => ({
         invoices: state.invoices.map(i => 
-          i.id === invoiceId ? response.data.invoice : i
+          i.id === invoiceId ? invoice : i
         ),
         currentInvoice: state.currentInvoice?.id === invoiceId 
-          ? response.data.invoice 
+          ? invoice 
           : state.currentInvoice,
         isLoading: false
       }))
       
-      return { success: true, data: response.data }
+      return { success: true, data }
     } catch (error) {
       const errorMessage = error.response?.data?.error || 'Failed to update invoice'
       set({ 
@@ -136,15 +138,17 @@ const useBillingStore = create((set, get) => ({
     set({ isLoading: true, error: null })
     
     try {
-      const response = await api.post(`/invoices/${invoiceId}/mark-paid`)
+      const response = await billingApi.markInvoicePaid(invoiceId)
+      const data = response.data || response
+      const invoice = data.invoice || data
       
       // Update invoice in the list
       set(state => ({
         invoices: state.invoices.map(i => 
-          i.id === invoiceId ? response.data.invoice : i
+          i.id === invoiceId ? invoice : i
         ),
         currentInvoice: state.currentInvoice?.id === invoiceId 
-          ? response.data.invoice 
+          ? invoice 
           : state.currentInvoice,
         isLoading: false
       }))
@@ -152,7 +156,7 @@ const useBillingStore = create((set, get) => ({
       // Refresh summary
       get().fetchBillingSummary()
       
-      return { success: true, data: response.data }
+      return { success: true, data }
     } catch (error) {
       const errorMessage = error.response?.data?.error || 'Failed to mark invoice as paid'
       set({ 
@@ -168,13 +172,15 @@ const useBillingStore = create((set, get) => ({
     set({ isLoading: true, error: null })
     
     try {
-      const response = await api.get('/.netlify/functions/billing-summary')
+      const response = await billingApi.getSummary()
+      const data = response.data || response
+      
       set({ 
-        summary: response.data.summary,
+        summary: data.summary || data,
         isLoading: false 
       })
       
-      return { success: true, data: response.data }
+      return { success: true, data }
     } catch (error) {
       const errorMessage = error.response?.data?.error || 'Failed to fetch billing summary'
       set({ 
@@ -188,10 +194,14 @@ const useBillingStore = create((set, get) => ({
   // Fetch overdue invoices
   fetchOverdueInvoices: async () => {
     try {
-      const response = await api.get('/.netlify/functions/billing-overdue')
-      set({ overdueInvoices: response.data.overdue_invoices })
+      const response = await billingApi.getOverdue()
+      const data = response.data || response
       
-      return { success: true, data: response.data }
+      const incoming = data.overdue_invoices || data.overdueInvoices || data
+      const normalized = Array.isArray(incoming) ? incoming : []
+      set({ overdueInvoices: normalized })
+      
+      return { success: true, data }
     } catch (error) {
       const errorMessage = error.response?.data?.error || 'Failed to fetch overdue invoices'
       set({ error: errorMessage })
@@ -291,28 +301,27 @@ const useBillingStore = create((set, get) => ({
     set({ isLoading: true, error: null })
     
     try {
-      const response = await api.post('/.netlify/functions/invoices-pay', {
-        invoiceId,
-        sourceId: paymentData.sourceId
-      })
+      const response = await billingApi.payInvoice(invoiceId, { sourceId: paymentData.sourceId })
+      const data = response.data || response
+      const invoice = data.invoice || data
 
       // Update invoice in the list to reflect paid status
       set(state => ({
         invoices: state.invoices.map(inv => 
           inv.id === invoiceId 
-            ? response.data.invoice
+            ? invoice
             : inv
         ),
         currentInvoice: state.currentInvoice?.id === invoiceId
-          ? response.data.invoice
+          ? invoice
           : state.currentInvoice,
         isLoading: false
       }))
 
       return { 
         success: true, 
-        data: response.data,
-        payment: response.data.payment
+        data,
+        payment: data.payment
       }
     } catch (error) {
       const errorMessage = error.response?.data?.error || error.response?.data?.details || error.message || 'Payment failed'
@@ -329,7 +338,8 @@ const useBillingStore = create((set, get) => ({
     set({ isLoading: true, error: null })
     
     try {
-      const response = await api.post('/.netlify/functions/invoices-send', { invoiceId })
+      const response = await billingApi.sendInvoice(invoiceId)
+      const data = response.data || response
       
       // Update invoice in list
       set(state => ({
@@ -341,7 +351,7 @@ const useBillingStore = create((set, get) => ({
         isLoading: false
       }))
 
-      return { success: true, data: response.data }
+      return { success: true, data }
     } catch (error) {
       const errorMessage = error.response?.data?.error || 'Failed to send invoice'
       set({ isLoading: false, error: errorMessage })
@@ -354,7 +364,8 @@ const useBillingStore = create((set, get) => ({
     set({ isLoading: true, error: null })
     
     try {
-      const response = await api.post('/.netlify/functions/invoices-reminder', { invoiceId })
+      const response = await billingApi.sendReminder(invoiceId)
+      const data = response.data || response
       
       // Update invoice in list with new reminder count
       set(state => ({
@@ -362,16 +373,16 @@ const useBillingStore = create((set, get) => ({
           inv.id === invoiceId 
             ? { 
                 ...inv, 
-                reminderCount: response.data.reminderCount,
+                reminderCount: data.reminderCount,
                 lastReminderSent: new Date().toISOString(),
-                nextReminderDate: response.data.nextReminderDate
+                nextReminderDate: data.nextReminderDate
               }
             : inv
         ),
         isLoading: false
       }))
 
-      return { success: true, data: response.data }
+      return { success: true, data }
     } catch (error) {
       const errorMessage = error.response?.data?.error || 'Failed to send reminder'
       set({ isLoading: false, error: errorMessage })
@@ -384,7 +395,8 @@ const useBillingStore = create((set, get) => ({
     set({ isLoading: true, error: null })
     
     try {
-      const response = await api.delete(`/.netlify/functions/invoices-delete/${invoiceId}`)
+      const response = await billingApi.deleteInvoice(invoiceId)
+      const data = response.data || response
       
       // Remove invoice from the list
       set(state => ({
@@ -393,7 +405,7 @@ const useBillingStore = create((set, get) => ({
         isLoading: false
       }))
       
-      return { success: true, data: response.data }
+      return { success: true, data }
     } catch (error) {
       const errorMessage = error.response?.data?.error || 'Failed to delete invoice'
       set({ 
@@ -409,10 +421,8 @@ const useBillingStore = create((set, get) => ({
     set({ isLoading: true, error: null })
     
     try {
-      const response = await api.post('/.netlify/functions/invoices-recurring-toggle', { 
-        invoiceId, 
-        paused 
-      })
+      const response = await billingApi.toggleRecurringPause(invoiceId, paused)
+      const data = response.data || response
       
       // Update invoice in list
       set(state => ({
@@ -424,7 +434,7 @@ const useBillingStore = create((set, get) => ({
         isLoading: false
       }))
 
-      return { success: true, data: response.data }
+      return { success: true, data }
     } catch (error) {
       const errorMessage = error.response?.data?.error || 'Failed to update recurring status'
       set({ isLoading: false, error: errorMessage })

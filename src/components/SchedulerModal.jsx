@@ -1,6 +1,6 @@
 // src/components/SchedulerModal.jsx
-// Scheduler modal for booking consultations from the portal
-// Adapted from main site for Vite/React compatibility
+// Universal scheduler for booking consultations with Uptrade Media
+// Calls Portal API for availability (synced with internal calendar)
 import { useState, useEffect, useCallback } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { 
@@ -21,8 +21,8 @@ import {
   CalendarDays
 } from 'lucide-react'
 
-// Main site API base URL (use www to avoid CORS redirect issues)
-const API_BASE = 'https://www.uptrademedia.com'
+// Portal API base URL for availability and booking
+const API_BASE = import.meta.env.VITE_PORTAL_API_URL || 'https://api.uptrademedia.com'
 
 // Time slots available for booking (Eastern Time)
 const TIME_SLOTS = [
@@ -224,19 +224,28 @@ export default function SchedulerModal({
   useEffect(() => {
     if (selectedDate) {
       setIsLoadingSlots(true)
-      fetch(`${API_BASE}/api/calendar/availability?date=${selectedDate.toISOString().split('T')[0]}`)
+      const dateStr = selectedDate.toISOString().split('T')[0]
+      fetch(`${API_BASE}/booking/availability?date=${dateStr}&type=${selectedMeetingType}`)
         .then(res => {
           if (!res.ok) throw new Error(`HTTP ${res.status}`)
           return res.json()
         })
-        .then(data => setBookedSlots(data.bookedSlots || []))
+        .then(data => {
+          // New API returns slots array with available boolean
+          if (data.slots) {
+            const booked = data.slots.filter(s => !s.available).map(s => s.time)
+            setBookedSlots(booked)
+          } else {
+            setBookedSlots(data.bookedSlots || [])
+          }
+        })
         .catch(err => {
           console.error('Failed to fetch availability:', err)
           setBookedSlots([])
         })
         .finally(() => setIsLoadingSlots(false))
     }
-  }, [selectedDate])
+  }, [selectedDate, selectedMeetingType])
 
   // Reset on close
   useEffect(() => {
@@ -285,16 +294,22 @@ export default function SchedulerModal({
     setBookingError(null)
     
     try {
-      const response = await fetch(`${API_BASE}/api/calendar/book`, {
+      const response = await fetch(`${API_BASE}/booking/create`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
+          bookingType: selectedMeetingType,
           date: selectedDate.toISOString().split('T')[0],
           time: selectedTime,
-          meetingType: selectedMeetingType,
-          source: 'portal-audit',
-          auditContext: auditContext || null,
-          ...formData,
+          name: formData.name,
+          email: formData.email,
+          phone: formData.phone,
+          company: formData.company,
+          message: formData.message,
+          source: auditContext ? 'audit_page' : 'portal',
+          sourceUrl: window.location.href,
+          auditId: auditContext?.auditId,
+          auditContext: auditContext ? JSON.stringify(auditContext) : null,
         }),
       })
       

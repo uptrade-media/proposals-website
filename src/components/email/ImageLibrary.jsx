@@ -2,7 +2,7 @@
  * ImageLibrary - Upload and manage email images
  * Supports drag-drop, Netlify Blobs storage, and image optimization
  */
-import { useState, useCallback, useRef } from 'react'
+import { useState, useCallback, useEffect, useRef } from 'react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
@@ -46,6 +46,7 @@ import {
   FileImage,
   Sparkles,
   Wand2,
+  Loader2,
   ExternalLink
 } from 'lucide-react'
 import './styles/liquid-glass.css'
@@ -179,6 +180,17 @@ function ImageCard({ image, isSelected, onSelect, onDelete, viewMode }) {
   )
 }
 
+const DEFAULT_IMAGES = [
+  { id: 1, name: 'hero-banner.jpg', url: 'https://images.unsplash.com/photo-1557804506-669a67965ba0?w=800', thumbnail: 'https://images.unsplash.com/photo-1557804506-669a67965ba0?w=200', width: 1200, height: 600, size: 245000, folder: 'campaigns' },
+  { id: 2, name: 'product-1.png', url: 'https://images.unsplash.com/photo-1523275335684-37898b6baf30?w=800', thumbnail: 'https://images.unsplash.com/photo-1523275335684-37898b6baf30?w=200', width: 800, height: 800, size: 156000, folder: 'products' },
+  { id: 3, name: 'team-photo.jpg', url: 'https://images.unsplash.com/photo-1522071820081-009f0129c71c?w=800', thumbnail: 'https://images.unsplash.com/photo-1522071820081-009f0129c71c?w=200', width: 1600, height: 900, size: 320000, folder: 'about' },
+  { id: 4, name: 'logo.png', url: 'https://images.unsplash.com/photo-1599305445671-ac291c95aaa9?w=800', thumbnail: 'https://images.unsplash.com/photo-1599305445671-ac291c95aaa9?w=200', width: 200, height: 200, size: 24000, folder: 'brand' },
+  { id: 5, name: 'sale-banner.jpg', url: 'https://images.unsplash.com/photo-1607083206869-4c7672e72a8a?w=800', thumbnail: 'https://images.unsplash.com/photo-1607083206869-4c7672e72a8a?w=200', width: 1200, height: 400, size: 189000, folder: 'campaigns' },
+  { id: 6, name: 'cta-background.jpg', url: 'https://images.unsplash.com/photo-1557682250-33bd709cbe85?w=800', thumbnail: 'https://images.unsplash.com/photo-1557682250-33bd709cbe85?w=200', width: 1920, height: 1080, size: 456000, folder: 'backgrounds' },
+]
+
+const DEFAULT_FOLDERS = ['all', 'campaigns', 'products', 'about', 'brand', 'backgrounds']
+
 // Upload dropzone
 function UploadDropzone({ onUpload, isUploading, uploadProgress }) {
   const [isDragging, setIsDragging] = useState(false)
@@ -268,16 +280,16 @@ function UploadDropzone({ onUpload, isUploading, uploadProgress }) {
   )
 }
 
-export default function ImageLibrary({ open, onOpenChange, onSelect }) {
-  const [images, setImages] = useState([
-    // Mock images - would come from API
-    { id: 1, name: 'hero-banner.jpg', url: 'https://images.unsplash.com/photo-1557804506-669a67965ba0?w=800', thumbnail: 'https://images.unsplash.com/photo-1557804506-669a67965ba0?w=200', width: 1200, height: 600, size: 245000, folder: 'campaigns' },
-    { id: 2, name: 'product-1.png', url: 'https://images.unsplash.com/photo-1523275335684-37898b6baf30?w=800', thumbnail: 'https://images.unsplash.com/photo-1523275335684-37898b6baf30?w=200', width: 800, height: 800, size: 156000, folder: 'products' },
-    { id: 3, name: 'team-photo.jpg', url: 'https://images.unsplash.com/photo-1522071820081-009f0129c71c?w=800', thumbnail: 'https://images.unsplash.com/photo-1522071820081-009f0129c71c?w=200', width: 1600, height: 900, size: 320000, folder: 'about' },
-    { id: 4, name: 'logo.png', url: 'https://images.unsplash.com/photo-1599305445671-ac291c95aaa9?w=800', thumbnail: 'https://images.unsplash.com/photo-1599305445671-ac291c95aaa9?w=200', width: 200, height: 200, size: 24000, folder: 'brand' },
-    { id: 5, name: 'sale-banner.jpg', url: 'https://images.unsplash.com/photo-1607083206869-4c7672e72a8a?w=800', thumbnail: 'https://images.unsplash.com/photo-1607083206869-4c7672e72a8a?w=200', width: 1200, height: 400, size: 189000, folder: 'campaigns' },
-    { id: 6, name: 'cta-background.jpg', url: 'https://images.unsplash.com/photo-1557682250-33bd709cbe85?w=800', thumbnail: 'https://images.unsplash.com/photo-1557682250-33bd709cbe85?w=200', width: 1920, height: 1080, size: 456000, folder: 'backgrounds' },
-  ])
+export default function ImageLibrary({ 
+  open, 
+  onOpenChange, 
+  onSelect, 
+  onUpload: externalUpload,
+  images: providedImages = [], 
+  loading = false,
+  uploadProgress: externalUploadProgress = 0
+}) {
+  const [images, setImages] = useState(DEFAULT_IMAGES)
   const [selectedImage, setSelectedImage] = useState(null)
   const [viewMode, setViewMode] = useState('grid')
   const [searchQuery, setSearchQuery] = useState('')
@@ -285,7 +297,25 @@ export default function ImageLibrary({ open, onOpenChange, onSelect }) {
   const [isUploading, setIsUploading] = useState(false)
   const [uploadProgress, setUploadProgress] = useState(0)
 
-  const folders = ['all', 'campaigns', 'products', 'about', 'brand', 'backgrounds']
+  const folders = Array.from(new Set(['all', ...(images.map((img) => img.folder || 'project'))]))
+
+  useEffect(() => {
+    if (providedImages && providedImages.length > 0) {
+      const mapped = providedImages.map((file) => ({
+        id: file.id,
+        name: file.filename || file.name,
+        url: file.url,
+        thumbnail: file.url,
+        width: file.width || 0,
+        height: file.height || 0,
+        size: file.fileSize || file.size || 0,
+        folder: 'project'
+      }))
+      setImages(mapped)
+    } else {
+      setImages(DEFAULT_IMAGES)
+    }
+  }, [providedImages])
   
   const filteredImages = images.filter(img => {
     const matchesSearch = img.name.toLowerCase().includes(searchQuery.toLowerCase())
@@ -294,6 +324,20 @@ export default function ImageLibrary({ open, onOpenChange, onSelect }) {
   })
 
   const handleUpload = async (files) => {
+    // If external upload handler provided, use it
+    if (externalUpload) {
+      setIsUploading(true)
+      try {
+        for (const file of files) {
+          await externalUpload(file)
+        }
+      } finally {
+        setIsUploading(false)
+      }
+      return
+    }
+
+    // Fallback: mock upload for demo/testing
     setIsUploading(true)
     setUploadProgress(0)
 
@@ -425,7 +469,12 @@ export default function ImageLibrary({ open, onOpenChange, onSelect }) {
 
             {/* Image grid */}
             <div className="flex-1 pl-4 overflow-y-auto">
-              {filteredImages.length === 0 ? (
+              {loading ? (
+                <div className="flex flex-col items-center justify-center h-full text-center text-muted-foreground gap-2">
+                  <Loader2 className="h-5 w-5 animate-spin" />
+                  <span className="text-sm">Loading images…</span>
+                </div>
+              ) : filteredImages.length === 0 ? (
                 <div className="flex flex-col items-center justify-center h-full text-center">
                   <div className="w-16 h-16 rounded-full bg-gray-100 flex items-center justify-center mb-4">
                     <FileImage className="h-8 w-8 text-gray-400" />
@@ -469,7 +518,7 @@ export default function ImageLibrary({ open, onOpenChange, onSelect }) {
             <UploadDropzone 
               onUpload={handleUpload}
               isUploading={isUploading}
-              uploadProgress={uploadProgress}
+              uploadProgress={externalUploadProgress || uploadProgress}
             />
             
             <div className="mt-6 p-4 glass-accent rounded-xl">

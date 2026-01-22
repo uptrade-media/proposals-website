@@ -13,7 +13,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Separator } from '@/components/ui/separator'
 import { toast } from '@/lib/toast'
-import api from '@/lib/api'
+import { engageApi } from '@/lib/portal-api'
 import {
   ArrowLeft,
   Save,
@@ -90,7 +90,7 @@ export default function EngageElementEditor({ elementId, onBack }) {
   const fetchElement = async () => {
     try {
       setLoading(true)
-      const { data } = await api.get(`/.netlify/functions/engage-elements?elementId=${elementId}`)
+      const { data } = await engageApi.getElement(elementId)
       setElement(data.element)
     } catch (error) {
       console.error('Failed to fetch element:', error)
@@ -103,10 +103,7 @@ export default function EngageElementEditor({ elementId, onBack }) {
   const handleSave = async () => {
     try {
       setSaving(true)
-      await api.put('/.netlify/functions/engage-elements', {
-        elementId,
-        ...element
-      })
+      await engageApi.updateElement(elementId, element)
       toast.success('Element saved!')
     } catch (error) {
       console.error('Failed to save element:', error)
@@ -118,10 +115,7 @@ export default function EngageElementEditor({ elementId, onBack }) {
 
   const handlePublish = async () => {
     try {
-      await api.put('/.netlify/functions/engage-elements', {
-        elementId,
-        action: 'publish'
-      })
+      await engageApi.updateElement(elementId, { action: 'publish' })
       toast.success('Element published!')
       fetchElement()
     } catch (error) {
@@ -131,10 +125,7 @@ export default function EngageElementEditor({ elementId, onBack }) {
 
   const handlePause = async () => {
     try {
-      await api.put('/.netlify/functions/engage-elements', {
-        elementId,
-        action: 'pause'
-      })
+      await engageApi.updateElement(elementId, { action: 'pause' })
       toast.success('Element paused')
       fetchElement()
     } catch (error) {

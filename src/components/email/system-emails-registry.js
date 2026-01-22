@@ -61,6 +61,12 @@ export const SYSTEM_EMAIL_CATEGORIES = {
     name: 'Notifications',
     description: 'System notifications and alerts',
     icon: 'Bell'
+  },
+  forms: {
+    id: 'forms',
+    name: 'Form Submissions',
+    description: 'Form confirmation and notification emails',
+    icon: 'FormInput'
   }
 }
 
@@ -350,6 +356,113 @@ export const SYSTEM_EMAILS = [
       { name: '{{download_link}}', description: 'Link to download file' }
     ],
     defaultSubject: '{{shared_by}} shared a file with you',
+    editable: true
+  },
+
+  // ============================================
+  // FORM SUBMISSION EMAILS
+  // ============================================
+  {
+    id: 'form-submission-confirmation',
+    name: 'Form Submission Confirmation',
+    category: 'forms',
+    description: 'Confirmation email sent to form submitter thanking them for their submission',
+    trigger: 'Form is submitted with email field',
+    functionFile: 'forms-submit.js',
+    variables: [
+      { name: '{{first_name}}', description: 'Submitter first name (extracted from form)' },
+      { name: '{{form_name}}', description: 'Name of the form submitted' },
+      { name: '{{company_name}}', description: 'Your company/organization name' },
+      { name: '{{submission_summary}}', description: 'Summary of submitted fields (HTML)' }
+    ],
+    defaultSubject: 'Thank you for your submission!',
+    editable: true,
+    // Default branded template using brand_primary and brand_secondary
+    defaultHtml: `
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+</head>
+<body style="margin: 0; padding: 0; background-color: #f5f5f7; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;">
+  <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background-color: #f5f5f7;">
+    <tr>
+      <td align="center" style="padding: 40px 20px;">
+        <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="max-width: 600px; background-color: #ffffff; border-radius: 16px; box-shadow: 0 2px 8px rgba(0,0,0,0.08);">
+          <!-- Header with gradient -->
+          <tr>
+            <td style="background: linear-gradient(135deg, {{brand_primary}} 0%, {{brand_secondary}} 100%); padding: 40px; border-radius: 16px 16px 0 0; text-align: center;">
+              <div style="width: 60px; height: 60px; background-color: rgba(255,255,255,0.2); border-radius: 50%; margin: 0 auto 16px auto; display: flex; align-items: center; justify-content: center;">
+                <span style="font-size: 28px;">✓</span>
+              </div>
+              <h1 style="margin: 0; color: #ffffff; font-size: 24px; font-weight: 600;">
+                Thank You!
+              </h1>
+            </td>
+          </tr>
+          
+          <!-- Body -->
+          <tr>
+            <td style="padding: 40px;">
+              <p style="margin: 0 0 20px 0; font-size: 16px; line-height: 1.6; color: #1a1a1a;">
+                Hi{{#if first_name}} {{first_name}}{{/if}},
+              </p>
+              <p style="margin: 0 0 20px 0; font-size: 16px; line-height: 1.6; color: #1a1a1a;">
+                We've received your submission and wanted to let you know we're on it! Our team will review your information and get back to you as soon as possible.
+              </p>
+              
+              {{#if submission_summary}}
+              <div style="background-color: #f9fafb; border-radius: 8px; padding: 20px; margin: 24px 0;">
+                <h3 style="margin: 0 0 12px 0; font-size: 14px; font-weight: 600; color: #666666; text-transform: uppercase; letter-spacing: 0.5px;">
+                  Your Submission
+                </h3>
+                {{{submission_summary}}}
+              </div>
+              {{/if}}
+              
+              <p style="margin: 24px 0 0 0; font-size: 16px; line-height: 1.6; color: #1a1a1a;">
+                If you have any questions in the meantime, feel free to reply to this email.
+              </p>
+            </td>
+          </tr>
+          
+          <!-- Footer -->
+          <tr>
+            <td style="padding: 24px 40px; background-color: #f9fafb; border-radius: 0 0 16px 16px; text-align: center;">
+              <p style="margin: 0; font-size: 14px; color: #666666;">
+                {{company_name}}
+              </p>
+              <p style="margin: 8px 0 0 0; font-size: 12px; color: #999999;">
+                This is an automated confirmation of your form submission.
+              </p>
+            </td>
+          </tr>
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>
+    `
+  },
+  {
+    id: 'form-submission-notification',
+    name: 'Form Submission Notification',
+    category: 'forms',
+    description: 'Internal notification sent to team when a form is submitted',
+    trigger: 'Form is submitted',
+    functionFile: 'forms-submit.js',
+    variables: [
+      { name: '{{form_name}}', description: 'Name of the form submitted' },
+      { name: '{{submitter_email}}', description: 'Email of the person who submitted' },
+      { name: '{{submitter_name}}', description: 'Name of the person who submitted' },
+      { name: '{{submission_details}}', description: 'Full form field data (HTML table)' },
+      { name: '{{submission_time}}', description: 'Timestamp of submission' },
+      { name: '{{source_page}}', description: 'Page URL where form was submitted' },
+      { name: '{{view_link}}', description: 'Link to view submission in Portal' }
+    ],
+    defaultSubject: 'New {{form_name}} Submission',
     editable: true
   }
 ]

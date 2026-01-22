@@ -1,5 +1,5 @@
 import { create } from 'zustand'
-import api from './api'
+import { proposalsApi } from './portal-api'
 
 export const useProposalsStore = create((set, get) => ({
   // State
@@ -19,8 +19,9 @@ export const useProposalsStore = create((set, get) => ({
   fetchProposals: async () => {
     set({ isLoading: true, error: null })
     try {
-      const response = await api.get('/.netlify/functions/proposals-list')
-      set({ proposals: response.data.proposals || [], isLoading: false })
+      // Increase limit to 100 to ensure recent proposals are visible
+      const response = await proposalsApi.list({ limit: 100 })
+      set({ proposals: response.data?.proposals || response.data || [], isLoading: false })
       return { success: true }
     } catch (err) {
       const error = err.response?.data?.error || 'Failed to fetch proposals'
@@ -32,9 +33,10 @@ export const useProposalsStore = create((set, get) => ({
   fetchProposal: async (id) => {
     set({ isLoading: true, error: null })
     try {
-      const response = await api.get(`/.netlify/functions/proposals-get?id=${id}`)
-      set({ currentProposal: response.data.proposal, isLoading: false })
-      return { success: true, proposal: response.data.proposal }
+      const response = await proposalsApi.get(id)
+      const proposal = response.data?.proposal || response.data
+      set({ currentProposal: proposal, isLoading: false })
+      return { success: true, proposal }
     } catch (err) {
       const error = err.response?.data?.error || 'Failed to fetch proposal'
       set({ error, isLoading: false })
@@ -46,9 +48,10 @@ export const useProposalsStore = create((set, get) => ({
   fetchTemplates: async () => {
     set({ isLoading: true, error: null })
     try {
-      const response = await api.get('/.netlify/functions/proposal-templates-list')
-      set({ templates: response.data.templates || [], isLoading: false })
-      return { success: true, templates: response.data.templates }
+      const response = await proposalsApi.listTemplates()
+      const templates = response.data?.templates || response.data || []
+      set({ templates, isLoading: false })
+      return { success: true, templates }
     } catch (err) {
       const error = err.response?.data?.error || 'Failed to fetch templates'
       set({ error, templates: [], isLoading: false })
@@ -60,8 +63,8 @@ export const useProposalsStore = create((set, get) => ({
   createProposal: async (data) => {
     set({ isCreating: true, error: null })
     try {
-      const response = await api.post('/.netlify/functions/proposals-create', data)
-      const newProposal = response.data.proposal
+      const response = await proposalsApi.create(data)
+      const newProposal = response.data?.proposal || response.data
       set(state => ({
         proposals: [newProposal, ...state.proposals],
         currentProposal: newProposal,
@@ -78,8 +81,8 @@ export const useProposalsStore = create((set, get) => ({
   updateProposal: async (id, data) => {
     set({ isCreating: true, error: null })
     try {
-      const response = await api.put(`/.netlify/functions/proposals-update?id=${id}`, data)
-      const updated = response.data.proposal
+      const response = await proposalsApi.update(id, data)
+      const updated = response.data?.proposal || response.data
       set(state => ({
         proposals: state.proposals.map(p => p.id === id ? updated : p),
         currentProposal: state.currentProposal?.id === id ? updated : state.currentProposal,
@@ -96,7 +99,7 @@ export const useProposalsStore = create((set, get) => ({
   deleteProposal: async (id) => {
     set({ isCreating: true, error: null })
     try {
-      await api.delete(`/.netlify/functions/proposals-delete?id=${id}`)
+      await proposalsApi.delete(id)
       set(state => ({
         proposals: state.proposals.filter(p => p.id !== id),
         currentProposal: state.currentProposal?.id === id ? null : state.currentProposal,
@@ -131,8 +134,8 @@ export const useProposalsStore = create((set, get) => ({
             ? [data.email] 
             : data.recipients
       }
-      const response = await api.post(`/.netlify/functions/proposals-send?id=${id}`, sendData)
-      const updated = response.data.proposal
+      const response = await proposalsApi.send(id, sendData)
+      const updated = response.data?.proposal || response.data
       set(state => ({
         proposals: state.proposals.map(p => p.id === id ? updated : p),
         currentProposal: state.currentProposal?.id === id ? updated : state.currentProposal,
@@ -140,10 +143,10 @@ export const useProposalsStore = create((set, get) => ({
       return { 
         success: true, 
         proposal: updated,
-        recipients: response.data.recipients,
-        successCount: response.data.successCount,
-        failedCount: response.data.failedCount,
-        message: response.data.message
+        recipients: response.data?.recipients,
+        successCount: response.data?.successCount,
+        failedCount: response.data?.failedCount,
+        message: response.data?.message
       }
     } catch (err) {
       const error = err.response?.data?.error || 'Failed to send proposal'
@@ -155,8 +158,8 @@ export const useProposalsStore = create((set, get) => ({
   acceptProposal: async (id, data) => {
     set({ error: null })
     try {
-      const response = await api.post(`/.netlify/functions/proposals-accept?id=${id}`, data)
-      const updated = response.data.proposal
+      const response = await proposalsApi.accept(id, data)
+      const updated = response.data?.proposal || response.data
       set(state => ({
         proposals: state.proposals.map(p => p.id === id ? updated : p),
         currentProposal: state.currentProposal?.id === id ? updated : state.currentProposal,
@@ -172,8 +175,8 @@ export const useProposalsStore = create((set, get) => ({
   declineProposal: async (id, reason) => {
     set({ error: null })
     try {
-      const response = await api.post(`/.netlify/functions/proposals-decline?id=${id}`, { reason })
-      const updated = response.data.proposal
+      const response = await proposalsApi.decline(id, { reason })
+      const updated = response.data?.proposal || response.data
       set(state => ({
         proposals: state.proposals.map(p => p.id === id ? updated : p),
         currentProposal: state.currentProposal?.id === id ? updated : state.currentProposal,
@@ -189,7 +192,7 @@ export const useProposalsStore = create((set, get) => ({
   // ========== Activity & Tracking ==========
   trackProposalView: async (id) => {
     try {
-      await api.post(`/.netlify/functions/proposals-track-view?id=${id}`, {})
+      await proposalsApi.trackView(id)
       // Update local state if needed
       set(state => {
         if (state.currentProposal?.id === id) {

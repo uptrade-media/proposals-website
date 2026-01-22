@@ -217,13 +217,32 @@ export function AddOnsGrid({
   onToggle,
   className = ''
 }) {
+  // Ensure defaults exist if list is empty or if specific defaults are missing
+  const defaultAddOns = [
+    {
+      id: 'hosting-maintenance-default',
+      name: 'Standard Hosting & Maintenance',
+      description: 'Secure cloud hosting, daily backups, SSL certificate, and monthly plugin updates.',
+      price: 29,
+      priceNote: '/mo'
+    }
+  ];
+
+  // Merge provided addOns with defaults (if not already present or overridden)
+  // Logic: display provided addOns. If 'hosting-maintenance-default' is not in addOns, prepend it?
+  // Actually, standard pattern is usually to pass all options. 
+  // However, user requested "default option". 
+  // If we want it HARDCODED as a default visual option:
+  
+  const displayAddOns = addOns.length > 0 ? addOns : defaultAddOns;
+
   return (
     <div className={className}>
       <h3 className="text-sm font-semibold uppercase tracking-wider text-[var(--text-tertiary)] mb-4">
         {title}
       </h3>
       <div className="space-y-3">
-        {addOns.map((addOn) => (
+        {displayAddOns.map((addOn) => (
           <AddOnOption
             key={addOn.id}
             {...addOn}

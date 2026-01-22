@@ -25,7 +25,7 @@ import {
   AccordionTrigger,
 } from "@/components/ui/accordion"
 
-export default function SEOIndexingIssues({ siteId }) {
+export default function SEOIndexingIssues({ projectId }) {
   const { 
     indexingStatus, 
     indexingLoading, 
@@ -41,21 +41,21 @@ export default function SEOIndexingIssues({ siteId }) {
   const [inspectionResult, setInspectionResult] = useState(null)
 
   useEffect(() => {
-    if (siteId) {
+    if (projectId) {
       loadData()
     }
-  }, [siteId])
+  }, [projectId])
 
   const loadData = async () => {
-    await analyzeIndexingIssues(siteId)
-    const sitemapData = await fetchSitemapsStatus(siteId)
+    await analyzeIndexingIssues(projectId)
+    const sitemapData = await fetchSitemapsStatus(projectId)
     setSitemaps(sitemapData)
   }
 
   const handleInspectUrl = async (url) => {
     setInspecting(url)
     try {
-      const result = await inspectUrl(siteId, url)
+      const result = await inspectUrl(projectId, url)
       setInspectionResult({ url, ...result })
     } catch (err) {
       console.error('Inspection failed:', err)

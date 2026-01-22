@@ -2,6 +2,8 @@
 // Top 3 one-click fixes with estimated impact
 import { useState } from 'react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { useSignalAccess } from '@/lib/signal-access'
+import SignalUpgradeCard from './signal/SignalUpgradeCard'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Progress } from '@/components/ui/progress'
@@ -25,7 +27,14 @@ import { useSeoStore } from '@/lib/seo-store'
  * SEOQuickWins - Actionable one-click fixes
  * Shows highest-impact fixes that can be done immediately
  */
-export default function SEOQuickWins({ site, onViewAll }) {
+export default function SEOQuickWins({ site, projectId, onViewAll }) {
+  const { hasAccess: hasSignalAccess } = useSignalAccess()
+
+  // Show upgrade prompt if no Signal access
+  if (!hasSignalAccess) {
+    return <SignalUpgradeCard feature="autofix" variant="compact" />
+  }
+
   const { 
     aiRecommendations,
     applyRecommendation,
@@ -33,12 +42,15 @@ export default function SEOQuickWins({ site, onViewAll }) {
     opportunities
   } = useSeoStore()
 
+  // Use projectId directly (new architecture) or fallback to site.id (legacy)
+  const siteId = projectId || site?.id
+
   const [applying, setApplying] = useState({})
   const [applyingAll, setApplyingAll] = useState(false)
 
   // Get auto-fixable, high-impact recommendations
   const quickWins = [
-    ...aiRecommendations
+    ...(Array.isArray(aiRecommendations) ? aiRecommendations : [])
       .filter(r => r.status === 'pending' && r.auto_fixable)
       .map(r => ({
         id: r.id,
@@ -86,7 +98,7 @@ export default function SEOQuickWins({ site, onViewAll }) {
     try {
       const recIds = quickWins.filter(w => w.type === 'recommendation').map(w => w.id)
       if (recIds.length > 0) {
-        await applyRecommendations(site.id, recIds)
+        await applyRecommendations(siteId, recIds)
       }
     } catch (error) {
       console.error('Failed to apply all:', error)

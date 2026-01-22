@@ -21,7 +21,7 @@ import {
   RefreshCw, CheckCircle2, AlertCircle, ExternalLink, Save, Trash2, Copy,
   MessageSquare, ArrowRight, Clock, FileText, Star, ChevronDown
 } from 'lucide-react'
-import api from '@/lib/api'
+import { portfolioApi } from '@/lib/portal-api'
 import { cn } from '@/lib/utils'
 
 // ===== Constants =====
@@ -497,7 +497,7 @@ export default function PortfolioAIDialog({ open, onOpenChange, onSuccess }) {
         SERVICE_OPTIONS.find(s => s.id === id)?.label || id
       )
       
-      const response = await api.post('/.netlify/functions/portfolio-ai-generate', {
+      const response = await portfolioApi.generateAI({
         ...formData,
         servicesProvided: serviceLabels,
         generateAll: true
@@ -571,7 +571,7 @@ export default function PortfolioAIDialog({ open, onOpenChange, onSuccess }) {
     setIsGenerating(true)
 
     try {
-      const response = await api.post('/.netlify/functions/portfolio-ai-generate', {
+      const response = await portfolioApi.generateAI({
         ...formData,
         existingContent: generatedBlocks,
         chatMessage: userMessage
@@ -602,7 +602,7 @@ export default function PortfolioAIDialog({ open, onOpenChange, onSuccess }) {
   const handleRegenerateBlock = async (blockId) => {
     setIsGenerating(true)
     try {
-      const response = await api.post('/.netlify/functions/portfolio-ai-generate', {
+      const response = await portfolioApi.generateAI({
         ...formData,
         regenerateBlock: blockId
       })
@@ -637,7 +637,7 @@ export default function PortfolioAIDialog({ open, onOpenChange, onSuccess }) {
         status: publish ? 'published' : 'draft'
       }
 
-      const response = await api.post('/.netlify/functions/portfolio-create', payload)
+      const response = await portfolioApi.createItem(payload)
 
       if (response.data.success) {
         onSuccess?.(response.data)

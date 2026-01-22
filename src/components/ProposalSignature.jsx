@@ -5,6 +5,7 @@ import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { CheckCircle, X, Pen, Loader2, Mail, Calendar, User } from 'lucide-react'
+import { proposalsApi } from '@/lib/portal-api'
 import ProposalDepositPayment from './ProposalDepositPayment'
 
 export default function ProposalSignature({ 
@@ -65,14 +66,10 @@ export default function ProposalSignature({
     if (!proposalId) return
     
     try {
-      const response = await fetch(`/.netlify/functions/proposals-get?id=${proposalId}`, {
-        credentials: 'include'
-      })
+      const response = await proposalsApi.get(proposalId)
+      const proposal = response.data?.proposal
       
-      if (response.ok) {
-        const data = await response.json()
-        const proposal = data.proposal
-        
+      if (proposal) {
         // Check if proposal has signature data
         if (proposal?.signed_at || proposal?.client_signed_at || proposal?.client_signature || proposal?.client_signature_url) {
           setSigned(true)
@@ -133,26 +130,14 @@ export default function ProposalSignature({
       const sigData = sigPad.current.toDataURL('image/png')
       const signedAt = new Date().toISOString()
       
-      const response = await fetch('/.netlify/functions/proposals-sign', {
-        method: 'POST',
-        credentials: 'include',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          proposalId,
-          proposalTitle,
-          signature: sigData,
-          signedAt,
-          signedBy: printedName.trim(),
-          clientEmail
-        })
+      const response = await proposalsApi.accept(proposalId, {
+        signature: sigData,
+        signedAt,
+        signedBy: printedName.trim(),
+        clientEmail
       })
 
-      if (!response.ok) {
-        const data = await response.json()
-        throw new Error(data.error || 'Failed to process signature')
-      }
-
-      const data = await response.json()
+      const data = response.data
 
       // Store signature data for inline display
       setSignatureData(sigData)

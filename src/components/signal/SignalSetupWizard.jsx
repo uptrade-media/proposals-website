@@ -66,7 +66,8 @@ import { Progress } from '@/components/ui/progress'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { cn } from '@/lib/utils'
-import api from '@/lib/api'
+import { seoApi, projectsApi, commerceApi } from '@/lib/portal-api'
+import { signalSeoApi, faqsApi, knowledgeApi, profileApi, setupApi, configApi, echoApi } from '@/lib/signal-api'
 import SignalSEOLogo from '@/components/seo/SignalSEOLogo'
 
 // =============================================================================
@@ -76,7 +77,7 @@ const SETUP_PHASES = [
   {
     id: 'discovery',
     title: 'Discovery',
-    description: 'Website crawling & content analysis',
+    description: 'Site pages auto-discovered via site-kit',
     icon: Search,
     color: 'from-blue-500 to-cyan-500'
   },
@@ -133,27 +134,14 @@ const SETUP_STEPS = [
     duration: 2000
   },
   {
-    id: 'crawl-sitemap',
+    id: 'verify-pages',
     phase: 'discovery',
-    title: 'Crawling Sitemap',
-    description: 'Discovering all pages from sitemap.xml',
-    icon: Search,
+    title: 'Verifying Pages',
+    description: 'Checking pages discovered by site-kit',
+    icon: FileText,
     color: 'text-blue-500',
     bgColor: 'bg-blue-500/10',
-    endpoint: 'seo-crawl-sitemap',
-    duration: 5000
-  },
-  {
-    id: 'crawl-pages',
-    phase: 'discovery',
-    title: 'Analyzing Page Content',
-    description: 'Extracting titles, descriptions, headings, and content',
-    icon: FileText,
-    color: 'text-cyan-500',
-    bgColor: 'bg-cyan-500/10',
-    endpoint: 'seo-crawl-page',
-    batch: true,
-    duration: 8000
+    duration: 2000
   },
   {
     id: 'internal-links',
@@ -270,6 +258,17 @@ const SETUP_STEPS = [
     bgColor: 'bg-pink-500/10',
     endpoint: 'seo-ai-blog-brain',
     duration: 4000
+  },
+  {
+    id: 'commerce-discovery',
+    phase: 'intelligence',
+    title: 'Commerce Discovery',
+    description: 'Identifying products, services, and events',
+    icon: Zap,
+    color: 'text-amber-500',
+    bgColor: 'bg-amber-500/10',
+    endpoint: 'commerce-analyze-site',
+    duration: 10000
   },
   
   // PHASE 4: DEEP ANALYSIS
@@ -750,9 +749,35 @@ function StatCard({ label, value, icon: Icon, color }) {
 const getWizardStorageKey = (projectId, siteId) => 
   `signal-wizard-${projectId || 'global'}-${siteId || 'pending'}`
 
-export default function SignalSetupWizard({ siteId: propSiteId, projectId, domain: propDomain, onComplete, onSkip }) {
+// Helper to safely extract error message from any error type
+const getErrorMessage = (err) => {
+  if (!err) return 'Unknown error'
+  if (typeof err === 'string') return err
+  
+  // Check for axios error response
+  const axiosError = err.response?.data?.error
+  if (axiosError) {
+    if (typeof axiosError === 'string') return axiosError
+    if (typeof axiosError === 'object') return axiosError.message || JSON.stringify(axiosError)
+  }
+  
+  const axiosMessage = err.response?.data?.message
+  if (axiosMessage && typeof axiosMessage === 'string') return axiosMessage
+  
+  // Check for standard error properties
+  if (err.message && typeof err.message === 'string') return err.message
+  
+  // Fallback to stringifying the object
+  if (typeof err === 'object') {
+    return err.message || err.error || JSON.stringify(err)
+  }
+  
+  return String(err)
+}
+
+export default function SignalSetupWizard({ projectId, domain: propDomain, onComplete, onSkip }) {
   // Track the actual siteId and domain (resolved from props or fetched)
-  const [siteId, setSiteId] = useState(propSiteId)
+  const [siteId, setSiteId] = useState(projectId)
   const [domain, setDomain] = useState(propDomain)
   const [siteLoading, setSiteLoading] = useState(false)
   const [siteError, setSiteError] = useState(null)
@@ -783,13 +808,16 @@ export default function SignalSetupWizard({ siteId: propSiteId, projectId, domai
   const [manualDomain, setManualDomain] = useState('')
   const [creatingFromDomain, setCreatingFromDomain] = useState(false)
 
+  // Commerce discovery results (products, services, classes, events)
+  const [commerceDiscoveryResults, setCommerceDiscoveryResults] = useState(null)
+
   // =========================================================================
   // PROGRESS PERSISTENCE - Save/Restore from localStorage
   // =========================================================================
   
   // Restore progress from localStorage on mount
   useEffect(() => {
-    const storageKey = getWizardStorageKey(projectId, siteId || propSiteId)
+    const storageKey = getWizardStorageKey(projectId, siteId)
     try {
       const saved = localStorage.getItem(storageKey)
       if (saved) {
@@ -820,14 +848,14 @@ export default function SignalSetupWizard({ siteId: propSiteId, projectId, domai
     } catch (err) {
       console.warn('[SignalSetupWizard] Failed to restore progress:', err)
     }
-  }, [projectId, siteId, propSiteId])
+  }, [projectId, siteId])
   
   // Save progress to localStorage whenever key state changes
   useEffect(() => {
     // Don't save if we haven't started or if there's no progress
     if (!hasStarted && Object.keys(stepStatuses).length === 0) return
     
-    const storageKey = getWizardStorageKey(projectId, siteId)
+    const storageKey = getWizardStorageKey(projectId, projectId)
     const saveData = {
       stepStatuses,
       currentStep,
@@ -844,20 +872,20 @@ export default function SignalSetupWizard({ siteId: propSiteId, projectId, domai
     } catch (err) {
       console.warn('[SignalSetupWizard] Failed to save progress:', err)
     }
-  }, [stepStatuses, currentStep, progress, stats, hasStarted, failedStep, projectId, siteId])
+  }, [stepStatuses, currentStep, progress, stats, hasStarted, failedStep, projectId, projectId])
   
   // Clear saved progress when wizard completes successfully
   const clearSavedProgress = useCallback(() => {
-    const storageKey = getWizardStorageKey(projectId, siteId)
+    const storageKey = getWizardStorageKey(projectId, projectId)
     try {
       localStorage.removeItem(storageKey)
       console.log('[SignalSetupWizard] Cleared saved progress')
     } catch (err) {
       console.warn('[SignalSetupWizard] Failed to clear progress:', err)
     }
-  }, [projectId, siteId])
+  }, [projectId, projectId])
 
-  // Handle manual domain submission
+  // Handle manual domain submission - projects already exist, just update domain
   const handleDomainSubmit = async () => {
     if (!manualDomain.trim()) return
     
@@ -868,51 +896,46 @@ export default function SignalSetupWizard({ siteId: propSiteId, projectId, domai
         .replace(/^https?:\/\//, '')
         .replace(/\/$/, '')
       
-      // Create the site
-      const createRes = await api.post('/.netlify/functions/seo-sites-create', {
-        domain: normalizedDomain,
-        siteName: normalizedDomain.replace(/^www\./, ''),
-        project_id: projectId
-      })
-      
-      if (createRes.data.site) {
-        setSiteId(createRes.data.site.id)
-        setDomain(createRes.data.site.domain || normalizedDomain)
+      // projectId IS the projectId - no need to create, just use it
+      if (projectId) {
+        setSiteId(projectId)
+        setDomain(normalizedDomain)
         setSiteError(null)
+      } else {
+        setSiteError('No project selected. Please select a project first.')
       }
     } catch (err) {
-      console.error('[SignalSetupWizard] Error creating site:', err)
-      setSiteError(err.response?.data?.error || err.message || 'Failed to create site')
+      console.error('[SignalSetupWizard] Error setting domain:', err)
+      setSiteError(getErrorMessage(err))
     } finally {
       setCreatingFromDomain(false)
     }
   }
 
-  // Look up site by projectId first, then fall back to domain, or use auto-setup
+  // Look up site by projectId - projectId IS the projectId
   useEffect(() => {
-    async function lookupOrCreateSite() {
-      if (propSiteId) {
-        // Already have a direct siteId, use it
-        setSiteId(propSiteId)
+    async function lookupSite() {
+      // projectId IS the projectId - no creation needed
+      if (!projectId) {
+        console.log('[SignalSetupWizard] No projectId provided, cannot proceed')
+        setSiteError('No project selected. Please select a project first.')
+        setSiteLoading(false)
         return
       }
       
-      // Allow wizard to work even without projectId if we can auto-setup
-      if (!projectId) {
-        console.log('[SignalSetupWizard] No projectId, will try auto-setup for known tenants')
-      }
-      
+      // Use projectId directly as siteId
+      setSiteId(projectId)
       setSiteLoading(true)
       setSiteError(null)
       
-      // First, if we don't have a domain, try to get it from the project
+      // Get domain from project
       let domainToUse = propDomain
-      if (!domainToUse && projectId) {
+      if (!domainToUse) {
         try {
-          const projectRes = await api.get(`/.netlify/functions/projects-get?id=${projectId}`)
+          const projectRes = await projectsApi.get(projectId)
           const project = projectRes.data?.project
-          if (project?.tenant_domain) {
-            domainToUse = project.tenant_domain
+          if (project?.domain) {
+            domainToUse = project.domain
             setDomain(domainToUse)
             console.log('[SignalSetupWizard] Got domain from project:', domainToUse)
           } else if (project?.title?.toLowerCase().includes('uptrade')) {
@@ -926,96 +949,16 @@ export default function SignalSetupWizard({ siteId: propSiteId, projectId, domai
         }
       }
       
-      try {
-        // First try to find by projectId
-        if (projectId) {
-          try {
-            const res = await api.get(`/.netlify/functions/seo-sites-get?projectId=${projectId}`)
-            if (res.data.site) {
-              setSiteId(res.data.site.id)
-              setDomain(res.data.site.domain || domainToUse)
-              setSiteLoading(false)
-              return
-            }
-          } catch (err) {
-            // 404 is expected if site isn't linked to project yet, continue to domain lookup
-            if (err.response?.status !== 404) {
-              throw err
-            }
-          }
-        }
-        
-        // Fall back to domain lookup (also links to project if found)
-        if (domainToUse) {
-          try {
-            const domainParam = encodeURIComponent(domainToUse)
-            const projectParam = projectId ? `&projectId=${projectId}` : ''
-            const res = await api.get(`/.netlify/functions/seo-sites-get?domain=${domainParam}${projectParam}`)
-            if (res.data.site) {
-              setSiteId(res.data.site.id)
-              setDomain(res.data.site.domain || domainToUse)
-              setSiteLoading(false)
-              return
-            }
-          } catch (err) {
-            // 404 is expected if site doesn't exist yet
-            if (err.response?.status !== 404) {
-              throw err
-            }
-          }
-        }
-        
-        // No site found - create one automatically if we have a domain
-        if (domainToUse) {
-          console.log('[SignalSetupWizard] No site found, creating new site for domain:', domainToUse)
-          const createRes = await api.post('/.netlify/functions/seo-sites-create', {
-            domain: domainToUse,
-            siteName: domainToUse.replace(/^www\./, ''),
-            project_id: projectId
-          })
-          
-          if (createRes.data.site) {
-            setSiteId(createRes.data.site.id)
-            setDomain(createRes.data.site.domain || domainToUse)
-            console.log('[SignalSetupWizard] Created new site:', createRes.data.site.id)
-            setSiteLoading(false)
-            return
-          }
-        }
-        
-        // No domain available - try signal-auto-setup for known tenants
-        // This handles the case where a known tenant (like 'uptrade') accesses the wizard
-        console.log('[SignalSetupWizard] Trying signal-auto-setup for known tenant...')
-        try {
-          const autoSetupRes = await api.post('/.netlify/functions/signal-auto-setup', {
-            tenantId: 'uptrade', // Will expand to check auth context for tenant
-            domain: domainToUse || undefined
-          })
-          
-          if (autoSetupRes.data.success && autoSetupRes.data.siteId) {
-            console.log('[SignalSetupWizard] Auto-setup succeeded:', autoSetupRes.data)
-            setSiteId(autoSetupRes.data.siteId)
-            setDomain(autoSetupRes.data.domain)
-            setSiteLoading(false)
-            return
-          }
-        } catch (autoErr) {
-          console.log('[SignalSetupWizard] Auto-setup not available:', autoErr.response?.data?.error || autoErr.message)
-          // Fall through to show domain entry form
-        }
-        
-        // Still no site - show domain entry form
-        setSiteError('noDomain')
-      } catch (err) {
-        console.error('[SignalSetupWizard] Error looking up/creating site:', err)
-        setSiteError(err.response?.data?.error || err.message || 'Failed to load site')
-      } finally {
-        setSiteLoading(false)
+      // projectId IS the projectId - use it directly
+      console.log('[SignalSetupWizard] Using projectId as projectId:', projectId)
+      if (domainToUse) {
+        setDomain(domainToUse)
       }
+      setSiteLoading(false)
     }
     
-    lookupOrCreateSite()
-  }, [propSiteId, projectId, propDomain])
+    lookupSite()
+  }, [projectId, propDomain])
 
   // Add log entry (with optional deduplication for parallel runs)
   const addLog = useCallback((message, type = 'info') => {
@@ -1077,10 +1020,10 @@ export default function SignalSetupWizard({ siteId: propSiteId, projectId, domai
 
   // Start setup when user clicks the Start button
   useEffect(() => {
-    if (hasStarted && siteId && !isRunning && progress === 0) {
+    if (hasStarted && projectId && !isRunning && progress === 0) {
       runSetup()
     }
-  }, [hasStarted, siteId, isRunning, progress])
+  }, [hasStarted, projectId, isRunning, progress])
 
   // =========================================================================
   // PARALLEL STEP EXECUTION GROUPS
@@ -1104,14 +1047,13 @@ export default function SignalSetupWizard({ siteId: propSiteId, projectId, domai
     return Math.round(range.start + stepProgress)
   }
   
-  // Phase 1: Sequential discovery (sitemap is source of truth)
+  // Phase 1: Discovery - now handled automatically by site-kit
+  // Pages are auto-discovered and enriched on every page view
   // - connect: Creates site/org in DB
-  // - crawl-sitemap: Discovers canonical page URLs from sitemap.xml
-  // - crawl-pages: Extracts content for sitemap pages
-  // - internal-links: Maps link structure between pages
-  const SEQUENTIAL_DISCOVERY_STEPS = ['connect', 'crawl-sitemap', 'crawl-pages', 'internal-links']
+  // - verify-pages: Check existing pages from site-kit
+  const SEQUENTIAL_DISCOVERY_STEPS = ['connect', 'verify-pages']
   
-  // Phase 2: GSC sync (validates against sitemap, flags orphan URLs)
+  // Phase 2: GSC sync (validates against discovered pages)
   const GSC_SYNC_STEPS = ['gsc-connect']
   
   // Phase 3: PARALLEL - All analysis tasks run together
@@ -1196,7 +1138,7 @@ export default function SignalSetupWizard({ siteId: propSiteId, projectId, domai
           addLog(`✅ ${step.title}`, 'success')
         } catch (stepError) {
           updateStep(step.id, 'error')
-          const errorMessage = stepError.response?.data?.message || stepError.response?.data?.error || stepError.message
+          const errorMessage = getErrorMessage(stepError)
           addLog(`❌ ${step.title}: ${errorMessage}`, 'error')
           setError(`${step.title} failed: ${errorMessage}`)
           setFailedStep({ id: step.id, title: step.title, error: errorMessage, stepIndex })
@@ -1234,7 +1176,7 @@ export default function SignalSetupWizard({ siteId: propSiteId, projectId, domai
           addLog(`✅ ${step.title}`, 'success')
         } catch (stepError) {
           updateStep(step.id, 'error')
-          const errorMessage = stepError.response?.data?.message || stepError.response?.data?.error || stepError.message
+          const errorMessage = getErrorMessage(stepError)
           addLog(`❌ ${step.title}: ${errorMessage}`, 'error')
           setError(`${step.title} failed: ${errorMessage}`)
           setFailedStep({ id: step.id, title: step.title, error: errorMessage, stepIndex })
@@ -1283,7 +1225,7 @@ export default function SignalSetupWizard({ siteId: propSiteId, projectId, domai
         } catch (err) {
           updateStep(step.id, 'error')
           failedCount++
-          const errorMessage = err.response?.data?.message || err.response?.data?.error || err.message
+          const errorMessage = getErrorMessage(err)
           parallelErrors.push({ step, error: errorMessage })
           return { success: false, step, error: errorMessage }
         }
@@ -1360,7 +1302,7 @@ export default function SignalSetupWizard({ siteId: propSiteId, projectId, domai
           addLog(`✅ ${step.title}`, 'success')
         } catch (stepError) {
           updateStep(step.id, 'error')
-          const errorMessage = stepError.response?.data?.message || stepError.response?.data?.error || stepError.message
+          const errorMessage = getErrorMessage(stepError)
           addLog(`❌ ${step.title}: ${errorMessage}`, 'error')
           setError(`${step.title} failed: ${errorMessage}`)
           setFailedStep({ id: step.id, title: step.title, error: errorMessage, stepIndex })
@@ -1398,7 +1340,7 @@ export default function SignalSetupWizard({ siteId: propSiteId, projectId, domai
         } catch (stepError) {
           // Signal setup steps are less critical, log warning and continue
           updateStep(step.id, 'error')
-          const errorMessage = stepError.response?.data?.message || stepError.response?.data?.error || stepError.message
+          const errorMessage = getErrorMessage(stepError)
           addLog(`⚠️ ${step.title}: ${errorMessage} (continuing)`, 'warning')
         }
         
@@ -1436,7 +1378,7 @@ export default function SignalSetupWizard({ siteId: propSiteId, projectId, domai
         } catch (stepError) {
           // Final steps are less critical, log warning and continue
           updateStep(step.id, 'error')
-          const errorMessage = stepError.response?.data?.message || stepError.response?.data?.error || stepError.message
+          const errorMessage = getErrorMessage(stepError)
           addLog(`⚠️ ${step.title}: ${errorMessage}`, 'warning')
         }
         
@@ -1447,21 +1389,21 @@ export default function SignalSetupWizard({ siteId: propSiteId, projectId, domai
       addLog('🎉 Signal Learning complete! Your AI brain is fully trained.', 'success')
 
       // Mark site as setup complete
-      await api.put('/.netlify/functions/seo-sites-update', {
-        siteId,
+      await seoApi.updateProject(projectId, {
         setup_completed: true,
         setup_completed_at: new Date().toISOString()
       })
 
     } catch (err) {
       console.error('Setup error:', err)
-      setError(err.message || 'Setup failed')
-      addLog(`❌ Error: ${err.message}`, 'error')
+      const errorMessage = getErrorMessage(err)
+      setError(errorMessage)
+      addLog(`❌ Error: ${errorMessage}`, 'error')
     } finally {
       setIsRunning(false)
       setParallelProgress({ running: 0, completed: 0, total: 0 })
     }
-  }, [siteId, domain, addLog, updateStep, isRunning])
+  }, [projectId, domain, addLog, updateStep, isRunning])
 
   // Execute individual step (silentMode = true for parallel execution, suppresses logs)
   const executeStep = async (step, silentMode = false) => {
@@ -1476,170 +1418,46 @@ export default function SignalSetupWizard({ siteId: propSiteId, projectId, domai
     
     switch (step.id) {
       case 'connect':
-        // Just verify site exists - seo-sites-get expects 'id' not 'siteId'
-        const siteRes = await api.get(`/.netlify/functions/seo-sites-get?id=${siteId}`)
-        if (!siteRes.data.site) throw new Error('Site not found')
-        stepLog(`  └ Connected to ${siteRes.data.site.domain}`)
+        // Just verify site/project exists - API returns overview data directly
+        const siteRes = await seoApi.getProject(projectId)
+        // The API returns the overview data directly (not wrapped in .site)
+        if (!siteRes.data) throw new Error('Project not found')
+        stepLog(`  └ Connected to ${siteRes.data.domain || domain || 'project'}`)
         break
 
-      case 'crawl-sitemap':
-        const crawlRes = await api.post('/.netlify/functions/seo-crawl-sitemap', { siteId })
-        // API returns urlsFound, pagesCreated, pagesAlreadyExist
-        const pagesFound = crawlRes.data.urlsFound || crawlRes.data.pagesFound || 0
-        updateStats({ pagesDiscovered: pagesFound })
-        stepLog(`  └ Discovered ${pagesFound} pages from sitemap`)
-        if (crawlRes.data.pagesCreated > 0) {
-          stepLog(`  └ Added ${crawlRes.data.pagesCreated} new pages`)
-        }
-        break
-
-      case 'crawl-pages':
-        // Queue page content analysis and wait for completion
-        stepLog(`  └ Analyzing page content...`)
-        try {
-          const contentRes = await api.post('/.netlify/functions/seo-background-jobs', {
-            siteId,
-            jobType: 'metadata-extract'
-          })
-          const contentJobId = contentRes.data.job?.id
-          
-          if (contentJobId) {
-            stepLog(`  └ Processing pages (job ${contentJobId})`)
-            
-            // Capture current abort signal
-            const startAbortSignal = abortSignalRef.current
-            
-            // Poll for job completion
-            let contentCompleted = false
-            let contentAttempts = 0
-            const maxAttempts = 180 // 15 minutes at 5s intervals
-            
-            while (!contentCompleted && contentAttempts < maxAttempts) {
-              // Wait first but check abort signal during wait
-              for (let i = 0; i < 10; i++) {
-                if (abortSignalRef.current !== startAbortSignal) {
-                  console.log('[Wizard] Content polling aborted')
-                  stepLog(`  └ Content analysis aborted`)
-                  return // Exit immediately
-                }
-                await new Promise(r => setTimeout(r, 500)) // Check every 500ms
-              }
-              contentAttempts++
-              
-              // Check abort again before API call
-              if (abortSignalRef.current !== startAbortSignal) {
-                console.log('[Wizard] Content polling aborted')
-                return
-              }
-              
-              try {
-                const jobStatus = await api.get(`/.netlify/functions/seo-background-jobs?jobId=${contentJobId}`)
-                console.log('[Wizard] Content job status:', jobStatus.data)
-                const status = jobStatus.data?.job?.status || jobStatus.data?.status
-                
-                if (status === 'completed') {
-                  console.log('[Wizard] Content job completed!')
-                  stepLog(`  └ Page content analysis complete`)
-                  contentCompleted = true
-                } else if (status === 'failed') {
-                  console.log('[Wizard] Content job failed, continuing anyway')
-                  stepLog(`  └ Content analysis failed, continuing...`)
-                  contentCompleted = true
-                } else if (contentAttempts % 3 === 0) {
-                  // Log every 15 seconds
-                  stepLog(`  └ Still analyzing... (${contentAttempts * 5}s elapsed)`)
-                }
-              } catch (err) {
-                console.log('[Wizard] Content job poll error:', err.message)
-                // If we can't poll, just continue after a reasonable wait
-                if (contentAttempts >= 4) {
-                  stepLog(`  └ Content analysis running in background`)
-                  contentCompleted = true
-                }
-              }
-            }
-            
-            if (!contentCompleted) {
-              stepLog(`  └ Content analysis timed out, continuing...`)
-            }
-          }
-        } catch (err) {
-          stepLog(`  └ Page content analysis will run in background`)
+      case 'verify-pages':
+        // Pages are auto-discovered by site-kit on page views
+        // Just count how many we have so far
+        const pagesRes = await seoApi.getPages(projectId, { limit: 1 })
+        const pageCount = pagesRes.data?.total || 0
+        updateStats({ pagesDiscovered: pageCount })
+        if (pageCount > 0) {
+          stepLog(`  └ Found ${pageCount} pages from site-kit`)
+        } else {
+          stepLog(`  └ No pages discovered yet - pages will appear as visitors browse the site`)
         }
         break
 
       case 'internal-links':
-        // Queue background job and wait for completion
-        const linksRes = await api.post('/.netlify/functions/seo-internal-links', { 
-          siteId,
-          crawlLinks: true
-        })
-        const jobId = linksRes.data.jobId
-        const initialLinksFound = linksRes.data.totalLinks || 0
-        stepLog(`  └ Queued internal link analysis (job ${jobId})`)
-        
-        // Poll for job completion
-        if (jobId) {
-          // Capture current abort signal
-          const startAbortSignal = abortSignalRef.current
-          
-          let completed = false
-          let attempts = 0
-          const maxAttempts = 180 // 15 minutes at 5s intervals
-          
-          while (!completed && attempts < maxAttempts) {
-            // Wait with abort checking
-            for (let i = 0; i < 10; i++) {
-              if (abortSignalRef.current !== startAbortSignal) {
-                console.log('[Wizard] Internal links polling aborted')
-                stepLog(`  └ Internal link analysis aborted`)
-                return
-              }
-              await new Promise(r => setTimeout(r, 500))
-            }
-            attempts++
-            
-            // Check abort again before API call
-            if (abortSignalRef.current !== startAbortSignal) {
-              console.log('[Wizard] Internal links polling aborted')
-              return
-            }
-            
-            try {
-              const jobStatus = await api.get(`/.netlify/functions/seo-background-jobs?jobId=${jobId}`)
-              console.log('[Wizard] Internal links job status:', jobStatus.data)
-              const status = jobStatus.data?.job?.status || jobStatus.data?.status
-              
-              if (status === 'completed') {
-                stepLog(`  └ Internal link analysis complete`)
-                completed = true
-              } else if (status === 'failed') {
-                // Job failed - don't retry, just log and move on
-                const errorMsg = jobStatus.data?.job?.error || jobStatus.data?.error || 'Job failed'
-                console.log('[Wizard] Internal links job failed:', errorMsg)
-                stepLog(`  └ Internal link analysis failed: ${errorMsg}`)
-                completed = true  // Exit the loop, don't keep polling
-              } else if (attempts % 3 === 0) {
-                // Log every 15 seconds
-                stepLog(`  └ Still analyzing... (${attempts * 5}s elapsed)`)
-              }
-            } catch (err) {
-              console.log('[Wizard] Poll error (will retry):', err.message)
-            }
-          }
-          
-          if (!completed) {
-            throw new Error('Internal link analysis timed out after 15 minutes')
-          }
+        // Internal link data is now captured by site-kit on page views
+        // Just get the current counts from seo_pages
+        try {
+          const linksRes = await seoApi.getInternalLinks(projectId)
+          const totalPages = linksRes.data?.pages?.length || 0
+          const totalLinks = linksRes.data?.pages?.reduce((sum, p) => 
+            sum + (p.internalLinksIn || 0) + (p.internalLinksOut || 0), 0
+          ) || 0
+          stepLog(`  └ Found ${totalLinks} internal links across ${totalPages} pages`)
+        } catch (err) {
+          stepLog(`  └ Internal link data will be collected as pages are visited`)
         }
-        stepLog(`  └ Mapped ${initialLinksFound} internal links`)
         break
 
       case 'gsc-connect':
       case 'gsc-queries':
       case 'gsc-pages':
         // Try to sync GSC data
-        const gscRes = await api.post('/.netlify/functions/seo-gsc-sync', { siteId })
+        const gscRes = await seoApi.syncGsc(projectId)
         console.log('[Wizard] GSC sync response:', gscRes.data) // Debug
         
         if (gscRes.data.jobId) {
@@ -1671,7 +1489,7 @@ export default function SignalSetupWizard({ siteId: propSiteId, projectId, domai
               return
             }
             
-            const jobRes = await api.get(`/.netlify/functions/seo-background-jobs?jobId=${gscRes.data.jobId}`)
+            const jobRes = await seoApi.getJobStatus(gscRes.data.jobId)
             const job = jobRes.data?.job || jobRes.data
             console.log('[Wizard] GSC job status:', job)
             
@@ -1737,8 +1555,8 @@ export default function SignalSetupWizard({ siteId: propSiteId, projectId, domai
       case 'gsc-indexing':
         // Queue GSC indexing analysis as background job
         try {
-          const indexJobRes = await api.post('/.netlify/functions/seo-background-jobs', {
-            siteId,
+          const indexJobRes = await seoApi.startBackgroundJob({
+            projectId,
             jobType: 'gsc-indexing'
           })
           const indexJobId = indexJobRes.data.job?.id
@@ -1767,7 +1585,7 @@ export default function SignalSetupWizard({ siteId: propSiteId, projectId, domai
               
               if (abortSignalRef.current !== startAbortSignal) return
               
-              const jobStatus = await api.get(`/.netlify/functions/seo-background-jobs?jobId=${indexJobId}`)
+              const jobStatus = await seoApi.getJobStatus(indexJobId)
               const job = jobStatus.data?.job || jobStatus.data
               
               if (job.status === 'completed') {
@@ -1811,8 +1629,8 @@ export default function SignalSetupWizard({ siteId: propSiteId, projectId, domai
       case 'pagespeed':
         // Queue PageSpeed analysis as background job
         try {
-          const psiJobRes = await api.post('/.netlify/functions/seo-background-jobs', {
-            siteId,
+          const psiJobRes = await seoApi.startBackgroundJob({
+            projectId,
             jobType: 'pagespeed'
           })
           const psiJobId = psiJobRes.data.job?.id
@@ -1841,7 +1659,7 @@ export default function SignalSetupWizard({ siteId: propSiteId, projectId, domai
               
               if (abortSignalRef.current !== startAbortSignal) return
               
-              const jobStatus = await api.get(`/.netlify/functions/seo-background-jobs?jobId=${psiJobId}`)
+              const jobStatus = await seoApi.getJobStatus(psiJobId)
               const job = jobStatus.data?.job || jobStatus.data
               
               if (job.status === 'completed') {
@@ -1877,17 +1695,13 @@ export default function SignalSetupWizard({ siteId: propSiteId, projectId, domai
         // Always force refresh - this step should retrain every time it runs
         // If restarting, abort any existing training first
         const isRestart = stepStatuses[step.id]?.status === 'running' || stepStatuses[step.id]?.status === 'error'
-        const trainRes = await api.post('/.netlify/functions/seo-ai-train', { 
-          siteId, 
-          forceRefresh: true,
-          abort: isRestart // Abort existing training if this is a restart
-        })
+        const trainRes = await seoApi.trainSite(projectId)
         stepLog(`  └ Signal training initiated...`)
         // Poll for completion
         for (let attempt = 0; attempt < 60; attempt++) {
           await new Promise(r => setTimeout(r, 2000))
-          const statusRes = await api.get(`/.netlify/functions/seo-ai-knowledge?siteId=${siteId}`)
-          const trainingStatus = statusRes.data.knowledge?.training_status
+          const statusRes = await seoApi.getProjectKnowledge(projectId)
+          const trainingStatus = statusRes.data.knowledge?.training_status || statusRes.data?.training_status
           
           if (trainingStatus === 'completed') {
             stepLog(`  └ Signal training complete!`)
@@ -1908,8 +1722,8 @@ export default function SignalSetupWizard({ siteId: propSiteId, projectId, domai
 
       case 'ai-knowledge': {
         // Force refresh
-        const knowledgeRes = await api.get(`/.netlify/functions/seo-ai-knowledge?siteId=${siteId}&refresh=true`)
-        if (knowledgeRes.data.knowledge) {
+        const knowledgeRes = await seoApi.getProjectKnowledge(projectId)
+        if (knowledgeRes.data.knowledge || knowledgeRes.data) {
           stepLog(`  └ Knowledge base loaded`)
         }
         break
@@ -1917,7 +1731,7 @@ export default function SignalSetupWizard({ siteId: propSiteId, projectId, domai
 
       case 'topic-clusters':
         // This now returns 202 and runs in background
-        const clustersRes = await api.post('/.netlify/functions/seo-topic-clusters', { siteId, forceRefresh: true })
+        const clustersRes = await seoApi.generateTopicClusters(projectId, { forceRefresh: true })
         if (clustersRes.status === 202 && clustersRes.data.jobId) {
           stepLog(`  └ Topic clustering queued (runs in background)`)
         } else {
@@ -1928,21 +1742,57 @@ export default function SignalSetupWizard({ siteId: propSiteId, projectId, domai
 
       case 'blog-brain':
         // Force refresh
-        await api.post('/.netlify/functions/seo-ai-blog-brain', { 
-          siteId,
+        await seoApi.analyzeBlogBrain(projectId, { 
           action: 'recommend-topics',
           forceRefresh: true
         })
         stepLog(`  └ Content style analysis complete`)
         break
 
+      case 'commerce-discovery':
+        // Analyze site pages to discover products, services, classes, events
+        try {
+          const commerceRes = await commerceApi.analyzeSiteForSetup(projectId)
+          const commerceData = commerceRes.data
+          
+          // Update stats with discovered commerce pages
+          const totalCommerce = (commerceData.summary?.services || 0) + 
+                               (commerceData.summary?.products || 0) + 
+                               (commerceData.summary?.classes || 0) + 
+                               (commerceData.summary?.events || 0)
+          
+          if (totalCommerce > 0) {
+            updateStats(prev => ({ ...prev, opportunitiesDetected: prev.opportunitiesDetected + totalCommerce }))
+          }
+          
+          // Log what was found
+          if (commerceData.summary?.services > 0) {
+            stepLog(`  └ Found ${commerceData.summary.services} service pages`)
+          }
+          if (commerceData.summary?.products > 0) {
+            stepLog(`  └ Found ${commerceData.summary.products} product pages`)
+          }
+          if (commerceData.summary?.classes > 0) {
+            stepLog(`  └ Found ${commerceData.summary.classes} class pages`)
+          }
+          if (commerceData.summary?.events > 0) {
+            stepLog(`  └ Found ${commerceData.summary.events} event pages`)
+          }
+          if (totalCommerce === 0) {
+            stepLog(`  └ No commerce pages detected`)
+          }
+          
+          // Store results for later review/generation
+          setCommerceDiscoveryResults(commerceData)
+        } catch (commerceErr) {
+          stepLog(`  └ Commerce discovery will run later`)
+          console.error('Commerce discovery error:', commerceErr)
+        }
+        break
+
       case 'cannibalization':
         // Force refresh - re-detect
-        const cannibRes = await api.post('/.netlify/functions/seo-cannibalization', { 
-          siteId,
-          action: 'detect',
-          forceRefresh: true
-        })
+        const cannibRes = await seoApi.detectCannibalization(projectId, { forceRefresh: true })
         const cannibIssues = cannibRes.data.issues?.length || 0
         if (cannibIssues > 0) {
           updateStats(prev => ({ ...prev, issuesFound: prev.issuesFound + cannibIssues }))
@@ -1954,7 +1804,7 @@ export default function SignalSetupWizard({ siteId: propSiteId, projectId, domai
 
       case 'content-decay':
         // Force refresh
-        const decayRes = await api.post('/.netlify/functions/seo-content-decay', { siteId, forceRefresh: true })
+        const decayRes = await seoApi.detectContentDecay(projectId, { forceRefresh: true })
         const decayingPages = decayRes.data.decayingPages?.length || 0
         if (decayingPages > 0) {
           updateStats(prev => ({ ...prev, issuesFound: prev.issuesFound + decayingPages }))
@@ -1966,11 +1816,7 @@ export default function SignalSetupWizard({ siteId: propSiteId, projectId, domai
 
       case 'content-gap':
         // This now returns 202 and runs in background
-        const gapRes = await api.post('/.netlify/functions/seo-content-gap-analysis', { 
-          siteId,
-          action: 'analyze',
-          forceRefresh: true
-        })
+        const gapRes = await seoApi.analyzeContentGaps(projectId, { forceRefresh: true })
         if (gapRes.status === 202 && gapRes.data.jobId) {
           stepLog(`  └ Content gap analysis queued (runs in background)`)
         } else {
@@ -1982,7 +1828,7 @@ export default function SignalSetupWizard({ siteId: propSiteId, projectId, domai
 
       case 'serp-features':
         // This now returns 202 and runs in background
-        const serpRes = await api.post('/.netlify/functions/seo-serp-features', { siteId, forceRefresh: true })
+        const serpRes = await seoApi.analyzeSerpFeatures(projectId)
         if (serpRes.status === 202 && serpRes.data.jobId) {
           stepLog(`  └ SERP features analysis queued (runs in background)`)
         } else {
@@ -1993,41 +1839,29 @@ export default function SignalSetupWizard({ siteId: propSiteId, projectId, domai
         break
 
       case 'technical-audit':
-        await api.post('/.netlify/functions/seo-serp-analyze', { 
-          siteId,
-          action: 'audit',
-          forceRefresh: true
-        })
+        await seoApi.runTechnicalAudit(projectId)
         stepLog(`  └ Technical audit complete`)
         break
 
       case 'backlinks':
         // Force refresh
-        const backlinksRes = await api.post('/.netlify/functions/seo-backlinks', { siteId, forceRefresh: true })
+        const backlinksRes = await seoApi.discoverBacklinks(projectId)
         stepLog(`  └ Backlink profile analyzed`)
         break
 
       case 'local-seo':
-        await api.post('/.netlify/functions/seo-local-analyze', { 
-          siteId,
-          action: 'audit',
-          forceRefresh: true
-        })
+        await seoApi.analyzeLocalSeo(projectId)
         stepLog(`  └ Local SEO signals checked`)
         break
 
       case 'competitors':
-        await api.post('/.netlify/functions/seo-competitor-analyze', { 
-          siteId,
-          action: 'analyze',
-          forceRefresh: true
-        })
+        await seoApi.analyzeCompetitor(projectId, { action: 'analyze', forceRefresh: true })
         stepLog(`  └ Competitor benchmarking complete`)
         break
 
       case 'schema-generate':
         // Schema generation - force refresh
-        const schemaStatusRes = await api.get(`/.netlify/functions/seo-schema-generate?siteId=${siteId}&forceRefresh=true`)
+        const schemaStatusRes = await seoApi.getSchemaStatus(projectId)
         const pagesWithSchema = schemaStatusRes.data.pagesWithSchema || 0
         updateStats({ schemaGenerated: pagesWithSchema })
         stepLog(`  └ Found ${pagesWithSchema} pages with schema markup`)
@@ -2044,7 +1878,7 @@ export default function SignalSetupWizard({ siteId: propSiteId, projectId, domai
         break
 
       case 'opportunities':
-        const oppsRes = await api.post('/.netlify/functions/seo-opportunities-detect', { siteId, forceRefresh: true })
+        const oppsRes = await seoApi.detectOpportunities(projectId)
         const oppsFound = oppsRes.data.opportunities?.length || 0
         updateStats(prev => ({ ...prev, opportunitiesDetected: prev.opportunitiesDetected + oppsFound }))
         stepLog(`  └ Detected ${oppsFound} quick wins`)
@@ -2052,8 +1886,7 @@ export default function SignalSetupWizard({ siteId: propSiteId, projectId, domai
 
       case 'ai-recommendations':
         // Force refresh - use seo-ai-analyze to generate recommendations
-        const recsRes = await api.post('/.netlify/functions/seo-ai-analyze', { 
-          siteId,
+        const recsRes = await seoApi.runAiBrain(projectId, { 
           analysisType: 'full_audit',
           forceRefresh: true
         })
@@ -2065,11 +1898,9 @@ export default function SignalSetupWizard({ siteId: propSiteId, projectId, domai
       case 'cwv-baseline':
         // CWV check requires a URL - use the site's homepage
         try {
-          const cwvRes = await api.post('/.netlify/functions/seo-cwv', { 
-            siteId,
+          const cwvRes = await seoApi.checkPageCwv(projectId, { 
             url: `https://${domain}`,
-            device: 'mobile',
-            forceRefresh: true
+            device: 'mobile'
           })
           const cwvScore = cwvRes.data.result?.performance_score || 0
           stepLog(`  └ CWV baseline recorded (score: ${cwvScore})`)
@@ -2080,10 +1911,9 @@ export default function SignalSetupWizard({ siteId: propSiteId, projectId, domai
         break
 
       case 'schedule-setup':
-        // seo-schedule expects: siteId, schedule (frequency), enabled, etc.
+        // seo-schedule expects: projectId, schedule (frequency), enabled, etc.
         try {
-          await api.post('/.netlify/functions/seo-schedule', { 
-            siteId,
+          await seoApi.scheduleAnalysis(projectId, { 
             schedule: 'weekly',
             enabled: true,
             notifications: true,
@@ -2100,29 +1930,42 @@ export default function SignalSetupWizard({ siteId: propSiteId, projectId, domai
       // SIGNAL MODULE STEPS - Custom handlers with profile sync
       // =====================================================================
       
+      case 'signal-config-init':
+        // Initialize Signal configuration for this project
+        try {
+          const initRes = await configApi.init(projectId)
+          if (initRes?.initialized) {
+            stepLog(`  └ ${initRes.message || 'Signal config initialized'}`)
+          } else {
+            stepLog(`  └ Signal config ready`)
+          }
+        } catch (configErr) {
+          // Config might already exist - that's fine
+          stepLog(`  └ Signal config already initialized`)
+        }
+        break
+      
       case 'signal-profile-extract':
         // Extract business profile from crawled content
-        const extractRes = await api.post('/.netlify/functions/signal-profile-extract', { 
-          siteId,
-          projectId 
+        const extractRes = await profileApi.extract({ 
+          projectId
         })
         
-        if (extractRes.data.extracted) {
-          stepLog(`  └ Extracted profile from ${extractRes.data.pagesAnalyzed} pages`)
+        if (extractRes.extracted || extractRes.data?.extracted) {
+          stepLog(`  └ Extracted profile from ${extractRes.pagesAnalyzed || extractRes.data?.pagesAnalyzed} pages`)
           
           // IMPORTANT: Sync the extracted profile to signal_config
           // This bridges the gap between seo_knowledge_base and the profile editor
           try {
-            const syncRes = await api.post('/.netlify/functions/signal-profile-sync', {
-              siteId,
+            const syncRes = await profileApi.sync({
               projectId,
               forceRefresh: true
             })
             
-            if (syncRes.data.synced) {
-              stepLog(`  └ Profile auto-populated: ${syncRes.data.syncedFields?.join(', ') || 'all fields'}`)
-              if (syncRes.data.industry && syncRes.data.industry !== 'other') {
-                stepLog(`  └ Detected industry: ${syncRes.data.industry}`)
+            if (syncRes.synced || syncRes.data?.synced) {
+              stepLog(`  └ Profile auto-populated: ${syncRes.syncedFields?.join(', ') || syncRes.data?.syncedFields?.join(', ') || 'all fields'}`)
+              if ((syncRes.industry || syncRes.data?.industry) && (syncRes.industry || syncRes.data?.industry) !== 'other') {
+                stepLog(`  └ Detected industry: ${syncRes.industry || syncRes.data?.industry}`)
               }
             }
           } catch (syncErr) {
@@ -2130,26 +1973,30 @@ export default function SignalSetupWizard({ siteId: propSiteId, projectId, domai
             stepLog(`  └ Profile sync will complete in background`)
           }
         } else {
-          stepLog(`  └ ${extractRes.data.message || 'Profile extraction queued'}`)
+          stepLog(`  └ ${extractRes.message || extractRes.data?.message || 'Profile extraction queued'}`)
         }
         break
         
       case 'signal-knowledge-sync': {
         // Sync knowledge base with AI classification
-        const knowledgeRes = await api.post('/.netlify/functions/signal-knowledge-sync', { 
-          siteId,
+        const knowledgeRes = await knowledgeApi.sync({ 
           projectId,
           forceRefresh: true
         })
         
-        if (knowledgeRes.data.synced > 0) {
-          stepLog(`  └ Created ${knowledgeRes.data.synced} knowledge chunks`)
-          if (knowledgeRes.data.classified > 0) {
-            stepLog(`  └ AI classified ${knowledgeRes.data.classified} chunks by content type`)
+        const syncedCount = knowledgeRes.synced || knowledgeRes.data?.synced || 0
+        const classifiedCount = knowledgeRes.classified || knowledgeRes.data?.classified || 0
+        const typeBreakdown = knowledgeRes.typeBreakdown || knowledgeRes.data?.typeBreakdown
+        const message = knowledgeRes.message || knowledgeRes.data?.message
+        
+        if (syncedCount > 0) {
+          stepLog(`  └ Created ${syncedCount} knowledge chunks`)
+          if (classifiedCount > 0) {
+            stepLog(`  └ AI classified ${classifiedCount} chunks by content type`)
           }
           // Log type breakdown if available
-          if (knowledgeRes.data.typeBreakdown) {
-            const types = Object.entries(knowledgeRes.data.typeBreakdown)
+          if (typeBreakdown) {
+            const types = Object.entries(typeBreakdown)
               .filter(([type]) => type !== 'general')
               .map(([type, count]) => `${type}: ${count}`)
               .slice(0, 3)
@@ -2158,29 +2005,136 @@ export default function SignalSetupWizard({ siteId: propSiteId, projectId, domai
             }
           }
         } else {
-          stepLog(`  └ ${knowledgeRes.data.message || 'Knowledge already synced'}`)
+          stepLog(`  └ ${message || 'Knowledge already synced'}`)
         }
         break
       }
         
       case 'signal-faq-generate':
-        // Generate FAQs with confidence-based auto-approval
-        const faqRes = await api.post('/.netlify/functions/signal-faq-generate', { 
-          siteId,
+        // Generate FAQs - this queues a BullMQ job
+        const faqRes = await faqsApi.generate({ 
           projectId,
-          count: 12  // Generate up to 12 FAQs
+          sourceType: 'knowledge_base',
+          maxFAQs: 12  // Generate up to 12 FAQs
         })
         
-        if (faqRes.data.generated > 0) {
-          stepLog(`  └ Generated ${faqRes.data.generated} FAQs`)
-          if (faqRes.data.autoApproved > 0) {
-            stepLog(`  └ Auto-approved ${faqRes.data.autoApproved} high-confidence FAQs`)
+        const faqJobId = faqRes.jobId || faqRes.data?.jobId
+        
+        if (faqJobId) {
+          stepLog(`  └ FAQ generation queued (job ${faqJobId.substring(0, 8)})...`)
+          
+          // Capture current abort signal
+          const startAbortSignal = abortSignalRef.current
+          
+          // Poll for job completion
+          let faqCompleted = false
+          let faqAttempts = 0
+          const maxFaqAttempts = 60 // 5 minutes at 5s intervals
+          
+          while (!faqCompleted && faqAttempts < maxFaqAttempts) {
+            // Wait with abort checking
+            for (let i = 0; i < 10; i++) {
+              if (abortSignalRef.current !== startAbortSignal) {
+                stepLog(`  └ FAQ generation aborted`)
+                return
+              }
+              await new Promise(r => setTimeout(r, 500))
+            }
+            faqAttempts++
+            
+            if (abortSignalRef.current !== startAbortSignal) return
+            
+            try {
+              // Poll job status via FAQs API
+              const jobStatus = await faqsApi.getJobStatus(faqJobId)
+              
+              if (jobStatus.status === 'completed') {
+                faqCompleted = true
+                const generatedCount = jobStatus.result?.faqs_generated || 0
+                stepLog(`  └ Generated ${generatedCount} FAQs from knowledge base`)
+              } else if (jobStatus.status === 'failed') {
+                throw new Error(jobStatus.error_message || 'FAQ generation failed')
+              } else if (faqAttempts % 3 === 0) {
+                stepLog(`  └ Generating FAQs... (${faqAttempts * 5}s elapsed)`)
+              }
+            } catch (pollErr) {
+              // If we can't poll, assume it's processing and continue after timeout
+              if (faqAttempts >= 6) {
+                stepLog(`  └ FAQ generation running in background`)
+                faqCompleted = true
+              }
+            }
           }
-          if (faqRes.data.pendingReview > 0) {
-            stepLog(`  └ ${faqRes.data.pendingReview} FAQs pending review`)
+          
+          if (!faqCompleted) {
+            stepLog(`  └ FAQ generation will complete in background`)
           }
         } else {
-          stepLog(`  └ ${faqRes.data.message || 'FAQs already generated'}`)
+          // Fallback for immediate response (shouldn't happen with current API)
+          const generatedCount = faqRes.generated || faqRes.data?.generated || 0
+          if (generatedCount > 0) {
+            stepLog(`  └ Generated ${generatedCount} FAQs`)
+          } else {
+            stepLog(`  └ ${faqRes.message || faqRes.data?.message || 'FAQs generation started'}`)
+          }
+        }
+        break
+
+      case 'signal-test-chat':
+        // Test that Signal/Echo can respond to questions
+        try {
+          const testRes = await echoApi.chat({
+            message: 'What services do you offer?',
+            conversationId: null, // Start fresh
+            skill: 'support' // Use support skill for public-facing test
+          })
+          
+          if (testRes?.response || testRes?.content) {
+            stepLog(`  └ Signal responding correctly`)
+            stepLog(`  └ Test response received (${(testRes.response || testRes.content || '').length} chars)`)
+          } else {
+            stepLog(`  └ Signal initialized (test response empty)`)
+          }
+        } catch (testErr) {
+          // Echo might not be fully ready yet - that's okay
+          stepLog(`  └ Signal will be ready after setup completes`)
+        }
+        break
+
+      case 'auto-optimize':
+        // Run auto-optimization to apply quick fixes
+        try {
+          const optimizeRes = await seoApi.runAutoOptimize(projectId)
+          const fixCount = optimizeRes?.fixes?.length || optimizeRes?.applied || 0
+          const recommendationCount = optimizeRes?.recommendations?.length || 0
+          
+          if (fixCount > 0) {
+            stepLog(`  └ Applied ${fixCount} quick fixes`)
+          }
+          if (recommendationCount > 0) {
+            stepLog(`  └ Generated ${recommendationCount} recommendations`)
+          }
+          if (fixCount === 0 && recommendationCount === 0) {
+            stepLog(`  └ Auto-optimization complete`)
+          }
+        } catch (optimizeErr) {
+          stepLog(`  └ Auto-optimization will run on next analysis`)
+        }
+        break
+
+      case 'keyword-tracking':
+        // Import top keywords from GSC for long-term tracking
+        try {
+          const keywordRes = await seoApi.autoDiscoverKeywords(projectId)
+          const importedCount = keywordRes?.imported || keywordRes?.keywords?.length || 0
+          
+          if (importedCount > 0) {
+            stepLog(`  └ Imported ${importedCount} keywords for tracking`)
+          } else {
+            stepLog(`  └ Keywords will be discovered from GSC data`)
+          }
+        } catch (keywordErr) {
+          stepLog(`  └ Keyword tracking will be configured manually`)
         }
         break
 
@@ -2189,9 +2143,10 @@ export default function SignalSetupWizard({ siteId: propSiteId, projectId, domai
         break
 
       default:
-        // Generic endpoint call
+        // Generic endpoint call - legacy fallback (should not be needed with full API coverage)
         if (step.endpoint) {
-          await api.post(`/.netlify/functions/${step.endpoint}`, { siteId })
+          console.warn('[Wizard] Unmapped step endpoint:', step.endpoint)
+          // Skip unknown endpoints - they should be mapped to specific API calls above
         }
     }
 
@@ -2376,8 +2331,7 @@ export default function SignalSetupWizard({ siteId: propSiteId, projectId, domai
       addLog('🎉 Signal Learning complete! Your AI brain is fully trained.', 'success')
 
       // Mark site as setup complete
-      await api.put('/.netlify/functions/seo-sites-update', {
-        siteId,
+      await seoApi.updateProject(projectId, {
         setup_completed: true,
         setup_completed_at: new Date().toISOString()
       })
@@ -2389,7 +2343,7 @@ export default function SignalSetupWizard({ siteId: propSiteId, projectId, domai
     } finally {
       setIsRunning(false)
     }
-  }, [siteId, addLog, updateStep, isRunning, executeStep])
+  }, [projectId, addLog, updateStep, isRunning, executeStep])
 
   const isComplete = progress === 100 && !isRunning && !error
   const hasFailed = !!failedStep
@@ -2408,12 +2362,16 @@ export default function SignalSetupWizard({ siteId: propSiteId, projectId, domai
 
   // Show error if site lookup failed (but not the 'noDomain' case which we handle below)
   if (siteError && siteError !== 'noDomain') {
+    // Ensure error is a string for rendering
+    const errorString = typeof siteError === 'object' 
+      ? (siteError.message || JSON.stringify(siteError)) 
+      : String(siteError)
     return (
       <div className="min-h-[400px] flex items-center justify-center">
         <Card className="p-8 max-w-md text-center">
           <AlertCircle className="w-12 h-12 text-amber-500 mx-auto mb-4" />
           <h3 className="text-lg font-semibold text-[var(--text-primary)] mb-2">Error Loading Site</h3>
-          <p className="text-[var(--text-secondary)] mb-4">{siteError}</p>
+          <p className="text-[var(--text-secondary)] mb-4">{errorString}</p>
           {onSkip && (
             <Button onClick={onSkip} variant="outline" className="mt-4">
               Go Back
@@ -2425,7 +2383,7 @@ export default function SignalSetupWizard({ siteId: propSiteId, projectId, domai
   }
 
   // Show "no site" error - allow entering domain directly
-  if (siteError === 'noDomain' || (!siteId && !siteLoading)) {
+  if (siteError === 'noDomain' || (!projectId && !siteLoading)) {
     return (
       <div className="min-h-[400px] flex items-center justify-center">
         <Card className="p-8 max-w-lg">
@@ -2818,7 +2776,9 @@ export default function SignalSetupWizard({ siteId: propSiteId, projectId, domai
                   </p>
                   <div className="bg-red-500/10 rounded-lg p-3 mb-4 border border-red-500/20">
                     <p className="text-sm text-red-400 font-mono break-all">
-                      {failedStep.error}
+                      {typeof failedStep.error === 'object' 
+                        ? (failedStep.error.message || JSON.stringify(failedStep.error)) 
+                        : String(failedStep.error || 'Unknown error')}
                     </p>
                   </div>
                   <p className="text-sm text-[var(--text-secondary)] mb-4">
@@ -2892,5 +2852,5 @@ export default function SignalSetupWizard({ siteId: propSiteId, projectId, domai
     </div>
   )
 }
-// Legacy alias for SEO module backwards compatibility
-export { SignalSetupWizard as SEOSetupWizard }
+// Note: SignalSetupWizard is now only used in Signal module
+// SEO module uses projects directly (projectId === projectId)

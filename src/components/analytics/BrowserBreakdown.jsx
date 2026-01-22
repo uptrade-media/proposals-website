@@ -1,179 +1,225 @@
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
-import { DonutChart, BarList } from '@tremor/react'
-import { Globe, Monitor, Smartphone, Tablet, Chrome, Apple, Laptop } from 'lucide-react'
+/**
+ * BrowserBreakdown - Browser and OS distribution charts
+ */
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
+import { Loader2, Globe, Monitor } from 'lucide-react'
+import {
+  ResponsiveContainer,
+  PieChart,
+  Pie,
+  Cell,
+  Tooltip,
+  Legend
+} from 'recharts'
+import { useBrandColors } from '@/hooks/useBrandColors'
 
-// Browser icons
-const browserIcons = {
-  Chrome: '🌐',
-  Safari: '🧭',
-  Firefox: '🦊',
-  Edge: '🔷',
-  Opera: '⭕',
-  Samsung: '📱',
-  unknown: '❓'
+// Browser icons/colors
+const BROWSER_COLORS = {
+  'Chrome': '#4285F4',
+  'Safari': '#5AC8FA',
+  'Firefox': '#FF7139',
+  'Edge': '#0078D7',
+  'Opera': '#FF1B2D',
+  'Samsung Internet': '#1428A0',
+  'Other': '#64748b'
 }
 
-// OS icons
-const osIcons = {
-  Windows: <Monitor className="w-4 h-4" />,
-  macOS: <Apple className="w-4 h-4" />,
-  iOS: <Smartphone className="w-4 h-4" />,
-  Android: <Smartphone className="w-4 h-4" />,
-  Linux: <Laptop className="w-4 h-4" />,
-  unknown: <Globe className="w-4 h-4" />
+const OS_COLORS = {
+  'Windows': '#0078D4',
+  'macOS': '#A2AAAD', // Apple's signature silver/grey with more visibility
+  'iOS': '#147CE5', // Apple blue
+  'Android': '#3DDC84',
+  'Linux': '#FCC624',
+  'Chrome OS': '#4285F4',
+  'Other': '#64748b'
 }
 
-// Device type icons
-const deviceIcons = {
-  desktop: <Monitor className="w-4 h-4" />,
-  mobile: <Smartphone className="w-4 h-4" />,
-  tablet: <Tablet className="w-4 h-4" />
+function getColor(name, colorMap, fallbackColors, index) {
+  return colorMap[name] || fallbackColors[index % fallbackColors.length]
 }
 
-// Colors for charts
-const browserColors = ['cyan', 'blue', 'indigo', 'violet', 'purple', 'fuchsia', 'pink', 'rose', 'red', 'orange']
-const osColors = ['emerald', 'teal', 'cyan', 'sky', 'blue', 'indigo', 'violet', 'purple', 'fuchsia', 'pink']
+// Custom tooltip
+function CustomTooltip({ active, payload }) {
+  if (!active || !payload?.length) return null
+  const data = payload[0].payload
+  
+  return (
+    <div className="bg-[var(--glass-bg)] backdrop-blur-xl border border-[var(--glass-border)] rounded-lg p-3 shadow-xl">
+      <p className="text-sm font-medium text-[var(--text-primary)]">{data.name}</p>
+      <div className="flex items-center gap-2 mt-1">
+        <span className="text-lg font-bold text-[var(--text-primary)]">{data.count?.toLocaleString()}</span>
+        <span className="text-xs text-[var(--text-tertiary)]">
+          ({data.percentage?.toFixed(1) || ((data.count / data.total) * 100).toFixed(1)}%)
+        </span>
+      </div>
+    </div>
+  )
+}
 
-export default function BrowserBreakdown({ sessions }) {
-  if (!sessions) {
+export function BrowserBreakdown({ sessions = {} }) {
+  const { primary, secondary } = useBrandColors()
+  
+  const browsers = sessions?.browsers || []
+  const operatingSystems = sessions?.operatingSystems || []
+  
+  const fallbackColors = [primary, secondary, '#22c55e', '#f59e0b', '#ef4444', '#8b5cf6', '#06b6d4']
+  
+  // Calculate totals
+  const browserTotal = browsers.reduce((sum, b) => sum + (b.count || 0), 0)
+  const osTotal = operatingSystems.reduce((sum, o) => sum + (o.count || 0), 0)
+  
+  // Prepare chart data
+  const browserData = browsers.map((b, i) => ({
+    name: b.name || b.browser || 'Unknown',
+    count: b.count || 0,
+    percentage: b.percentage || (browserTotal > 0 ? (b.count / browserTotal) * 100 : 0),
+    total: browserTotal,
+    fill: getColor(b.name || b.browser, BROWSER_COLORS, fallbackColors, i)
+  }))
+  
+  const osData = operatingSystems.map((o, i) => ({
+    name: o.name || o.os || 'Unknown',
+    count: o.count || 0,
+    percentage: o.percentage || (osTotal > 0 ? (o.count / osTotal) * 100 : 0),
+    total: osTotal,
+    fill: getColor(o.name || o.os, OS_COLORS, fallbackColors, i)
+  }))
+
+  const hasData = browserData.length > 0 || osData.length > 0
+
+  if (!hasData) {
     return (
-      <Card className="animate-pulse">
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Globe className="w-5 h-5" />
-            Browser & OS
-          </CardTitle>
+      <Card>
+        <CardHeader className="pb-2">
+          <CardTitle className="text-lg">Browser & OS</CardTitle>
+          <CardDescription>Technology breakdown</CardDescription>
         </CardHeader>
         <CardContent>
-          <div className="h-48 bg-muted rounded" />
+          <div className="text-center py-8 text-[var(--text-tertiary)]">
+            <Globe className="w-12 h-12 mx-auto mb-3 opacity-30" />
+            <p className="text-sm">No session data available</p>
+          </div>
         </CardContent>
       </Card>
     )
   }
 
-  const { browsers = [], operatingSystems = [], devices = [] } = sessions
-
-  // Format for DonutChart
-  const browserChartData = browsers.map((b, i) => ({
-    name: b.name,
-    value: b.count,
-    color: browserColors[i % browserColors.length]
-  }))
-
-  const osChartData = operatingSystems.map((o, i) => ({
-    name: o.name,
-    value: o.count,
-    color: osColors[i % osColors.length]
-  }))
-
-  // Format for BarList
-  const browserBarData = browsers.slice(0, 6).map(b => ({
-    name: `${browserIcons[b.name] || '🌐'} ${b.name}`,
-    value: b.count
-  }))
-
-  const osBarData = operatingSystems.slice(0, 6).map(o => ({
-    name: o.name,
-    value: o.count,
-    icon: osIcons[o.name] || osIcons.unknown
-  }))
-
   return (
-    <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-      {/* Browser Distribution */}
-      <Card>
-        <CardHeader className="pb-2">
-          <CardTitle className="text-base flex items-center gap-2">
-            <Chrome className="w-5 h-5 text-blue-500" />
-            Browsers
-          </CardTitle>
-          <CardDescription>
-            Distribution by browser type
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <div className="flex items-center gap-6">
-            <DonutChart
-              data={browserChartData}
-              category="value"
-              index="name"
-              colors={browserColors}
-              className="h-32 w-32"
-              showLabel={false}
-              showAnimation
-            />
-            <div className="flex-1">
-              <BarList 
-                data={browserBarData} 
-                className="mt-2"
-                showAnimation
-              />
+    <Card>
+      <CardHeader className="pb-2">
+        <CardTitle className="text-lg">Browser & Operating System</CardTitle>
+        <CardDescription>Technology breakdown by sessions</CardDescription>
+      </CardHeader>
+      
+      <CardContent>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          {/* Browsers */}
+          <div>
+            <div className="flex items-center gap-2 mb-4">
+              <Globe className="w-4 h-4 text-[var(--text-tertiary)]" />
+              <h4 className="text-sm font-medium text-[var(--text-primary)]">Browsers</h4>
             </div>
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* OS Distribution */}
-      <Card>
-        <CardHeader className="pb-2">
-          <CardTitle className="text-base flex items-center gap-2">
-            <Monitor className="w-5 h-5 text-emerald-500" />
-            Operating Systems
-          </CardTitle>
-          <CardDescription>
-            Distribution by operating system
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <div className="flex items-center gap-6">
-            <DonutChart
-              data={osChartData}
-              category="value"
-              index="name"
-              colors={osColors}
-              className="h-32 w-32"
-              showLabel={false}
-              showAnimation
-            />
-            <div className="flex-1">
-              <BarList 
-                data={osBarData.map(o => ({ name: o.name, value: o.value }))} 
-                className="mt-2"
-                showAnimation
-              />
-            </div>
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* Device Type Summary */}
-      {devices.length > 0 && (
-        <Card className="lg:col-span-2">
-          <CardHeader className="pb-2">
-            <CardTitle className="text-base">Device Types</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="flex flex-wrap gap-4">
-              {devices.map(device => (
-                <div 
-                  key={device.name}
-                  className="flex items-center gap-3 px-4 py-3 bg-muted rounded-lg flex-1 min-w-[150px]"
-                >
-                  <div className="p-2 bg-background rounded-md">
-                    {deviceIcons[device.name] || <Monitor className="w-4 h-4" />}
-                  </div>
-                  <div>
-                    <p className="text-sm font-medium capitalize">{device.name}</p>
-                    <p className="text-xs text-muted-foreground">
-                      {device.count.toLocaleString()} sessions ({device.percentage}%)
-                    </p>
-                  </div>
+            
+            {browserData.length > 0 ? (
+              <>
+                <ResponsiveContainer width="100%" height={180}>
+                  <PieChart>
+                    <Pie
+                      data={browserData}
+                      dataKey="count"
+                      nameKey="name"
+                      cx="50%"
+                      cy="50%"
+                      innerRadius={45}
+                      outerRadius={75}
+                      paddingAngle={2}
+                    >
+                      {browserData.map((entry, index) => (
+                        <Cell key={index} fill={entry.fill} />
+                      ))}
+                    </Pie>
+                    <Tooltip content={<CustomTooltip />} />
+                  </PieChart>
+                </ResponsiveContainer>
+                
+                {/* Legend */}
+                <div className="grid grid-cols-2 gap-2 mt-4">
+                  {browserData.slice(0, 6).map((browser, index) => (
+                    <div key={index} className="flex items-center gap-2 text-xs">
+                      <div 
+                        className="w-2.5 h-2.5 rounded-full flex-shrink-0" 
+                        style={{ backgroundColor: browser.fill }}
+                      />
+                      <span className="text-[var(--text-secondary)] truncate">{browser.name}</span>
+                      <span className="text-[var(--text-tertiary)] ml-auto">
+                        {browser.percentage.toFixed(0)}%
+                      </span>
+                    </div>
+                  ))}
                 </div>
-              ))}
+              </>
+            ) : (
+              <div className="h-44 flex items-center justify-center text-[var(--text-tertiary)] text-sm">
+                No browser data
+              </div>
+            )}
+          </div>
+          
+          {/* Operating Systems */}
+          <div>
+            <div className="flex items-center gap-2 mb-4">
+              <Monitor className="w-4 h-4 text-[var(--text-tertiary)]" />
+              <h4 className="text-sm font-medium text-[var(--text-primary)]">Operating Systems</h4>
             </div>
-          </CardContent>
-        </Card>
-      )}
-    </div>
+            
+            {osData.length > 0 ? (
+              <>
+                <ResponsiveContainer width="100%" height={180}>
+                  <PieChart>
+                    <Pie
+                      data={osData}
+                      dataKey="count"
+                      nameKey="name"
+                      cx="50%"
+                      cy="50%"
+                      innerRadius={45}
+                      outerRadius={75}
+                      paddingAngle={2}
+                    >
+                      {osData.map((entry, index) => (
+                        <Cell key={index} fill={entry.fill} />
+                      ))}
+                    </Pie>
+                    <Tooltip content={<CustomTooltip />} />
+                  </PieChart>
+                </ResponsiveContainer>
+                
+                {/* Legend */}
+                <div className="grid grid-cols-2 gap-2 mt-4">
+                  {osData.slice(0, 6).map((os, index) => (
+                    <div key={index} className="flex items-center gap-2 text-xs">
+                      <div 
+                        className="w-2.5 h-2.5 rounded-full flex-shrink-0" 
+                        style={{ backgroundColor: os.fill }}
+                      />
+                      <span className="text-[var(--text-secondary)] truncate">{os.name}</span>
+                      <span className="text-[var(--text-tertiary)] ml-auto">
+                        {os.percentage.toFixed(0)}%
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </>
+            ) : (
+              <div className="h-44 flex items-center justify-center text-[var(--text-tertiary)] text-sm">
+                No OS data
+              </div>
+            )}
+          </div>
+        </div>
+      </CardContent>
+    </Card>
   )
 }
+
+export default BrowserBreakdown

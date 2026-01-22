@@ -410,7 +410,7 @@ function CustomersTab({ tenantId }) {
   const fetchCustomers = async () => {
     setIsLoading(true)
     try {
-      const response = await api.get(`/.netlify/functions/tenant-customers-list?tenant_id=${tenantId}`)
+      const response = await ecommerceApi.listTenantCustomers(tenantId)
       setCustomers(response.data.customers || [])
     } catch (error) {
       console.error('Failed to fetch customers:', error)
@@ -540,10 +540,10 @@ function InvoicesTab({ tenantId }) {
   const fetchInvoices = async () => {
     setIsLoading(true)
     try {
-      const params = new URLSearchParams({ tenant_id: tenantId })
-      if (statusFilter !== 'all') params.append('status', statusFilter)
+      const params = {}
+      if (statusFilter !== 'all') params.status = statusFilter
       
-      const response = await api.get(`/.netlify/functions/tenant-invoices-list?${params}`)
+      const response = await ecommerceApi.listTenantInvoices(tenantId, params)
       setInvoices(response.data.invoices || [])
     } catch (error) {
       console.error('Failed to fetch invoices:', error)
@@ -677,7 +677,7 @@ export default function TenantSales() {
   const fetchStats = async () => {
     setIsLoading(true)
     try {
-      const response = await api.get(`/.netlify/functions/tenant-sales-stats?tenant_id=${tenantId}`)
+      const response = await ecommerceApi.getTenantSalesStats(tenantId)
       setStats(response.data.stats || {})
     } catch (error) {
       console.error('Failed to fetch stats:', error)

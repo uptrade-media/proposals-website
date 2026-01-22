@@ -41,6 +41,7 @@ import useReportsStore from '../lib/reports-store'
 import useProjectsStore from '../lib/projects-store'
 import useAuthStore from '../lib/auth-store'
 import api from '../lib/api'
+import { auditsApi } from '../lib/portal-api'
 import { toast } from '../lib/toast'
 import AuditPublicView from '../components/AuditPublicView'
 
@@ -56,6 +57,53 @@ const normalizeUrl = (input) => {
     url = 'https://' + url
   }
   return url
+}
+
+// Mini score circle component for overview
+function ScoreCircle({ score, label, icon: Icon }) {
+  if (score === null || score === undefined) return null
+  
+  const getColor = (s) => {
+    if (s >= 90) return { stroke: 'var(--accent-success)', text: 'text-[var(--accent-success)]' }
+    if (s >= 50) return { stroke: 'var(--accent-warning)', text: 'text-[var(--accent-warning)]' }
+    return { stroke: 'var(--accent-error)', text: 'text-[var(--accent-error)]' }
+  }
+  
+  const colors = getColor(score)
+  const circumference = 2 * Math.PI * 13 // radius = 13
+  const offset = circumference - (score / 100) * circumference
+  
+  return (
+    <div className="flex flex-col items-center gap-0" title={`${label}: ${score}`}>
+      <div className="relative w-9 h-9">
+        <svg className="w-9 h-9 -rotate-90">
+          <circle
+            cx="18"
+            cy="18"
+            r="13"
+            fill="none"
+            stroke="var(--glass-border)"
+            strokeWidth="2.5"
+          />
+          <circle
+            cx="18"
+            cy="18"
+            r="13"
+            fill="none"
+            stroke={colors.stroke}
+            strokeWidth="2.5"
+            strokeDasharray={circumference}
+            strokeDashoffset={offset}
+            strokeLinecap="round"
+          />
+        </svg>
+        <div className={`absolute inset-0 flex items-center justify-center text-xs font-semibold ${colors.text}`}>
+          {score}
+        </div>
+      </div>
+      <span className="text-[10px] text-[var(--text-tertiary)] uppercase tracking-wide">{label}</span>
+    </div>
+  )
 }
 
 // Admin-only audit row component with magic link and analytics
@@ -74,9 +122,9 @@ function AdminAuditRow({ audit, navigate, getStatusIcon, getScoreColor, getAudit
   const [emailRecipient, setEmailRecipient] = useState('')
   const [emailRecipientName, setEmailRecipientName] = useState('')
   const [isSendingEmail, setIsSendingEmail] = useState(false)
-  const [magicLink, setMagicLink] = useState(audit.magicToken ? 
+  const [magicLink, setMagicLink] = useState(audit.magicLink || (audit.magicToken ? 
     `${window.location.origin}/audit/${audit.id}?token=${audit.magicToken}` : null
-  )
+  ))
   const [analytics, setAnalytics] = useState(null)
   const [loadingAnalytics, setLoadingAnalytics] = useState(false)
 
@@ -92,20 +140,20 @@ function AdminAuditRow({ audit, navigate, getStatusIcon, getScoreColor, getAudit
     
     setIsSendingEmail(true)
     try {
-      const res = await api.post('/.netlify/functions/audits-send-email', {
+      const { data } = await auditsApi.sendEmail({
         auditId: audit.id,
         recipientEmail: emailRecipient,
         recipientName: emailRecipientName || null
       })
       
-      if (res.data.success) {
+      if (data.success) {
         toast.success('Audit email sent successfully!')
         setShowEmailModal(false)
         setEmailRecipient('')
         setEmailRecipientName('')
         // Update magic link if returned
-        if (res.data.magicLink) {
-          setMagicLink(res.data.magicLink)
+        if (data.magicLink) {
+          setMagicLink(data.magicLink)
         }
       } else {
         toast.error(res.data.error || 'Failed to send email')
@@ -149,13 +197,13 @@ function AdminAuditRow({ audit, navigate, getStatusIcon, getScoreColor, getAudit
 
     setIsGenerating(true)
     try {
-      const res = await api.post(`/.netlify/functions/audits-magic-link`, {
+      const { data } = await auditsApi.generateMagicLink({
         auditId: audit.id
       })
       
-      if (res.data.magicLink) {
-        setMagicLink(res.data.magicLink)
-        await navigator.clipboard.writeText(res.data.magicLink)
+      if (data.magicLink) {
+        setMagicLink(data.magicLink)
+        await navigator.clipboard.writeText(data.magicLink)
         setCopied(true)
         toast.success('Magic link created and copied!')
         setTimeout(() => setCopied(false), 2000)
@@ -190,8 +238,8 @@ function AdminAuditRow({ audit, navigate, getStatusIcon, getScoreColor, getAudit
       if (!analytics) {
         setLoadingAnalytics(true)
         try {
-          const res = await api.get(`/.netlify/functions/audits-analytics?auditId=${audit.id}`)
-          setAnalytics(res.data)
+          const { data } = await auditsApi.getAnalytics(audit.id)
+          setAnalytics(data)
         } catch (err) {
           console.error('Failed to load analytics:', err)
         } finally {
@@ -203,8 +251,8 @@ function AdminAuditRow({ audit, navigate, getStatusIcon, getScoreColor, getAudit
       if (!fullAuditData) {
         setLoadingFullAudit(true)
         try {
-          const res = await api.get(`/.netlify/functions/audits-get?id=${audit.id}`)
-          setFullAuditData(res.data.audit)
+          const { data } = await auditsApi.get(audit.id)
+          setFullAuditData(data.audit)
         } catch (err) {
           console.error('Failed to load audit data:', err)
         } finally {
@@ -221,8 +269,8 @@ function AdminAuditRow({ audit, navigate, getStatusIcon, getScoreColor, getAudit
     if (!fullAuditData) {
       setLoadingFullAudit(true)
       try {
-        const res = await api.get(`/.netlify/functions/audits-get?id=${audit.id}`)
-        setFullAuditData(res.data.audit)
+        const { data } = await auditsApi.get(audit.id)
+        setFullAuditData(data.audit)
       } catch (err) {
         console.error('Failed to load audit data:', err)
         toast.error('Failed to load audit data')
@@ -241,15 +289,17 @@ function AdminAuditRow({ audit, navigate, getStatusIcon, getScoreColor, getAudit
   return (
     <Collapsible open={isOpen} onOpenChange={handleToggle}>
       <Card className="bg-[var(--glass-bg)] backdrop-blur-xl border-[var(--glass-border)] hover:shadow-[var(--shadow-lg)] transition-all">
-        <CardContent className="p-6">
-          <div className="flex items-start justify-between">
-            <div className="flex-1">
+        <CardContent className="py-2 px-3">
+          <div className="flex items-center justify-between gap-4">
+            <div className="flex-1 min-w-0">
               {/* URL and Status */}
-              <div className="flex items-center gap-3 mb-3">
+              <div className="flex items-center gap-3">
                 {getStatusIcon(audit.status)}
-                <div className="flex-1">
-                  <h3 className="text-lg font-semibold text-[var(--text-primary)] flex items-center gap-2">
-                    {audit.targetUrl}
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <h3 className="text-base font-semibold text-[var(--text-primary)] truncate max-w-md">
+                      {audit.targetUrl}
+                    </h3>
                     <a 
                       href={audit.targetUrl} 
                       target="_blank" 
@@ -258,47 +308,62 @@ function AdminAuditRow({ audit, navigate, getStatusIcon, getScoreColor, getAudit
                     >
                       <ExternalLink className="w-4 h-4 text-[var(--text-tertiary)] hover:text-[var(--brand-primary)]" />
                     </a>
-                  </h3>
-                  <div className="flex items-center gap-2 mt-1 flex-wrap">
                     <Badge variant={statusBadge.color}>
                       {statusBadge.text}
                     </Badge>
                     <span className="text-sm text-[var(--text-tertiary)] flex items-center gap-1">
-                      <Calendar className="w-3 h-3" />
+                      <Calendar className="w-3.5 h-3.5" />
                       {new Date(audit.createdAt).toLocaleDateString()}
                     </span>
                     
-                    {/* Contact info badge for admin */}
-                    {audit.contact && (
-                      <span className="text-sm text-[var(--brand-primary)] flex items-center gap-1 bg-[var(--brand-primary)]/10 px-2 py-0.5 rounded-full">
-                        <User className="w-3 h-3" />
-                        {audit.contact.name || audit.contact.email}
-                        {audit.contact.company && (
-                          <span className="text-[var(--text-tertiary)]">• {audit.contact.company}</span>
+                    {/* Contact/Prospect info badge for admin */}
+                    {(audit.contact || audit.prospect) && (
+                      <span className={`text-sm flex items-center gap-1 px-2 py-0.5 rounded-full ${
+                        audit.prospect 
+                          ? 'text-[var(--accent-warning)] bg-[var(--accent-warning)]/10' 
+                          : 'text-[var(--brand-primary)] bg-[var(--brand-primary)]/10'
+                      }`}>
+                        <User className="w-3.5 h-3.5" />
+                        {(audit.contact?.name || audit.contact?.email) || (audit.prospect?.name || audit.prospect?.email)}
+                        {(audit.contact?.company || audit.prospect?.company) && (
+                          <span className="text-[var(--text-tertiary)] hidden md:inline">• {audit.contact?.company || audit.prospect?.company}</span>
                         )}
+                        {audit.prospect && (
+                          <Badge variant="outline" className="ml-1 text-[10px] px-1 py-0 border-[var(--accent-warning)] text-[var(--accent-warning)]">
+                            PROSPECT
+                          </Badge>
+                        )}
+                      </span>
+                    )}
+                    
+                    {/* Processing/Failed message inline */}
+                    {(audit.status === 'pending' || audit.status === 'running') && (
+                      <span className="text-sm text-[var(--text-secondary)]">
+                        Processing...
+                      </span>
+                    )}
+                    {audit.status === 'failed' && (
+                      <span className="text-sm text-[var(--accent-error)]">
+                        Failed
                       </span>
                     )}
                   </div>
                 </div>
               </div>
-
-              {/* Processing message */}
-              {(audit.status === 'pending' || audit.status === 'running') && (
-                <p className="text-sm text-[var(--text-secondary)] mt-2">
-                  Analysis in progress. This usually takes 2-3 minutes.
-                </p>
-              )}
-
-              {/* Failed message */}
-              {audit.status === 'failed' && (
-                <p className="text-sm text-[var(--accent-error)] mt-2">
-                  Audit failed. Please try requesting a new audit.
-                </p>
-              )}
             </div>
 
+            {/* Score Circles - Only show for completed audits */}
+            {isAuditCompleted(audit.status) && (
+              <div className="hidden sm:flex items-center gap-3">
+                <ScoreCircle score={audit.performanceScore} label="Perf" />
+                <ScoreCircle score={audit.seoScore} label="SEO" />
+                <ScoreCircle score={audit.accessibilityScore} label="A11y" />
+                <ScoreCircle score={audit.bestPracticesScore} label="BP" />
+              </div>
+            )}
+
             {/* Action Buttons */}
-            <div className="flex items-center gap-2 ml-4">
+            <div className="flex items-center gap-1">
               {/* View Report Button */}
               {isAuditCompleted(audit.status) && (
                 <Button
@@ -320,10 +385,11 @@ function AdminAuditRow({ audit, navigate, getStatusIcon, getScoreColor, getAudit
                   size="sm"
                   onClick={(e) => {
                     e.stopPropagation()
-                    // Pre-fill email if contact exists
-                    if (audit.contact?.email) {
-                      setEmailRecipient(audit.contact.email)
-                      setEmailRecipientName(audit.contact.name || '')
+                    // Pre-fill email if contact or prospect exists
+                    const person = audit.contact || audit.prospect
+                    if (person?.email) {
+                      setEmailRecipient(person.email)
+                      setEmailRecipientName(person.name || '')
                     }
                     setShowEmailModal(true)
                   }}
@@ -563,41 +629,54 @@ function AdminAuditRow({ audit, navigate, getStatusIcon, getScoreColor, getAudit
                   {/* Analytics Section */}
                   {analytics ? (
                     <div className="space-y-4">
-                      {/* Contact Details */}
-                      {audit.contact && (
-                        <div className="p-4 rounded-xl bg-[var(--brand-primary)]/5 border border-[var(--brand-primary)]/20">
-                          <h4 className="text-sm font-semibold text-[var(--text-primary)] mb-3 flex items-center gap-2">
-                            <User className="w-4 h-4" />
-                            Prospect Details
-                          </h4>
-                          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
-                            <div>
-                              <span className="text-[var(--text-tertiary)]">Name</span>
-                              <p className="font-medium text-[var(--text-primary)]">{audit.contact.name || '—'}</p>
-                            </div>
-                            <div>
-                              <span className="text-[var(--text-tertiary)]">Email</span>
-                              <p className="font-medium text-[var(--text-primary)]">{audit.contact.email}</p>
-                            </div>
-                            <div>
-                              <span className="text-[var(--text-tertiary)]">Company</span>
-                              <p className="font-medium text-[var(--text-primary)]">{audit.contact.company || '—'}</p>
-                            </div>
-                            <div>
-                              <span className="text-[var(--text-tertiary)]">Magic Link</span>
-                              <p className="font-medium text-[var(--text-primary)]">
-                                {magicLink ? (
-                                  <span className={isExpired ? 'text-[var(--accent-warning)]' : 'text-[var(--accent-success)]'}>
-                                    {isExpired ? 'Expired' : 'Active'}
-                                  </span>
-                                ) : (
-                                  <span className="text-[var(--text-tertiary)]">Not generated</span>
-                                )}
-                              </p>
+                      {/* Contact/Prospect Details */}
+                      {(audit.contact || audit.prospect) && (() => {
+                        const person = audit.contact || audit.prospect
+                        const isProspect = !!audit.prospect
+                        return (
+                          <div className={`p-4 rounded-xl ${
+                            isProspect 
+                              ? 'bg-[var(--accent-warning)]/5 border border-[var(--accent-warning)]/20'
+                              : 'bg-[var(--brand-primary)]/5 border border-[var(--brand-primary)]/20'
+                          }`}>
+                            <h4 className="text-sm font-semibold text-[var(--text-primary)] mb-3 flex items-center gap-2">
+                              <User className="w-4 h-4" />
+                              {isProspect ? 'Prospect Details' : 'Contact Details'}
+                              {isProspect && audit.prospect.pipelineStage && (
+                                <Badge variant="outline" className="ml-2 text-[10px] border-[var(--accent-warning)] text-[var(--accent-warning)]">
+                                  {audit.prospect.pipelineStage.replace(/_/g, ' ').toUpperCase()}
+                                </Badge>
+                              )}
+                            </h4>
+                            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+                              <div>
+                                <span className="text-[var(--text-tertiary)]">Name</span>
+                                <p className="font-medium text-[var(--text-primary)]">{person.name || '—'}</p>
+                              </div>
+                              <div>
+                                <span className="text-[var(--text-tertiary)]">Email</span>
+                                <p className="font-medium text-[var(--text-primary)]">{person.email}</p>
+                              </div>
+                              <div>
+                                <span className="text-[var(--text-tertiary)]">Company</span>
+                                <p className="font-medium text-[var(--text-primary)]">{person.company || '—'}</p>
+                              </div>
+                              <div>
+                                <span className="text-[var(--text-tertiary)]">Magic Link</span>
+                                <p className="font-medium text-[var(--text-primary)]">
+                                  {magicLink ? (
+                                    <span className={isExpired ? 'text-[var(--accent-warning)]' : 'text-[var(--accent-success)]'}>
+                                      {isExpired ? 'Expired' : 'Active'}
+                                    </span>
+                                  ) : (
+                                    <span className="text-[var(--text-tertiary)]">Not generated</span>
+                                  )}
+                                </p>
+                              </div>
                             </div>
                           </div>
-                        </div>
-                      )}
+                        )
+                      })()}
 
                       {/* Engagement Stats */}
                       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
@@ -709,7 +788,7 @@ function AdminAuditRow({ audit, navigate, getStatusIcon, getScoreColor, getAudit
             {fullAuditData && (
               <AuditPublicView 
                 audit={fullAuditData} 
-                contact={audit.contact}
+                contact={audit.contact || audit.prospect}
               />
             )}
           </div>
@@ -808,8 +887,8 @@ function ClientAuditRow({ audit, navigate, getStatusIcon, getScoreColor, getAudi
     if (!fullAuditData) {
       setLoadingFullAudit(true)
       try {
-        const res = await api.get(`/.netlify/functions/audits-get?id=${audit.id}`)
-        setFullAuditData(res.data.audit)
+        const { data } = await auditsApi.get(audit.id)
+        setFullAuditData(data.audit)
       } catch (err) {
         console.error('Failed to load audit data:', err)
         toast.error('Failed to load audit data')
@@ -828,81 +907,62 @@ function ClientAuditRow({ audit, navigate, getStatusIcon, getScoreColor, getAudi
         className="bg-[var(--glass-bg)] backdrop-blur-xl border-[var(--glass-border)] hover:shadow-[var(--shadow-lg)] transition-all cursor-pointer"
         onClick={handleViewFullAudit}
       >
-        <CardContent className="p-6">
-          <div className="flex items-start justify-between">
-            <div className="flex-1">
-              {/* URL and Status */}
-              <div className="flex items-center gap-3 mb-3">
-                {getStatusIcon(audit.status)}
-                <div>
-                  <h3 className="text-lg font-semibold text-[var(--text-primary)] flex items-center gap-2">
+        <CardContent className="py-2 px-3">
+          <div className="flex items-center justify-between gap-4">
+            <div className="flex items-center gap-3 flex-1 min-w-0">
+              {getStatusIcon(audit.status)}
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <h3 className="text-base font-semibold text-[var(--text-primary)] truncate max-w-md">
                     {audit.targetUrl}
-                    <ExternalLink className="w-4 h-4 text-[var(--text-tertiary)]" />
                   </h3>
-                  <div className="flex items-center gap-2 mt-1">
-                    <Badge variant={statusBadge.color}>
-                      {statusBadge.text}
-                    </Badge>
-                    <span className="text-sm text-[var(--text-tertiary)] flex items-center gap-1">
-                      <Calendar className="w-3 h-3" />
-                      {new Date(audit.createdAt).toLocaleDateString()}
+                  <ExternalLink className="w-4 h-4 text-[var(--text-tertiary)]" />
+                  <Badge variant={statusBadge.color}>
+                    {statusBadge.text}
+                  </Badge>
+                  <span className="text-sm text-[var(--text-tertiary)] flex items-center gap-1">
+                    <Calendar className="w-3.5 h-3.5" />
+                    {new Date(audit.createdAt).toLocaleDateString()}
+                  </span>
+                  
+                  {/* Processing/Failed message inline */}
+                  {(audit.status === 'pending' || audit.status === 'running') && (
+                    <span className="text-sm text-[var(--text-secondary)]">
+                      Processing...
                     </span>
-                  </div>
+                  )}
+                  {audit.status === 'failed' && (
+                    <span className="text-sm text-[var(--accent-error)]">
+                      Failed
+                    </span>
+                  )}
                 </div>
               </div>
+            </div>
 
-              {/* Scores (only show if completed) */}
-              {isAuditCompleted(audit.status) && (
-                <div className="flex gap-3 mt-4">
-                  {audit.scorePerformance !== null && (
-                    <div className={`px-3 py-2 rounded-xl ${getScoreColor(audit.scorePerformance)}`}>
-                      <div className="text-xs font-medium">Performance</div>
-                      <div className="text-2xl font-bold">{audit.scorePerformance}</div>
-                    </div>
-                  )}
-                  {audit.scoreSeo !== null && (
-                    <div className={`px-3 py-2 rounded-xl ${getScoreColor(audit.scoreSeo)}`}>
-                      <div className="text-xs font-medium">SEO</div>
-                      <div className="text-2xl font-bold">{audit.scoreSeo}</div>
-                    </div>
-                  )}
-                  {audit.scoreAccessibility !== null && (
-                    <div className={`px-3 py-2 rounded-xl ${getScoreColor(audit.scoreAccessibility)}`}>
-                      <div className="text-xs font-medium">Accessibility</div>
-                      <div className="text-2xl font-bold">{audit.scoreAccessibility}</div>
-                    </div>
-                  )}
-                </div>
-              )}
-
-            {/* Processing message */}
-            {(audit.status === 'pending' || audit.status === 'running') && (
-              <p className="text-sm text-[var(--text-secondary)] mt-2">
-                Analysis in progress. This usually takes 2-3 minutes.
-              </p>
+            {/* Scores (only show if completed) */}
+            {isAuditCompleted(audit.status) && (
+              <div className="hidden sm:flex items-center gap-3">
+                <ScoreCircle score={audit.performanceScore ?? audit.scorePerformance} label="Perf" />
+                <ScoreCircle score={audit.seoScore ?? audit.scoreSeo} label="SEO" />
+                <ScoreCircle score={audit.accessibilityScore ?? audit.scoreAccessibility} label="A11y" />
+                <ScoreCircle score={audit.bestPracticesScore ?? audit.scoreBestPractices} label="BP" />
+              </div>
             )}
-
-            {/* Failed message */}
-            {audit.status === 'failed' && (
-              <p className="text-sm text-[var(--accent-error)] mt-2">
-                Audit failed. Please try requesting a new audit.
-              </p>
-            )}
-          </div>
 
           {/* View Button */}
           {isAuditCompleted(audit.status) && (
             <Button
               variant="glass"
+              size="sm"
               onClick={handleViewFullAudit}
               disabled={loadingFullAudit}
             >
               {loadingFullAudit ? (
-                <Loader2 className="w-4 h-4 animate-spin mr-2" />
+                <Loader2 className="w-4 h-4 animate-spin" />
               ) : (
-                <Maximize2 className="w-4 h-4 mr-2" />
+                'View'
               )}
-              View Report
             </Button>
           )}
         </div>
@@ -946,8 +1006,44 @@ export default function Audits() {
   const [selectedProjectId, setSelectedProjectId] = useState('')
   const [requestError, setRequestError] = useState('')
   const [isRequesting, setIsRequesting] = useState(false)
+  
+  // Search and pagination
+  const [searchQuery, setSearchQuery] = useState('')
+  const [currentPage, setCurrentPage] = useState(1)
+  const itemsPerPage = 20
 
   const isAdmin = user?.role === 'admin'
+  
+  // Filter audits by search query
+  const filteredAudits = audits.filter(audit => {
+    if (!searchQuery.trim()) return true
+    const query = searchQuery.toLowerCase()
+    const targetUrl = audit.targetUrl?.toLowerCase() || ''
+    const contactEmail = audit.contact?.email?.toLowerCase() || ''
+    const contactName = audit.contact?.name?.toLowerCase() || ''
+    const prospectEmail = audit.prospect?.email?.toLowerCase() || ''
+    const prospectName = audit.prospect?.name?.toLowerCase() || ''
+    const company = audit.contact?.company?.toLowerCase() || audit.prospect?.company?.toLowerCase() || ''
+    
+    return targetUrl.includes(query) || 
+           contactEmail.includes(query) || 
+           contactName.includes(query) ||
+           prospectEmail.includes(query) ||
+           prospectName.includes(query) ||
+           company.includes(query)
+  })
+  
+  // Paginate filtered results
+  const totalPages = Math.ceil(filteredAudits.length / itemsPerPage)
+  const paginatedAudits = filteredAudits.slice(
+    (currentPage - 1) * itemsPerPage,
+    currentPage * itemsPerPage
+  )
+  
+  // Reset to page 1 when search changes
+  useEffect(() => {
+    setCurrentPage(1)
+  }, [searchQuery])
 
   // Initial fetch
   useEffect(() => {
@@ -1001,7 +1097,10 @@ export default function Audits() {
       toast.success('Audit requested! Results will be ready in 2-3 minutes.')
       fetchAudits() // Refresh list
     } else {
-      setRequestError(result.error || 'Failed to request audit')
+      const errorMsg = typeof result.error === 'string' ? result.error : 
+                      result.error?.message || 
+                      'Failed to request audit'
+      setRequestError(errorMsg)
     }
   }
 
@@ -1035,7 +1134,7 @@ export default function Audits() {
   }
 
   return (
-    <div className="p-6 max-w-7xl mx-auto space-y-6">
+    <div className="p-6 space-y-6">
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
@@ -1051,6 +1150,24 @@ export default function Audits() {
           <Plus className="w-4 h-4 mr-2" />
           Request New Audit
         </Button>
+      </div>
+
+      {/* Search and Stats Bar */}
+      <div className="flex items-center gap-4">
+        <div className="relative flex-1 max-w-md">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[var(--text-tertiary)]" />
+          <Input
+            type="text"
+            placeholder="Search by URL, email, name, or company..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            className="pl-9"
+          />
+        </div>
+        <div className="text-sm text-[var(--text-secondary)]">
+          {filteredAudits.length} {filteredAudits.length === 1 ? 'audit' : 'audits'}
+          {searchQuery && ` matching "${searchQuery}"`}
+        </div>
       </div>
 
       {/* Error Alert */}
@@ -1173,30 +1290,100 @@ export default function Audits() {
           </CardContent>
         </Card>
       ) : (
-        <div className="grid gap-4">
-          {audits.map(audit => (
-            isAdmin ? (
-              <AdminAuditRow
-                key={audit.id}
-                audit={audit}
-                navigate={navigate}
-                getStatusIcon={getStatusIcon}
-                getScoreColor={getScoreColor}
-                getAuditStatusBadge={getAuditStatusBadge}
-                onDelete={deleteAudit}
-              />
-            ) : (
-              <ClientAuditRow
-                key={audit.id}
-                audit={audit}
-                navigate={navigate}
-                getStatusIcon={getStatusIcon}
-                getScoreColor={getScoreColor}
-                getAuditStatusBadge={getAuditStatusBadge}
-              />
-            )
-          ))}
-        </div>
+        <>
+          <div className="grid gap-2">
+            {paginatedAudits.map(audit => (
+              isAdmin ? (
+                <AdminAuditRow
+                  key={audit.id}
+                  audit={audit}
+                  navigate={navigate}
+                  getStatusIcon={getStatusIcon}
+                  getScoreColor={getScoreColor}
+                  getAuditStatusBadge={getAuditStatusBadge}
+                  onDelete={deleteAudit}
+                />
+              ) : (
+                <ClientAuditRow
+                  key={audit.id}
+                  audit={audit}
+                  navigate={navigate}
+                  getStatusIcon={getStatusIcon}
+                  getScoreColor={getScoreColor}
+                  getAuditStatusBadge={getAuditStatusBadge}
+                />
+              )
+            ))}
+          </div>
+          
+          {/* Pagination */}
+          {totalPages > 1 && (
+            <div className="flex items-center justify-between pt-4 border-t border-[var(--glass-border)]">
+              <div className="text-sm text-[var(--text-secondary)]">
+                Showing {((currentPage - 1) * itemsPerPage) + 1} - {Math.min(currentPage * itemsPerPage, filteredAudits.length)} of {filteredAudits.length}
+              </div>
+              <div className="flex items-center gap-1">
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setCurrentPage(1)}
+                  disabled={currentPage === 1}
+                >
+                  First
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                  disabled={currentPage === 1}
+                >
+                  Prev
+                </Button>
+                <div className="flex items-center gap-1 mx-2">
+                  {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
+                    let pageNum
+                    if (totalPages <= 5) {
+                      pageNum = i + 1
+                    } else if (currentPage <= 3) {
+                      pageNum = i + 1
+                    } else if (currentPage >= totalPages - 2) {
+                      pageNum = totalPages - 4 + i
+                    } else {
+                      pageNum = currentPage - 2 + i
+                    }
+                    return (
+                      <Button
+                        key={pageNum}
+                        variant={currentPage === pageNum ? 'glass-primary' : 'ghost'}
+                        size="sm"
+                        onClick={() => setCurrentPage(pageNum)}
+                        className="w-8 h-8 p-0"
+                      >
+                        {pageNum}
+                      </Button>
+                    )
+                  })}
+                </div>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+                  disabled={currentPage === totalPages}
+                >
+                  Next
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setCurrentPage(totalPages)}
+                  disabled={currentPage === totalPages}
+                >
+                  Last
+                </Button>
+              </div>
+            </div>
+          )}
+        </>
       )}
     </div>
   )

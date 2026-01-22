@@ -18,7 +18,7 @@ import {
   Eye
 } from 'lucide-react'
 
-export default function SEOAlerts({ siteId }) {
+export default function SEOAlerts({ projectId }) {
   const { 
     alerts, 
     alertsStats,
@@ -33,15 +33,15 @@ export default function SEOAlerts({ siteId }) {
   const [filter, setFilter] = useState('active')
 
   useEffect(() => {
-    if (siteId) {
-      fetchAlerts(siteId)
+    if (projectId) {
+      fetchAlerts(projectId)
     }
-  }, [siteId])
+  }, [projectId])
 
   const handleCheckAlerts = async () => {
     setIsChecking(true)
     try {
-      await checkAlerts(siteId, true) // true = send notifications
+      await checkAlerts(projectId, true) // true = send notifications
     } catch (error) {
       console.error('Check alerts error:', error)
     }
@@ -89,10 +89,10 @@ export default function SEOAlerts({ siteId }) {
     }
   }
 
-  const filteredAlerts = alerts?.filter(alert => {
+  const filteredAlerts = (Array.isArray(alerts) ? alerts : []).filter(alert => {
     if (filter === 'all') return true
     return alert.status === filter
-  }) || []
+  })
 
   return (
     <div className="space-y-6">

@@ -44,11 +44,20 @@ function parseReferrer(referrer) {
   return { name: domain, category: 'referral' }
 }
 
+const defaultFormatNumber = (num) => {
+  if (!num && num !== 0) return '0'
+  if (num >= 1000000) return (num / 1000000).toFixed(1) + 'M'
+  if (num >= 1000) return (num / 1000).toFixed(1) + 'K'
+  return num.toLocaleString()
+}
+
 export function ReferrersTable({ 
   referrers = [], 
   isLoading = false,
-  formatNumber,
-  limit = 15
+  formatNumber = defaultFormatNumber,
+  limit = 15,
+  title = 'Traffic Sources',
+  description = 'Where your visitors come from'
 }) {
   const displayReferrers = referrers.slice(0, limit)
   const totalCount = referrers.reduce((sum, r) => sum + (r.count || 0), 0)
@@ -77,9 +86,9 @@ export function ReferrersTable({
           <div>
             <CardTitle className="text-lg flex items-center gap-2">
               <Globe className="h-5 w-5 text-blue-500" />
-              Traffic Sources
+              {title}
             </CardTitle>
-            <CardDescription>Where your visitors come from</CardDescription>
+            <CardDescription>{description}</CardDescription>
           </div>
         </div>
         

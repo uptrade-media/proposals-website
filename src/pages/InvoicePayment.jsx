@@ -16,11 +16,7 @@ import {
   ArrowRight
 } from 'lucide-react'
 import api from '@/lib/api'
-
-// Square Web SDK
-const SQUARE_APP_ID = import.meta.env.SQUARE_APPLICATION_ID
-const SQUARE_LOCATION_ID = import.meta.env.SQUARE_LOCATION_ID
-const SQUARE_ENV = import.meta.env.SQUARE_ENVIRONMENT || 'sandbox'
+import { billingApi, configApi } from '@/lib/portal-api'
 
 function formatCurrency(amount) {
   return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(amount || 0)
@@ -66,6 +62,7 @@ export default function InvoicePayment() {
   const token = queryToken || urlToken
   
   const [invoice, setInvoice] = useState(null)
+  const [squareConfig, setSquareConfig] = useState(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
   const [paymentError, setPaymentError] = useState(null)
@@ -77,19 +74,19 @@ export default function InvoicePayment() {
   const cardContainerRef = useRef(null)
   const cardInitializedRef = useRef(false)
 
-  // Fetch invoice on mount
+  // Fetch invoice and Square config on mount
   useEffect(() => {
     if (!token) {
       setError('Invalid payment link')
       setLoading(false)
       return
     }
-    fetchInvoice()
+    fetchInvoiceAndConfig()
   }, [token])
 
   // Initialize Square Web SDK - only once
   useEffect(() => {
-    if (!invoice || invoice.status === 'paid' || !SQUARE_APP_ID || cardInitializedRef.current) return
+    if (!invoice || invoice.status === 'paid' || !squareConfig || cardInitializedRef.current) return
     
     cardInitializedRef.current = true
     initializeSquare()
@@ -100,12 +97,18 @@ export default function InvoicePayment() {
         card.destroy?.()
       }
     }
-  }, [invoice])
+  }, [invoice, squareConfig])
 
-  const fetchInvoice = async () => {
+  const fetchInvoiceAndConfig = async () => {
     try {
-      const response = await api.get(`/.netlify/functions/invoices-get-public?token=${token}`)
-      setInvoice(response.data.invoice)
+      // Fetch invoice and Square config in parallel
+      const [invoiceResponse, config] = await Promise.all([
+        billingApi.getPublicInvoice(token),
+        configApi.getSquareConfigByInvoiceToken(token)
+      ])
+      
+      setInvoice(invoiceResponse.data.invoice)
+      setSquareConfig(config)
     } catch (err) {
       console.error('Failed to fetch invoice:', err)
       if (err.response?.status === 410) {
@@ -123,12 +126,12 @@ export default function InvoicePayment() {
   const initializeSquare = async () => {
     try {
       console.log('[Square Init] Starting Square initialization...')
-      console.log('[Square Init] App ID:', SQUARE_APP_ID ? 'Present' : 'Missing')
-      console.log('[Square Init] Location ID:', SQUARE_LOCATION_ID ? 'Present' : 'Missing')
-      console.log('[Square Init] Environment:', SQUARE_ENV)
+      console.log('[Square Init] App ID:', squareConfig?.applicationId ? 'Present' : 'Missing')
+      console.log('[Square Init] Location ID:', squareConfig?.locationId ? 'Present' : 'Missing')
+      console.log('[Square Init] Environment:', squareConfig?.environment)
       
-      // Check if Square environment variables are present
-      if (!SQUARE_APP_ID || !SQUARE_LOCATION_ID) {
+      // Check if Square config is present
+      if (!squareConfig?.applicationId || !squareConfig?.locationId) {
         throw new Error('Square payment configuration is missing. Please contact support.')
       }
       
@@ -138,7 +141,7 @@ export default function InvoicePayment() {
         await Promise.race([
           new Promise((resolve, reject) => {
             const script = document.createElement('script')
-            script.src = SQUARE_ENV === 'production' 
+            script.src = squareConfig.environment === 'production' 
               ? 'https://web.squarecdn.com/v1/square.js'
               : 'https://sandbox.web.squarecdn.com/v1/square.js'
             script.onload = () => {
@@ -158,7 +161,7 @@ export default function InvoicePayment() {
       }
 
       console.log('[Square Init] Initializing payments instance...')
-      const paymentsInstance = window.Square.payments(SQUARE_APP_ID, SQUARE_LOCATION_ID)
+      const paymentsInstance = window.Square.payments(squareConfig.applicationId, squareConfig.locationId)
       
       console.log('[Square Init] Creating card instance...')
       const cardInstance = await Promise.race([
@@ -235,12 +238,12 @@ export default function InvoicePayment() {
         throw new Error(result.errors?.[0]?.message || 'Card validation failed')
       }
 
-      const response = await api.post('/.netlify/functions/invoices-pay-public', {
+      const { data } = await billingApi.payPublicInvoice({
         token,
         sourceId: result.token
       })
 
-      if (response.data.success) {
+      if (data.success) {
         setPaymentSuccess(true)
         setInvoice(prev => ({ ...prev, status: 'paid' }))
       }

@@ -1,6 +1,7 @@
 // src/components/seo/SEOPagesList.jsx
 // List of all pages for a site with filtering and actions
 import { useState, useEffect } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -17,11 +18,14 @@ import {
   ExternalLink,
   CheckCircle,
   XCircle,
-  AlertTriangle
+  AlertTriangle,
+  Wand2
 } from 'lucide-react'
 import { useSeoStore } from '@/lib/seo-store'
+import SEOBulkEditModal from './SEOBulkEditModal'
 
-export default function SEOPagesList({ site, onSelectPage }) {
+export default function SEOPagesList({ site, projectId }) {
+  const navigate = useNavigate()
   const { 
     pages,
     pagesLoading,
@@ -37,23 +41,28 @@ export default function SEOPagesList({ site, onSelectPage }) {
   const [sortBy, setSortBy] = useState('clicks')
   const [crawlingPages, setCrawlingPages] = useState(new Set())
   const [crawlingSitemap, setCrawlingSitemap] = useState(false)
+  const [bulkEditOpen, setBulkEditOpen] = useState(false)
+
+  // Use projectId directly (new architecture) or fallback to site.id (legacy)
+  const siteId = projectId || site?.id
 
   // Fetch pages on mount and when filters change
   useEffect(() => {
-    if (site?.id) {
-      fetchPages(site.id, { 
+    if (siteId) {
+      console.log('[SEOPagesList] Fetching pages for siteId:', siteId)
+      fetchPages(siteId, { 
         search: searchQuery,
         indexStatus: statusFilter !== 'all' ? statusFilter : undefined,
         sortBy,
         limit: 50
       })
     }
-  }, [site?.id, searchQuery, statusFilter, sortBy])
+  }, [siteId, searchQuery, statusFilter, sortBy])
 
   const handleCrawlSitemap = async () => {
     setCrawlingSitemap(true)
     try {
-      await crawlSitemap(site.id)
+      await crawlSitemap(siteId)
     } finally {
       setCrawlingSitemap(false)
     }
@@ -131,7 +140,7 @@ export default function SEOPagesList({ site, onSelectPage }) {
       )
     }
     return (
-      <Badge variant="outline" className="text-xs text-[var(--text-tertiary)]">
+      <Badge variant="outline" className="text-xs text-muted-foreground">
         Unknown
       </Badge>
     )
@@ -158,7 +167,7 @@ export default function SEOPagesList({ site, onSelectPage }) {
       <div className="flex items-center justify-between flex-wrap gap-4">
         <div className="flex items-center gap-2 flex-1 min-w-[200px] max-w-md">
           <div className="relative flex-1">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-[var(--text-tertiary)]" />
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
             <Input
               placeholder="Search pages..."
               value={searchQuery}
@@ -210,44 +219,93 @@ export default function SEOPagesList({ site, onSelectPage }) {
             variant="outline"
             onClick={handleCrawlSitemap}
             disabled={crawlingSitemap}
+            title="Manually sync pages from sitemap.xml (auto-syncs at build time)"
           >
             {crawlingSitemap ? (
               <Loader2 className="h-4 w-4 mr-2 animate-spin" />
             ) : (
               <RefreshCw className="h-4 w-4 mr-2" />
             )}
-            Crawl Sitemap
+            Sync Pages
+          </Button>
+          
+          <Button 
+            onClick={() => setBulkEditOpen(true)}
+            disabled={pages.length === 0}
+          >
+            <Wand2 className="h-4 w-4 mr-2" />
+            Bulk AI Edit
           </Button>
         </div>
       </div>
+
+      {/* Bulk Edit Modal */}
+      <SEOBulkEditModal
+        open={bulkEditOpen}
+        onOpenChange={setBulkEditOpen}
+        projectId={site?.id}
+        pages={filteredPages}
+        field="both"
+        onComplete={() => {
+          // Refresh pages after bulk edit
+          fetchPages(siteId, { 
+            search: searchQuery,
+            indexStatus: statusFilter !== 'all' ? statusFilter : undefined,
+            sortBy,
+            limit: 50
+          })
+        }}
+      />
 
       {/* Pages Table */}
       <Card>
         <CardContent className="p-0">
           {pagesLoading ? (
             <div className="flex items-center justify-center py-12">
-              <Loader2 className="h-8 w-8 animate-spin text-[var(--accent-primary)]" />
+              <Loader2 className="h-8 w-8 animate-spin text-primary" />
             </div>
           ) : filteredPages.length === 0 ? (
-            <div className="text-center py-12 text-[var(--text-tertiary)]">
+            <div className="text-center py-12 text-muted-foreground">
               <FileText className="h-12 w-12 mx-auto mb-4 opacity-50" />
               <p className="text-lg mb-2">No pages found</p>
-              <p className="text-sm mb-4">
-                {pages.length === 0 
-                  ? 'Crawl the sitemap to discover pages'
-                  : 'Try adjusting your filters'}
-              </p>
-              {pages.length === 0 && (
-                <Button onClick={handleCrawlSitemap} disabled={crawlingSitemap}>
-                  {crawlingSitemap ? 'Crawling...' : 'Crawl Sitemap'}
-                </Button>
+              {pages.length === 0 ? (
+                <div className="space-y-4">
+                  <p className="text-sm max-w-md mx-auto">
+                    Pages are automatically synced from your site's <code className="bg-muted px-1 py-0.5 rounded text-xs">sitemap.xml</code> at build time 
+                    when Site-Kit is installed.
+                  </p>
+                  <div className="flex justify-center gap-2">
+                    <Button 
+                      variant="outline"
+                      onClick={handleCrawlSitemap} 
+                      disabled={crawlingSitemap}
+                    >
+                      {crawlingSitemap ? (
+                        <>
+                          <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                          Syncing...
+                        </>
+                      ) : (
+                        <>
+                          <RefreshCw className="h-4 w-4 mr-2" />
+                          Sync Now
+                        </>
+                      )}
+                    </Button>
+                  </div>
+                  <p className="text-xs text-muted-foreground/60">
+                    Or wait for the next build to sync automatically
+                  </p>
+                </div>
+              ) : (
+                <p className="text-sm">Try adjusting your filters</p>
               )}
             </div>
           ) : (
             <div className="overflow-x-auto">
               <table className="w-full">
-                <thead className="border-b border-[var(--glass-border)]">
-                  <tr className="text-left text-sm text-[var(--text-tertiary)]">
+                <thead className="border-b border-border/50">
+                  <tr className="text-left text-sm text-muted-foreground">
                     <th className="px-4 py-3 font-medium">Page</th>
                     <th className="px-4 py-3 font-medium text-center">Index</th>
                     <th className="px-4 py-3 font-medium text-right">Clicks</th>
@@ -258,33 +316,46 @@ export default function SEOPagesList({ site, onSelectPage }) {
                     <th className="px-4 py-3 font-medium"></th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-[var(--glass-border)]">
+                <tbody className="divide-y divide-border/50">
                   {filteredPages.map((page) => (
                     <tr 
                       key={page.id}
-                      className="hover:bg-[var(--surface-elevated)] cursor-pointer transition-colors"
-                      onClick={() => onSelectPage(page.id)}
+                      className="hover:bg-muted/50 cursor-pointer transition-colors"
+                      onClick={() => navigate(`/seo/pages/${page.id}`)}
                     >
                       <td className="px-4 py-3">
                         <div className="max-w-xs">
-                          <p className="text-sm font-medium text-[var(--text-primary)] truncate">
+                          <p className="text-sm font-medium text-foreground truncate">
                             {page.title || page.path}
                           </p>
-                          <p className="text-xs text-[var(--text-tertiary)] truncate">
-                            {page.path}
+                          <p className="text-xs text-muted-foreground truncate">
+                            {(() => {
+                              try {
+                                const url = new URL(page.path)
+                                const path = url.pathname + url.search + url.hash
+                                // Show full path for special routes (audit, proposal, invoice)
+                                if (path.includes('/audit') || path.includes('/proposal') || path.includes('/invoice')) {
+                                  return path
+                                }
+                                // For regular pages, just show domain
+                                return url.hostname
+                              } catch {
+                                return page.path
+                              }
+                            })()}
                           </p>
                         </div>
                       </td>
                       <td className="px-4 py-3 text-center">
                         {getIndexStatusBadge(page)}
                       </td>
-                      <td className="px-4 py-3 text-right text-sm text-[var(--text-primary)]">
+                      <td className="px-4 py-3 text-right text-sm text-foreground">
                         {formatNumber(page.clicks_28d)}
                       </td>
-                      <td className="px-4 py-3 text-right text-sm text-[var(--text-primary)]">
+                      <td className="px-4 py-3 text-right text-sm text-foreground">
                         {formatNumber(page.impressions_28d)}
                       </td>
-                      <td className="px-4 py-3 text-right text-sm text-[var(--text-primary)]">
+                      <td className="px-4 py-3 text-right text-sm text-foreground">
                         {page.avg_position_28d?.toFixed(1) || '-'}
                       </td>
                       <td className="px-4 py-3 text-center">
@@ -296,7 +367,7 @@ export default function SEOPagesList({ site, onSelectPage }) {
                             {page.opportunities_count}
                           </Badge>
                         ) : (
-                          <span className="text-xs text-[var(--text-tertiary)]">-</span>
+                          <span className="text-xs text-muted-foreground">-</span>
                         )}
                       </td>
                       <td className="px-4 py-3">
@@ -339,7 +410,7 @@ export default function SEOPagesList({ site, onSelectPage }) {
 
       {/* Pagination */}
       {pagesPagination.totalPages > 1 && (
-        <div className="flex items-center justify-between text-sm text-[var(--text-tertiary)]">
+        <div className="flex items-center justify-between text-sm text-muted-foreground">
           <p>
             Showing {filteredPages.length} of {pagesPagination.total} pages
           </p>
@@ -348,7 +419,7 @@ export default function SEOPagesList({ site, onSelectPage }) {
               variant="outline"
               size="sm"
               disabled={pagesPagination.page <= 1}
-              onClick={() => fetchPages(site.id, { page: pagesPagination.page - 1, limit: 50 })}
+              onClick={() => fetchPages(siteId, { page: pagesPagination.page - 1, limit: 50 })}
             >
               Previous
             </Button>
@@ -359,7 +430,7 @@ export default function SEOPagesList({ site, onSelectPage }) {
               variant="outline"
               size="sm"
               disabled={pagesPagination.page >= pagesPagination.totalPages}
-              onClick={() => fetchPages(site.id, { page: pagesPagination.page + 1, limit: 50 })}
+              onClick={() => fetchPages(siteId, { page: pagesPagination.page + 1, limit: 50 })}
             >
               Next
             </Button>

@@ -434,8 +434,31 @@ export function AIInsightsSection({ aiInsights }) {
           )}
           {aiInsights.estimatedROI && (
             <div className="p-4 bg-gradient-to-r from-green-500/10 to-emerald-500/10 rounded-xl border border-green-500/20">
-              <h4 className="text-green-300 font-medium mb-2">Estimated ROI</h4>
-              <p className="text-gray-300 text-sm">{aiInsights.estimatedROI}</p>
+              <h4 className="text-green-300 font-medium mb-3">Estimated ROI</h4>
+              {typeof aiInsights.estimatedROI === 'string' ? (
+                <p className="text-gray-300 text-sm">{aiInsights.estimatedROI}</p>
+              ) : (
+                <div className="grid gap-3 sm:grid-cols-3">
+                  {aiInsights.estimatedROI.performanceGain && (
+                    <div className="p-3 bg-green-500/10 rounded-lg">
+                      <p className="text-xs text-green-400 mb-1">Performance Gain</p>
+                      <p className="text-sm text-gray-200">{aiInsights.estimatedROI.performanceGain}</p>
+                    </div>
+                  )}
+                  {aiInsights.estimatedROI.seoImpact && (
+                    <div className="p-3 bg-blue-500/10 rounded-lg">
+                      <p className="text-xs text-blue-400 mb-1">SEO Impact</p>
+                      <p className="text-sm text-gray-200">{aiInsights.estimatedROI.seoImpact}</p>
+                    </div>
+                  )}
+                  {aiInsights.estimatedROI.conversionImpact && (
+                    <div className="p-3 bg-purple-500/10 rounded-lg">
+                      <p className="text-xs text-purple-400 mb-1">Conversion Impact</p>
+                      <p className="text-sm text-gray-200">{aiInsights.estimatedROI.conversionImpact}</p>
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
           )}
         </CardContent>
@@ -458,6 +481,7 @@ function AIInsightCard({ title, content }) {
 
 /**
  * QuickWinsSection - Fast fixes that can be implemented quickly
+ * Handles both string format (legacy) and object format (AI insights: {fix, expectedImpact})
  */
 export function QuickWinsSection({ quickWins }) {
   if (!quickWins?.length) return null
@@ -478,12 +502,26 @@ export function QuickWinsSection({ quickWins }) {
         </CardHeader>
         <CardContent>
           <div className="space-y-3">
-            {quickWins.map((win, i) => (
-              <div key={i} className="flex items-center gap-3 p-3 bg-green-500/10 rounded-xl border border-green-500/20">
-                <CheckCircle className="w-5 h-5 text-green-400 flex-shrink-0" />
-                <span className="text-green-100">{win}</span>
-              </div>
-            ))}
+            {quickWins.map((win, i) => {
+              // Handle both string and object formats
+              const isObject = typeof win === 'object' && win !== null
+              const fixText = isObject ? win.fix : win
+              const expectedImpact = isObject ? win.expectedImpact : null
+              
+              return (
+                <div key={i} className="flex items-start gap-3 p-3 bg-green-500/10 rounded-xl border border-green-500/20">
+                  <CheckCircle className="w-5 h-5 text-green-400 flex-shrink-0 mt-0.5" />
+                  <div className="flex-1">
+                    <span className="text-green-100">{fixText}</span>
+                    {expectedImpact && (
+                      <p className="text-sm text-green-300/70 mt-1">
+                        <span className="text-green-400">Expected impact:</span> {expectedImpact}
+                      </p>
+                    )}
+                  </div>
+                </div>
+              )
+            })}
           </div>
         </CardContent>
       </Card>

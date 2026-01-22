@@ -1,91 +1,114 @@
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
-import { BarChart, BarList } from '@tremor/react'
-import { Target, Megaphone, Link, ExternalLink } from 'lucide-react'
-import { Badge } from '@/components/ui/badge'
+/**
+ * UTMCampaigns - Campaign tracking and attribution
+ */
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
+import { Loader2, Megaphone, Link2, Target, BarChart3 } from 'lucide-react'
+import {
+  ResponsiveContainer,
+  BarChart,
+  Bar,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  Cell
+} from 'recharts'
+import { useBrandColors } from '@/hooks/useBrandColors'
 
-// UTM source colors
-const sourceColors = {
-  google: 'text-blue-500 bg-blue-500/10',
-  facebook: 'text-blue-600 bg-blue-600/10',
-  instagram: 'text-pink-500 bg-pink-500/10',
-  twitter: 'text-sky-500 bg-sky-500/10',
-  linkedin: 'text-blue-700 bg-blue-700/10',
-  email: 'text-amber-500 bg-amber-500/10',
-  newsletter: 'text-amber-500 bg-amber-500/10',
-  direct: 'text-gray-500 bg-gray-500/10',
-  organic: 'text-emerald-500 bg-emerald-500/10',
-  referral: 'text-purple-500 bg-purple-500/10'
+// Custom tooltip
+function CustomTooltip({ active, payload, label }) {
+  if (!active || !payload?.length) return null
+  
+  return (
+    <div className="bg-[var(--glass-bg)] backdrop-blur-xl border border-[var(--glass-border)] rounded-lg p-3 shadow-xl">
+      <p className="text-sm font-medium text-[var(--text-primary)] mb-1">{label}</p>
+      <p className="text-lg font-bold text-[var(--text-primary)]">
+        {payload[0].value?.toLocaleString()} sessions
+      </p>
+    </div>
+  )
 }
 
-const getSourceStyle = (source) => {
-  const lower = (source || '').toLowerCase()
-  for (const [key, style] of Object.entries(sourceColors)) {
-    if (lower.includes(key)) return style
-  }
-  return 'text-gray-500 bg-gray-500/10'
-}
-
-export default function UTMCampaigns({ sessions }) {
-  if (!sessions) {
+function CampaignSection({ title, icon: Icon, data = [], color, emptyMessage }) {
+  const maxValue = Math.max(...data.map(d => d.count || 0), 1)
+  
+  if (data.length === 0) {
     return (
-      <Card className="animate-pulse">
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Target className="w-5 h-5" />
-            Campaign Tracking
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="h-48 bg-muted rounded" />
-        </CardContent>
-      </Card>
+      <div className="p-4 rounded-xl bg-[var(--glass-bg-inset)] border border-[var(--glass-border)]">
+        <div className="flex items-center gap-2 mb-3">
+          <Icon className="w-4 h-4 text-[var(--text-tertiary)]" />
+          <h4 className="text-sm font-medium text-[var(--text-primary)]">{title}</h4>
+        </div>
+        <p className="text-xs text-[var(--text-tertiary)]">{emptyMessage}</p>
+      </div>
     )
   }
+  
+  return (
+    <div className="p-4 rounded-xl bg-[var(--glass-bg-inset)] border border-[var(--glass-border)]">
+      <div className="flex items-center gap-2 mb-4">
+        <Icon className="w-4 h-4 text-[var(--text-tertiary)]" />
+        <h4 className="text-sm font-medium text-[var(--text-primary)]">{title}</h4>
+      </div>
+      
+      <div className="space-y-3">
+        {data.slice(0, 5).map((item, index) => {
+          const percentage = (item.count / maxValue) * 100
+          
+          return (
+            <div key={index}>
+              <div className="flex items-center justify-between mb-1">
+                <span className="text-sm text-[var(--text-secondary)] truncate max-w-[70%]">
+                  {item.name || item.campaign || item.source || item.medium || 'Unknown'}
+                </span>
+                <span className="text-sm font-medium text-[var(--text-primary)] tabular-nums">
+                  {item.count?.toLocaleString()}
+                </span>
+              </div>
+              <div className="h-1.5 bg-[var(--glass-border)] rounded-full overflow-hidden">
+                <div 
+                  className="h-full rounded-full transition-all duration-500"
+                  style={{ 
+                    width: `${percentage}%`,
+                    backgroundColor: color 
+                  }}
+                />
+              </div>
+            </div>
+          )
+        })}
+      </div>
+    </div>
+  )
+}
 
-  const { utmSources = [], utmCampaigns = [], summary } = sessions
-
-  // Format for BarChart
-  const sourceChartData = utmSources.map(s => ({
-    name: s.name,
-    Sessions: s.count
+export function UTMCampaigns({ sessions = {} }) {
+  const { primary, secondary } = useBrandColors()
+  
+  const sources = sessions?.utmSources || []
+  const campaigns = sessions?.utmCampaigns || []
+  const mediums = sessions?.utmMediums || []
+  
+  const hasData = sources.length > 0 || campaigns.length > 0 || mediums.length > 0
+  
+  // Prepare chart data for top campaigns
+  const chartData = campaigns.slice(0, 8).map(c => ({
+    name: (c.name || c.campaign || 'Unknown').substring(0, 15),
+    count: c.count || 0
   }))
 
-  // Calculate organic vs paid traffic
-  const paidSources = ['google', 'facebook', 'instagram', 'linkedin', 'twitter', 'tiktok', 'bing']
-  const paidSessions = utmSources
-    .filter(s => paidSources.some(p => s.name.toLowerCase().includes(p)))
-    .reduce((sum, s) => sum + s.count, 0)
-  const organicSessions = (summary?.totalSessions || 0) - paidSessions
-  
-  const trafficMix = [
-    { name: 'Organic', value: organicSessions },
-    { name: 'Paid', value: paidSessions }
-  ].filter(t => t.value > 0)
-
-  const hasNoUTMData = utmSources.length === 0 && utmCampaigns.length === 0
-
-  if (hasNoUTMData) {
+  if (!hasData) {
     return (
       <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Target className="w-5 h-5 text-purple-500" />
-            Campaign Tracking
-          </CardTitle>
-          <CardDescription>
-            UTM parameter tracking
-          </CardDescription>
+        <CardHeader className="pb-2">
+          <CardTitle className="text-lg">Campaign Tracking</CardTitle>
+          <CardDescription>UTM parameter attribution</CardDescription>
         </CardHeader>
         <CardContent>
-          <div className="flex flex-col items-center justify-center py-8 text-center">
-            <Link className="w-12 h-12 text-muted-foreground mb-4" />
-            <p className="text-muted-foreground mb-2">
-              No UTM parameters detected
-            </p>
-            <p className="text-sm text-muted-foreground max-w-sm">
-              Add UTM parameters to your campaign links to track traffic sources.
-              Example: <code className="text-xs bg-muted px-1 py-0.5 rounded">?utm_source=google&utm_medium=cpc</code>
-            </p>
+          <div className="text-center py-8 text-[var(--text-tertiary)]">
+            <Megaphone className="w-12 h-12 mx-auto mb-3 opacity-30" />
+            <p className="text-sm">No campaign data detected</p>
+            <p className="text-xs mt-1">Add UTM parameters to your marketing links to track campaigns</p>
           </div>
         </CardContent>
       </Card>
@@ -93,137 +116,85 @@ export default function UTMCampaigns({ sessions }) {
   }
 
   return (
-    <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-      {/* UTM Sources */}
-      <Card>
-        <CardHeader className="pb-2">
-          <CardTitle className="text-base flex items-center gap-2">
-            <ExternalLink className="w-5 h-5 text-purple-500" />
-            Traffic Sources
-          </CardTitle>
-          <CardDescription>
-            Sessions by UTM source
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          {utmSources.length > 0 ? (
-            <div className="space-y-3">
-              {utmSources.slice(0, 8).map((source, idx) => (
-                <div key={source.name} className="flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <Badge variant="outline" className={getSourceStyle(source.name)}>
-                      {source.name}
-                    </Badge>
-                  </div>
-                  <div className="flex items-center gap-3">
-                    <div className="w-24 h-2 bg-muted rounded-full overflow-hidden">
-                      <div 
-                        className="h-full bg-purple-500 rounded-full"
-                        style={{ width: `${source.percentage}%` }}
-                      />
-                    </div>
-                    <span className="text-sm font-medium w-16 text-right">
-                      {source.count.toLocaleString()}
-                    </span>
-                    <span className="text-xs text-muted-foreground w-10 text-right">
-                      {source.percentage}%
-                    </span>
-                  </div>
-                </div>
-              ))}
-            </div>
-          ) : (
-            <p className="text-sm text-muted-foreground py-4 text-center">
-              No UTM sources tracked
-            </p>
-          )}
-        </CardContent>
-      </Card>
-
-      {/* UTM Campaigns */}
-      <Card>
-        <CardHeader className="pb-2">
-          <CardTitle className="text-base flex items-center gap-2">
-            <Megaphone className="w-5 h-5 text-orange-500" />
-            Active Campaigns
-          </CardTitle>
-          <CardDescription>
-            Top performing campaigns
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          {utmCampaigns.length > 0 ? (
-            <div className="space-y-2">
-              {utmCampaigns.slice(0, 8).map((campaign, idx) => {
-                const [source, name] = campaign.name.includes('/') 
-                  ? campaign.name.split('/') 
-                  : ['direct', campaign.name]
-                return (
-                  <div 
-                    key={campaign.name} 
-                    className="flex items-center justify-between py-2 px-3 bg-muted/50 rounded-lg"
-                  >
-                    <div className="flex flex-col">
-                      <span className="text-sm font-medium truncate max-w-[200px]">
-                        {name}
-                      </span>
-                      <span className="text-xs text-muted-foreground">
-                        via {source}
-                      </span>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <span className="text-sm font-semibold">
-                        {campaign.count.toLocaleString()}
-                      </span>
-                      <span className="text-xs text-muted-foreground">sessions</span>
-                    </div>
-                  </div>
-                )
-              })}
-            </div>
-          ) : (
-            <p className="text-sm text-muted-foreground py-4 text-center">
-              No campaigns tracked yet
-            </p>
-          )}
-        </CardContent>
-      </Card>
-
-      {/* Traffic Mix Summary */}
-      {trafficMix.length > 0 && (
-        <Card className="lg:col-span-2">
-          <CardHeader className="pb-2">
-            <CardTitle className="text-base">Traffic Mix</CardTitle>
-            <CardDescription>Organic vs Paid traffic breakdown</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="flex gap-4">
-              {trafficMix.map(type => (
-                <div 
-                  key={type.name}
-                  className={`flex-1 p-4 rounded-lg border ${
-                    type.name === 'Organic' 
-                      ? 'border-emerald-200 bg-emerald-50 dark:border-emerald-800 dark:bg-emerald-950' 
-                      : 'border-purple-200 bg-purple-50 dark:border-purple-800 dark:bg-purple-950'
-                  }`}
-                >
-                  <p className={`text-2xl font-bold ${
-                    type.name === 'Organic' ? 'text-emerald-600' : 'text-purple-600'
-                  }`}>
-                    {type.value.toLocaleString()}
-                  </p>
-                  <p className="text-sm text-muted-foreground">{type.name} Sessions</p>
-                  <p className="text-xs text-muted-foreground mt-1">
-                    {summary?.totalSessions 
-                      ? Math.round((type.value / summary.totalSessions) * 100) 
-                      : 0}% of total
-                  </p>
-                </div>
-              ))}
-            </div>
-          </CardContent>
-        </Card>
-      )}
-    </div>
+    <Card>
+      <CardHeader className="pb-2">
+        <CardTitle className="text-lg">Campaign Tracking</CardTitle>
+        <CardDescription>Attribution from UTM parameters</CardDescription>
+      </CardHeader>
+      
+      <CardContent className="space-y-6">
+        {/* Campaign Chart */}
+        {chartData.length > 0 && (
+          <div>
+            <h4 className="text-sm font-medium text-[var(--text-primary)] mb-4 flex items-center gap-2">
+              <BarChart3 className="w-4 h-4 text-[var(--text-tertiary)]" />
+              Top Campaigns
+            </h4>
+            <ResponsiveContainer width="100%" height={200}>
+              <BarChart data={chartData} layout="vertical" margin={{ left: 0, right: 20 }}>
+                <CartesianGrid 
+                  strokeDasharray="3 3" 
+                  stroke="var(--glass-border)" 
+                  horizontal={true}
+                  vertical={false}
+                />
+                <XAxis 
+                  type="number" 
+                  stroke="var(--text-tertiary)"
+                  fontSize={11}
+                  tickLine={false}
+                  axisLine={false}
+                />
+                <YAxis 
+                  type="category" 
+                  dataKey="name" 
+                  stroke="var(--text-tertiary)"
+                  fontSize={11}
+                  tickLine={false}
+                  axisLine={false}
+                  width={100}
+                />
+                <Tooltip content={<CustomTooltip />} />
+                <Bar dataKey="count" radius={[0, 4, 4, 0]}>
+                  {chartData.map((entry, index) => (
+                    <Cell 
+                      key={index} 
+                      fill={index % 2 === 0 ? primary : secondary} 
+                    />
+                  ))}
+                </Bar>
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+        )}
+        
+        {/* UTM Breakdown Grid */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <CampaignSection
+            title="Sources"
+            icon={Link2}
+            data={sources}
+            color={primary}
+            emptyMessage="No source data"
+          />
+          <CampaignSection
+            title="Mediums"
+            icon={Target}
+            data={mediums}
+            color={secondary}
+            emptyMessage="No medium data"
+          />
+          <CampaignSection
+            title="Campaigns"
+            icon={Megaphone}
+            data={campaigns}
+            color="#22c55e"
+            emptyMessage="No campaign data"
+          />
+        </div>
+      </CardContent>
+    </Card>
   )
 }
+
+export default UTMCampaigns

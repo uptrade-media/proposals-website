@@ -25,7 +25,7 @@ import { Button } from '@/components/ui/button'
 import { Progress } from '@/components/ui/progress'
 import { Badge } from '@/components/ui/badge'
 import { GlassCard, GlassEmptyState } from '@/components/crm/ui'
-import api from '@/lib/api'
+import { reportsApi } from '@/lib/portal-api'
 
 // Format currency
 function formatCurrency(amount) {
@@ -183,7 +183,7 @@ function LeaderboardRow({ rank, member, isExpanded, onToggle }) {
         <div className="px-12 pb-4 space-y-3 bg-[var(--glass-bg-inset)]">
           <div className="grid grid-cols-3 gap-4">
             <div>
-              <p className="text-xs text-[var(--text-tertiary)]">Assigned Clients</p>
+              <p className="text-xs text-[var(--text-tertiary)]">Assigned Prospects</p>
               <p className="text-lg font-semibold text-[var(--text-primary)]">{member.assignedClients}</p>
             </div>
             <div>
@@ -224,7 +224,7 @@ export default function TeamMetrics() {
 
   const fetchMetrics = async () => {
     try {
-      const response = await api.get('/.netlify/functions/team-metrics')
+      const response = await reportsApi.getTeamMetrics()
       setMetrics(response.data)
       setError(null)
     } catch (err) {

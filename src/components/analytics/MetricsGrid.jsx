@@ -35,13 +35,13 @@ function MetricCard({
 }) {
   const Icon = typeof icon === 'string' ? (iconMap[icon] || Eye) : icon
   
-  const colorClasses = {
-    brand: 'bg-[#39bfb0]/20 text-[#39bfb0]',
-    blue: 'bg-blue-500/20 text-blue-500',
-    purple: 'bg-purple-500/20 text-purple-500',
-    green: 'bg-[#4bbf39]/20 text-[#4bbf39]',
-    orange: 'bg-orange-500/20 text-orange-500',
-    pink: 'bg-pink-500/20 text-pink-500'
+  const iconColors = {
+    brand: 'text-[#39bfb0]',
+    blue: 'text-blue-500',
+    purple: 'text-purple-500',
+    green: 'text-[#4bbf39]',
+    orange: 'text-orange-500',
+    pink: 'text-pink-500'
   }
 
   const isPositive = trend === 'up'
@@ -50,36 +50,28 @@ function MetricCard({
   const TrendIcon = isPositive ? TrendingUp : isNegative ? TrendingDown : ArrowUpRight
 
   return (
-    <div className="relative overflow-hidden rounded-2xl bg-[var(--glass-bg)] border border-[var(--glass-border)] p-5 hover:border-[var(--glass-border-hover)] transition-colors">
-      {/* Background decoration */}
-      <div className={cn(
-        "absolute -right-4 -top-4 w-20 h-20 rounded-full opacity-10",
-        color === 'brand' && "bg-[#39bfb0]",
-        color === 'blue' && "bg-blue-500",
-        color === 'purple' && "bg-purple-500",
-        color === 'green' && "bg-[#4bbf39]",
-        color === 'orange' && "bg-orange-500",
-        color === 'pink' && "bg-pink-500"
-      )} />
-      
-      <div className="flex items-start justify-between">
-        <div className="flex-1 min-w-0">
-          <p className="text-xs font-medium text-[var(--text-secondary)] uppercase tracking-wider">{label}</p>
-          <p className="text-2xl font-bold text-[var(--text-primary)] mt-1 truncate">{value}</p>
-          
-          {change !== null && (
-            <div className="flex items-center gap-1.5 mt-2">
-              <span className={cn("flex items-center gap-0.5 text-xs font-medium", trendColor)}>
-                <TrendIcon className="h-3 w-3" />
-                {typeof change === 'number' ? `${Math.abs(change).toFixed(1)}%` : change}
-              </span>
-            </div>
-          )}
+    <div className="rounded-2xl bg-[var(--glass-bg)] border border-[var(--glass-border)] p-5 hover:border-[var(--glass-border-hover)] transition-colors">
+      <div className="flex flex-col items-center text-center">
+        {/* Icon tile */}
+        <div className="w-12 h-12 rounded-lg bg-muted/50 flex items-center justify-center mb-3">
+          <Icon className={cn("h-5 w-5", iconColors[color])} />
         </div>
         
-        <div className={cn("p-2.5 rounded-xl flex-shrink-0", colorClasses[color])}>
-          <Icon className="h-5 w-5" />
-        </div>
+        {/* Label */}
+        <p className="text-xs font-medium text-[var(--text-secondary)] uppercase tracking-wider mb-1">{label}</p>
+        
+        {/* Value */}
+        <p className="text-2xl font-bold text-[var(--text-primary)]">{value}</p>
+        
+        {/* Change indicator */}
+        {change !== null && (
+          <div className="flex items-center gap-1.5 mt-2">
+            <span className={cn("flex items-center gap-0.5 text-xs font-medium", trendColor)}>
+              <TrendIcon className="h-3 w-3" />
+              {typeof change === 'number' ? `${Math.abs(change).toFixed(1)}%` : change}
+            </span>
+          </div>
+        )}
       </div>
     </div>
   )

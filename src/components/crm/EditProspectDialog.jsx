@@ -22,7 +22,7 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import { toast } from '@/lib/toast'
-import api from '@/lib/api'
+import { adminApi } from '@/lib/portal-api'
 
 const SOURCES = [
   { value: 'website', label: 'Website' },
@@ -75,10 +75,7 @@ export default function EditProspectDialog({
 
     setIsSaving(true)
     try {
-      const response = await api.put(
-        `/.netlify/functions/admin-clients-update/${prospect.id}`,
-        formData
-      )
+      const response = await adminApi.updateClient(prospect.id, formData)
 
       toast.success('Contact updated successfully')
       

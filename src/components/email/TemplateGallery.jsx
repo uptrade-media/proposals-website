@@ -24,7 +24,7 @@ import {
   Loader2
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
-import axios from 'axios'
+import { emailApi } from '@/lib/portal-api'
 
 // Category icons
 const categoryIcons = {
@@ -218,9 +218,7 @@ export function TemplateGallery({ open, onOpenChange, onSelectTemplate }) {
       setIsLoading(true)
       setError(null)
       try {
-        const res = await axios.get('/.netlify/functions/email-templates-list', {
-          params: { includeGlobal: true }
-        })
+        const res = await emailApi.listTemplates()
         setTemplates(res.data.templates || [])
         setCategories(res.data.categories || [])
       } catch (err) {

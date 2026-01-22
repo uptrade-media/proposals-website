@@ -12,10 +12,18 @@ const DEVICE_CONFIG = {
   tablet: { icon: Tablet, color: '#f59e0b', label: 'Tablet' }
 }
 
+// Default formatNumber if not provided
+const defaultFormatNumber = (num) => {
+  if (!num && num !== 0) return '0'
+  if (num >= 1000000) return (num / 1000000).toFixed(1) + 'M'
+  if (num >= 1000) return (num / 1000).toFixed(1) + 'K'
+  return num.toLocaleString()
+}
+
 export function DeviceBreakdown({ 
   data = {}, 
   isLoading = false,
-  formatNumber,
+  formatNumber = defaultFormatNumber,
   formatPercent 
 }) {
   const total = (data.desktop || 0) + (data.mobile || 0) + (data.tablet || 0)

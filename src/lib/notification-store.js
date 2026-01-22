@@ -1,5 +1,5 @@
 import { create } from 'zustand'
-import api from './api'
+import { crmApi } from './portal-api'
 
 /**
  * Notification Store
@@ -22,8 +22,9 @@ const useNotificationStore = create((set, get) => ({
     
     try {
       // Fetch prospects and count those in 'new_lead' stage
-      const response = await api.get('/.netlify/functions/crm-prospects-list?stage=new_lead')
-      const prospects = response.data.prospects || []
+      const response = await crmApi.listProspects({ stage: 'new_lead' })
+      const data = response.data || response
+      const prospects = data.prospects || []
       
       // Count prospects that are genuinely new (created in last 7 days and in new_lead stage)
       const sevenDaysAgo = new Date()

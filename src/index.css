@@ -127,8 +127,25 @@
   
   /* Brand colors */
   --brand-primary: #4bbf39;
+  --brand-primary-hover: #3da82f;
   --brand-secondary: #39bfb0;
+  --brand-secondary-hover: #2fa89c;
+
+  /* Theme locks (exceptions) */
+  /* Use this on subtrees that should NOT inherit org brand colors. */
+  --brand-primary-default: #4bbf39;
+  --brand-primary-hover-default: #3da82f;
+  --brand-secondary-default: #39bfb0;
+  --brand-secondary-hover-default: #2fa89c;
   
+
+/* Keep excluded UI areas on Uptrade defaults (Audit/Proposals/etc.). */
+[data-theme-lock="default"] {
+  --brand-primary: var(--brand-primary-default);
+  --brand-primary-hover: var(--brand-primary-hover-default);
+  --brand-secondary: var(--brand-secondary-default);
+  --brand-secondary-hover: var(--brand-secondary-hover-default);
+}
   /* Semantic colors */
   --color-success: var(--accent-green);
   --color-warning: var(--accent-orange);
@@ -231,6 +248,7 @@ html {
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   text-rendering: optimizeLegibility;
+  height: 100%;
 }
 
 body {
@@ -240,6 +258,12 @@ body {
   color: var(--text-primary);
   transition: background-color var(--transition-normal), 
               color var(--transition-normal);
+  height: 100%;
+  margin: 0;
+}
+
+#root {
+  height: 100%;
 }
 
 /* ------------------------------------------------
@@ -603,6 +627,64 @@ body {
 
 .dark .recharts-tooltip-item {
   color: rgba(255, 255, 255, 0.72) !important;
+}
+
+/* Tremor chart tooltips - force dark theme */
+/* Target the recharts tooltip wrapper that Tremor uses */
+/* Only apply to default Tremor tooltips, not custom ones */
+.dark .recharts-tooltip-wrapper > .recharts-default-tooltip,
+.dark [class*="tremor"] .recharts-tooltip-wrapper > .recharts-default-tooltip {
+  background: rgba(44, 44, 46, 0.95) !important;
+  backdrop-filter: blur(12px) !important;
+  border: 1px solid rgba(255, 255, 255, 0.12) !important;
+  border-radius: 12px !important;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4) !important;
+}
+
+/* Force all Tremor tooltip containers to be dark - but not custom tooltips */
+.dark .recharts-default-tooltip > div,
+.dark [class*="tremor"] [class*="tooltip"]:not([data-custom-tooltip]) {
+  background: rgba(44, 44, 46, 0.95) !important;
+  border: 1px solid rgba(255, 255, 255, 0.12) !important;
+}
+
+.dark [class*="tremor-ChartTooltip"],
+.dark [data-tremor-element="ChartTooltip"] {
+  background: rgba(44, 44, 46, 0.95) !important;
+  backdrop-filter: blur(12px) !important;
+  border: 1px solid rgba(255, 255, 255, 0.12) !important;
+  border-radius: 12px !important;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4) !important;
+  color: rgba(255, 255, 255, 0.92) !important;
+}
+
+/* All text inside Tremor default tooltips (not custom) */
+.dark .recharts-default-tooltip p,
+.dark .recharts-default-tooltip span,
+.dark .recharts-default-tooltip div,
+.dark [class*="tremor-ChartTooltip"] p,
+.dark [class*="tremor-ChartTooltip"] span,
+.dark [class*="tremor-ChartTooltip"] div,
+.dark [data-tremor-element="ChartTooltip"] p,
+.dark [data-tremor-element="ChartTooltip"] span,
+.dark [data-tremor-element="ChartTooltip"] div {
+  color: rgba(255, 255, 255, 0.92) !important;
+  background: transparent !important;
+}
+
+/* Tremor tooltip row text */
+.dark .tremor-ChartTooltipRow-text,
+.dark [class*="ChartTooltipRow"],
+.dark [class*="TooltipRow"] {
+  color: rgba(255, 255, 255, 0.72) !important;
+  background: transparent !important;
+}
+
+/* Tremor tooltip value */
+.dark .tremor-ChartTooltipRow-value,
+.dark [class*="TooltipRow"] [class*="value"] {
+  color: rgba(255, 255, 255, 0.92) !important;
+  font-weight: 600 !important;
 }
 
 /* Legend */

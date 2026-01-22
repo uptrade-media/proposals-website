@@ -3,12 +3,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } f
 import { Button } from '@/components/ui/button'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { CreditCard, CheckCircle, Loader2, Lock, Shield, Receipt } from 'lucide-react'
-import api from '@/lib/api'
-
-// Square Web Payments SDK
-const SQUARE_APPLICATION_ID = import.meta.env.SQUARE_APPLICATION_ID
-const SQUARE_LOCATION_ID = import.meta.env.SQUARE_LOCATION_ID
-const SQUARE_ENVIRONMENT = import.meta.env.SQUARE_ENVIRONMENT || 'sandbox'
+import { billingApi, configApi } from '@/lib/portal-api'
 
 export default function InvoicePaymentDialog({
   invoice,
@@ -18,6 +13,7 @@ export default function InvoicePaymentDialog({
 }) {
   const [card, setCard] = useState(null)
   const [payments, setPayments] = useState(null)
+  const [squareConfig, setSquareConfig] = useState(null)
   const [loading, setLoading] = useState(true)
   const [processing, setProcessing] = useState(false)
   const [error, setError] = useState('')
@@ -38,21 +34,31 @@ export default function InvoicePaymentDialog({
         setLoading(true)
         setError('')
         
+        // Fetch Square config for this invoice's project
+        const config = await configApi.getSquareConfig(invoice?.project_id)
+        setSquareConfig(config)
+        
+        if (!config?.applicationId || !config?.locationId) {
+          setError('Payment system not configured. Please contact support.')
+          setLoading(false)
+          return
+        }
+        
         if (!window.Square) {
           // Load Square SDK
           const script = document.createElement('script')
-          script.src = SQUARE_ENVIRONMENT === 'production' 
+          script.src = config.environment === 'production' 
             ? 'https://web.squarecdn.com/v1/square.js'
             : 'https://sandbox.web.squarecdn.com/v1/square.js'
           script.async = true
-          script.onload = () => initPayments()
+          script.onload = () => initPayments(config)
           script.onerror = () => {
             setError('Failed to load payment system')
             setLoading(false)
           }
           document.body.appendChild(script)
         } else {
-          await initPayments()
+          await initPayments(config)
         }
       } catch (err) {
         console.error('Error loading Square:', err)
@@ -61,9 +67,9 @@ export default function InvoicePaymentDialog({
       }
     }
 
-    const initPayments = async () => {
+    const initPayments = async (config) => {
       try {
-        const paymentsInstance = window.Square.payments(SQUARE_APPLICATION_ID, SQUARE_LOCATION_ID)
+        const paymentsInstance = window.Square.payments(config.applicationId, config.locationId)
         setPayments(paymentsInstance)
 
         const cardInstance = await paymentsInstance.card()
@@ -84,7 +90,7 @@ export default function InvoicePaymentDialog({
         card.destroy()
       }
     }
-  }, [open])
+  }, [open, invoice?.project_id])
 
   const handlePayment = async () => {
     if (!card) {
@@ -104,8 +110,7 @@ export default function InvoicePaymentDialog({
       }
 
       // Send to our backend
-      const response = await api.post('/.netlify/functions/invoices-pay', {
-        invoiceId: invoice.id,
+      const response = await billingApi.processPayment(invoice.id, {
         sourceId: tokenResult.token
       })
 

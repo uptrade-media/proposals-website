@@ -3,7 +3,7 @@ import { format, formatDistance } from 'date-fns'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Loader2, Calendar, Clock, AlertCircle } from 'lucide-react'
-import api from '@/lib/api'
+import { reportsApi } from '@/lib/portal-api'
 
 const priorityConfig = {
   high: { color: 'bg-red-100', textColor: 'text-red-700', label: 'High' },
@@ -47,7 +47,7 @@ export function UpcomingDeadlines({ limit = 10 }) {
   const fetchDeadlines = async () => {
     try {
       setLoading(true)
-      const response = await api.get('/.netlify/functions/dashboard-deadlines?daysAhead=30')
+      const response = await reportsApi.getDeadlines({ daysAhead: 30 })
       setDeadlines(response.data.deadlines || [])
       setError(null)
     } catch (err) {
@@ -102,10 +102,12 @@ export function UpcomingDeadlines({ limit = 10 }) {
               const priorityConfig_ = priorityConfig[deadline.priority] || priorityConfig.normal
               const daysUntil = deadline.days_until || Math.floor((new Date(deadline.dueDate) - Date.now()) / (1000 * 60 * 60 * 24))
               const StatusIcon = config.icon
+              // Ensure a stable, unique key even when backend leaves ids undefined
+              const key = deadline.id || deadline.item_id || `${deadline.item_type || 'item'}-${index}`
 
               return (
                 <div
-                  key={`${deadline.item_id}-${deadline.item_type}`}
+                  key={key}
                   className={`p-3 border rounded-lg transition-colors hover:shadow-sm ${config.color} ${config.borderColor}`}
                 >
                   <div className="flex items-start justify-between gap-3">

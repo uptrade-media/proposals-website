@@ -3,6 +3,7 @@ import * as React from "react"
 import { Slot } from "@radix-ui/react-slot"
 import { cva } from "class-variance-authority";
 import { PanelLeftIcon } from "lucide-react"
+import { motion, AnimatePresence } from "framer-motion"
 
 import { useIsMobile } from "@/hooks/use-mobile"
 import { cn } from "@/lib/utils"
@@ -53,6 +54,7 @@ function SidebarProvider({
 }) {
   const isMobile = useIsMobile()
   const [openMobile, setOpenMobile] = React.useState(false)
+  const [isHovered, setIsHovered] = React.useState(false)
 
   // This is the internal state of the sidebar.
   // We use openProp and setOpenProp for control from outside the component.
@@ -91,9 +93,10 @@ function SidebarProvider({
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [toggleSidebar])
 
-  // We add a state so that we can do data-state="expanded" or "collapsed".
-  // This makes it easier to style the sidebar with Tailwind classes.
-  const state = open ? "expanded" : "collapsed"
+  // For hover-to-expand: sidebar is visually expanded when hovered OR when open is true
+  // The "state" determines visual appearance, while "open" is the persistent state
+  const isExpanded = isHovered || open
+  const state = isExpanded ? "expanded" : "collapsed"
 
   const contextValue = React.useMemo(() => ({
     state,
@@ -103,7 +106,9 @@ function SidebarProvider({
     openMobile,
     setOpenMobile,
     toggleSidebar,
-  }), [state, open, setOpen, isMobile, openMobile, setOpenMobile, toggleSidebar])
+    isHovered,
+    setIsHovered,
+  }), [state, open, setOpen, isMobile, openMobile, setOpenMobile, toggleSidebar, isHovered])
 
   return (
     <SidebarContext.Provider value={contextValue}>
@@ -137,7 +142,7 @@ function Sidebar({
   children,
   ...props
 }) {
-  const { isMobile, state, openMobile, setOpenMobile } = useSidebar()
+  const { isMobile, state, openMobile, setOpenMobile, setIsHovered, isHovered, open } = useSidebar()
 
   if (collapsible === "none") {
     return (
@@ -177,6 +182,9 @@ function Sidebar({
     );
   }
 
+  // Calculate if sidebar should show as expanded (hover OR pinned open)
+  const isExpanded = isHovered || open
+
   return (
     <div
       className="group peer text-sidebar-foreground hidden md:block"
@@ -185,38 +193,50 @@ function Sidebar({
       data-variant={variant}
       data-side={side}
       data-slot="sidebar">
-      {/* This is what handles the sidebar gap on desktop */}
+      {/* Sidebar gap - ALWAYS stays at icon width so content doesn't shift */}
       <div
         data-slot="sidebar-gap"
         className={cn(
-          "relative w-(--sidebar-width) bg-transparent transition-[width] duration-200 ease-linear",
+          "relative bg-transparent transition-[width] duration-200 ease-linear",
           "group-data-[collapsible=offcanvas]:w-0",
           "group-data-[side=right]:rotate-180",
+          // Always icon width - sidebar overlays content when expanded
           variant === "floating" || variant === "inset"
-            ? "group-data-[collapsible=icon]:w-[calc(var(--sidebar-width-icon)+(--spacing(4)))]"
-            : "group-data-[collapsible=icon]:w-(--sidebar-width-icon)"
+            ? "w-[calc(var(--sidebar-width-icon)+(--spacing(4)))]"
+            : "w-(--sidebar-width-icon)"
         )} />
-      <div
+      {/* Animated sidebar container */}
+      <motion.div
         data-slot="sidebar-container"
+        onMouseEnter={() => setIsHovered(true)}
+        onMouseLeave={() => setIsHovered(false)}
+        initial={false}
+        animate={{
+          width: isExpanded ? SIDEBAR_WIDTH : SIDEBAR_WIDTH_ICON,
+        }}
+        transition={{
+          duration: 0.2,
+          ease: [0.25, 0.1, 0.25, 1],
+        }}
         className={cn(
-          "fixed inset-y-0 z-10 hidden h-svh w-(--sidebar-width) transition-[left,right,width] duration-200 ease-linear md:flex",
-          side === "left"
-            ? "left-0 group-data-[collapsible=offcanvas]:left-[calc(var(--sidebar-width)*-1)]"
-            : "right-0 group-data-[collapsible=offcanvas]:right-[calc(var(--sidebar-width)*-1)]",
-          // Adjust the padding for floating and inset variants.
+          "fixed inset-y-0 z-20 hidden h-svh md:flex",
+          side === "left" ? "left-0" : "right-0",
+          // Add shadow when expanded to show overlay effect
+          isExpanded && "shadow-xl",
+          // Border styling
           variant === "floating" || variant === "inset"
-            ? "p-2 group-data-[collapsible=icon]:w-[calc(var(--sidebar-width-icon)+(--spacing(4))+2px)]"
-            : "group-data-[collapsible=icon]:w-(--sidebar-width-icon) group-data-[side=left]:border-r group-data-[side=right]:border-l",
+            ? "p-2"
+            : "group-data-[side=left]:border-r group-data-[side=right]:border-l",
           className
         )}
         {...props}>
-        <div
+        <motion.div
           data-sidebar="sidebar"
           data-slot="sidebar-inner"
-          className="bg-sidebar group-data-[variant=floating]:border-sidebar-border flex h-full w-full flex-col group-data-[variant=floating]:rounded-lg group-data-[variant=floating]:border group-data-[variant=floating]:shadow-sm">
+          className="bg-sidebar group-data-[variant=floating]:border-sidebar-border flex h-full w-full flex-col group-data-[variant=floating]:rounded-lg group-data-[variant=floating]:border group-data-[variant=floating]:shadow-sm overflow-hidden">
           {children}
-        </div>
-      </div>
+        </motion.div>
+      </motion.div>
     </div>
   );
 }

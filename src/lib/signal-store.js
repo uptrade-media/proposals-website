@@ -3,18 +3,61 @@
  * ═══════════════════════════════════════════════════════════════════════════════
  * 
  * Zustand store for Signal AI state management.
+ * All calls go directly to Signal API (NestJS) - no Netlify function proxies.
+ * 
  * Handles:
  * - Echo interface (chat UI)
  * - Signal Module (knowledge base, FAQs, widget config)
  * - Conversations and learning suggestions
+ * - Knowledge gap detection (SIGNAL-017)
  */
 
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
 import axios from 'axios'
+import { supabase } from './supabase-auth'
 
-const API_BASE = '/.netlify/functions/api/signal'
-const MODULE_BASE = '/.netlify/functions'
+// ─────────────────────────────────────────────────────────────────────────────
+// Signal API Direct Access
+// ─────────────────────────────────────────────────────────────────────────────
+// Signal API runs on NestJS - all requests go directly there
+const SIGNAL_API_URL = import.meta.env.VITE_SIGNAL_API_URL || 'http://localhost:3001'
+
+// Create Signal API axios instance
+const signalApi = axios.create({
+  baseURL: SIGNAL_API_URL,
+  timeout: 30000,
+  withCredentials: true,
+  headers: { 'Content-Type': 'application/json' }
+})
+
+// Add auth interceptor for Signal API calls
+signalApi.interceptors.request.use(async (config) => {
+  // Get Supabase session and add to Authorization header
+  const { data: { session } } = await supabase.auth.getSession()
+  if (session?.access_token) {
+    config.headers.Authorization = `Bearer ${session.access_token}`
+  }
+  
+  // Get org/project from current context (will be set by components)
+  const orgId = localStorage.getItem('signal_org_id')
+  const projectId = localStorage.getItem('signal_project_id')
+  if (orgId) config.headers['X-Organization-Id'] = orgId
+  if (projectId) config.headers['X-Project-Id'] = projectId
+  
+  // Also try to get from auth store for consistency
+  try {
+    const { default: useAuthStore } = await import('./auth-store')
+    const state = useAuthStore.getState()
+    if (state.currentProject?.id) {
+      config.headers['X-Project-Id'] = state.currentProject.id
+    }
+  } catch (e) {
+    // Auth store not available yet
+  }
+  
+  return config
+})
 
 export const useSignalStore = create(
   persist(
@@ -80,11 +123,28 @@ export const useSignalStore = create(
       analyticsLoading: false,
       analyticsError: null,
       
+      // Patterns state (learned behaviors)
+      patterns: [],
+      patternsLoading: false,
+      patternsStats: { total: 0, bySkill: {} },
+      
       // Learning suggestions state
       suggestions: [],
       suggestionsLoading: false,
       suggestionsPagination: { page: 1, total: 0, pages: 0 },
       suggestionsStats: { byStatus: {}, byType: {} },
+      
+      // Knowledge gaps state (SIGNAL-017)
+      knowledgeGaps: [],
+      knowledgeGapsLoading: false,
+      knowledgeGapsPagination: { page: 1, total: 0, pages: 0 },
+      knowledgeGapsStats: { 
+        openGaps: 0, 
+        addressedGaps: 0, 
+        dismissedGaps: 0, 
+        totalOccurrences: 0,
+        avgSimilarity: 0 
+      },
 
       // ─────────────────────────────────────────────────────────────────────────
       // Echo Actions
@@ -128,21 +188,21 @@ export const useSignalStore = create(
         }))
 
         try {
+          // Use Signal API directly
           const endpoint = options.skill || echoSkill 
-            ? `${API_BASE}/echo/module`
-            : `${API_BASE}/echo/chat`
+            ? `/echo/module/${options.skill || echoSkill}`
+            : `/echo/chat`
 
           const payload = {
             message,
             conversationId: activeConversation?.id,
             ...(options.skill || echoSkill ? {
-              skill: options.skill || echoSkill,
               contextId: options.contextId || echoContextId
             } : {})
           }
 
-          const res = await axios.post(endpoint, payload)
-          const { message: response, conversation_id, skill } = res.data
+          const res = await signalApi.post(endpoint, payload)
+          const { message: response, conversation_id, skill } = res.data?.data || res.data
 
           // Update active conversation
           if (conversation_id && !activeConversation) {
@@ -182,10 +242,11 @@ export const useSignalStore = create(
         set({ isLoading: true, error: null })
 
         try {
-          const params = skill ? `?skill=${skill}` : ''
-          const res = await axios.get(`${API_BASE}/conversations${params}`)
-          set({ conversations: res.data.conversations, isLoading: false })
-          return res.data.conversations
+          const params = skill ? { skill } : {}
+          const res = await signalApi.get('/echo/conversations', { params })
+          const data = res.data?.data || res.data
+          set({ conversations: data.items || data.conversations || [], isLoading: false })
+          return data.items || data.conversations || []
         } catch (error) {
           console.error('Failed to fetch conversations:', error)
           set({ error: error.message, isLoading: false })
@@ -200,8 +261,8 @@ export const useSignalStore = create(
         set({ isLoading: true, error: null })
 
         try {
-          const res = await axios.get(`${API_BASE}/conversation/${conversationId}`)
-          const { conversation, messages } = res.data
+          const res = await signalApi.get(`/echo/conversation/${conversationId}`)
+          const { conversation, messages } = res.data?.data || res.data
 
           set({ 
             activeConversation: conversation,
@@ -213,7 +274,7 @@ export const useSignalStore = create(
             isLoading: false
           })
 
-          return res.data
+          return res.data?.data || res.data
         } catch (error) {
           console.error('Failed to load conversation:', error)
           set({ error: error.message, isLoading: false })
@@ -239,7 +300,7 @@ export const useSignalStore = create(
         if (!activeConversation?.id) return
 
         try {
-          await axios.post(`${API_BASE}/conversation/rate`, {
+          await signalApi.post('/echo/rate', {
             conversationId: activeConversation.id,
             rating,
             feedback
@@ -260,9 +321,10 @@ export const useSignalStore = create(
         if (get().skillsLoaded) return get().skills
 
         try {
-          const res = await axios.get(`${API_BASE}/skills`)
-          set({ skills: res.data.skills, skillsLoaded: true })
-          return res.data.skills
+          const res = await signalApi.get('/skills')
+          const data = res.data?.data || res.data
+          set({ skills: data.skills || data || [], skillsLoaded: true })
+          return data.skills || data || []
         } catch (error) {
           console.error('Failed to fetch skills:', error)
           return []
@@ -276,9 +338,10 @@ export const useSignalStore = create(
         set({ isLoading: true, error: null })
 
         try {
-          const res = await axios.post(`${API_BASE}/invoke/${skill}/${tool}`, params)
+          const res = await signalApi.post('/echo/tool-invoke', { skill, tool, params })
+          const data = res.data?.data || res.data
           set({ isLoading: false })
-          return res.data
+          return data
         } catch (error) {
           console.error('Tool invocation error:', error)
           set({ error: error.message, isLoading: false })
@@ -295,13 +358,14 @@ export const useSignalStore = create(
        */
       fetchMemories: async (skill = null, type = null) => {
         try {
-          const params = new URLSearchParams()
-          if (skill) params.append('skill', skill)
-          if (type) params.append('type', type)
+          const params = {}
+          if (skill) params.skill = skill
+          if (type) params.type = type
 
-          const res = await axios.get(`${API_BASE}/memory?${params}`)
-          set({ memories: res.data.memories })
-          return res.data.memories
+          const res = await signalApi.get('/memory', { params })
+          const data = res.data?.data || res.data
+          set({ memories: data.memories || data || [] })
+          return data.memories || data || []
         } catch (error) {
           console.error('Failed to fetch memories:', error)
           return []
@@ -310,17 +374,20 @@ export const useSignalStore = create(
 
       // ─────────────────────────────────────────────────────────────────────────
       // Signal Module Config Actions
+      // TODO: Signal API needs /config endpoint - using Netlify proxy for now
       // ─────────────────────────────────────────────────────────────────────────
       
       fetchModuleConfig: async (projectId) => {
         set({ moduleConfigLoading: true, moduleConfigError: null })
         try {
-          const res = await axios.get(`${MODULE_BASE}/signal-config?projectId=${projectId}`)
+          // TODO: Create /config endpoint in Signal API
+          const res = await signalApi.get('/config', { params: { projectId } })
+          const data = res.data?.data || res.data
           set({ 
-            moduleConfig: res.data.config, 
+            moduleConfig: data.config || data, 
             moduleConfigLoading: false 
           })
-          return res.data
+          return data
         } catch (error) {
           set({ moduleConfigLoading: false, moduleConfigError: error.message })
           throw error
@@ -330,12 +397,14 @@ export const useSignalStore = create(
       updateModuleConfig: async (projectId, updates) => {
         set({ moduleConfigLoading: true })
         try {
-          const res = await axios.put(`${MODULE_BASE}/signal-config`, {
+          // TODO: Create /config endpoint in Signal API
+          const res = await signalApi.put('/config', {
             projectId,
             config: updates
           })
-          set({ moduleConfig: res.data.config, moduleConfigLoading: false })
-          return res.data
+          const data = res.data?.data || res.data
+          set({ moduleConfig: data.config || data, moduleConfigLoading: false })
+          return data
         } catch (error) {
           set({ moduleConfigLoading: false, moduleConfigError: error.message })
           throw error
@@ -357,15 +426,17 @@ export const useSignalStore = create(
       fetchKnowledge: async (projectId, options = {}) => {
         set({ knowledgeLoading: true })
         try {
-          const params = new URLSearchParams({ projectId, ...options })
-          const res = await axios.get(`${MODULE_BASE}/signal-knowledge?${params}`)
+          const res = await signalApi.get('/knowledge', { 
+            params: { projectId, ...options } 
+          })
+          const data = res.data?.data || res.data
           set({ 
-            knowledge: res.data.chunks,
-            knowledgePagination: res.data.pagination,
-            knowledgeStats: res.data.stats,
+            knowledge: data.items || data.chunks || [],
+            knowledgePagination: data.pagination || { page: 1, total: 0, pages: 0 },
+            knowledgeStats: data.stats || { total: 0, byType: {} },
             knowledgeLoading: false
           })
-          return res.data
+          return data
         } catch (error) {
           set({ knowledgeLoading: false })
           throw error
@@ -373,28 +444,28 @@ export const useSignalStore = create(
       },
       
       addKnowledge: async (projectId, entry) => {
-        const res = await axios.post(`${MODULE_BASE}/signal-knowledge`, {
-          projectId,
-          ...entry
+        const res = await signalApi.post('/knowledge', {
+          ...entry,
+          projectId
         })
         await get().fetchKnowledge(projectId)
-        return res.data
+        return res.data?.data || res.data
       },
       
       updateKnowledge: async (projectId, id, updates) => {
-        const res = await axios.put(`${MODULE_BASE}/signal-knowledge`, {
-          projectId,
-          id,
-          ...updates
+        const res = await signalApi.put(`/knowledge/${id}`, {
+          ...updates,
+          projectId
         })
+        const chunk = res.data?.data?.chunk || res.data?.data || res.data?.chunk || res.data
         set(state => ({
-          knowledge: state.knowledge.map(k => k.id === id ? res.data.chunk : k)
+          knowledge: state.knowledge.map(k => k.id === id ? chunk : k)
         }))
-        return res.data
+        return res.data?.data || res.data
       },
       
       deleteKnowledge: async (id) => {
-        await axios.delete(`${MODULE_BASE}/signal-knowledge?id=${id}`)
+        await signalApi.delete(`/knowledge/${id}`)
         set(state => ({
           knowledge: state.knowledge.filter(k => k.id !== id)
         }))
@@ -407,15 +478,17 @@ export const useSignalStore = create(
       fetchFaqs: async (projectId, options = {}) => {
         set({ faqsLoading: true })
         try {
-          const params = new URLSearchParams({ projectId, ...options })
-          const res = await axios.get(`${MODULE_BASE}/signal-faqs?${params}`)
+          const res = await signalApi.get('/faqs', { 
+            params: { projectId, ...options } 
+          })
+          const data = res.data?.data || res.data
           set({ 
-            faqs: res.data.faqs,
-            faqsPagination: res.data.pagination,
-            faqsStats: res.data.stats,
+            faqs: data.items || data.faqs || [],
+            faqsPagination: data.pagination || { page: 1, total: 0, pages: 0 },
+            faqsStats: data.stats || { pending: 0, approved: 0, rejected: 0 },
             faqsLoading: false
           })
-          return res.data
+          return data
         } catch (error) {
           set({ faqsLoading: false })
           throw error
@@ -423,44 +496,46 @@ export const useSignalStore = create(
       },
       
       createFaq: async (projectId, faq) => {
-        const res = await axios.post(`${MODULE_BASE}/signal-faqs`, {
-          projectId,
-          ...faq
+        const res = await signalApi.post('/faqs', {
+          ...faq,
+          projectId
         })
         await get().fetchFaqs(projectId)
-        return res.data
+        return res.data?.data || res.data
       },
       
       updateFaq: async (projectId, id, updates) => {
-        const res = await axios.put(`${MODULE_BASE}/signal-faqs`, {
-          projectId,
-          id,
-          ...updates
+        const res = await signalApi.put(`/faqs/${id}`, {
+          ...updates,
+          projectId
         })
+        const faq = res.data?.data?.faq || res.data?.data || res.data?.faq || res.data
         set(state => ({
-          faqs: state.faqs.map(f => f.id === id ? res.data.faq : f)
+          faqs: state.faqs.map(f => f.id === id ? faq : f)
         }))
-        return res.data
+        return res.data?.data || res.data
       },
       
       approveFaq: async (projectId, id) => {
-        const res = await axios.post(`${MODULE_BASE}/signal-faqs?id=${id}&action=approve`, { projectId })
+        const res = await signalApi.post(`/faqs/${id}/approve`, { projectId })
+        const faq = res.data?.data?.faq || res.data?.data || res.data?.faq || res.data
         set(state => ({
-          faqs: state.faqs.map(f => f.id === id ? res.data.faq : f)
+          faqs: state.faqs.map(f => f.id === id ? faq : f)
         }))
-        return res.data
+        return res.data?.data || res.data
       },
       
       rejectFaq: async (projectId, id) => {
-        const res = await axios.post(`${MODULE_BASE}/signal-faqs?id=${id}&action=reject`, { projectId })
+        const res = await signalApi.post(`/faqs/${id}/reject`, { projectId })
+        const faq = res.data?.data?.faq || res.data?.data || res.data?.faq || res.data
         set(state => ({
-          faqs: state.faqs.map(f => f.id === id ? res.data.faq : f)
+          faqs: state.faqs.map(f => f.id === id ? faq : f)
         }))
-        return res.data
+        return res.data?.data || res.data
       },
       
       deleteFaq: async (id) => {
-        await axios.delete(`${MODULE_BASE}/signal-faqs?id=${id}`)
+        await signalApi.delete(`/faqs/${id}`)
         set(state => ({
           faqs: state.faqs.filter(f => f.id !== id)
         }))
@@ -468,20 +543,23 @@ export const useSignalStore = create(
       
       // ─────────────────────────────────────────────────────────────────────────
       // Widget Conversation Actions
+      // TODO: Signal API needs /conversations endpoint - using Echo for now
       // ─────────────────────────────────────────────────────────────────────────
       
       fetchWidgetConversations: async (projectId, options = {}) => {
         set({ widgetConversationsLoading: true })
         try {
-          const params = new URLSearchParams({ projectId, ...options })
-          const res = await axios.get(`${MODULE_BASE}/signal-conversations?${params}`)
+          const res = await signalApi.get('/echo/conversations', { 
+            params: { projectId, type: 'widget', ...options } 
+          })
+          const data = res.data?.data || res.data
           set({ 
-            widgetConversations: res.data.conversations,
-            widgetConversationsPagination: res.data.pagination,
-            widgetConversationsStats: res.data.stats,
+            widgetConversations: data.items || data.conversations || [],
+            widgetConversationsPagination: data.pagination || { page: 1, total: 0, pages: 0 },
+            widgetConversationsStats: data.stats || { total: 0, byStatus: {}, leadsCreated: 0 },
             widgetConversationsLoading: false
           })
-          return res.data
+          return data
         } catch (error) {
           set({ widgetConversationsLoading: false })
           throw error
@@ -491,13 +569,14 @@ export const useSignalStore = create(
       fetchWidgetConversation: async (conversationId) => {
         set({ widgetConversationsLoading: true })
         try {
-          const res = await axios.get(`${MODULE_BASE}/signal-conversations?id=${conversationId}`)
+          const res = await signalApi.get(`/echo/conversation/${conversationId}`)
+          const data = res.data?.data || res.data
           set({ 
-            activeWidgetConversation: res.data.conversation,
-            activeWidgetMessages: res.data.messages,
+            activeWidgetConversation: data.conversation || data,
+            activeWidgetMessages: data.messages || [],
             widgetConversationsLoading: false
           })
-          return res.data
+          return data
         } catch (error) {
           set({ widgetConversationsLoading: false })
           throw error
@@ -505,35 +584,38 @@ export const useSignalStore = create(
       },
       
       closeWidgetConversation: async (conversationId) => {
-        const res = await axios.put(`${MODULE_BASE}/signal-conversations`, {
-          id: conversationId,
-          status: 'closed'
+        const res = await signalApi.put(`/echo/conversation/${conversationId}/close`, {
+          reason: 'user_closed'
         })
+        const conv = res.data?.data?.conversation || res.data?.data || res.data?.conversation || res.data
         set(state => ({
           widgetConversations: state.widgetConversations.map(c => 
-            c.id === conversationId ? res.data.conversation : c
+            c.id === conversationId ? conv : c
           ),
           activeWidgetConversation: state.activeWidgetConversation?.id === conversationId 
-            ? res.data.conversation 
+            ? conv 
             : state.activeWidgetConversation
         }))
-        return res.data
+        return res.data?.data || res.data
       },
       
       // ─────────────────────────────────────────────────────────────────────────
       // Analytics Actions
+      // TODO: Signal API needs /analytics endpoint - creating basic version
       // ─────────────────────────────────────────────────────────────────────────
       
       fetchAnalytics: async (projectId, options = {}) => {
         set({ analyticsLoading: true, analyticsError: null })
         try {
-          const params = new URLSearchParams({ projectId, ...options })
-          const res = await axios.get(`${MODULE_BASE}/signal-analytics?${params}`)
+          const res = await signalApi.get('/analytics', { 
+            params: { projectId, ...options } 
+          })
+          const data = res.data?.data || res.data
           set({ 
-            analytics: res.data,
+            analytics: data,
             analyticsLoading: false
           })
-          return res.data
+          return data
         } catch (error) {
           set({ 
             analyticsError: error.message,
@@ -543,22 +625,102 @@ export const useSignalStore = create(
         }
       },
       
+      fetchQualityTrend: async (projectId, options = {}) => {
+        try {
+          const res = await signalApi.get('/analytics/quality-trend', { 
+            params: { projectId, ...options } 
+          })
+          const data = res.data?.data || res.data
+          return data.trend || []
+        } catch (error) {
+          console.error('Failed to fetch quality trend:', error)
+          return []
+        }
+      },
+      
+      fetchKnowledgeCoverage: async (projectId) => {
+        try {
+          const res = await signalApi.get('/analytics/knowledge-coverage', { 
+            params: { projectId } 
+          })
+          const data = res.data?.data || res.data
+          return data.coverage || []
+        } catch (error) {
+          console.error('Failed to fetch knowledge coverage:', error)
+          return []
+        }
+      },
+      
+      fetchActivityFeed: async (projectId, limit = 10) => {
+        try {
+          const res = await signalApi.get('/analytics/activity-feed', { 
+            params: { projectId, limit } 
+          })
+          const data = res.data?.data || res.data
+          return data.activities || []
+        } catch (error) {
+          console.error('Failed to fetch activity feed:', error)
+          return []
+        }
+      },
+      
+      fetchKnowledgeDomains: async (projectId) => {
+        try {
+          const res = await signalApi.get('/analytics/knowledge-domains', { 
+            params: { projectId } 
+          })
+          const data = res.data?.data || res.data
+          return data
+        } catch (error) {
+          console.error('Failed to fetch knowledge domains:', error)
+          return { domains: [], totalCoverage: 0, totalChunks: 0, hasProfile: false }
+        }
+      },
+      
+      // ─────────────────────────────────────────────────────────────────────────
+      // Patterns Actions
+      // Learned behaviors from successful interactions
+      // ─────────────────────────────────────────────────────────────────────────
+      
+      fetchPatterns: async (projectId, skillKey = 'all') => {
+        set({ patternsLoading: true })
+        try {
+          // Fetch patterns for a specific skill or all skills
+          const endpoint = skillKey === 'all' ? '/patterns/router' : `/patterns/${skillKey}`
+          const res = await signalApi.get(endpoint)
+          const data = res.data?.data || res.data
+          set({ 
+            patterns: data.patterns || data || [],
+            patternsStats: data.stats || { total: (data.patterns || data || []).length, bySkill: {} },
+            patternsLoading: false
+          })
+          return data.patterns || data || []
+        } catch (error) {
+          console.error('Failed to fetch patterns:', error)
+          set({ patternsLoading: false })
+          return []
+        }
+      },
+      
       // ─────────────────────────────────────────────────────────────────────────
       // Learning Suggestions Actions
+      // TODO: Signal API needs /learning controller - creating it
       // ─────────────────────────────────────────────────────────────────────────
       
       fetchSuggestions: async (projectId, options = {}) => {
         set({ suggestionsLoading: true })
         try {
-          const params = new URLSearchParams({ projectId, ...options })
-          const res = await axios.get(`${MODULE_BASE}/signal-learning?${params}`)
+          const res = await signalApi.get('/learning/suggestions', { 
+            params: { projectId, ...options } 
+          })
+          const data = res.data?.data || res.data
           set({ 
-            suggestions: res.data.suggestions,
-            suggestionsPagination: res.data.pagination,
-            suggestionsStats: res.data.stats,
+            suggestions: data.items || data.suggestions || [],
+            suggestionsPagination: data.pagination || { page: 1, total: 0, pages: 0 },
+            suggestionsStats: data.stats || { byStatus: {}, byType: {} },
             suggestionsLoading: false
           })
-          return res.data
+          return data
         } catch (error) {
           set({ suggestionsLoading: false })
           throw error
@@ -566,52 +728,167 @@ export const useSignalStore = create(
       },
       
       approveSuggestion: async (projectId, suggestionId) => {
-        const res = await axios.post(
-          `${MODULE_BASE}/signal-learning?id=${suggestionId}&action=approve`,
-          { projectId }
-        )
+        const res = await signalApi.post(`/learning/suggestions/${suggestionId}/approve`, { 
+          projectId 
+        })
+        const suggestion = res.data?.data?.suggestion || res.data?.data || res.data?.suggestion || res.data
         set(state => ({
           suggestions: state.suggestions.map(s => 
-            s.id === suggestionId ? res.data.suggestion : s
+            s.id === suggestionId ? suggestion : s
           )
         }))
-        return res.data
+        return res.data?.data || res.data
       },
       
       applySuggestion: async (projectId, suggestionId) => {
-        const res = await axios.post(
-          `${MODULE_BASE}/signal-learning?id=${suggestionId}&action=apply`,
-          { projectId }
-        )
+        const res = await signalApi.post(`/learning/suggestions/${suggestionId}/apply`, { 
+          projectId 
+        })
+        const suggestion = res.data?.data?.suggestion || res.data?.data || res.data?.suggestion || res.data
         set(state => ({
           suggestions: state.suggestions.map(s => 
-            s.id === suggestionId ? res.data.suggestion : s
+            s.id === suggestionId ? suggestion : s
           )
         }))
-        return res.data
+        return res.data?.data || res.data
       },
       
       rejectSuggestion: async (projectId, suggestionId, reason) => {
-        const res = await axios.post(
-          `${MODULE_BASE}/signal-learning?id=${suggestionId}&action=reject`,
-          { projectId, reason }
-        )
+        const res = await signalApi.post(`/learning/suggestions/${suggestionId}/reject`, {
+          projectId,
+          reason
+        })
+        const suggestion = res.data?.data?.suggestion || res.data?.data || res.data?.suggestion || res.data
         set(state => ({
           suggestions: state.suggestions.map(s => 
-            s.id === suggestionId ? res.data.suggestion : s
+            s.id === suggestionId ? suggestion : s
+          )
+        }))
+        return res.data?.data || res.data
+      },
+      
+      deferSuggestion: async (projectId, suggestionId) => {
+        const res = await signalApi.post(`/learning/suggestions/${suggestionId}/defer`, { 
+          projectId 
+        })
+        const suggestion = res.data?.data?.suggestion || res.data?.data || res.data?.suggestion || res.data
+        set(state => ({
+          suggestions: state.suggestions.map(s => 
+            s.id === suggestionId ? suggestion : s
+          )
+        }))
+        return res.data?.data || res.data
+      },
+
+      // ─────────────────────────────────────────────────────────────────────────
+      // Knowledge Gaps Actions (SIGNAL-017) - Direct Signal API calls
+      // ─────────────────────────────────────────────────────────────────────────
+      
+      // Set context for Signal API calls (call this when project changes)
+      setSignalContext: (orgId, projectId) => {
+        if (orgId) localStorage.setItem('signal_org_id', orgId)
+        if (projectId) localStorage.setItem('signal_project_id', projectId)
+      },
+      
+      fetchKnowledgeGaps: async (projectId, options = {}) => {
+        set({ knowledgeGapsLoading: true })
+        // Set project context for this request
+        localStorage.setItem('signal_project_id', projectId)
+        try {
+          const params = new URLSearchParams()
+          if (options.status) params.append('status', options.status)
+          if (options.limit) params.append('limit', options.limit)
+          if (options.offset) params.append('offset', options.offset)
+          if (options.sortBy) params.append('sortBy', options.sortBy)
+          if (options.sortOrder) params.append('sortOrder', options.sortOrder)
+          
+          const [gapsRes, statsRes] = await Promise.all([
+            signalApi.get(`/knowledge/gaps?${params.toString()}`),
+            signalApi.get('/knowledge/gaps/stats')
+          ])
+          
+          set({ 
+            knowledgeGaps: gapsRes.data.gaps || gapsRes.data,
+            knowledgeGapsPagination: gapsRes.data.pagination || {
+              page: 1,
+              limit: options.limit || 50,
+              total: gapsRes.data.total || (gapsRes.data.gaps?.length || 0),
+              pages: Math.ceil((gapsRes.data.total || gapsRes.data.gaps?.length || 0) / (options.limit || 50))
+            },
+            knowledgeGapsStats: statsRes.data,
+            knowledgeGapsLoading: false
+          })
+          return { gaps: gapsRes.data, stats: statsRes.data }
+        } catch (error) {
+          set({ knowledgeGapsLoading: false })
+          throw error
+        }
+      },
+      
+      fetchKnowledgeGapsStats: async (projectId) => {
+        localStorage.setItem('signal_tenant_id', projectId)
+        try {
+          const res = await signalApi.get('/knowledge/gaps/stats')
+          set({ knowledgeGapsStats: res.data })
+          return res.data
+        } catch (error) {
+          console.error('Failed to fetch knowledge gaps stats:', error)
+          throw error
+        }
+      },
+      
+      addressKnowledgeGap: async (projectId, gapId, knowledgeChunkId, note) => {
+        localStorage.setItem('signal_tenant_id', projectId)
+        const res = await signalApi.put(`/knowledge/gaps/${gapId}/address`, {
+          knowledgeChunkId,
+          note
+        })
+        set(state => ({
+          knowledgeGaps: state.knowledgeGaps.map(g => 
+            g.id === gapId ? res.data : g
           )
         }))
         return res.data
       },
       
-      deferSuggestion: async (projectId, suggestionId) => {
-        const res = await axios.post(
-          `${MODULE_BASE}/signal-learning?id=${suggestionId}&action=defer`,
-          { projectId }
-        )
+      dismissKnowledgeGap: async (projectId, gapId, reason) => {
+        localStorage.setItem('signal_tenant_id', projectId)
+        const res = await signalApi.put(`/knowledge/gaps/${gapId}/dismiss`, {
+          reason
+        })
         set(state => ({
-          suggestions: state.suggestions.map(s => 
-            s.id === suggestionId ? res.data.suggestion : s
+          knowledgeGaps: state.knowledgeGaps.map(g => 
+            g.id === gapId ? res.data : g
+          )
+        }))
+        return res.data
+      },
+      
+      mergeKnowledgeGaps: async (projectId, primaryId, duplicateIds) => {
+        localStorage.setItem('signal_tenant_id', projectId)
+        const res = await signalApi.put(`/knowledge/gaps/${primaryId}/merge`, {
+          duplicateIds
+        })
+        // Remove merged gaps from state
+        set(state => ({
+          knowledgeGaps: state.knowledgeGaps.filter(g => 
+            !duplicateIds.includes(g.id)
+          ).map(g => g.id === primaryId ? res.data : g)
+        }))
+        return res.data
+      },
+      
+      fillKnowledgeGap: async (projectId, gapId, content, options = {}) => {
+        localStorage.setItem('signal_tenant_id', projectId)
+        const res = await signalApi.post(`/knowledge/gaps/${gapId}/fill`, {
+          content,
+          contentType: options.contentType || 'faq',
+          sourceUrl: options.sourceUrl,
+          isPublic: options.isPublic ?? true
+        })
+        set(state => ({
+          knowledgeGaps: state.knowledgeGaps.map(g => 
+            g.id === gapId ? res.data.gap : g
           )
         }))
         return res.data
@@ -645,7 +922,11 @@ export const useSignalStore = create(
           activeWidgetConversation: null,
           activeWidgetMessages: [],
           suggestions: [],
-          suggestionsLoading: false
+          suggestionsLoading: false,
+          // Knowledge gaps state
+          knowledgeGaps: [],
+          knowledgeGapsLoading: false,
+          knowledgeGapsStats: { openGaps: 0, addressedGaps: 0, dismissedGaps: 0, totalOccurrences: 0, avgSimilarity: 0 }
         })
       }
     }),
@@ -685,5 +966,11 @@ export const selectSuggestions = (state) => state.suggestions
 export const selectSuggestionsStats = (state) => state.suggestionsStats
 export const selectAnalytics = (state) => state.analytics
 export const selectAnalyticsLoading = (state) => state.analyticsLoading
+
+// Knowledge Gaps selectors (SIGNAL-017)
+export const selectKnowledgeGaps = (state) => state.knowledgeGaps
+export const selectKnowledgeGapsLoading = (state) => state.knowledgeGapsLoading
+export const selectKnowledgeGapsStats = (state) => state.knowledgeGapsStats
+export const selectKnowledgeGapsPagination = (state) => state.knowledgeGapsPagination
 
 export default useSignalStore

@@ -1,0 +1,358 @@
+/**
+ * CommerceImageUploader
+ * 
+ * Drag-and-drop image uploader for commerce offerings.
+ * Supports featured image and gallery images.
+ * Images are stored in Files module under Commerce/{type}s/{slug}/
+ */
+import { useState, useRef, useCallback } from 'react'
+import { 
+  uploadOfferingImage, 
+  deleteOfferingImage, 
+  setFeaturedImage 
+} from '@/lib/commerce-store'
+import { Button } from '@/components/ui/button'
+import { Badge } from '@/components/ui/badge'
+import {
+  ImagePlus,
+  X,
+  Star,
+  Loader2,
+  AlertCircle,
+  Upload,
+} from 'lucide-react'
+import { cn } from '@/lib/utils'
+
+// Maximum file size: 5MB
+const MAX_FILE_SIZE = 5 * 1024 * 1024
+const ACCEPTED_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'image/gif']
+
+export function CommerceImageUploader({
+  offeringId,
+  images = [],
+  featuredImageId,
+  onImagesChange,
+  disabled = false,
+  maxImages = 10,
+  className,
+}) {
+  const [uploading, setUploading] = useState(false)
+  const [uploadProgress, setUploadProgress] = useState(0)
+  const [error, setError] = useState(null)
+  const [deletingId, setDeletingId] = useState(null)
+  const [isDragActive, setIsDragActive] = useState(false)
+  
+  const featuredInputRef = useRef(null)
+  const galleryInputRef = useRef(null)
+
+  const validateFile = (file) => {
+    if (!ACCEPTED_TYPES.includes(file.type)) {
+      return `${file.name} is not a valid image type`
+    }
+    if (file.size > MAX_FILE_SIZE) {
+      return `${file.name} is too large (max 5MB)`
+    }
+    return null
+  }
+
+  const handleFiles = useCallback(async (files, setAsFeatured = false) => {
+    if (!offeringId) {
+      setError('Please save the offering first before uploading images')
+      return
+    }
+
+    const fileArray = Array.from(files)
+    const remainingSlots = maxImages - images.length
+    const filesToUpload = fileArray.slice(0, remainingSlots)
+    
+    if (fileArray.length > remainingSlots) {
+      setError(`Only ${remainingSlots} more image(s) can be added (max ${maxImages})`)
+    }
+
+    // Validate files
+    const validationErrors = filesToUpload.map(validateFile).filter(Boolean)
+    if (validationErrors.length > 0) {
+      setError(validationErrors.join(', '))
+      return
+    }
+
+    if (filesToUpload.length === 0) return
+
+    setUploading(true)
+    setError(null)
+    
+    try {
+      const newImages = []
+      for (let i = 0; i < filesToUpload.length; i++) {
+        const file = filesToUpload[i]
+        setUploadProgress(Math.round(((i + 1) / filesToUpload.length) * 100))
+        
+        // Set first uploaded image as featured if none exists or explicitly requested
+        const isFeatured = setAsFeatured || (!featuredImageId && images.length === 0 && i === 0)
+        
+        const result = await uploadOfferingImage(offeringId, file, isFeatured)
+        newImages.push({
+          id: result.id,
+          url: result.url,
+          filename: result.filename,
+          is_featured: isFeatured,
+        })
+      }
+      
+      onImagesChange?.([...images, ...newImages])
+    } catch (err) {
+      console.error('Upload error:', err)
+      setError(err.message || 'Failed to upload image')
+    } finally {
+      setUploading(false)
+      setUploadProgress(0)
+    }
+  }, [offeringId, images, featuredImageId, maxImages, onImagesChange])
+
+  const handleDrop = useCallback((e) => {
+    e.preventDefault()
+    setIsDragActive(false)
+    
+    if (disabled || uploading || !offeringId) return
+    
+    const files = e.dataTransfer?.files
+    if (files?.length > 0) {
+      handleFiles(files, !featuredImageId)
+    }
+  }, [disabled, uploading, offeringId, featuredImageId, handleFiles])
+
+  const handleDragOver = useCallback((e) => {
+    e.preventDefault()
+    if (!disabled && !uploading && offeringId) {
+      setIsDragActive(true)
+    }
+  }, [disabled, uploading, offeringId])
+
+  const handleDragLeave = useCallback((e) => {
+    e.preventDefault()
+    setIsDragActive(false)
+  }, [])
+
+  const handleDelete = async (imageId) => {
+    if (!offeringId) return
+    
+    setDeletingId(imageId)
+    try {
+      await deleteOfferingImage(offeringId, imageId)
+      onImagesChange?.(images.filter(img => img.id !== imageId))
+    } catch (err) {
+      console.error('Delete error:', err)
+      setError(err.message || 'Failed to delete image')
+    } finally {
+      setDeletingId(null)
+    }
+  }
+
+  const handleSetFeatured = async (imageId) => {
+    if (!offeringId) return
+    
+    try {
+      await setFeaturedImage(offeringId, imageId)
+      onImagesChange?.(images.map(img => ({
+        ...img,
+        is_featured: img.id === imageId,
+      })))
+    } catch (err) {
+      console.error('Set featured error:', err)
+      setError(err.message || 'Failed to set featured image')
+    }
+  }
+
+  const featuredImage = images.find(img => img.is_featured || img.id === featuredImageId)
+  const galleryImages = images.filter(img => !img.is_featured && img.id !== featuredImageId)
+
+  return (
+    <div className={cn("space-y-4", className)}>
+      {/* Error display */}
+      {error && (
+        <div className="flex items-center gap-2 p-3 rounded-lg bg-red-500/10 border border-red-500/20 text-red-500 text-sm">
+          <AlertCircle className="h-4 w-4 flex-shrink-0" />
+          <span>{error}</span>
+          <button 
+            onClick={() => setError(null)} 
+            className="ml-auto hover:text-red-400"
+          >
+            <X className="h-4 w-4" />
+          </button>
+        </div>
+      )}
+
+      {/* Featured Image */}
+      <div>
+        <label className="text-sm font-medium text-foreground mb-2 block">
+          Featured Image
+        </label>
+        {featuredImage ? (
+          <div className="relative aspect-[16/9] rounded-xl overflow-hidden bg-muted border group">
+            <img
+              src={featuredImage.url}
+              alt="Featured"
+              className="w-full h-full object-cover"
+            />
+            <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2">
+              <Button
+                variant="secondary"
+                size="sm"
+                onClick={() => handleDelete(featuredImage.id)}
+                disabled={deletingId === featuredImage.id}
+                className="bg-red-500/90 hover:bg-red-600 text-white"
+              >
+                {deletingId === featuredImage.id ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <X className="h-4 w-4" />
+                )}
+                Remove
+              </Button>
+            </div>
+            <Badge className="absolute top-2 left-2 bg-primary text-primary-foreground">
+              <Star className="h-3 w-3 mr-1 fill-current" />
+              Featured
+            </Badge>
+          </div>
+        ) : (
+          <div
+            onClick={() => !disabled && !uploading && offeringId && featuredInputRef.current?.click()}
+            onDrop={handleDrop}
+            onDragOver={handleDragOver}
+            onDragLeave={handleDragLeave}
+            className={cn(
+              "aspect-[16/9] rounded-xl border-2 border-dashed transition-all cursor-pointer flex flex-col items-center justify-center gap-2",
+              isDragActive 
+                ? "border-primary bg-primary/10" 
+                : "border-muted-foreground/25 bg-muted hover:border-primary/50",
+              (disabled || !offeringId) && "opacity-50 cursor-not-allowed"
+            )}
+          >
+            <input
+              ref={featuredInputRef}
+              type="file"
+              accept="image/*"
+              className="hidden"
+              onChange={(e) => {
+                if (e.target.files?.length) {
+                  handleFiles(e.target.files, true)
+                  e.target.value = '' // Reset input
+                }
+              }}
+            />
+            {uploading ? (
+              <>
+                <Loader2 className="h-8 w-8 text-primary animate-spin" />
+                <span className="text-sm text-muted-foreground">
+                  Uploading... {uploadProgress}%
+                </span>
+              </>
+            ) : (
+              <>
+                <ImagePlus className="h-8 w-8 text-muted-foreground" />
+                <span className="text-sm text-muted-foreground">
+                  {isDragActive ? 'Drop image here' : 'Click or drag to upload featured image'}
+                </span>
+                {!offeringId && (
+                  <span className="text-xs text-muted-foreground">
+                    Save offering first to enable uploads
+                  </span>
+                )}
+              </>
+            )}
+          </div>
+        )}
+      </div>
+
+      {/* Gallery Images */}
+      <div>
+        <div className="flex items-center justify-between mb-2">
+          <label className="text-sm font-medium text-foreground">
+            Gallery Images
+          </label>
+          <span className="text-xs text-muted-foreground">
+            {images.length} / {maxImages}
+          </span>
+        </div>
+        
+        <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 gap-3">
+          {galleryImages.map((image) => (
+            <div
+              key={image.id}
+              className="relative aspect-square rounded-lg overflow-hidden bg-muted border group"
+            >
+              <img
+                src={image.url}
+                alt={image.filename || 'Gallery image'}
+                className="w-full h-full object-cover"
+              />
+              <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-1">
+                <button
+                  onClick={() => handleSetFeatured(image.id)}
+                  className="p-1.5 rounded-lg bg-white/20 hover:bg-white/30 text-white"
+                  title="Set as featured"
+                >
+                  <Star className="h-4 w-4" />
+                </button>
+                <button
+                  onClick={() => handleDelete(image.id)}
+                  disabled={deletingId === image.id}
+                  className="p-1.5 rounded-lg bg-red-500/80 hover:bg-red-600 text-white"
+                  title="Delete"
+                >
+                  {deletingId === image.id ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <X className="h-4 w-4" />
+                  )}
+                </button>
+              </div>
+            </div>
+          ))}
+          
+          {/* Add more button */}
+          {images.length < maxImages && (
+            <div
+              onClick={() => !disabled && !uploading && offeringId && galleryInputRef.current?.click()}
+              onDrop={handleDrop}
+              onDragOver={handleDragOver}
+              onDragLeave={handleDragLeave}
+              className={cn(
+                "aspect-square rounded-lg border-2 border-dashed transition-all cursor-pointer flex flex-col items-center justify-center gap-1",
+                isDragActive 
+                  ? "border-primary bg-primary/10" 
+                  : "border-muted-foreground/25 bg-muted hover:border-primary/50",
+                (disabled || uploading || !offeringId) && "opacity-50 cursor-not-allowed"
+              )}
+            >
+              <input
+                ref={galleryInputRef}
+                type="file"
+                accept="image/*"
+                multiple
+                className="hidden"
+                onChange={(e) => {
+                  if (e.target.files?.length) {
+                    handleFiles(e.target.files, false)
+                    e.target.value = '' // Reset input
+                  }
+                }}
+              />
+              {uploading ? (
+                <Loader2 className="h-6 w-6 text-primary animate-spin" />
+              ) : (
+                <>
+                  <Upload className="h-6 w-6 text-muted-foreground" />
+                  <span className="text-xs text-muted-foreground">Add</span>
+                </>
+              )}
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  )
+}
+
+export default CommerceImageUploader

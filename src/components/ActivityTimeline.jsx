@@ -3,7 +3,7 @@ import { format, formatDistanceToNow } from 'date-fns'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Loader2 } from 'lucide-react'
-import axios from 'axios'
+import { reportsApi } from '@/lib/portal-api'
 
 const activityTypeConfig = {
   project: { icon: '📁', color: 'bg-[var(--brand-secondary)]/20', textColor: 'text-[var(--brand-secondary)]' },
@@ -36,9 +36,7 @@ export function ActivityTimeline({ limit = 10 }) {
   const fetchActivities = async () => {
     try {
       setLoading(true)
-      const response = await axios.get(
-        `/.netlify/functions/dashboard-activity?limit=${limit}&offset=0`
-      )
+      const response = await reportsApi.getActivity({ limit, offset: 0 })
       setActivities(response.data.activities || [])
       setError(null)
     } catch (err) {

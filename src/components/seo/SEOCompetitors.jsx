@@ -19,7 +19,7 @@ import {
   BarChart3
 } from 'lucide-react'
 
-export default function SEOCompetitors({ siteId }) {
+export default function SEOCompetitors({ projectId }) {
   const { 
     competitors, 
     competitorsLoading, 
@@ -32,10 +32,10 @@ export default function SEOCompetitors({ siteId }) {
   const [analyzingId, setAnalyzingId] = useState(null)
 
   useEffect(() => {
-    if (siteId) {
-      fetchCompetitors(siteId)
+    if (projectId) {
+      fetchCompetitors(projectId)
     }
-  }, [siteId])
+  }, [projectId])
 
   const handleAddCompetitor = async () => {
     if (!newCompetitor.trim()) return
@@ -47,7 +47,7 @@ export default function SEOCompetitors({ siteId }) {
         .replace(/^www\./, '')
         .split('/')[0]
       
-      await analyzeCompetitor(siteId, domain)
+      await analyzeCompetitor(projectId, domain)
       setNewCompetitor('')
     } catch (error) {
       console.error('Add competitor error:', error)
@@ -58,7 +58,7 @@ export default function SEOCompetitors({ siteId }) {
   const handleReanalyze = async (competitorDomain) => {
     setAnalyzingId(competitorDomain)
     try {
-      await analyzeCompetitor(siteId, competitorDomain)
+      await analyzeCompetitor(projectId, competitorDomain)
     } catch (error) {
       console.error('Reanalyze error:', error)
     }

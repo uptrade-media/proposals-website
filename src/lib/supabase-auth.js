@@ -118,8 +118,13 @@ export async function getSession() {
  * Links auth_user_id to contact record if found by email
  */
 export async function getCurrentUser() {
+  console.log('[getCurrentUser] Starting...')
   const { data: { session } } = await getSession()
-  if (!session?.user) return null
+  if (!session?.user) {
+    console.log('[getCurrentUser] No session found')
+    return null
+  }
+  console.log('[getCurrentUser] Session user:', session.user.email)
   
   // First try to fetch contact by auth_user_id
   let { data: contact, error } = await supabase
@@ -157,7 +162,8 @@ export async function getCurrentUser() {
   }
   
   if (!contact) {
-    console.error('Error fetching contact:', error)
+    console.error('[getCurrentUser] Error fetching contact:', error)
+    console.log('[getCurrentUser] Returning fallback user object')
     // If contact doesn't exist yet, return basic user info
     return {
       id: session.user.id,
@@ -168,6 +174,7 @@ export async function getCurrentUser() {
     }
   }
   
+  console.log('[getCurrentUser] Contact found:', contact.email, 'org_id:', contact.org_id)
   return {
     id: contact.id,
     authUserId: session.user.id,
@@ -175,7 +182,9 @@ export async function getCurrentUser() {
     name: contact.name || session.user.user_metadata?.name,
     role: contact.role || 'client',
     company: contact.company,
-    avatar: session.user.user_metadata?.avatar_url || session.user.user_metadata?.picture,
+    avatar: contact.avatar || session.user.user_metadata?.avatar_url || session.user.user_metadata?.picture,
+    // Organization context
+    org_id: contact.org_id,
     // Team member fields
     isTeamMember: contact.is_team_member || false,
     teamRole: contact.team_role || null,

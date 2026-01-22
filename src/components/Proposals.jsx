@@ -24,12 +24,18 @@ import {
   Timer,
   TrendingUp,
   Activity,
-  Copy
+  Copy,
+  User,
+  UserPlus,
+  FileSignature,
+  Building2,
+  Plus
 } from 'lucide-react'
 import useAuthStore from '@/lib/auth-store'
-import api from '@/lib/api'
+import { adminApi, proposalsApi, crmApi } from '@/lib/portal-api'
 import ProposalAIDialog from './ProposalAIDialog'
 import EditProposalDialog from './EditProposalDialog'
+import NewContractModal from './NewContractModal'
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible'
 import { Progress } from '@/components/ui/progress'
 
@@ -88,8 +94,8 @@ function ProposalRow({ proposal, onView, onEdit, onDelete, onDuplicate, showSign
     if (analytics || loadingAnalytics) return
     setLoadingAnalytics(true)
     try {
-      const response = await api.get(`/.netlify/functions/proposals-analytics?id=${proposal.id}`)
-      setAnalytics(response.data.analytics)
+      const response = await proposalsApi.getAnalytics(proposal.id)
+      setAnalytics(response.data.analytics || response.data)
     } catch (err) {
       console.error('Failed to fetch analytics:', err)
     } finally {
@@ -124,12 +130,25 @@ function ProposalRow({ proposal, onView, onEdit, onDelete, onDuplicate, showSign
               )}
             </div>
             <div className="flex items-center gap-3 mt-1">
-              <p className="text-sm text-[var(--text-secondary)] truncate">
-                {proposal.contact?.name || proposal.client_name || 'Unknown client'}
-                {(proposal.contact?.email || proposal.client_email) && (
-                  <span className="text-[var(--text-tertiary)]"> ({proposal.contact?.email || proposal.client_email})</span>
+              <div className="flex items-center gap-1.5 text-sm text-[var(--text-secondary)] truncate">
+                {proposal.contact ? (
+                  <User className="w-3.5 h-3.5 text-blue-500" />
+                ) : proposal.prospect ? (
+                  <UserPlus className="w-3.5 h-3.5 text-emerald-500" />
+                ) : (
+                  <User className="w-3.5 h-3.5 text-gray-400" />
                 )}
-              </p>
+                
+                <span>{proposal.contact?.name || proposal.prospect?.name || proposal.client_name || 'Unknown client'}</span>
+                
+                {(proposal.contact?.email || proposal.prospect?.email || proposal.client_email) && (
+                  <span className="text-[var(--text-tertiary)] hidden sm:inline"> ({proposal.contact?.email || proposal.prospect?.email || proposal.client_email})</span>
+                )}
+                
+                {proposal.prospect && !proposal.contact && (
+                  <Badge variant="outline" className="ml-1 text-[10px] py-0 h-4 border-emerald-200 text-emerald-600">Prospect</Badge>
+                )}
+              </div>
               {proposal.totalAmount && (
                 <span className="text-sm font-medium text-[var(--text-primary)]">
                   ${proposal.totalAmount.toLocaleString()}
@@ -276,14 +295,23 @@ function ProposalRow({ proposal, onView, onEdit, onDelete, onDuplicate, showSign
 }
 
 // Client Proposal Row - simpler view for clients
-function ClientProposalRow({ proposal, onView, showSignedDate = false }) {
+function ClientProposalRow({ 
+  proposal, 
+  onView, 
+  onEdit,
+  showSignedDate = false,
+  fromUptrade = false,
+  isMyContract = false
+}) {
   const getStatusBadge = (status) => {
     switch (status) {
       case 'signed':
       case 'accepted':
         return <Badge className="bg-emerald-100 text-emerald-700 border-emerald-200">Signed</Badge>
       case 'sent':
-        return <Badge variant="outline" className="border-blue-200 text-blue-600">Ready to Review</Badge>
+        return <Badge variant="outline" className="border-blue-200 text-blue-600">
+          {isMyContract ? 'Sent' : 'Ready to Review'}
+        </Badge>
       case 'viewed':
         return <Badge variant="outline" className="border-purple-200 text-purple-600">Viewed</Badge>
       case 'draft':
@@ -310,8 +338,28 @@ function ClientProposalRow({ proposal, onView, showSignedDate = false }) {
         <div className="flex items-center gap-2">
           <h4 className="font-medium text-[var(--text-primary)] truncate">{proposal.title}</h4>
           {getStatusBadge(proposal.status)}
+          {/* Source indicator */}
+          {fromUptrade && (
+            <Badge variant="outline" className="text-[10px] py-0 h-4 border-blue-200 text-blue-600">
+              <Building2 className="w-2.5 h-2.5 mr-1" />
+              From Uptrade
+            </Badge>
+          )}
+          {isMyContract && (
+            <Badge variant="outline" className="text-[10px] py-0 h-4 border-purple-200 text-purple-600">
+              <FileSignature className="w-2.5 h-2.5 mr-1" />
+              Your Contract
+            </Badge>
+          )}
         </div>
         <div className="flex items-center gap-3 mt-1">
+          {/* Show recipient for contracts */}
+          {isMyContract && proposal.contact && (
+            <span className="text-sm text-[var(--text-secondary)] flex items-center gap-1">
+              <User className="w-3 h-3" />
+              To: {proposal.contact.name}
+            </span>
+          )}
           {proposal.totalAmount && (
             <span className="text-sm font-medium text-[var(--text-primary)]">
               ${proposal.totalAmount.toLocaleString()}
@@ -319,14 +367,14 @@ function ClientProposalRow({ proposal, onView, showSignedDate = false }) {
           )}
           {proposal.createdAt && (
             <span className="text-sm text-[var(--text-secondary)]">
-              Sent {formatDate(proposal.createdAt)}
+              {isMyContract ? 'Created' : 'Sent'} {formatDate(proposal.createdAt)}
             </span>
           )}
         </div>
         {showSignedDate && proposal.signedAt && (
           <p className="text-xs text-emerald-600 mt-1 flex items-center gap-1">
             <CheckCircle className="w-3 h-3" />
-            You signed on {formatDate(proposal.signedAt)}
+            {isMyContract ? 'Signed by recipient' : 'You signed'} on {formatDate(proposal.signedAt)}
             {proposal.fullyExecutedAt && (
               <span className="text-[var(--text-tertiary)]"> • Contract executed {formatDate(proposal.fullyExecutedAt)}</span>
             )}
@@ -334,14 +382,21 @@ function ClientProposalRow({ proposal, onView, showSignedDate = false }) {
         )}
       </div>
       <div className="flex items-center gap-2 ml-4">
+        {/* Edit button for draft contracts */}
+        {onEdit && proposal.status === 'draft' && (
+          <Button variant="outline" size="sm" onClick={onEdit}>
+            <Edit className="w-3 h-3 mr-1" />
+            Edit
+          </Button>
+        )}
         <Button 
-          variant={['sent', 'viewed'].includes(proposal.status) ? 'default' : 'outline'} 
+          variant={['sent', 'viewed'].includes(proposal.status) && !isMyContract ? 'default' : 'outline'} 
           size="sm" 
           onClick={onView}
-          className={['sent', 'viewed'].includes(proposal.status) ? 'bg-[var(--brand-primary)] hover:bg-[var(--brand-primary-hover)]' : ''}
+          className={['sent', 'viewed'].includes(proposal.status) && !isMyContract ? 'bg-[var(--brand-primary)] hover:bg-[var(--brand-primary-hover)]' : ''}
         >
           <Eye className="w-3 h-3 mr-1" />
-          {['sent', 'viewed'].includes(proposal.status) ? 'Review & Sign' : 'View'}
+          {['sent', 'viewed'].includes(proposal.status) && !isMyContract ? 'Review & Sign' : 'View'}
         </Button>
       </div>
     </div>
@@ -355,16 +410,20 @@ const Proposals = ({ onNavigate }) => {
   const isUptradeMediaOrg = currentOrg?.slug === 'uptrade-media' || currentOrg?.domain === 'uptrademedia.com' || currentOrg?.org_type === 'agency'
   const isInTenantContext = (!!currentProject && !isUptradeMediaOrg) || (!!currentOrg && !isUptradeMediaOrg)
   const canManageProposals = (isAdmin || isSuperAdmin) && !isInTenantContext
+  // Client orgs can create contracts
+  const canCreateContracts = isInTenantContext && !isUptradeMediaOrg
   
   const hasFetchedRef = useRef(false)
   const [proposals, setProposals] = useState([])
   const [clients, setClients] = useState([])
+  const [contacts, setContacts] = useState([])
   const [isLoading, setIsLoading] = useState(true)
   const [viewingProposal, setViewingProposal] = useState(null)
   const [loadingProposalView, setLoadingProposalView] = useState(false)
   const [editingProposal, setEditingProposal] = useState(null)
   const [deleteProposalDialog, setDeleteProposalDialog] = useState({ open: false, id: null, title: '', isSigned: false })
   const [showAIProposalDialog, setShowAIProposalDialog] = useState(false)
+  const [showNewContractModal, setShowNewContractModal] = useState(false)
 
   // Fetch data only once on mount
   useEffect(() => {
@@ -377,13 +436,18 @@ const Proposals = ({ onNavigate }) => {
     if (isAdmin) {
       fetchClients()
     }
+    // Client orgs need contacts for contract creation
+    if (canCreateContracts) {
+      fetchContacts()
+    }
   }, [])
 
   const fetchProposals = async () => {
     setIsLoading(true)
     try {
-      const response = await api.get('/.netlify/functions/proposals-list')
-      setProposals(response.data.proposals || [])
+      // Increase limit to ensure we see all proposals (default is 50)
+      const response = await proposalsApi.list({ limit: 100 })
+      setProposals(response.data.proposals || response.data || [])
     } catch (err) {
       console.error('Failed to fetch proposals:', err)
     } finally {
@@ -393,10 +457,20 @@ const Proposals = ({ onNavigate }) => {
 
   const fetchClients = async () => {
     try {
-      const response = await api.get('/.netlify/functions/admin-clients-list')
-      setClients(response.data.clients || [])
+      const response = await adminApi.listClients()
+      setClients(response.data.clients || response.data || [])
     } catch (err) {
       console.error('Failed to fetch clients:', err)
+    }
+  }
+
+  // Fetch contacts for contract creation (client orgs only)
+  const fetchContacts = async () => {
+    try {
+      const response = await crmApi.listContacts({ limit: 500 })
+      setContacts(response.data.contacts || response.data || [])
+    } catch (err) {
+      console.error('Failed to fetch contacts:', err)
     }
   }
 
@@ -404,8 +478,8 @@ const Proposals = ({ onNavigate }) => {
   const handleViewProposal = async (proposal) => {
     setLoadingProposalView(true)
     try {
-      const response = await api.get(`/.netlify/functions/proposals-get?id=${proposal.id}`)
-      setViewingProposal(response.data.proposal)
+      const response = await proposalsApi.get(proposal.id)
+      setViewingProposal(response.data.proposal || response.data)
     } catch (err) {
       console.error('Failed to fetch proposal details:', err)
       toast.error('Failed to load proposal')
@@ -426,8 +500,7 @@ const Proposals = ({ onNavigate }) => {
     
     try {
       // Add confirm=true for signed proposals
-      const confirmParam = deleteProposalDialog.isSigned ? '&confirm=true' : ''
-      await api.delete(`/.netlify/functions/proposals-delete?id=${deleteProposalDialog.id}${confirmParam}`)
+      await proposalsApi.delete(deleteProposalDialog.id, deleteProposalDialog.isSigned)
       setProposals(proposals.filter(p => p.id !== deleteProposalDialog.id))
       toast.success('Proposal deleted')
     } catch (err) {
@@ -440,11 +513,9 @@ const Proposals = ({ onNavigate }) => {
   // Duplicate a proposal (creates new draft without signatures)
   const handleDuplicateProposal = async (proposal) => {
     try {
-      const response = await api.post('/.netlify/functions/proposals-duplicate', {
-        proposalId: proposal.id
-      })
+      const response = await proposalsApi.duplicate(proposal.id)
       
-      const newProposal = response.data.proposal
+      const newProposal = response.data.proposal || response.data
       setProposals([newProposal, ...proposals])
       toast.success(`Created draft copy: "${newProposal.title}"`)
     } catch (err) {
@@ -495,85 +566,178 @@ const Proposals = ({ onNavigate }) => {
     )
   }
 
-  // Client view OR org/project context view (they view proposals sent TO them)
+  // Client view OR org/project context view (they view proposals sent TO them + contracts they create)
   if (!isAdmin || isInTenantContext) {
-    const activeProposals = proposals.filter(p => !['signed', 'accepted', 'declined'].includes(p.status))
-    const signedProposals = proposals.filter(p => ['signed', 'accepted'].includes(p.status))
+    // Separate proposals from Uptrade vs contracts created by this org
+    const receivedProposals = proposals.filter(p => p.doc_type === 'proposal' || !p.doc_type)
+    const myContracts = proposals.filter(p => p.doc_type === 'contract')
+    
+    const pendingReceived = receivedProposals.filter(p => !['signed', 'accepted', 'declined'].includes(p.status))
+    const signedReceived = receivedProposals.filter(p => ['signed', 'accepted'].includes(p.status))
+    const pendingContracts = myContracts.filter(p => !['signed', 'accepted', 'declined'].includes(p.status))
+    const signedContracts = myContracts.filter(p => ['signed', 'accepted'].includes(p.status))
 
     return (
       <div className="space-y-6">
-        <div>
-          <h1 className="text-2xl font-bold text-[var(--text-primary)]">Proposals</h1>
-          <p className="text-[var(--text-secondary)]">Review and sign proposals from Uptrade Media</p>
+        <div className="flex items-center justify-between">
+          <div>
+            <h1 className="text-2xl font-bold text-[var(--text-primary)]">
+              {canCreateContracts ? 'Proposals & Contracts' : 'Proposals'}
+            </h1>
+            <p className="text-[var(--text-secondary)]">
+              {canCreateContracts 
+                ? 'Review proposals from Uptrade Media and manage your contracts'
+                : 'Review and sign proposals from Uptrade Media'
+              }
+            </p>
+          </div>
+          {canCreateContracts && (
+            <Button
+              onClick={() => setShowNewContractModal(true)}
+              className="bg-[var(--brand-primary)] hover:bg-[var(--brand-primary-hover)]"
+            >
+              <Plus className="w-4 h-4 mr-2" />
+              New Contract
+            </Button>
+          )}
         </div>
 
-        <Tabs defaultValue="pending" className="w-full">
+        <Tabs defaultValue="received" className="w-full">
           <TabsList>
-            <TabsTrigger value="pending" className="flex items-center gap-1.5">
-              <Clock className="w-3.5 h-3.5" />
-              Pending
-              {activeProposals.length > 0 && (
+            <TabsTrigger value="received" className="flex items-center gap-1.5">
+              <Building2 className="w-3.5 h-3.5" />
+              From Uptrade
+              {pendingReceived.length > 0 && (
                 <Badge variant="secondary" className="ml-1 h-5 px-1.5 text-xs">
-                  {activeProposals.length}
+                  {pendingReceived.length}
                 </Badge>
               )}
             </TabsTrigger>
+            {canCreateContracts && (
+              <TabsTrigger value="contracts" className="flex items-center gap-1.5">
+                <FileSignature className="w-3.5 h-3.5" />
+                My Contracts
+                {myContracts.length > 0 && (
+                  <Badge variant="secondary" className="ml-1 h-5 px-1.5 text-xs">
+                    {myContracts.length}
+                  </Badge>
+                )}
+              </TabsTrigger>
+            )}
             <TabsTrigger value="signed" className="flex items-center gap-1.5">
               <CheckCircle className="w-3.5 h-3.5" />
               Signed
-              {signedProposals.length > 0 && (
+              {(signedReceived.length + signedContracts.length) > 0 && (
                 <Badge variant="secondary" className="ml-1 h-5 px-1.5 text-xs bg-emerald-100 text-emerald-700">
-                  {signedProposals.length}
+                  {signedReceived.length + signedContracts.length}
                 </Badge>
               )}
             </TabsTrigger>
           </TabsList>
 
-          <TabsContent value="pending" className="space-y-4 mt-4">
+          {/* Received proposals from Uptrade */}
+          <TabsContent value="received" className="space-y-4 mt-4">
             {isLoading ? (
               <div className="flex items-center justify-center py-12">
                 <Loader2 className="h-8 w-8 animate-spin text-[var(--brand-primary)]" />
               </div>
-            ) : activeProposals.length === 0 ? (
+            ) : pendingReceived.length === 0 ? (
               <EmptyState
                 icon={Send}
                 title="No pending proposals"
-                description="You don't have any proposals waiting for review."
+                description="You don't have any proposals waiting for review from Uptrade Media."
               />
             ) : (
               <div className="space-y-3">
-                {activeProposals.map((proposal) => (
+                {pendingReceived.map((proposal) => (
                   <ClientProposalRow
                     key={proposal.id}
                     proposal={proposal}
                     onView={() => handleViewProposal(proposal)}
+                    fromUptrade
                   />
                 ))}
               </div>
             )}
           </TabsContent>
 
+          {/* My contracts (client orgs only) */}
+          {canCreateContracts && (
+            <TabsContent value="contracts" className="space-y-4 mt-4">
+              {pendingContracts.length === 0 ? (
+                <EmptyState
+                  icon={FileSignature}
+                  title="No contracts yet"
+                  description="Create contracts to send to your customers for signature."
+                  action={
+                    <Button
+                      onClick={() => setShowNewContractModal(true)}
+                      className="bg-[var(--brand-primary)] hover:bg-[var(--brand-primary-hover)]"
+                    >
+                      <Plus className="w-4 h-4 mr-2" />
+                      Create Contract
+                    </Button>
+                  }
+                />
+              ) : (
+                <div className="space-y-3">
+                  {pendingContracts.map((contract) => (
+                    <ClientProposalRow
+                      key={contract.id}
+                      proposal={contract}
+                      onView={() => handleViewProposal(contract)}
+                      onEdit={canCreateContracts && contract.status === 'draft' ? () => handleEditProposal(contract) : undefined}
+                      isMyContract
+                    />
+                  ))}
+                </div>
+              )}
+            </TabsContent>
+          )}
+
+          {/* All signed documents */}
           <TabsContent value="signed" className="space-y-4 mt-4">
-            {signedProposals.length === 0 ? (
+            {(signedReceived.length + signedContracts.length) === 0 ? (
               <EmptyState
                 icon={CheckCircle}
-                title="No signed proposals"
-                description="Proposals you've signed will appear here."
+                title="No signed documents"
+                description="Signed proposals and contracts will appear here."
               />
             ) : (
               <div className="space-y-3">
-                {signedProposals.map((proposal) => (
+                {signedReceived.map((proposal) => (
                   <ClientProposalRow
                     key={proposal.id}
                     proposal={proposal}
                     onView={() => handleViewProposal(proposal)}
                     showSignedDate
+                    fromUptrade
+                  />
+                ))}
+                {signedContracts.map((contract) => (
+                  <ClientProposalRow
+                    key={contract.id}
+                    proposal={contract}
+                    onView={() => handleViewProposal(contract)}
+                    showSignedDate
+                    isMyContract
                   />
                 ))}
               </div>
             )}
           </TabsContent>
         </Tabs>
+
+        {/* New Contract Modal */}
+        <NewContractModal
+          open={showNewContractModal}
+          onOpenChange={setShowNewContractModal}
+          projectId={currentProject?.id}
+          contacts={contacts}
+          onSuccess={(contract) => {
+            setProposals([contract, ...proposals])
+          }}
+        />
       </div>
     )
   }

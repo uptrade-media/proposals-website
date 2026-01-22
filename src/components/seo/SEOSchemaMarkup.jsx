@@ -2,6 +2,8 @@
 // Schema Markup Generator - create and validate structured data
 import { useState, useEffect } from 'react'
 import { useSeoStore } from '@/lib/seo-store'
+import { useSignalAccess } from '@/lib/signal-access'
+import SignalUpgradeCard from './signal/SignalUpgradeCard'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -18,7 +20,18 @@ import {
   FileText
 } from 'lucide-react'
 
-export default function SEOSchemaMarkup({ siteId }) {
+export default function SEOSchemaMarkup({ projectId }) {
+  const { hasAccess: hasSignalAccess } = useSignalAccess()
+
+  // Show upgrade prompt if no Signal access
+  if (!hasSignalAccess) {
+    return (
+      <div className="p-6">
+        <SignalUpgradeCard feature="default" variant="default" />
+      </div>
+    )
+  }
+
   const { 
     schemaStatus, 
     schemaLoading,
@@ -33,16 +46,16 @@ export default function SEOSchemaMarkup({ siteId }) {
   const [copiedId, setCopiedId] = useState(null)
 
   useEffect(() => {
-    if (siteId) {
-      fetchSchemaStatus(siteId)
+    if (projectId) {
+      fetchSchemaStatus(projectId)
     }
-  }, [siteId])
+  }, [projectId])
 
   const handleGenerateSchema = async (pageId) => {
     setIsGenerating(true)
     setSelectedPage(pageId)
     try {
-      await generateSchema(siteId, pageId)
+      await generateSchema(projectId, pageId)
     } catch (error) {
       console.error('Schema generation error:', error)
     }
@@ -68,7 +81,7 @@ export default function SEOSchemaMarkup({ siteId }) {
           </p>
         </div>
         <Button 
-          onClick={() => fetchSchemaStatus(siteId)} 
+          onClick={() => fetchSchemaStatus(projectId)} 
           disabled={schemaLoading}
           variant="outline"
         >
@@ -301,7 +314,7 @@ export default function SEOSchemaMarkup({ siteId }) {
             <p className="text-muted-foreground mb-4">
               Check your site's structured data coverage and generate new schema
             </p>
-            <Button onClick={() => fetchSchemaStatus(siteId)}>
+            <Button onClick={() => fetchSchemaStatus(projectId)}>
               <RefreshCw className="mr-2 h-4 w-4" />
               Check Coverage
             </Button>

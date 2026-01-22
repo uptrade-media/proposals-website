@@ -2,6 +2,8 @@
 // Internal Linking Analysis - optimize site structure and PageRank flow
 import { useState, useEffect } from 'react'
 import { useSeoStore } from '@/lib/seo-store'
+import { useSignalAccess } from '@/lib/signal-access'
+import SignalUpgradeCard from './signal/SignalUpgradeCard'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -17,7 +19,18 @@ import {
   Network
 } from 'lucide-react'
 
-export default function SEOInternalLinks({ siteId }) {
+export default function SEOInternalLinks({ projectId }) {
+  const { hasAccess: hasSignalAccess } = useSignalAccess()
+
+  // Show upgrade prompt if no Signal access
+  if (!hasSignalAccess) {
+    return (
+      <div className="p-6">
+        <SignalUpgradeCard feature="default" variant="default" />
+      </div>
+    )
+  }
+
   const { 
     internalLinksAnalysis, 
     internalLinksLoading, 
@@ -28,15 +41,15 @@ export default function SEOInternalLinks({ siteId }) {
   const [isAnalyzing, setIsAnalyzing] = useState(false)
 
   useEffect(() => {
-    if (siteId) {
-      fetchInternalLinksAnalysis(siteId)
+    if (projectId) {
+      fetchInternalLinksAnalysis(projectId)
     }
-  }, [siteId])
+  }, [projectId])
 
   const handleAnalyze = async () => {
     setIsAnalyzing(true)
     try {
-      await analyzeInternalLinks(siteId)
+      await analyzeInternalLinks(projectId)
     } catch (error) {
       console.error('Internal links analysis error:', error)
     }

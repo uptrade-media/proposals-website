@@ -62,21 +62,25 @@ const OrgSwitcher = ({ onManageTenants, collapsed = false }) => {
 
   const loadAllOrgs = async () => {
     setLoadingOrgs(true)
-    const orgs = await fetchAllOrganizations()
+    const orgsWithProjects = await fetchAllOrganizations()
     
-    // Separate organizations and projects
+    // API returns organizations with nested projects arrays
+    // Extract orgs (without the nested projects array) and build project map
     const realOrgs = []
     const projectMap = {}
     
-    orgs?.forEach(item => {
-      if (item.isProjectTenant) {
-        // This is a project - group by org_id or put in 'unassigned'
-        const orgId = item.organization_id || item.org_id || 'unassigned'
-        if (!projectMap[orgId]) projectMap[orgId] = []
-        projectMap[orgId].push(item)
-      } else {
-        // This is an organization
-        realOrgs.push(item)
+    orgsWithProjects?.forEach(org => {
+      // Extract the org without the projects array
+      const { projects, ...orgData } = org
+      realOrgs.push(orgData)
+      
+      // Build project map keyed by org_id
+      if (projects && projects.length > 0) {
+        projectMap[org.id] = projects.map(p => ({
+          ...p,
+          name: p.title || p.name,
+          org_id: p.org_id || org.id,
+        }))
       }
     })
     
@@ -162,56 +166,64 @@ const OrgSwitcher = ({ onManageTenants, collapsed = false }) => {
   }
 
   return (
-    <DropdownMenu>
-      <DropdownMenuTrigger asChild>
-        <Button 
-          variant="ghost" 
-          className="w-full justify-between px-3 py-2 h-auto"
-          disabled={isLoading}
+    <div className="flex items-center gap-1">
+      {/* Org name - clickable to go to org dashboard */}
+      <button 
+        onClick={async () => {
+          if (isInProject) {
+            await exitProjectView()
+          }
+        }}
+        className="flex items-center gap-2 min-w-0 px-2 py-1.5 rounded-md hover:bg-[var(--glass-bg-hover)] transition-colors"
+        disabled={isLoading}
+      >
+        {/* Icon: Building for org */}
+        <div 
+          className="w-7 h-7 rounded flex items-center justify-center text-white text-xs font-bold shrink-0"
+          style={{ backgroundColor: displayColor }}
         >
-          <div className="flex items-center gap-2 min-w-0">
-            {/* Icon: Globe for project, Building for org */}
-            <div 
-              className="w-7 h-7 rounded flex items-center justify-center text-white text-xs font-bold shrink-0"
-              style={{ backgroundColor: displayColor }}
-            >
-              {isInProject ? (
-                <Globe className="h-4 w-4" />
-              ) : (
-                displayName?.charAt(0) || 'U'
-              )}
-            </div>
-            <div className="flex flex-col items-start min-w-0">
-              <span className="text-sm font-medium truncate text-[var(--text-primary)]">
-                {displayName}
-              </span>
-              {displayDomain && (
-                <span className="text-xs text-[var(--text-tertiary)] truncate">
-                  {displayDomain}
-                </span>
-              )}
-            </div>
-          </div>
-          <ChevronDown className="h-4 w-4 text-[var(--text-secondary)] shrink-0" />
-        </Button>
-      </DropdownMenuTrigger>
-      <DropdownMenuContent align="start" className="w-72">
-        <SwitcherDropdownContent 
-          currentOrg={currentOrg}
-          currentProject={currentProject}
-          isInProject={isInProject}
-          allOrgs={allOrgs}
-          currentOrgProjects={currentOrgProjects}
-          orgProjects={orgProjects}
-          isSuperAdmin={isSuperAdmin}
-          loadingOrgs={loadingOrgs}
-          handleSwitchOrg={handleSwitchOrg}
-          handleSwitchProject={handleSwitchProject}
-          handleExitProject={handleExitProject}
-          onManageTenants={onManageTenants}
-        />
-      </DropdownMenuContent>
-    </DropdownMenu>
+          {currentOrg?.name?.charAt(0) || 'U'}
+        </div>
+        <span className="text-sm font-medium text-[var(--text-primary)] truncate max-w-[140px]">
+          {currentOrg?.name || 'Organization'}
+        </span>
+        {isSuperAdmin && (
+          <Badge variant="outline" className="text-[10px] px-1.5 py-0 h-4 text-[var(--text-tertiary)] border-[var(--glass-border)]">
+            PRO
+          </Badge>
+        )}
+      </button>
+      
+      {/* Dropdown toggle - more prominent */}
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          <Button 
+            variant="ghost" 
+            size="sm"
+            className="h-8 w-8 p-0 hover:bg-[var(--glass-bg-hover)] rounded-md border border-[var(--glass-border)]"
+            disabled={isLoading}
+          >
+            <ChevronDown className="h-4 w-4 text-[var(--text-secondary)]" />
+          </Button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="start" className="w-72">
+          <SwitcherDropdownContent 
+            currentOrg={currentOrg}
+            currentProject={currentProject}
+            isInProject={isInProject}
+            allOrgs={allOrgs}
+            currentOrgProjects={currentOrgProjects}
+            orgProjects={orgProjects}
+            isSuperAdmin={isSuperAdmin}
+            loadingOrgs={loadingOrgs}
+            handleSwitchOrg={handleSwitchOrg}
+            handleSwitchProject={handleSwitchProject}
+            handleExitProject={handleExitProject}
+            onManageTenants={onManageTenants}
+          />
+        </DropdownMenuContent>
+      </DropdownMenu>
+    </div>
   )
 }
 
@@ -230,22 +242,61 @@ const SwitcherDropdownContent = ({
   handleExitProject,
   onManageTenants 
 }) => {
+  // Detect if we're stuck in a "project-as-org" state (legacy bug)
+  const isProjectAsOrg = currentOrg?.isProjectTenant === true
+  const showReturnOption = isInProject || isProjectAsOrg
+  
+  // Handle returning to admin portal (returns to Uptrade Media org)
+  const handleReturnToAdmin = async () => {
+    // Find Uptrade Media org
+    const uptradeOrg = allOrgs.find(org => 
+      org.slug === 'uptrade-media' || 
+      org.domain === 'uptrademedia.com' || 
+      org.org_type === 'agency'
+    )
+    
+    if (uptradeOrg) {
+      await handleSwitchOrg(uptradeOrg)
+    } else {
+      // Fallback: clear context and reload
+      localStorage.removeItem('currentTenantProject')
+      localStorage.removeItem('currentOrganization')
+      window.location.reload()
+    }
+  }
+  
   return (
     <>
-      {/* If currently in a project, show "Return to Organization" option */}
-      {isInProject && (
+      {/* If currently in a project OR stuck in project-as-org state, show return option */}
+      {showReturnOption && (
         <>
           <DropdownMenuItem 
-            onClick={handleExitProject}
+            onClick={isInProject ? handleExitProject : handleReturnToAdmin}
             className="cursor-pointer bg-[var(--glass-bg-hover)]"
           >
             <ArrowLeft className="h-4 w-4 mr-2 text-[var(--text-secondary)]" />
             <div className="flex flex-col">
-              <span className="text-sm">Return to Organization</span>
+              <span className="text-sm">
+                {isInProject ? 'Return to Organization' : 'Return to Admin Portal'}
+              </span>
               <span className="text-xs text-[var(--text-tertiary)]">
-                {currentOrg?.name || 'Organization Dashboard'}
+                {isInProject ? (currentOrg?.name || 'Organization Dashboard') : 'Clear project context'}
               </span>
             </div>
+          </DropdownMenuItem>
+          <DropdownMenuSeparator />
+        </>
+      )}
+
+      {/* Super admin: Always show "Return to Admin Portal" as fallback */}
+      {isSuperAdmin && !showReturnOption && (
+        <>
+          <DropdownMenuItem 
+            onClick={handleReturnToAdmin}
+            className="cursor-pointer text-[var(--text-tertiary)] hover:text-[var(--text-primary)]"
+          >
+            <ArrowLeft className="h-4 w-4 mr-2" />
+            <span className="text-sm">Return to Admin Portal</span>
           </DropdownMenuItem>
           <DropdownMenuSeparator />
         </>
@@ -268,15 +319,15 @@ const SwitcherDropdownContent = ({
               <div className="flex items-center gap-2 min-w-0">
                 <div 
                   className="w-5 h-5 rounded flex items-center justify-center text-white shrink-0"
-                  style={{ backgroundColor: project.theme?.primaryColor || project.tenant_theme_color || '#4bbf39' }}
+                  style={{ backgroundColor: project.theme?.primaryColor || project.theme_color || '#4bbf39' }}
                 >
                   <Globe className="h-3 w-3" />
                 </div>
                 <div className="min-w-0">
                   <div className="text-sm truncate">{project.name || project.title}</div>
-                  {(project.domain || project.tenant_domain) && (
+                  {project.domain && (
                     <div className="text-xs text-[var(--text-tertiary)] truncate">
-                      {project.domain || project.tenant_domain}
+                      {project.domain}
                     </div>
                   )}
                 </div>

@@ -9,6 +9,7 @@ import { Progress } from '@/components/ui/progress'
 import { Separator } from '@/components/ui/separator'
 import { toast } from '@/lib/toast'
 import api from '@/lib/api'
+import { AreaChart, BarChart } from '@tremor/react'
 import {
   Eye,
   MousePointerClick,
@@ -23,6 +24,9 @@ import {
   Zap,
   ArrowUpRight
 } from 'lucide-react'
+
+// API base URL - use Portal API for analytics
+const PORTAL_API_URL = import.meta.env.VITE_PORTAL_API_URL || ''
 
 export default function EngageAnalytics({ projectId }) {
   const [loading, setLoading] = useState(true)
@@ -40,17 +44,28 @@ export default function EngageAnalytics({ projectId }) {
   const fetchAnalytics = async () => {
     try {
       setLoading(true)
-      const params = projectId ? `projectId=${projectId}&days=${period}` : `days=${period}`
-      
+      const params = new URLSearchParams({ days: period })
+      if (projectId) params.append('projectId', projectId)
+
+      // Use Portal API if available, fallback to Netlify functions
+      const baseUrl = PORTAL_API_URL || '/.netlify/functions'
+      const isPortalAPI = !!PORTAL_API_URL
+
       const [overviewRes, elementsRes, trendsRes] = await Promise.all([
-        api.get(`/.netlify/functions/engage-analytics?${params}&report=overview`),
-        api.get(`/.netlify/functions/engage-analytics?${params}&report=elements`),
-        api.get(`/.netlify/functions/engage-analytics?${params}&report=trends`)
+        isPortalAPI 
+          ? api.get(`${baseUrl}/engage/analytics/overview?${params}`)
+          : api.get(`${baseUrl}/engage-analytics?${params}&report=overview`),
+        isPortalAPI
+          ? api.get(`${baseUrl}/engage/analytics/elements?${params}`)
+          : api.get(`${baseUrl}/engage-analytics?${params}&report=elements`),
+        isPortalAPI
+          ? api.get(`${baseUrl}/engage/analytics/trends?${params}`)
+          : api.get(`${baseUrl}/engage-analytics?${params}&report=trends`)
       ])
 
-      setOverview(overviewRes.data)
-      setElementsPerf(elementsRes.data.elements || [])
-      setTrends(trendsRes.data)
+      setOverview(isPortalAPI ? overviewRes.data.data : overviewRes.data)
+      setElementsPerf(isPortalAPI ? elementsRes.data.data?.elements || [] : elementsRes.data.elements || [])
+      setTrends(isPortalAPI ? trendsRes.data.data : trendsRes.data)
     } catch (error) {
       console.error('Failed to fetch analytics:', error)
       toast.error('Failed to load analytics')
@@ -251,32 +266,25 @@ export default function EngageAnalytics({ projectId }) {
       <div className="grid md:grid-cols-2 gap-6">
         <Card>
           <CardHeader>
-            <CardTitle>Element Trends</CardTitle>
+            <CardTitle>Element Performance</CardTitle>
             <CardDescription>Daily impressions and clicks</CardDescription>
           </CardHeader>
           <CardContent>
             {trends?.elements?.length > 0 ? (
-              <div className="space-y-2">
-                {trends.elements.slice(-7).map(day => (
-                  <div key={day.date} className="flex items-center gap-3">
-                    <span className="text-sm text-muted-foreground w-20">
-                      {new Date(day.date).toLocaleDateString('en-US', { 
-                        month: 'short', 
-                        day: 'numeric' 
-                      })}
-                    </span>
-                    <div className="flex-1">
-                      <Progress 
-                        value={day.impressions > 0 ? Math.min((day.impressions / 100) * 100, 100) : 0} 
-                        className="h-2"
-                      />
-                    </div>
-                    <span className="text-sm font-mono w-16 text-right">
-                      {formatNumber(day.impressions)}
-                    </span>
-                  </div>
-                ))}
-              </div>
+              <AreaChart
+                className="h-48"
+                data={trends.elements.map(day => ({
+                  date: new Date(day.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
+                  Impressions: day.impressions,
+                  Clicks: day.clicks,
+                }))}
+                index="date"
+                categories={['Impressions', 'Clicks']}
+                colors={['blue', 'green']}
+                showLegend={true}
+                showGridLines={false}
+                curveType="monotone"
+              />
             ) : (
               <div className="text-center py-8 text-muted-foreground">
                 No trend data available
@@ -287,32 +295,24 @@ export default function EngageAnalytics({ projectId }) {
 
         <Card>
           <CardHeader>
-            <CardTitle>Chat Trends</CardTitle>
+            <CardTitle>Chat Activity</CardTitle>
             <CardDescription>Daily sessions and handoffs</CardDescription>
           </CardHeader>
           <CardContent>
             {trends?.chat?.length > 0 ? (
-              <div className="space-y-2">
-                {trends.chat.slice(-7).map(day => (
-                  <div key={day.date} className="flex items-center gap-3">
-                    <span className="text-sm text-muted-foreground w-20">
-                      {new Date(day.date).toLocaleDateString('en-US', { 
-                        month: 'short', 
-                        day: 'numeric' 
-                      })}
-                    </span>
-                    <div className="flex-1">
-                      <Progress 
-                        value={day.sessions > 0 ? Math.min((day.sessions / 10) * 100, 100) : 0} 
-                        className="h-2"
-                      />
-                    </div>
-                    <span className="text-sm font-mono w-16 text-right">
-                      {day.sessions} / {day.handoffs}
-                    </span>
-                  </div>
-                ))}
-              </div>
+              <BarChart
+                className="h-48"
+                data={trends.chat.map(day => ({
+                  date: new Date(day.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
+                  Sessions: day.sessions,
+                  Handoffs: day.handoffs,
+                }))}
+                index="date"
+                categories={['Sessions', 'Handoffs']}
+                colors={['purple', 'orange']}
+                showLegend={true}
+                showGridLines={false}
+              />
             ) : (
               <div className="text-center py-8 text-muted-foreground">
                 No chat data available

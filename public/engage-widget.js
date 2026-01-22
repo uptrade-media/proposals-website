@@ -16,8 +16,6 @@
   // Configuration
   const PORTAL_URL = 'https://portal.uptrademedia.com';
   const API_BASE = '/.netlify/functions';
-  const SUPABASE_URL = 'https://qxnfswulhjrwinosjxon.supabase.co';
-  const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InF4bmZzd3VsaGpyd2lub3NqeG9uIiwicm9sZSI6ImFub24iLCJpYXQiOjE3MjkyODE3NDcsImV4cCI6MjA0NDg1Nzc0N30.8kNJeWgNopRYhLQ0CVkg7KQsILzfXX8baZFiGfLwzBY';
   
   // ═══════════════════════════════════════════════════════════════════════════════
   // ANIMATED ECHO LOGO SVG
@@ -106,7 +104,133 @@
   let realtimeChannel = null;
   let isWaitingForAI = false;
   let aiConversationHistory = [];
-  let activeElements = []; // Popups, banners, etc. // Track conversation for AI context
+  let activeElements = []; // Popups, banners, etc.
+  let displayedElements = new Set(); // Track displayed elements this session
+
+  // ═══════════════════════════════════════════════════════════════════════════════
+  // ENGAGE-014: FREQUENCY CAPPING UTILITIES
+  // ═══════════════════════════════════════════════════════════════════════════════
+  
+  const FREQUENCY_STORAGE_KEY = 'engage_element_frequency';
+  
+  /**
+   * Get frequency data from localStorage
+   */
+  function getFrequencyData() {
+    try {
+      const data = localStorage.getItem(FREQUENCY_STORAGE_KEY);
+      return data ? JSON.parse(data) : {};
+    } catch (e) {
+      return {};
+    }
+  }
+  
+  /**
+   * Save frequency data to localStorage
+   */
+  function saveFrequencyData(data) {
+    try {
+      localStorage.setItem(FREQUENCY_STORAGE_KEY, JSON.stringify(data));
+    } catch (e) {
+      console.warn('[Engage] Failed to save frequency data');
+    }
+  }
+  
+  /**
+   * Check if element should be shown based on frequency cap
+   * @param {Object} element - Element with frequency_cap property
+   * @returns {boolean} - True if element should be shown
+   */
+  function shouldShowElement(element) {
+    const cap = element.frequency_cap || 'session';
+    const elementId = element.id;
+    
+    // No limit - always show
+    if (cap === 'none') {
+      return true;
+    }
+    
+    // Session-based - check session storage
+    if (cap === 'session') {
+      return !displayedElements.has(elementId);
+    }
+    
+    const frequencyData = getFrequencyData();
+    const elementData = frequencyData[elementId];
+    
+    if (!elementData) {
+      return true;
+    }
+    
+    const now = Date.now();
+    
+    // Once - show once per visitor (forever)
+    if (cap === 'once') {
+      return !elementData.shown;
+    }
+    
+    // Daily - once per day (24 hours)
+    if (cap === 'daily') {
+      const oneDayMs = 24 * 60 * 60 * 1000;
+      const lastShown = elementData.lastShown || 0;
+      return (now - lastShown) > oneDayMs;
+    }
+    
+    // Weekly - once per week
+    if (cap === 'weekly') {
+      const oneWeekMs = 7 * 24 * 60 * 60 * 1000;
+      const lastShown = elementData.lastShown || 0;
+      return (now - lastShown) > oneWeekMs;
+    }
+    
+    return true;
+  }
+  
+  /**
+   * Mark element as shown for frequency capping
+   * @param {Object} element - Element that was shown
+   */
+  function markElementShown(element) {
+    const cap = element.frequency_cap || 'session';
+    const elementId = element.id;
+    
+    // Session-based - just track in memory
+    if (cap === 'session') {
+      displayedElements.add(elementId);
+      return;
+    }
+    
+    // Persistent caps - save to localStorage
+    if (['once', 'daily', 'weekly'].includes(cap)) {
+      const frequencyData = getFrequencyData();
+      frequencyData[elementId] = {
+        shown: true,
+        lastShown: Date.now(),
+        showCount: (frequencyData[elementId]?.showCount || 0) + 1
+      };
+      saveFrequencyData(frequencyData);
+    }
+  }
+  
+  /**
+   * Clean up old frequency data (older than 30 days)
+   */
+  function cleanupFrequencyData() {
+    const frequencyData = getFrequencyData();
+    const thirtyDaysAgo = Date.now() - (30 * 24 * 60 * 60 * 1000);
+    
+    let cleaned = false;
+    for (const elementId in frequencyData) {
+      if (frequencyData[elementId].lastShown < thirtyDaysAgo) {
+        delete frequencyData[elementId];
+        cleaned = true;
+      }
+    }
+    
+    if (cleaned) {
+      saveFrequencyData(frequencyData);
+    }
+  }
 
   // Get project ID from script tag
   const scriptTag = document.currentScript || document.querySelector('script[data-project]');
@@ -193,8 +317,14 @@
   function initWidget() {
     if (!config) return;
     
+    // Clean up old frequency data
+    cleanupFrequencyData();
+    
     injectStyles();
     createWidget();
+    
+    // Fetch and display engage elements (popups, banners, nudges)
+    fetchAndDisplayElements();
     
     // Auto-open after delay if configured
     if (config.autoOpenDelay && !sessionStorage.getItem('engage_opened')) {
@@ -205,6 +335,282 @@
     }
     
     trackEvent('widget_loaded');
+  }
+  
+  // ═══════════════════════════════════════════════════════════════════════════════
+  // ELEMENTS DISPLAY ENGINE (Popups, Banners, Nudges)
+  // ═══════════════════════════════════════════════════════════════════════════════
+  
+  /**
+   * Fetch active elements from API and display them
+   */
+  async function fetchAndDisplayElements() {
+    try {
+      const url = new URL(`${WIDGET_ORIGIN}${API_BASE}/engage-elements-widget/elements`);
+      url.searchParams.set('projectId', projectId);
+      url.searchParams.set('url', window.location.pathname);
+      url.searchParams.set('device', getDeviceType());
+      url.searchParams.set('visitor', localStorage.getItem('engage_visitor_id') ? 'returning' : 'new');
+      
+      const response = await fetch(url);
+      const data = await response.json();
+      
+      if (data.elements && Array.isArray(data.elements)) {
+        activeElements = data.elements;
+        processElements();
+      }
+    } catch (error) {
+      console.error('[Engage] Failed to fetch elements:', error);
+    }
+  }
+  
+  /**
+   * Process elements and display them based on triggers and frequency caps
+   */
+  function processElements() {
+    activeElements.forEach(element => {
+      // Check frequency cap
+      if (!shouldShowElement(element)) {
+        console.log(`[Engage] Element ${element.id} blocked by frequency cap`);
+        return;
+      }
+      
+      const trigger = element.trigger_type || 'time';
+      const triggerConfig = element.trigger_config || { delay_seconds: 3 };
+      
+      switch (trigger) {
+        case 'time':
+          setTimeout(() => {
+            displayElement(element);
+          }, (triggerConfig.delay_seconds || 3) * 1000);
+          break;
+          
+        case 'scroll':
+          const scrollHandler = () => {
+            const scrollPercent = (window.scrollY / (document.body.scrollHeight - window.innerHeight)) * 100;
+            if (scrollPercent >= (triggerConfig.scroll_percent || 50)) {
+              displayElement(element);
+              window.removeEventListener('scroll', scrollHandler);
+            }
+          };
+          window.addEventListener('scroll', scrollHandler);
+          break;
+          
+        case 'exit':
+          const exitHandler = (e) => {
+            if (e.clientY < 10) {
+              displayElement(element);
+              document.removeEventListener('mouseleave', exitHandler);
+            }
+          };
+          document.addEventListener('mouseleave', exitHandler);
+          break;
+          
+        case 'click':
+          // Click triggers are handled by specific CSS selectors
+          if (triggerConfig.selector) {
+            document.querySelectorAll(triggerConfig.selector).forEach(el => {
+              el.addEventListener('click', () => displayElement(element));
+            });
+          }
+          break;
+          
+        case 'immediate':
+        default:
+          displayElement(element);
+          break;
+      }
+    });
+  }
+  
+  /**
+   * Display an element on the page
+   */
+  function displayElement(element) {
+    // Double-check frequency cap (in case of race conditions)
+    if (!shouldShowElement(element)) return;
+    
+    const elementId = `engage-element-${element.id}`;
+    if (document.getElementById(elementId)) return; // Already displayed
+    
+    // Mark as shown for frequency capping
+    markElementShown(element);
+    
+    // Create element container
+    const container = document.createElement('div');
+    container.id = elementId;
+    container.className = `engage-element engage-${element.element_type} engage-position-${element.position || 'center'}`;
+    container.innerHTML = renderElement(element);
+    
+    document.body.appendChild(container);
+    
+    // Track impression
+    trackElementEvent(element.id, 'impression');
+    
+    // Apply animation
+    requestAnimationFrame(() => {
+      container.classList.add('engage-element-visible');
+    });
+    
+    // Attach event handlers
+    attachElementHandlers(container, element);
+  }
+  
+  /**
+   * Render element HTML based on type
+   */
+  function renderElement(element) {
+    const type = element.element_type;
+    
+    if (type === 'popup') {
+      return renderPopup(element);
+    } else if (type === 'banner') {
+      return renderBanner(element);
+    } else if (type === 'nudge') {
+      return renderNudge(element);
+    } else if (type === 'toast') {
+      return renderToast(element);
+    }
+    
+    return '';
+  }
+  
+  function renderPopup(element) {
+    return `
+      <div class="engage-popup-overlay" data-element-id="${element.id}">
+        <div class="engage-popup-content" style="${getElementStyles(element)}">
+          <button class="engage-popup-close" aria-label="Close">&times;</button>
+          ${element.image_url ? `<img src="${element.image_url}" alt="" class="engage-popup-image">` : ''}
+          ${element.headline ? `<h2 class="engage-popup-headline">${escapeHtml(element.headline)}</h2>` : ''}
+          ${element.body ? `<p class="engage-popup-body">${escapeHtml(element.body)}</p>` : ''}
+          ${element.cta_text ? `<a href="${element.cta_url || '#'}" class="engage-popup-cta" data-action="${element.cta_action || 'link'}">${escapeHtml(element.cta_text)}</a>` : ''}
+        </div>
+      </div>
+    `;
+  }
+  
+  function renderBanner(element) {
+    const position = element.position === 'top' ? 'top' : 'bottom';
+    return `
+      <div class="engage-banner engage-banner-${position}" style="${getElementStyles(element)}">
+        <div class="engage-banner-content">
+          ${element.headline ? `<span class="engage-banner-headline">${escapeHtml(element.headline)}</span>` : ''}
+          ${element.body ? `<span class="engage-banner-body">${escapeHtml(element.body)}</span>` : ''}
+          ${element.cta_text ? `<a href="${element.cta_url || '#'}" class="engage-banner-cta" data-action="${element.cta_action || 'link'}">${escapeHtml(element.cta_text)}</a>` : ''}
+        </div>
+        <button class="engage-banner-close" aria-label="Close">&times;</button>
+      </div>
+    `;
+  }
+  
+  function renderNudge(element) {
+    const position = element.position || 'bottom-right';
+    return `
+      <div class="engage-nudge engage-nudge-${position}" style="${getElementStyles(element)}">
+        <button class="engage-nudge-close" aria-label="Close">&times;</button>
+        ${element.image_url ? `<img src="${element.image_url}" alt="" class="engage-nudge-image">` : ''}
+        <div class="engage-nudge-content">
+          ${element.headline ? `<h4 class="engage-nudge-headline">${escapeHtml(element.headline)}</h4>` : ''}
+          ${element.body ? `<p class="engage-nudge-body">${escapeHtml(element.body)}</p>` : ''}
+          ${element.cta_text ? `<a href="${element.cta_url || '#'}" class="engage-nudge-cta" data-action="${element.cta_action || 'link'}">${escapeHtml(element.cta_text)}</a>` : ''}
+        </div>
+      </div>
+    `;
+  }
+  
+  function renderToast(element) {
+    return `
+      <div class="engage-toast" style="${getElementStyles(element)}">
+        ${element.headline ? `<span class="engage-toast-text">${escapeHtml(element.headline)}</span>` : ''}
+        ${element.cta_text ? `<a href="${element.cta_url || '#'}" class="engage-toast-cta" data-action="${element.cta_action || 'link'}">${escapeHtml(element.cta_text)}</a>` : ''}
+        <button class="engage-toast-close" aria-label="Close">&times;</button>
+      </div>
+    `;
+  }
+  
+  function getElementStyles(element) {
+    const theme = element.theme || {};
+    let styles = [];
+    
+    if (theme.backgroundColor) styles.push(`background-color: ${theme.backgroundColor}`);
+    if (theme.textColor) styles.push(`color: ${theme.textColor}`);
+    if (theme.borderRadius) styles.push(`border-radius: ${theme.borderRadius}px`);
+    
+    return styles.join('; ');
+  }
+  
+  function attachElementHandlers(container, element) {
+    // Close button
+    const closeBtn = container.querySelector('.engage-popup-close, .engage-banner-close, .engage-nudge-close, .engage-toast-close');
+    if (closeBtn) {
+      closeBtn.addEventListener('click', () => {
+        trackElementEvent(element.id, 'close');
+        removeElement(element.id);
+      });
+    }
+    
+    // Overlay click (for popups)
+    const overlay = container.querySelector('.engage-popup-overlay');
+    if (overlay) {
+      overlay.addEventListener('click', (e) => {
+        if (e.target === overlay) {
+          trackElementEvent(element.id, 'close');
+          removeElement(element.id);
+        }
+      });
+    }
+    
+    // CTA click
+    const cta = container.querySelector('.engage-popup-cta, .engage-banner-cta, .engage-nudge-cta, .engage-toast-cta');
+    if (cta) {
+      cta.addEventListener('click', (e) => {
+        trackElementEvent(element.id, 'click');
+        
+        const action = cta.getAttribute('data-action');
+        if (action === 'close' || action === 'dismiss') {
+          e.preventDefault();
+          removeElement(element.id);
+        } else if (action === 'open_chat') {
+          e.preventDefault();
+          removeElement(element.id);
+          openWidget();
+        }
+        // For 'link' action, let the default click behavior work
+      });
+    }
+    
+    // Auto-dismiss for toasts
+    if (element.element_type === 'toast') {
+      setTimeout(() => removeElement(element.id), 5000);
+    }
+  }
+  
+  function removeElement(elementId) {
+    const container = document.getElementById(`engage-element-${elementId}`);
+    if (container) {
+      container.classList.remove('engage-element-visible');
+      container.classList.add('engage-element-hiding');
+      setTimeout(() => container.remove(), 300);
+    }
+  }
+  
+  function trackElementEvent(elementId, eventType) {
+    try {
+      fetch(`${WIDGET_ORIGIN}${API_BASE}/engage-elements-widget/event`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          elementId,
+          eventType,
+          pageUrl: window.location.href,
+          visitorId,
+          sessionId,
+          deviceType: getDeviceType()
+        })
+      });
+    } catch (error) {
+      // Silently fail
+    }
   }
 
   // Inject CSS styles
@@ -570,9 +976,10 @@
       .engage-widget-message.typing {
         padding: 16px 20px;
         display: flex;
+        align-items: center;
         gap: 4px;
       }
-      .engage-widget-message.typing span {
+      .engage-widget-message.typing span:not(.engage-typing-text) {
         width: 8px;
         height: 8px;
         background: #888;
@@ -581,6 +988,14 @@
       }
       .engage-widget-message.typing span:nth-child(1) { animation-delay: -0.32s; }
       .engage-widget-message.typing span:nth-child(2) { animation-delay: -0.16s; }
+      .engage-widget-message.typing span:nth-child(3) { animation-delay: 0s; }
+      .engage-widget-message.typing .engage-typing-text {
+        margin-left: 8px;
+        font-size: 12px;
+        color: #666;
+        background: transparent;
+        animation: none;
+      }
       @keyframes typing-bounce {
         0%, 80%, 100% { transform: scale(0.6); opacity: 0.5; }
         40% { transform: scale(1); opacity: 1; }
@@ -635,6 +1050,312 @@
         outline: none;
         border-color: ${accent};
       }
+      
+      /* ═══════════════════════════════════════════════════════════════════════════════
+       * ENGAGE ELEMENTS - Popups, Banners, Nudges, Toasts
+       * ═══════════════════════════════════════════════════════════════════════════════ */
+      
+      /* Base element styles */
+      .engage-element {
+        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+        z-index: 999990;
+        opacity: 0;
+        transition: opacity 0.3s ease, transform 0.3s ease;
+      }
+      .engage-element-visible {
+        opacity: 1;
+      }
+      .engage-element-hiding {
+        opacity: 0;
+        pointer-events: none;
+      }
+      
+      /* Popup styles */
+      .engage-popup-overlay {
+        position: fixed;
+        inset: 0;
+        background: rgba(0, 0, 0, 0.5);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 20px;
+        z-index: 999991;
+      }
+      .engage-popup-content {
+        position: relative;
+        background: #ffffff;
+        border-radius: 12px;
+        max-width: 400px;
+        width: 100%;
+        padding: 24px;
+        box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+        text-align: center;
+        animation: engage-popup-in 0.3s ease;
+      }
+      @keyframes engage-popup-in {
+        from { transform: scale(0.9); opacity: 0; }
+        to { transform: scale(1); opacity: 1; }
+      }
+      .engage-popup-close {
+        position: absolute;
+        top: 12px;
+        right: 12px;
+        background: none;
+        border: none;
+        font-size: 24px;
+        cursor: pointer;
+        color: #888;
+        width: 32px;
+        height: 32px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        border-radius: 50%;
+        transition: background 0.2s;
+      }
+      .engage-popup-close:hover {
+        background: rgba(0, 0, 0, 0.1);
+      }
+      .engage-popup-image {
+        width: 100%;
+        max-height: 200px;
+        object-fit: cover;
+        border-radius: 8px;
+        margin-bottom: 16px;
+      }
+      .engage-popup-headline {
+        margin: 0 0 12px;
+        font-size: 22px;
+        font-weight: 600;
+        color: #111;
+      }
+      .engage-popup-body {
+        margin: 0 0 20px;
+        font-size: 15px;
+        color: #555;
+        line-height: 1.5;
+      }
+      .engage-popup-cta {
+        display: inline-block;
+        padding: 12px 24px;
+        background: ${accent};
+        color: ${textOnAccent};
+        text-decoration: none;
+        border-radius: 8px;
+        font-weight: 600;
+        font-size: 15px;
+        transition: transform 0.2s, box-shadow 0.2s;
+      }
+      .engage-popup-cta:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 4px 12px ${accent}40;
+      }
+      
+      /* Banner styles */
+      .engage-banner {
+        position: fixed;
+        left: 0;
+        right: 0;
+        background: ${accent};
+        color: ${textOnAccent};
+        padding: 12px 20px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 16px;
+        z-index: 999989;
+        box-shadow: 0 2px 10px rgba(0, 0, 0, 0.15);
+      }
+      .engage-banner-top {
+        top: 0;
+        animation: engage-banner-slide-down 0.3s ease;
+      }
+      .engage-banner-bottom {
+        bottom: 0;
+        animation: engage-banner-slide-up 0.3s ease;
+      }
+      @keyframes engage-banner-slide-down {
+        from { transform: translateY(-100%); }
+        to { transform: translateY(0); }
+      }
+      @keyframes engage-banner-slide-up {
+        from { transform: translateY(100%); }
+        to { transform: translateY(0); }
+      }
+      .engage-banner-content {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        flex-wrap: wrap;
+        justify-content: center;
+      }
+      .engage-banner-headline {
+        font-weight: 600;
+        font-size: 15px;
+      }
+      .engage-banner-body {
+        font-size: 14px;
+        opacity: 0.9;
+      }
+      .engage-banner-cta {
+        padding: 8px 16px;
+        background: rgba(255, 255, 255, 0.2);
+        color: inherit;
+        text-decoration: none;
+        border-radius: 6px;
+        font-weight: 600;
+        font-size: 13px;
+        transition: background 0.2s;
+      }
+      .engage-banner-cta:hover {
+        background: rgba(255, 255, 255, 0.3);
+      }
+      .engage-banner-close {
+        position: absolute;
+        right: 12px;
+        background: none;
+        border: none;
+        font-size: 20px;
+        cursor: pointer;
+        color: inherit;
+        opacity: 0.7;
+        padding: 4px;
+      }
+      .engage-banner-close:hover {
+        opacity: 1;
+      }
+      
+      /* Nudge styles */
+      .engage-nudge {
+        position: fixed;
+        background: #ffffff;
+        border-radius: 12px;
+        padding: 16px;
+        max-width: 320px;
+        box-shadow: 0 10px 40px rgba(0, 0, 0, 0.15);
+        z-index: 999988;
+        animation: engage-nudge-in 0.3s ease;
+      }
+      @keyframes engage-nudge-in {
+        from { transform: translateX(20px); opacity: 0; }
+        to { transform: translateX(0); opacity: 1; }
+      }
+      .engage-nudge-bottom-right {
+        bottom: 90px;
+        right: 20px;
+      }
+      .engage-nudge-bottom-left {
+        bottom: 90px;
+        left: 20px;
+      }
+      .engage-nudge-top-right {
+        top: 20px;
+        right: 20px;
+      }
+      .engage-nudge-top-left {
+        top: 20px;
+        left: 20px;
+      }
+      .engage-nudge-close {
+        position: absolute;
+        top: 8px;
+        right: 8px;
+        background: none;
+        border: none;
+        font-size: 18px;
+        cursor: pointer;
+        color: #888;
+        padding: 4px;
+      }
+      .engage-nudge-close:hover {
+        color: #333;
+      }
+      .engage-nudge-image {
+        width: 100%;
+        max-height: 120px;
+        object-fit: cover;
+        border-radius: 8px;
+        margin-bottom: 12px;
+      }
+      .engage-nudge-content {
+        padding-right: 20px;
+      }
+      .engage-nudge-headline {
+        margin: 0 0 8px;
+        font-size: 16px;
+        font-weight: 600;
+        color: #111;
+      }
+      .engage-nudge-body {
+        margin: 0 0 12px;
+        font-size: 14px;
+        color: #555;
+        line-height: 1.4;
+      }
+      .engage-nudge-cta {
+        display: inline-block;
+        padding: 8px 16px;
+        background: ${accent};
+        color: ${textOnAccent};
+        text-decoration: none;
+        border-radius: 6px;
+        font-weight: 600;
+        font-size: 13px;
+        transition: background 0.2s;
+      }
+      .engage-nudge-cta:hover {
+        filter: brightness(1.1);
+      }
+      
+      /* Toast styles */
+      .engage-toast {
+        position: fixed;
+        bottom: 90px;
+        left: 50%;
+        transform: translateX(-50%);
+        background: #333;
+        color: #fff;
+        padding: 12px 20px;
+        border-radius: 8px;
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        box-shadow: 0 4px 20px rgba(0, 0, 0, 0.2);
+        z-index: 999987;
+        animation: engage-toast-in 0.3s ease;
+      }
+      @keyframes engage-toast-in {
+        from { transform: translateX(-50%) translateY(20px); opacity: 0; }
+        to { transform: translateX(-50%) translateY(0); opacity: 1; }
+      }
+      .engage-toast-text {
+        font-size: 14px;
+      }
+      .engage-toast-cta {
+        padding: 6px 12px;
+        background: rgba(255, 255, 255, 0.2);
+        color: inherit;
+        text-decoration: none;
+        border-radius: 4px;
+        font-size: 13px;
+        font-weight: 500;
+      }
+      .engage-toast-cta:hover {
+        background: rgba(255, 255, 255, 0.3);
+      }
+      .engage-toast-close {
+        background: none;
+        border: none;
+        color: inherit;
+        font-size: 18px;
+        cursor: pointer;
+        opacity: 0.7;
+        padding: 0 4px;
+      }
+      .engage-toast-close:hover {
+        opacity: 1;
+      }
+      
       @media (max-width: 480px) {
         .engage-widget-container {
           width: calc(100vw - 20px);
@@ -1041,6 +1762,8 @@
   }
 
   // Attach chat input handlers
+  let visitorTypingTimeout = null;
+  
   function attachChatHandlers() {
     const input = document.getElementById('engage-input');
     const sendBtn = document.getElementById('engage-send');
@@ -1055,10 +1778,19 @@
         }
       };
       
-      // Auto-resize textarea
+      // Auto-resize textarea and emit typing status
       input.oninput = () => {
         input.style.height = 'auto';
         input.style.height = Math.min(input.scrollHeight, 120) + 'px';
+        
+        // Emit visitor typing
+        sendVisitorTyping(true);
+        
+        // Stop typing after 2 seconds of no input
+        if (visitorTypingTimeout) clearTimeout(visitorTypingTimeout);
+        visitorTypingTimeout = setTimeout(() => {
+          sendVisitorTyping(false);
+        }, 2000);
       };
     }
     
@@ -1410,70 +2142,196 @@
     }
   }
 
-  // Subscribe to Supabase Realtime for live updates
-  function subscribeToSession(sessionId) {
-    // Load Supabase client if not already loaded
-    if (!window.supabase && typeof createClient === 'undefined') {
+  // ═══════════════════════════════════════════════════════════════════════════════
+  // SOCKET.IO REALTIME CONNECTION
+  // ═══════════════════════════════════════════════════════════════════════════════
+  
+  const PORTAL_API_URL = 'https://api.uptrademedia.com';
+  let socket = null;
+  let agentTypingTimeout = null;
+  
+  function subscribeToSession(chatSessionId) {
+    // Load Socket.io client if not already loaded
+    if (!window.io) {
       const script = document.createElement('script');
-      script.src = 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js';
-      script.onload = () => setupRealtime(sessionId);
+      script.src = 'https://cdn.socket.io/4.7.5/socket.io.min.js';
+      script.onload = () => connectSocket(chatSessionId);
       document.head.appendChild(script);
     } else {
-      setupRealtime(sessionId);
+      connectSocket(chatSessionId);
     }
   }
 
-  // Setup Supabase Realtime subscription
-  function setupRealtime(chatSessionId) {
+  // Connect to Portal API WebSocket
+  function connectSocket(chatSessionId) {
     try {
-      const client = window.supabase?.createClient?.(SUPABASE_URL, SUPABASE_ANON_KEY) ||
-                     createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+      sessionId = chatSessionId;
       
-      // Subscribe to messages table changes for this session
-      realtimeChannel = client
-        .channel(`engage_session_${chatSessionId}`)
-        .on(
-          'postgres_changes',
-          {
-            event: 'INSERT',
-            schema: 'public',
-            table: 'engage_chat_messages',
-            filter: `session_id=eq.${chatSessionId}`
-          },
-          (payload) => {
-            const newMessage = payload.new;
-            // Only add if not from visitor (avoid duplicates)
-            if (newMessage.role !== 'visitor') {
-              if (!messages.find(m => m.id === newMessage.id)) {
-                messages.push({
-                  id: newMessage.id,
-                  role: newMessage.role,
-                  content: newMessage.content
-                });
-                updateMessagesUI();
-                
-                if (config.playSoundOnMessage) {
-                  playNotificationSound();
-                }
-              }
-            }
+      socket = io(`${PORTAL_API_URL}/engage/chat`, {
+        query: {
+          projectId: projectId,
+          visitorId: visitorId,
+          sessionId: chatSessionId
+        },
+        transports: ['websocket', 'polling'],
+        reconnection: true,
+        reconnectionAttempts: 5,
+        reconnectionDelay: 1000
+      });
+
+      socket.on('connect', () => {
+        console.log('[Engage] Socket connected');
+        // Can stop polling when socket is connected
+        if (pollingInterval) {
+          clearInterval(pollingInterval);
+          pollingInterval = null;
+        }
+      });
+
+      socket.on('disconnect', (reason) => {
+        console.log('[Engage] Socket disconnected:', reason);
+        // Fallback to polling if disconnected
+        startPolling();
+      });
+
+      socket.on('connect_error', (error) => {
+        console.error('[Engage] Socket connection error:', error.message);
+        // Fallback to polling
+        startPolling();
+      });
+
+      // ─────────────────────────────────────────────────────────────────────────
+      // Message Events
+      // ─────────────────────────────────────────────────────────────────────────
+
+      // Agent or AI message received
+      socket.on('message', (data) => {
+        console.log('[Engage] Message received:', data.role);
+        hideAgentTypingIndicator();
+        
+        const msgId = `socket_${Date.now()}`;
+        if (!messages.find(m => m.content === data.content && m.role === data.role)) {
+          messages.push({
+            id: msgId,
+            role: data.role,
+            content: data.content
+          });
+          updateMessagesUI();
+          
+          if (config?.playSoundOnMessage) {
+            playNotificationSound();
           }
-        )
-        .subscribe();
-      
-      console.log('[Engage] Realtime subscription active');
+        }
+      });
+
+      // Agent joined the chat
+      socket.on('agent:joined', (data) => {
+        console.log('[Engage] Agent joined:', data.agentName);
+        messages.push({
+          role: 'system',
+          content: `${data.agentName || 'An agent'} has joined the chat.`
+        });
+        updateMessagesUI();
+      });
+
+      // ─────────────────────────────────────────────────────────────────────────
+      // Typing Events
+      // ─────────────────────────────────────────────────────────────────────────
+
+      // Agent is typing
+      socket.on('typing', (data) => {
+        if (data.isTyping) {
+          showAgentTypingIndicator();
+          // Auto-hide after 3 seconds if no updates
+          if (agentTypingTimeout) clearTimeout(agentTypingTimeout);
+          agentTypingTimeout = setTimeout(hideAgentTypingIndicator, 3000);
+        } else {
+          hideAgentTypingIndicator();
+        }
+      });
+
+      // ─────────────────────────────────────────────────────────────────────────
+      // Session Events
+      // ─────────────────────────────────────────────────────────────────────────
+
+      // Chat was transferred to another agent
+      socket.on('agent:changed', (data) => {
+        messages.push({
+          role: 'system',
+          content: data.message || "You've been transferred to another team member."
+        });
+        updateMessagesUI();
+      });
+
+      // Chat was closed
+      socket.on('chat:closed', (data) => {
+        messages.push({
+          role: 'system',
+          content: data.message || 'This chat has been closed. Thank you!'
+        });
+        updateMessagesUI();
+      });
+
+      console.log('[Engage] Socket.io connection established');
     } catch (error) {
-      console.error('[Engage] Realtime setup failed:', error);
+      console.error('[Engage] Socket setup failed:', error);
       // Fallback to polling
+      startPolling();
+    }
+  }
+  
+  // Send visitor typing status
+  function sendVisitorTyping(isTyping) {
+    if (socket?.connected) {
+      socket.emit('visitor:typing', { isTyping });
+    }
+  }
+  
+  // Send message via socket (faster than HTTP)
+  function sendMessageViaSocket(content) {
+    if (socket?.connected) {
+      socket.emit('visitor:message', { content });
+      return true;
+    }
+    return false;
+  }
+
+  // Show "Agent is typing..." indicator
+  function showAgentTypingIndicator() {
+    const messagesContainer = document.getElementById('engage-messages');
+    if (!messagesContainer) return;
+    
+    // Remove existing typing indicator if present
+    hideAgentTypingIndicator();
+    
+    const indicator = document.createElement('div');
+    indicator.id = 'engage-agent-typing';
+    indicator.className = 'engage-widget-message ai typing';
+    indicator.innerHTML = `
+      <span></span><span></span><span></span>
+      <span class="engage-typing-text">Agent is typing...</span>
+    `;
+    messagesContainer.appendChild(indicator);
+    messagesContainer.scrollTop = messagesContainer.scrollHeight;
+  }
+
+  // Hide agent typing indicator
+  function hideAgentTypingIndicator() {
+    const indicator = document.getElementById('engage-agent-typing');
+    if (indicator) indicator.remove();
+    if (agentTypingTimeout) {
+      clearTimeout(agentTypingTimeout);
+      agentTypingTimeout = null;
     }
   }
 
-  // Cleanup realtime subscription
+  // Cleanup socket connection
   function cleanupRealtime() {
-    if (realtimeChannel) {
-      realtimeChannel.unsubscribe();
-      realtimeChannel = null;
+    if (socket) {
+      socket.disconnect();
+      socket = null;
     }
+    hideAgentTypingIndicator();
   }
 
   // Show chat view after form submission

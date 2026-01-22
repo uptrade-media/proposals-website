@@ -15,7 +15,7 @@ import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from '@/components/ui/dialog'
 import { toast } from '@/lib/toast'
 import { cn } from '@/lib/utils'
-import api from '@/lib/api'
+import { engageApi } from '@/lib/portal-api'
 import {
   Sparkles,
   Plus,
@@ -84,7 +84,7 @@ export default function EchoNudgeSettings({ projectId }) {
   const fetchNudges = async () => {
     setLoading(true)
     try {
-      const response = await api.get(`/.netlify/functions/engage-echo-config?projectId=${projectId}`)
+      const response = await engageApi.getEchoConfigs(projectId)
       setNudges(response.data.configs || [])
     } catch (error) {
       console.error('Failed to fetch nudges:', error)
@@ -138,11 +138,11 @@ export default function EchoNudgeSettings({ projectId }) {
 
       if (editingNudge.id) {
         // Update existing
-        await api.put('/.netlify/functions/engage-echo-config', payload)
+        await engageApi.updateEchoConfig(editingNudge.id, payload)
         toast.success('Nudge updated')
       } else {
         // Create new
-        await api.post('/.netlify/functions/engage-echo-config', payload)
+        await engageApi.createEchoConfig(payload)
         toast.success('Nudge created')
       }
 
@@ -159,7 +159,7 @@ export default function EchoNudgeSettings({ projectId }) {
 
   const handleDelete = async (nudgeId) => {
     try {
-      await api.delete(`/.netlify/functions/engage-echo-config?id=${nudgeId}`)
+      await engageApi.deleteEchoConfig(nudgeId)
       toast.success('Nudge deleted')
       setDeleteConfirm(null)
       fetchNudges()
@@ -171,8 +171,7 @@ export default function EchoNudgeSettings({ projectId }) {
 
   const handleToggleActive = async (nudge) => {
     try {
-      await api.put('/.netlify/functions/engage-echo-config', {
-        id: nudge.id,
+      await engageApi.updateEchoConfig(nudge.id, {
         isActive: !nudge.is_active
       })
       fetchNudges()

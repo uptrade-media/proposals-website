@@ -232,7 +232,7 @@ export default function BlogAIDialog({ onSuccess }) {
       console.log('[BlogAI] Starting blog generation:', formData.topic)
       
       // Create job
-      const response = await api.post('/.netlify/functions/blog-create-ai', formData)
+      const response = await blogApi.createAI(formData)
 
       if (response.data.success) {
         const jobId = response.data.jobId
@@ -241,7 +241,7 @@ export default function BlogAIDialog({ onSuccess }) {
         // Poll for job status
         const pollInterval = setInterval(async () => {
           try {
-            const statusResponse = await api.get(`/.netlify/functions/blog-job-status?jobId=${jobId}`)
+            const statusResponse = await blogApi.getAIJobStatus(jobId)
             const status = statusResponse.data
             
             // Update progress based on job status

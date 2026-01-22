@@ -25,7 +25,7 @@ import {
   Building2
 } from 'lucide-react'
 import useAuthStore from '@/lib/auth-store'
-import api from '@/lib/api'
+import { adminApi, proposalsApi } from '@/lib/portal-api'
 import UptradeLoading from './UptradeLoading'
 import TenantDashboard from './TenantDashboard'
 import { toast } from '@/lib/toast'
@@ -117,11 +117,11 @@ const Dashboard = ({ onNavigate }) => {
           // Fetch admin overview data
           try {
             const [clientsRes, proposalsRes] = await Promise.all([
-              api.get('/.netlify/functions/admin-clients-list').catch(err => {
+              adminApi.listClients().catch(err => {
                 console.warn('[Dashboard] Failed to fetch clients:', err.message)
                 return { data: { clients: [] } }
               }),
-              api.get('/.netlify/functions/proposals-list').catch(err => {
+              proposalsApi.list().catch(err => {
                 console.warn('[Dashboard] Failed to fetch proposals:', err.message)
                 return { data: { proposals: [] } }
               })
@@ -232,7 +232,7 @@ const Dashboard = ({ onNavigate }) => {
 
     setIsAddingClient(true)
     try {
-      const response = await api.post('/.netlify/functions/admin-clients-create', {
+      const response = await adminApi.createClient({
         name: newClient.name,
         email: newClient.email,
         company: newClient.company || null
@@ -253,8 +253,8 @@ const Dashboard = ({ onNavigate }) => {
         
         try {
           const [clientsRes, proposalsRes] = await Promise.all([
-            api.get('/.netlify/functions/admin-clients-list'),
-            api.get('/.netlify/functions/proposals-list')
+            adminApi.listClients(),
+            proposalsApi.list()
           ])
 
           setDashboardData({

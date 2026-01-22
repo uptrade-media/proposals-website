@@ -42,7 +42,7 @@ import {
   AlertTriangle,
   User
 } from 'lucide-react'
-import api from '../lib/api'
+import { adminApi, filesApi, proposalsApi } from '../lib/portal-api'
 import { cn } from '../lib/utils'
 
 // Payment terms options
@@ -142,8 +142,8 @@ export default function EditProposalDialog({
       
       setIsLoadingClients(true)
       try {
-        const response = await api.get('/.netlify/functions/admin-clients-list')
-        setClients(response.data.clients || [])
+        const response = await adminApi.listClients()
+        setClients(response.data.clients || response.data || [])
       } catch (error) {
         console.error('Failed to fetch clients:', error)
       } finally {
@@ -164,9 +164,7 @@ export default function EditProposalDialog({
       imageFormData.append('file', file)
       imageFormData.append('category', 'proposal-hero')
       
-      const response = await api.post('/.netlify/functions/files-upload', imageFormData, {
-        headers: { 'Content-Type': 'multipart/form-data' }
-      })
+      const response = await filesApi.upload(imageFormData)
       
       setFormData(prev => ({
         ...prev,
@@ -201,7 +199,7 @@ export default function EditProposalDialog({
         updatePayload.contactId = formData.contactId
       }
       
-      const response = await api.put(`/.netlify/functions/proposals-update?id=${proposal.id}`, updatePayload)
+      const response = await proposalsApi.update(proposal.id, updatePayload)
 
       if (response.data.proposal || response.data.success) {
         onSuccess(response.data.proposal || { ...proposal, ...formData })
@@ -223,7 +221,7 @@ export default function EditProposalDialog({
     setIsSending(true)
     
     try {
-      await api.post(`/.netlify/functions/proposals-send?id=${proposal.id}`)
+      await proposalsApi.send(proposal.id)
       
       setFormData(prev => ({ ...prev, status: 'sent' }))
       onSuccess({ ...proposal, ...formData, status: 'sent' })

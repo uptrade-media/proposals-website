@@ -54,8 +54,10 @@ import {
 } from './ui'
 import { PIPELINE_STAGES } from './PipelineKanban'
 import ProspectCallsTab from './ProspectCallsTab'
+import ProspectTimeline from './ProspectTimeline'
 import EditProspectDialog from './EditProspectDialog'
 import AssignContactDialog from './AssignContactDialog'
+import { useProspectTimeline } from '@/hooks/useProspectTimeline'
 
 // Format duration
 function formatDuration(seconds) {
@@ -863,6 +865,17 @@ export default function ProspectDetailPanel({
   const [isAssignDialogOpen, setIsAssignDialogOpen] = useState(false)
   const [isAssigning, setIsAssigning] = useState(false)
 
+  // Timeline hook
+  const {
+    events: timelineEvents,
+    attribution: timelineAttribution,
+    isLoading: isLoadingTimeline,
+    error: timelineError,
+    hasMore: hasMoreTimeline,
+    loadMore: loadMoreTimeline,
+    refresh: refreshTimeline
+  } = useProspectTimeline(prospect?.id, prospect?.converted_contact_id)
+
   // Filter notes from activity
   const noteItems = activity.filter(a => a.type === 'note')
 
@@ -1010,8 +1023,9 @@ export default function ProspectDetailPanel({
         
         {/* Tabs */}
         <Tabs value={activeTab} onValueChange={setActiveTab} className="flex-1 flex flex-col overflow-hidden">
-          <TabsList className="flex-shrink-0 grid grid-cols-7 mx-6 mt-4 bg-[var(--glass-bg-inset)] p-1 rounded-xl">
+          <TabsList className="flex-shrink-0 grid grid-cols-8 mx-6 mt-4 bg-[var(--glass-bg-inset)] p-1 rounded-xl">
             <TabsTrigger value="overview" className="rounded-lg text-xs">Overview</TabsTrigger>
+            <TabsTrigger value="timeline" className="rounded-lg text-xs">Timeline</TabsTrigger>
             <TabsTrigger value="website" className="rounded-lg text-xs">Website</TabsTrigger>
             <TabsTrigger value="audits" className="rounded-lg text-xs">Audits</TabsTrigger>
             <TabsTrigger value="calls" className="rounded-lg text-xs">Calls</TabsTrigger>
@@ -1023,6 +1037,19 @@ export default function ProspectDetailPanel({
           <ScrollArea className="flex-1 p-6">
             <TabsContent value="overview" className="mt-0">
               <OverviewTab prospect={prospect} onUpdateStage={onUpdateStage} />
+            </TabsContent>
+
+            <TabsContent value="timeline" className="mt-0">
+              <ProspectTimeline
+                prospectId={prospect?.id}
+                contactId={prospect?.converted_contact_id}
+                events={timelineEvents}
+                isLoading={isLoadingTimeline}
+                error={timelineError}
+                onLoadMore={loadMoreTimeline}
+                hasMore={hasMoreTimeline}
+                attribution={timelineAttribution}
+              />
             </TabsContent>
             
             <TabsContent value="website" className="mt-0">

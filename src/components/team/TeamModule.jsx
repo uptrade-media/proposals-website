@@ -17,32 +17,35 @@
  */
 import { useState } from 'react'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
-import { Building2, Users, FolderOpen } from 'lucide-react'
+import { Building2, Users, FolderOpen, UserCog } from 'lucide-react'
 import useAuthStore from '@/lib/auth-store'
 import UptradeTeamPanel from './panels/UptradeTeamPanel'
 import OrganizationUsersPanel from './panels/OrganizationUsersPanel'
 import AllOrganizationsPanel from './panels/AllOrganizationsPanel'
+import AllUsersPanel from './panels/AllUsersPanel'
 import ProjectTeamPanel from './panels/ProjectTeamPanel'
 
 export default function TeamModule() {
   const { user, currentOrg, currentProject, isSuperAdmin, accessLevel } = useAuthStore()
-  const [activeView, setActiveView] = useState('organizations')
+  const [activeView, setActiveView] = useState('users')
 
-  // Determine context
-  // Show admin view only when:
-  // 1. User is a super admin AND
-  // 2. They're in the Uptrade Media org (or no org) - not viewing a client org
-  const isUptradeMediaOrg = currentOrg?.slug === 'uptrade-media' || currentOrg?.domain === 'uptrademedia.com'
-  const isProjectContext = !!currentProject
-  const isGlobalAdminView = isSuperAdmin && !isProjectContext && (!currentOrg || isUptradeMediaOrg)
+  // Determine context - SAME LOGIC AS BILLING MODULE
+  // Uptrade Media org should show admin view, client orgs show tenant view
+  const isUptradeMediaOrg = currentOrg?.slug === 'uptrade-media' || currentOrg?.domain === 'uptrademedia.com' || currentOrg?.org_type === 'agency'
+  const isInTenantContext = (!!currentProject && !isUptradeMediaOrg) || (!!currentOrg && !isUptradeMediaOrg)
+  const isAdmin = (user?.role === 'admin' || isSuperAdmin) && !isInTenantContext
+  
+  // Legacy context flags for view routing
+  const isProjectContext = !!currentProject && !isUptradeMediaOrg
+  const isGlobalAdminView = isAdmin
   const isOrgContext = !!currentOrg && !currentProject && !isGlobalAdminView
   
   // Get IDs for non-admin views
-  const organizationId = currentOrg?.id || currentProject?.organization_id
+  const organizationId = currentOrg?.id || currentProject?.org_id
   const organizationName = currentOrg?.name || 'Organization'
   
   // Determine if user can manage (org-level access) or only view (project-level access)
-  const canManage = isSuperAdmin || accessLevel === 'organization'
+  const canManage = isAdmin || accessLevel === 'organization'
 
   // ADMIN VIEW - Show Organizations + Uptrade Team tabs ONLY when viewing global admin interface
   // If an admin has selected a specific org, show them that org's view instead
@@ -51,6 +54,10 @@ export default function TeamModule() {
       <div className="p-6 space-y-6">
         <Tabs value={activeView} onValueChange={setActiveView}>
           <TabsList className="mb-6">
+            <TabsTrigger value="users" className="gap-2">
+              <UserCog className="h-4 w-4" />
+              All Users
+            </TabsTrigger>
             <TabsTrigger value="organizations" className="gap-2">
               <Building2 className="h-4 w-4" />
               Organizations
@@ -60,6 +67,10 @@ export default function TeamModule() {
               Uptrade Team
             </TabsTrigger>
           </TabsList>
+
+          <TabsContent value="users">
+            <AllUsersPanel />
+          </TabsContent>
 
           <TabsContent value="organizations">
             <AllOrganizationsPanel />

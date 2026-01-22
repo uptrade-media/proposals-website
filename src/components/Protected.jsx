@@ -12,7 +12,12 @@ export default function Protected({ children }) {
   React.useEffect(() => {
     // If not authenticated, redirect to login
     if (!isAuthenticated) {
-      console.log('[Protected] User not authenticated, redirecting to login')
+      console.log('[Protected] User not authenticated, redirecting to login', { 
+        isAuthenticated, 
+        hasUser: !!user,
+        userEmail: user?.email,
+        pathname: loc.pathname 
+      })
       const next = encodeURIComponent(loc.pathname + loc.search)
       const prefix = slug ? `/login?brand=${encodeURIComponent(slug)}&next=${next}` : `/login?next=${next}`
       nav(prefix, { replace: true })

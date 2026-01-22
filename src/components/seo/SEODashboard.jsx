@@ -1,7 +1,7 @@
 // src/components/seo/SEODashboard.jsx
 // SEO Command Center - Shows SEO data for the current tenant's domain
 // No "add site" - each org with SEO feature enabled automatically tracks their domain
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, useCallback } from 'react'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -40,6 +40,9 @@ import SEOAIInsights from './SEOAIInsights'
 import SEOKeywordTracking from './SEOKeywordTracking'
 import SEOTechnicalAudit from './SEOTechnicalAudit'
 import SEOContentDecay from './SEOContentDecay'
+import SEOLocalSeo from './SEOLocalSeo'
+import SEOBacklinks from './SEOBacklinks'
+import SEOCompetitors from './SEOCompetitors'
 
 // New dashboard components
 import SEOHealthScore from './SEOHealthScore'
@@ -47,19 +50,20 @@ import SEOQuickWins from './SEOQuickWins'
 import SEONavigation from './SEONavigation'
 import SEOTrends from './SEOTrends'
 import SEOQuickActionsBar from './SEOQuickActionsBar'
+import { SEOCommandPalette } from './SEOCommandPalette'
 
 export default function SEODashboard({ onNavigate }) {
-  const { currentOrg } = useAuthStore()
+  const { currentOrg, currentProject: authProject } = useAuthStore()
   const { 
-    currentSite,
+    currentProject: seoProject,
     pages,
     opportunities,
     aiRecommendations,
-    sitesLoading,
+    projectsLoading,
     pagesLoading,
     opportunitiesLoading,
-    sitesError,
-    fetchSiteForOrg,
+    projectsError,
+    fetchProjectForOrg,
     fetchPages,
     fetchOpportunities,
     fetchAiRecommendations,
@@ -80,6 +84,9 @@ export default function SEODashboard({ onNavigate }) {
     fetchCwvSummary
   } = useSeoStore()
 
+  // Use SEO project if available, otherwise fall back to auth project
+  const currentProject = seoProject || authProject
+
   // Internal view state - now aligned with navigation
   const [view, setView] = useState('overview') // overview, pages, keywords, content, technical, reports
   const [subView, setSubView] = useState(null) // page-detail, etc.
@@ -90,46 +97,49 @@ export default function SEODashboard({ onNavigate }) {
   
   // Track if initial data has been fetched to prevent loops
   const hasFetchedRef = useRef(false)
-  const lastOrgIdRef = useRef(null)
+  const lastProjectIdRef = useRef(null)
   const lastSiteIdRef = useRef(null)
 
-  // Fetch site data for current org on mount (only once per org)
+  // Fetch site data for current project on mount (only once per project)
+  // Note: In the new architecture, projectId === projectId for SEO
   useEffect(() => {
-    if (currentOrg?.id && currentOrg.id !== lastOrgIdRef.current) {
-      lastOrgIdRef.current = currentOrg.id
-      // Only fetch if we don't already have a site for this org
-      if (!currentSite?.id || currentSite.org_id !== currentOrg.id) {
-        fetchSiteForOrg(currentOrg.id)
+    const projectId = authProject?.id
+    if (projectId && projectId !== lastProjectIdRef.current) {
+      lastProjectIdRef.current = projectId
+      // Only fetch if we don't already have data for this project
+      if (!seoProject?.id || seoProject.id !== projectId) {
+        fetchProjectForOrg(projectId)
       }
     }
-  }, [currentOrg?.id])
+  }, [authProject?.id])
 
   // Fetch pages, opportunities, and GSC data when site is loaded (only once per site)
   useEffect(() => {
-    if (currentSite?.id && currentSite.id !== lastSiteIdRef.current) {
-      lastSiteIdRef.current = currentSite.id
+    if (currentProject?.id && currentProject.id !== lastSiteIdRef.current) {
+      lastSiteIdRef.current = currentProject.id
       hasFetchedRef.current = true
       
-      fetchPages(currentSite.id, { limit: 50 })
-      fetchOpportunities(currentSite.id, { limit: 20, status: 'open' })
-      fetchAiRecommendations(currentSite.id)
-      fetchCwvSummary(currentSite.id)
-      setLastScan(currentSite.gsc_last_sync_at || currentSite.updated_at)
+      fetchPages(currentProject.id, { limit: 50 })
+      fetchOpportunities(currentProject.id, { limit: 20, status: 'open' })
+      fetchAiRecommendations(currentProject.id)
+      fetchCwvSummary(currentProject.id)
+      setLastScan(currentProject.gsc_last_sync_at || currentProject.updated_at)
       
-      // Also fetch GSC data using the org domain
-      if (currentOrg?.domain) {
-        fetchGscOverview(currentOrg.domain)
-        fetchGscQueries(currentOrg.domain, { limit: 20 })
+      // Also fetch GSC data using the site domain - pass projectId explicitly
+      const siteDomain = currentProject.domain || currentProject?.tenant_domain || currentOrg?.domain
+      if (siteDomain) {
+        fetchGscOverview(currentProject.id, siteDomain)
+        fetchGscQueries(currentProject.id, siteDomain, { limit: 20 })
       }
     }
-  }, [currentSite?.id])
+  }, [currentProject?.id])
 
   const handleCrawlSitemap = async () => {
-    if (!currentSite?.id) return
+    if (!currentProject?.id) return
     setCrawling(true)
     try {
-      await crawlSitemap(currentSite.id)
-      await fetchPages(currentSite.id, { limit: 50 })
+      await crawlSitemap(currentProject.id)
+      await fetchPages(currentProject.id, { limit: 50 })
       setLastScan(new Date().toISOString())
     } finally {
       setCrawling(false)
@@ -137,27 +147,28 @@ export default function SEODashboard({ onNavigate }) {
   }
 
   const handleDetectOpportunities = async () => {
-    if (!currentSite?.id) return
+    if (!currentProject?.id) return
     setDetecting(true)
     try {
-      await detectOpportunities(currentSite.id)
-      await fetchOpportunities(currentSite.id, { limit: 20, status: 'open' })
+      await detectOpportunities(currentProject.id)
+      await fetchOpportunities(currentProject.id, { limit: 20, status: 'open' })
     } finally {
       setDetecting(false)
     }
   }
 
-  const handleSyncGsc = async () => {
-    if (!currentOrg?.domain) return
+  const handleSyncGsc = useCallback(async () => {
+    const siteDomain = currentProject?.domain || currentProject?.tenant_domain || currentOrg?.domain
+    if (!siteDomain) return
     setSyncing(true)
     try {
-      await fetchGscOverview(currentOrg.domain)
-      await fetchGscQueries(currentOrg.domain, { limit: 20 })
+      await fetchGscOverview(siteDomain)
+      await fetchGscQueries(siteDomain, { limit: 20 })
       setLastScan(new Date().toISOString())
     } finally {
       setSyncing(false)
     }
-  }
+  }, [currentProject?.domain, currentProject?.tenant_domain, currentOrg?.domain, fetchGscOverview, fetchGscQueries])
 
   const handleSelectPage = async (pageId) => {
     await selectPage(pageId)
@@ -178,6 +189,31 @@ export default function SEODashboard({ onNavigate }) {
       setView('overview')
     }
   }
+
+  // Command palette action handler
+  const handleCommandAction = useCallback(async (action) => {
+    switch (action) {
+      case 'syncGsc':
+        handleSyncGsc()
+        break
+      case 'exportReport':
+        // TODO: Implement PDF export in Tier 3
+        console.log('Export report - coming soon')
+        break
+      case 'quickWins':
+        setView('content')
+        break
+      case 'aiAnalyze':
+        if (currentProject?.id) {
+          await fetchAiRecommendations(currentProject.id)
+          setView('content')
+        }
+        break
+      case 'priorityQueue':
+        setView('opportunities')
+        break
+    }
+  }, [currentProject?.id, fetchAiRecommendations, handleSyncGsc])
 
   const handleFixIssues = (issues) => {
     // Navigate to AI insights with issues pre-selected
@@ -251,28 +287,50 @@ export default function SEODashboard({ onNavigate }) {
   const hasGscData = gscOverview && !gscError
 
   // Loading state
-  if (sitesLoading) {
+  if (projectsLoading) {
     return (
       <div className="p-6 flex items-center justify-center min-h-[400px]">
         <div className="text-center">
-          <Loader2 className="h-8 w-8 animate-spin text-[var(--accent-primary)] mx-auto mb-4" />
-          <p className="text-[var(--text-secondary)]">Loading SEO data...</p>
+          <Loader2 className="h-8 w-8 animate-spin text-primary mx-auto mb-4" />
+          <p className="text-muted-foreground">Loading SEO data...</p>
         </div>
       </div>
     )
   }
 
-  // Error or no org domain configured
-  if (!currentOrg?.domain) {
+  // No project selected
+  if (!currentProject?.id) {
+    return (
+      <div className="p-6">
+        <Card className="border-blue-500/30 bg-blue-500/5">
+          <CardContent className="py-12 text-center">
+            <Search className="h-12 w-12 mx-auto mb-4 text-blue-400" />
+            <h3 className="text-lg font-semibold mb-2 text-foreground">
+              Select a Project
+            </h3>
+            <p className="text-muted-foreground mb-4 max-w-md mx-auto">
+              Select a project from the sidebar to view SEO data and analytics.
+            </p>
+          </CardContent>
+        </Card>
+      </div>
+    )
+  }
+
+  // Get domain from project or org
+  const domain = currentProject?.domain || currentOrg?.domain
+
+  // Error or no domain configured
+  if (!domain) {
     return (
       <div className="p-6">
         <Card className="border-yellow-500/30 bg-yellow-500/5">
           <CardContent className="py-12 text-center">
             <AlertTriangle className="h-12 w-12 mx-auto mb-4 text-yellow-400" />
-            <h3 className="text-lg font-semibold mb-2 text-[var(--text-primary)]">
+            <h3 className="text-lg font-semibold mb-2 text-foreground">
               No Domain Configured
             </h3>
-            <p className="text-[var(--text-secondary)] mb-4 max-w-md mx-auto">
+            <p className="text-muted-foreground mb-4 max-w-md mx-auto">
               To use the SEO module, configure a domain for {currentOrg?.name || 'this organization'} in the organization settings.
             </p>
             <Button variant="outline" onClick={() => onNavigate?.('settings')}>
@@ -286,27 +344,27 @@ export default function SEODashboard({ onNavigate }) {
   }
 
   // No site created yet - offer to initialize
-  if (!currentSite && !sitesLoading) {
+  if (!currentProject && !projectsLoading) {
     return (
       <div className="p-6">
         <div className="mb-6">
-          <h1 className="text-2xl font-bold text-[var(--text-primary)]">SEO Command Center</h1>
-          <p className="text-[var(--text-secondary)]">
-            Track and optimize SEO for {currentOrg.domain}
+          <h1 className="text-2xl font-bold text-foreground">SEO Command Center</h1>
+          <p className="text-muted-foreground">
+            Track and optimize SEO for {domain}
           </p>
         </div>
         
         <Card className="border-dashed">
           <CardContent className="py-12 text-center">
-            <Globe className="h-12 w-12 mx-auto mb-4 text-[var(--accent-primary)]" />
-            <h3 className="text-lg font-semibold mb-2 text-[var(--text-primary)]">
+            <Globe className="h-12 w-12 mx-auto mb-4 text-primary" />
+            <h3 className="text-lg font-semibold mb-2 text-foreground">
               Initialize SEO Tracking
             </h3>
-            <p className="text-[var(--text-secondary)] mb-4 max-w-md mx-auto">
-              Start tracking SEO performance for <strong>{currentOrg.domain}</strong>. 
+            <p className="text-muted-foreground mb-4 max-w-md mx-auto">
+              Start tracking SEO performance for <strong>{domain}</strong>. 
               We'll crawl your sitemap and analyze your pages.
             </p>
-            <Button onClick={() => fetchSiteForOrg(currentOrg.id, true)}>
+            <Button onClick={() => currentProject?.id && fetchProjectForOrg(currentProject.id, true)}>
               <Zap className="h-4 w-4 mr-2" />
               Initialize SEO Tracking
             </Button>
@@ -324,7 +382,7 @@ export default function SEODashboard({ onNavigate }) {
           <ArrowLeft className="h-4 w-4 mr-2" />
           Back to Pages
         </Button>
-        <SEOPageDetail page={currentPage} site={currentSite} />
+        <SEOPageDetail page={currentPage} site={currentProject} />
       </div>
     )
   }
@@ -334,7 +392,7 @@ export default function SEODashboard({ onNavigate }) {
     return (
       <div className="p-6 space-y-6">
         <SEONavigation activeView={view} onViewChange={handleViewChange} alerts={opportunityCounts.technical} opportunities={opportunityCounts.content} />
-        <SEOPagesList site={currentSite} onSelectPage={handleSelectPage} />
+        <SEOPagesList site={currentProject} onSelectPage={handleSelectPage} />
       </div>
     )
   }
@@ -343,7 +401,7 @@ export default function SEODashboard({ onNavigate }) {
     return (
       <div className="p-6 space-y-6">
         <SEONavigation activeView={view} onViewChange={handleViewChange} alerts={opportunityCounts.technical} opportunities={opportunityCounts.content} />
-        <SEOKeywordTracking siteId={currentSite?.id} gscQueries={gscQueries} />
+        <SEOKeywordTracking projectId={currentProject?.id} gscQueries={gscQueries} />
       </div>
     )
   }
@@ -352,7 +410,7 @@ export default function SEODashboard({ onNavigate }) {
     return (
       <div className="p-6 space-y-6">
         <SEONavigation activeView={view} onViewChange={handleViewChange} alerts={opportunityCounts.technical} opportunities={opportunityCounts.content} />
-        <SEOContentDecay siteId={currentSite?.id} />
+        <SEOContentDecay projectId={currentProject?.id} />
       </div>
     )
   }
@@ -365,7 +423,7 @@ export default function SEODashboard({ onNavigate }) {
           Back to Dashboard
         </Button>
         <SEOHealthScore 
-          site={currentSite}
+          site={currentProject}
           pages={pages}
           opportunities={opportunities}
           gscMetrics={gscMetrics}
@@ -382,10 +440,37 @@ export default function SEODashboard({ onNavigate }) {
       <div className="p-6 space-y-6">
         <SEONavigation activeView={view} onViewChange={handleViewChange} alerts={opportunityCounts.technical} opportunities={opportunityCounts.content} />
         <SEOTechnicalAudit 
-          siteId={currentSite?.id} 
+          projectId={currentProject?.id} 
           pages={pages}
           cwvSummary={cwvSummary}
         />
+      </div>
+    )
+  }
+
+  if (view === 'local') {
+    return (
+      <div className="p-6 space-y-6">
+        <SEONavigation activeView={view} onViewChange={handleViewChange} alerts={opportunityCounts.technical} opportunities={opportunityCounts.content} />
+        <SEOLocalSeo projectId={currentProject?.id} />
+      </div>
+    )
+  }
+
+  if (view === 'backlinks') {
+    return (
+      <div className="p-6 space-y-6">
+        <SEONavigation activeView={view} onViewChange={handleViewChange} alerts={opportunityCounts.technical} opportunities={opportunityCounts.content} />
+        <SEOBacklinks projectId={currentProject?.id} />
+      </div>
+    )
+  }
+
+  if (view === 'competitors') {
+    return (
+      <div className="p-6 space-y-6">
+        <SEONavigation activeView={view} onViewChange={handleViewChange} alerts={opportunityCounts.technical} opportunities={opportunityCounts.content} />
+        <SEOCompetitors site={currentProject} />
       </div>
     )
   }
@@ -394,7 +479,7 @@ export default function SEODashboard({ onNavigate }) {
     return (
       <div className="p-6 space-y-6">
         <SEONavigation activeView={view} onViewChange={handleViewChange} alerts={opportunityCounts.technical} opportunities={opportunityCounts.content} />
-        <SEOTrends site={currentSite} onViewDetails={handleViewChange} />
+        <SEOTrends site={currentProject} onViewDetails={handleViewChange} />
       </div>
     )
   }
@@ -407,7 +492,7 @@ export default function SEODashboard({ onNavigate }) {
           <ArrowLeft className="h-4 w-4 mr-2" />
           Back to Overview
         </Button>
-        <SEOOpportunities site={currentSite} onSelectPage={handleSelectPage} />
+        <SEOOpportunities site={currentProject} onSelectPage={handleSelectPage} />
       </div>
     )
   }
@@ -419,7 +504,7 @@ export default function SEODashboard({ onNavigate }) {
           <ArrowLeft className="h-4 w-4 mr-2" />
           Back to Overview
         </Button>
-        <SEOOpportunities site={currentSite} onSelectPage={handleSelectPage} />
+        <SEOOpportunities site={currentProject} onSelectPage={handleSelectPage} />
       </div>
     )
   }
@@ -431,7 +516,7 @@ export default function SEODashboard({ onNavigate }) {
           <ArrowLeft className="h-4 w-4 mr-2" />
           Back to Overview
         </Button>
-        <SEOAIInsights site={currentSite} onSelectPage={handleSelectPage} />
+        <SEOAIInsights site={currentProject} onSelectPage={handleSelectPage} />
       </div>
     )
   }
@@ -442,34 +527,31 @@ export default function SEODashboard({ onNavigate }) {
 
   return (
     <div className="p-6 space-y-6">
-      {/* Navigation */}
-      <SEONavigation activeView={view} onViewChange={handleViewChange} alerts={opportunityCounts.technical} opportunities={opportunityCounts.content} />
-
       {/* Header with Status */}
       <div className="flex items-start justify-between flex-wrap gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-[var(--text-primary)]">SEO Command Center</h1>
+          <h1 className="text-2xl font-bold text-foreground">SEO Command Center</h1>
           <div className="flex items-center gap-3 mt-1 flex-wrap">
             <a 
-              href={`https://${currentOrg.domain}`} 
+              href={`https://${domain}`} 
               target="_blank" 
               rel="noopener noreferrer"
-              className="text-[var(--text-secondary)] hover:text-[var(--accent-primary)] flex items-center gap-1"
+              className="text-muted-foreground hover:text-primary flex items-center gap-1"
             >
-              <Globe className="h-4 w-4 text-[var(--accent-primary)]" />
-              {currentOrg.domain}
+              <Globe className="h-4 w-4 text-primary" />
+              {domain}
               <ExternalLink className="h-3 w-3" />
             </a>
             
             {/* GSC Sync Status Indicator */}
-            <div className="flex items-center gap-2 px-3 py-1 rounded-full bg-[var(--glass-bg)] border border-[var(--glass-border)]">
+            <div className="flex items-center gap-2 px-3 py-1 rounded-full bg-muted/30 border border-border/50">
               <div className={`w-2 h-2 rounded-full ${syncing ? 'bg-yellow-400 animate-pulse' : hasGscData ? 'bg-green-400' : 'bg-gray-400'}`} />
-              <span className="text-xs text-[var(--text-tertiary)]">
+              <span className="text-xs text-muted-foreground">
                 {syncing ? 'Syncing...' : hasGscData ? 'GSC Connected' : 'GSC Not Connected'}
               </span>
-              {currentSite?.gsc_last_sync_at && !syncing && (
-                <span className="text-xs text-[var(--text-tertiary)] border-l border-[var(--glass-border)] pl-2 ml-1">
-                  {formatRelativeTime(currentSite.gsc_last_sync_at)}
+              {currentProject?.gsc_last_sync_at && !syncing && (
+                <span className="text-xs text-muted-foreground border-l border-border/50 pl-2 ml-1">
+                  {formatRelativeTime(currentProject.gsc_last_sync_at)}
                 </span>
               )}
               <Button 
@@ -533,7 +615,9 @@ export default function SEODashboard({ onNavigate }) {
               <AlertTriangle className="h-5 w-5 text-yellow-400" />
               <div>
                 <p className="text-sm font-medium text-yellow-400">Google Search Console Error</p>
-                <p className="text-xs text-[var(--text-tertiary)]">{gscError}</p>
+                <p className="text-xs text-muted-foreground">
+                  {typeof gscError === 'string' ? gscError : gscError?.message || 'Unknown error'}
+                </p>
               </div>
             </div>
           </CardContent>
@@ -542,14 +626,14 @@ export default function SEODashboard({ onNavigate }) {
 
       {/* Quick Actions Bar */}
       <SEOQuickActionsBar 
-        siteId={currentSite?.id}
-        domain={currentOrg?.domain}
+        projectId={currentProject?.id}
+        domain={domain}
         onActionComplete={(action, msg) => console.log('[SEO] Action complete:', action, msg)}
       />
 
       {/* Health Score - Full Width */}
       <SEOHealthScore 
-        site={currentSite}
+        site={currentProject}
         pages={pages}
         opportunities={opportunities}
         gscMetrics={gscMetrics}
@@ -560,7 +644,7 @@ export default function SEODashboard({ onNavigate }) {
       
       {/* Quick Wins */}
       <SEOQuickWins 
-        site={currentSite}
+        site={currentProject}
         onViewAll={() => setView('ai-insights')}
       />
 
@@ -570,11 +654,11 @@ export default function SEODashboard({ onNavigate }) {
           <CardContent className="pt-4">
             <div className="flex items-center gap-2 mb-1">
               <MousePointerClick className="h-4 w-4 text-blue-400" />
-              <span className="text-sm text-[var(--text-tertiary)]">Clicks (28d)</span>
+              <span className="text-sm text-muted-foreground">Clicks (28d)</span>
             </div>
             <div className="flex items-center gap-2">
-              <span className="text-2xl font-bold text-[var(--text-primary)]">
-                {formatNumber(hasGscData ? gscMetrics.clicks?.value : currentSite?.total_clicks_28d)}
+              <span className="text-2xl font-bold text-foreground">
+                {formatNumber(hasGscData ? gscMetrics.clicks?.value : currentProject?.total_clicks_28d)}
               </span>
               {hasGscData && gscMetrics.clicks?.change !== undefined && (
                 <span className={`flex items-center gap-1 text-xs ${gscMetrics.clicks.change >= 0 ? 'text-green-400' : 'text-red-400'}`}>
@@ -590,11 +674,11 @@ export default function SEODashboard({ onNavigate }) {
           <CardContent className="pt-4">
             <div className="flex items-center gap-2 mb-1">
               <Eye className="h-4 w-4 text-purple-400" />
-              <span className="text-sm text-[var(--text-tertiary)]">Impressions (28d)</span>
+              <span className="text-sm text-muted-foreground">Impressions (28d)</span>
             </div>
             <div className="flex items-center gap-2">
-              <span className="text-2xl font-bold text-[var(--text-primary)]">
-                {formatNumber(hasGscData ? gscMetrics.impressions?.value : currentSite?.total_impressions_28d)}
+              <span className="text-2xl font-bold text-foreground">
+                {formatNumber(hasGscData ? gscMetrics.impressions?.value : currentProject?.total_impressions_28d)}
               </span>
               {hasGscData && gscMetrics.impressions?.change !== undefined && (
                 <span className={`flex items-center gap-1 text-xs ${gscMetrics.impressions.change >= 0 ? 'text-green-400' : 'text-red-400'}`}>
@@ -610,11 +694,11 @@ export default function SEODashboard({ onNavigate }) {
           <CardContent className="pt-4">
             <div className="flex items-center gap-2 mb-1">
               <BarChart3 className="h-4 w-4 text-orange-400" />
-              <span className="text-sm text-[var(--text-tertiary)]">Avg Position</span>
+              <span className="text-sm text-muted-foreground">Avg Position</span>
             </div>
             <div className="flex items-center gap-2">
-              <span className="text-2xl font-bold text-[var(--text-primary)]">
-                {hasGscData ? gscMetrics.position?.value?.toFixed(1) : (currentSite?.avg_position_28d?.toFixed(1) || '-')}
+              <span className="text-2xl font-bold text-foreground">
+                {hasGscData ? gscMetrics.position?.value?.toFixed(1) : (currentProject?.avg_position_28d?.toFixed(1) || '-')}
               </span>
               {hasGscData && gscMetrics.position?.change !== undefined && (
                 <span className={`flex items-center gap-1 text-xs ${gscMetrics.position.change >= 0 ? 'text-green-400' : 'text-red-400'}`}>
@@ -630,11 +714,11 @@ export default function SEODashboard({ onNavigate }) {
           <CardContent className="pt-4">
             <div className="flex items-center gap-2 mb-1">
               <Target className="h-4 w-4 text-green-400" />
-              <span className="text-sm text-[var(--text-tertiary)]">CTR</span>
+              <span className="text-sm text-muted-foreground">CTR</span>
             </div>
             <div className="flex items-center gap-2">
-              <span className="text-2xl font-bold text-[var(--text-primary)]">
-                {hasGscData ? `${(gscMetrics.ctr?.value * 100)?.toFixed(1)}%` : formatPercent(currentSite?.avg_ctr_28d)}
+              <span className="text-2xl font-bold text-foreground">
+                {hasGscData ? `${(gscMetrics.ctr?.value * 100)?.toFixed(1)}%` : formatPercent(currentProject?.avg_ctr_28d)}
               </span>
               {hasGscData && gscMetrics.ctr?.change !== undefined && (
                 <span className={`flex items-center gap-1 text-xs ${gscMetrics.ctr.change >= 0 ? 'text-green-400' : 'text-red-400'}`}>
@@ -661,14 +745,14 @@ export default function SEODashboard({ onNavigate }) {
                 return (
                   <div 
                     key={day.date}
-                    className="flex-1 bg-[var(--accent-primary)] rounded-t opacity-60 hover:opacity-100 transition-opacity"
+                    className="flex-1 bg-primary rounded-t opacity-60 hover:opacity-100 transition-opacity"
                     style={{ height: `${Math.max(height, 2)}%` }}
                     title={`${day.date}: ${day.clicks} clicks`}
                   />
                 )
               })}
             </div>
-            <div className="flex justify-between mt-2 text-xs text-[var(--text-tertiary)]">
+            <div className="flex justify-between mt-2 text-xs text-muted-foreground">
               <span>{gscTrend[0]?.date}</span>
               <span>{gscTrend[gscTrend.length - 1]?.date}</span>
             </div>
@@ -694,7 +778,7 @@ export default function SEODashboard({ onNavigate }) {
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
                 <thead>
-                  <tr className="text-left text-[var(--text-tertiary)] border-b border-[var(--glass-border)]">
+                  <tr className="text-left text-muted-foreground border-b border-border/50">
                     <th className="pb-2 font-medium">Query</th>
                     <th className="pb-2 font-medium text-right">Clicks</th>
                     <th className="pb-2 font-medium text-right">Impressions</th>
@@ -704,16 +788,16 @@ export default function SEODashboard({ onNavigate }) {
                 </thead>
                 <tbody>
                   {gscQueries.slice(0, 10).map((query, i) => (
-                    <tr key={i} className="border-b border-[var(--glass-border)]/50 hover:bg-[var(--glass-bg)]">
-                      <td className="py-2 text-[var(--text-primary)]">{query.query}</td>
-                      <td className="py-2 text-right text-[var(--text-secondary)]">{query.clicks}</td>
-                      <td className="py-2 text-right text-[var(--text-secondary)]">{formatNumber(query.impressions)}</td>
+                    <tr key={i} className="border-b border-border/50 hover:bg-muted/30">
+                      <td className="py-2 text-foreground">{query.query}</td>
+                      <td className="py-2 text-right text-muted-foreground">{query.clicks}</td>
+                      <td className="py-2 text-right text-muted-foreground">{formatNumber(query.impressions)}</td>
                       <td className="py-2 text-right">
-                        <span className={query.position <= 10 ? 'text-green-400' : query.position <= 20 ? 'text-yellow-400' : 'text-[var(--text-tertiary)]'}>
+                        <span className={query.position <= 10 ? 'text-green-400' : query.position <= 20 ? 'text-yellow-400' : 'text-muted-foreground'}>
                           {query.position?.toFixed(1)}
                         </span>
                       </td>
-                      <td className="py-2 text-right text-[var(--text-secondary)]">
+                      <td className="py-2 text-right text-muted-foreground">
                         {(query.ctr * 100).toFixed(1)}%
                       </td>
                     </tr>
@@ -735,13 +819,13 @@ export default function SEODashboard({ onNavigate }) {
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="text-3xl font-bold text-[var(--text-primary)]">
+            <div className="text-3xl font-bold text-foreground">
               {pages.length || 0}
             </div>
             <div className="flex items-center gap-2 mt-2 text-sm">
-              <span className="text-green-400">{currentSite?.pages_indexed || 0} indexed</span>
-              <span className="text-[var(--text-tertiary)]">•</span>
-              <span className="text-red-400">{currentSite?.pages_not_indexed || 0} not indexed</span>
+              <span className="text-green-400">{currentProject?.pages_indexed || 0} indexed</span>
+              <span className="text-muted-foreground">•</span>
+              <span className="text-red-400">{currentProject?.pages_not_indexed || 0} not indexed</span>
             </div>
             <Button 
               variant="link" 
@@ -762,14 +846,14 @@ export default function SEODashboard({ onNavigate }) {
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="text-3xl font-bold text-[var(--text-primary)]">
+            <div className="text-3xl font-bold text-foreground">
               {openOpportunities.length}
             </div>
             <div className="flex items-center gap-2 mt-2 text-sm">
               <span className="text-red-400">
                 {opportunities.filter(o => o.priority === 'critical').length} critical
               </span>
-              <span className="text-[var(--text-tertiary)]">•</span>
+              <span className="text-muted-foreground">•</span>
               <span className="text-orange-400">
                 {opportunities.filter(o => o.priority === 'high').length} high
               </span>
@@ -793,15 +877,15 @@ export default function SEODashboard({ onNavigate }) {
             </CardTitle>
           </CardHeader>
           <CardContent>
-            {currentSite?.gsc_connected_at ? (
+            {(currentProject?.gscConnected || currentProject?.gsc_connected_at) ? (
               <>
                 <Badge className="bg-green-500/20 text-green-400 border-green-500/30">
                   <CheckCircle className="h-3 w-3 mr-1" />
                   Connected
                 </Badge>
-                <p className="text-xs text-[var(--text-tertiary)] mt-2">
-                  Last sync: {currentSite.gsc_last_sync_at 
-                    ? new Date(currentSite.gsc_last_sync_at).toLocaleDateString()
+                <p className="text-xs text-muted-foreground mt-2">
+                  Last sync: {(currentProject.lastSyncAt || currentProject.gsc_last_sync_at)
+                    ? new Date(currentProject.lastSyncAt || currentProject.gsc_last_sync_at).toLocaleDateString()
                     : 'Never'}
                 </p>
               </>
@@ -835,10 +919,10 @@ export default function SEODashboard({ onNavigate }) {
           <CardContent>
             {pagesLoading ? (
               <div className="flex items-center justify-center py-8">
-                <Loader2 className="h-6 w-6 animate-spin text-[var(--text-tertiary)]" />
+                <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
               </div>
             ) : topPages.length === 0 ? (
-              <div className="text-center py-8 text-[var(--text-tertiary)]">
+              <div className="text-center py-8 text-muted-foreground">
                 <FileText className="h-8 w-8 mx-auto mb-2 opacity-50" />
                 <p>No pages crawled yet</p>
                 <Button 
@@ -856,21 +940,21 @@ export default function SEODashboard({ onNavigate }) {
                 {topPages.map((page) => (
                   <div 
                     key={page.id}
-                    className="flex items-center justify-between p-3 rounded-lg bg-[var(--glass-bg)] hover:bg-[var(--surface-elevated)] cursor-pointer transition-colors"
+                    className="flex items-center justify-between p-3 rounded-lg bg-muted/30 hover:bg-muted/50 cursor-pointer transition-colors"
                     onClick={() => handleSelectPage(page.id)}
                   >
                     <div className="flex-1 min-w-0">
-                      <p className="text-sm font-medium text-[var(--text-primary)] truncate">
+                      <p className="text-sm font-medium text-foreground truncate">
                         {page.title || page.path}
                       </p>
-                      <p className="text-xs text-[var(--text-tertiary)] truncate">
+                      <p className="text-xs text-muted-foreground truncate">
                         {page.path}
                       </p>
                     </div>
                     <div className="flex items-center gap-4 text-sm">
                       <div className="text-right">
-                        <p className="text-[var(--text-primary)]">{page.clicks_28d || 0}</p>
-                        <p className="text-xs text-[var(--text-tertiary)]">clicks</p>
+                        <p className="text-foreground">{page.clicks_28d || 0}</p>
+                        <p className="text-xs text-muted-foreground">clicks</p>
                       </div>
                       {getHealthBadge(page.seo_health_score)}
                     </div>
@@ -894,10 +978,10 @@ export default function SEODashboard({ onNavigate }) {
           <CardContent>
             {opportunitiesLoading ? (
               <div className="flex items-center justify-center py-8">
-                <Loader2 className="h-6 w-6 animate-spin text-[var(--text-tertiary)]" />
+                <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
               </div>
             ) : openOpportunities.length === 0 ? (
-              <div className="text-center py-8 text-[var(--text-tertiary)]">
+              <div className="text-center py-8 text-muted-foreground">
                 <Zap className="h-8 w-8 mx-auto mb-2 opacity-50" />
                 <p>No opportunities detected</p>
                 <Button 
@@ -915,14 +999,14 @@ export default function SEODashboard({ onNavigate }) {
                 {openOpportunities.map((opp) => (
                   <div 
                     key={opp.id}
-                    className="flex items-center justify-between p-3 rounded-lg bg-[var(--glass-bg)] hover:bg-[var(--surface-elevated)] cursor-pointer transition-colors"
+                    className="flex items-center justify-between p-3 rounded-lg bg-muted/30 hover:bg-muted/50 cursor-pointer transition-colors"
                     onClick={() => opp.page_id && handleSelectPage(opp.page_id)}
                   >
                     <div className="flex-1 min-w-0">
-                      <p className="text-sm font-medium text-[var(--text-primary)]">
+                      <p className="text-sm font-medium text-foreground">
                         {opp.title}
                       </p>
-                      <p className="text-xs text-[var(--text-tertiary)] truncate">
+                      <p className="text-xs text-muted-foreground truncate">
                         {opp.description}
                       </p>
                     </div>

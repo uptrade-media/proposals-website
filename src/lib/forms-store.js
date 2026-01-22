@@ -4,7 +4,8 @@
  */
 
 import { create } from 'zustand'
-import api from './api'
+import { formsApi } from './portal-api'
+import useAuthStore from './auth-store'
 
 export const useFormsStore = create((set, get) => ({
   // State
@@ -32,13 +33,16 @@ export const useFormsStore = create((set, get) => ({
   fetchForms: async (options = {}) => {
     set({ isLoading: true, error: null })
     try {
-      const params = new URLSearchParams()
-      if (options.tenantId) params.append('tenant_id', options.tenantId)
-      if (options.includeGlobal) params.append('include_global', 'true')
-
-      const response = await api.get(`/.netlify/functions/forms-list?${params}`)
-      set({ forms: response.data.forms, isLoading: false })
-      return response.data.forms
+      // Auto-include projectId from auth store if not explicitly provided
+      const { currentProject } = useAuthStore.getState()
+      const params = { ...options }
+      if (currentProject?.id && !params.projectId) {
+        params.projectId = currentProject.id
+      }
+      const response = await formsApi.list(params)
+      const forms = response.data?.forms || response.data || []
+      set({ forms, isLoading: false })
+      return forms
     } catch (error) {
       console.error('Error fetching forms:', error)
       set({ error: error.message, isLoading: false })
@@ -49,8 +53,9 @@ export const useFormsStore = create((set, get) => ({
   fetchForm: async (formId) => {
     set({ isLoading: true, error: null })
     try {
-      const response = await api.get(`/.netlify/functions/forms-get?id=${formId}`)
-      set({ currentForm: response.data.form, isLoading: false })
+      const response = await formsApi.get(formId)
+      const form = response.data?.form || response.data
+      set({ currentForm: form, isLoading: false })
       return response.data
     } catch (error) {
       console.error('Error fetching form:', error)
@@ -62,8 +67,8 @@ export const useFormsStore = create((set, get) => ({
   createForm: async (formData) => {
     set({ isLoading: true, error: null })
     try {
-      const response = await api.post('/.netlify/functions/forms-create', formData)
-      const newForm = response.data.form
+      const response = await formsApi.create(formData)
+      const newForm = response.data?.form || response.data
       set(state => ({
         forms: [newForm, ...state.forms],
         isLoading: false
@@ -76,45 +81,75 @@ export const useFormsStore = create((set, get) => ({
     }
   },
 
+  updateForm: async (formId, formData) => {
+    set({ isLoading: true, error: null })
+    try {
+      const response = await formsApi.update(formId, formData)
+      const updatedForm = response.data?.form || response.data
+      set(state => ({
+        forms: state.forms.map(f => f.id === formId ? updatedForm : f),
+        currentForm: state.currentForm?.id === formId ? updatedForm : state.currentForm,
+        isLoading: false
+      }))
+      return updatedForm
+    } catch (error) {
+      console.error('Error updating form:', error)
+      set({ error: error.message, isLoading: false })
+      throw error
+    }
+  },
+
+  deleteForm: async (formId) => {
+    set({ isLoading: true, error: null })
+    try {
+      await formsApi.delete(formId)
+      set(state => ({
+        forms: state.forms.filter(f => f.id !== formId),
+        currentForm: state.currentForm?.id === formId ? null : state.currentForm,
+        isLoading: false
+      }))
+    } catch (error) {
+      console.error('Error deleting form:', error)
+      set({ error: error.message, isLoading: false })
+      throw error
+    }
+  },
+
   // Submissions actions
   fetchSubmissions: async (options = {}) => {
     const { filters, pagination } = get()
     set({ isLoadingSubmissions: true, error: null })
     
     try {
-      const params = new URLSearchParams()
+      // Auto-include projectId from auth store if not explicitly provided
+      const { currentProject } = useAuthStore.getState()
       
-      // Tenant filtering for "My Sales" view
-      if (options.tenantId) {
-        params.append('tenant_id', options.tenantId)
+      const params = {
+        // Project filtering
+        projectId: options.projectId || (currentProject?.id || undefined),
+        // Tenant filtering for "My Sales" view
+        tenantId: options.tenantId,
+        // Apply filters
+        formId: options.formId || filters.formId,
+        status: (options.status || filters.status) !== 'all' ? (options.status || filters.status) : undefined,
+        search: options.search || filters.search || undefined,
+        // Pagination
+        page: options.page || pagination.page,
+        limit: options.limit || pagination.limit,
+        sortBy: options.sortBy || 'created_at',
+        sortOrder: options.sortOrder || 'desc'
       }
-      
-      // Apply filters
-      if (options.formId || filters.formId) {
-        params.append('form_id', options.formId || filters.formId)
-      }
-      if (options.status || filters.status !== 'all') {
-        params.append('status', options.status || filters.status)
-      }
-      if (options.search || filters.search) {
-        params.append('search', options.search || filters.search)
-      }
-      
-      // Pagination
-      params.append('page', options.page || pagination.page)
-      params.append('limit', options.limit || pagination.limit)
-      params.append('sort_by', options.sortBy || 'created_at')
-      params.append('sort_order', options.sortOrder || 'desc')
 
-      const response = await api.get(`/.netlify/functions/form-submissions-list?${params}`)
+      const response = await formsApi.listSubmissions(params)
+      const data = response.data || response
       
       set({ 
-        submissions: response.data.submissions, 
-        pagination: response.data.pagination,
+        submissions: data.submissions || [], 
+        pagination: data.pagination || pagination,
         isLoadingSubmissions: false 
       })
       
-      return response.data
+      return data
     } catch (error) {
       console.error('Error fetching submissions:', error)
       set({ error: error.message, isLoadingSubmissions: false })
@@ -125,9 +160,10 @@ export const useFormsStore = create((set, get) => ({
   fetchSubmission: async (submissionId) => {
     set({ isLoadingSubmissions: true, error: null })
     try {
-      const response = await api.get(`/.netlify/functions/form-submissions-get?id=${submissionId}`)
-      set({ currentSubmission: response.data, isLoadingSubmissions: false })
-      return response.data
+      const response = await formsApi.getSubmission(submissionId)
+      const submission = response.data || response
+      set({ currentSubmission: submission, isLoadingSubmissions: false })
+      return submission
     } catch (error) {
       console.error('Error fetching submission:', error)
       set({ error: error.message, isLoadingSubmissions: false })
@@ -137,22 +173,20 @@ export const useFormsStore = create((set, get) => ({
 
   updateSubmission: async (submissionId, updates) => {
     try {
-      const response = await api.put('/.netlify/functions/form-submissions-update', {
-        id: submissionId,
-        ...updates
-      })
+      const response = await formsApi.updateSubmission(submissionId, updates)
+      const updatedSubmission = response.data?.submission || response.data
       
       // Update in local state
       set(state => ({
         submissions: state.submissions.map(s => 
-          s.id === submissionId ? { ...s, ...response.data.submission } : s
+          s.id === submissionId ? { ...s, ...updatedSubmission } : s
         ),
         currentSubmission: state.currentSubmission?.submission?.id === submissionId
-          ? { ...state.currentSubmission, submission: response.data.submission }
+          ? { ...state.currentSubmission, submission: updatedSubmission }
           : state.currentSubmission
       }))
       
-      return response.data.submission
+      return updatedSubmission
     } catch (error) {
       console.error('Error updating submission:', error)
       throw error

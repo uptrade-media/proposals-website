@@ -9,7 +9,7 @@
  * 
  * Usage:
  *   <Echo />                        // Global Echo (floating)
- *   <Echo skill="seo" contextId={siteId} embedded />  // Module Echo
+ *   <Echo skill="seo" contextId={projectId} embedded />  // Module Echo
  */
 
 import { useState, useRef, useEffect } from 'react'
@@ -18,7 +18,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { cn } from '@/lib/utils'
-import axios from 'axios'
+import { echoApi } from '@/lib/signal-api'
 
 // Skill icons and colors
 const SKILL_CONFIG = {
@@ -37,7 +37,9 @@ export function Echo({
   embedded = false,  // Embedded in a module vs floating
   title = null,  // Custom title
   placeholder = 'Ask Signal anything...',
-  className = ''
+  className = '',
+  initialContext = null,  // Initial context for the conversation (e.g., knowledge gap)
+  onClose = null  // Callback when conversation is done
 }) {
   const [isOpen, setIsOpen] = useState(embedded)
   const [isMinimized, setIsMinimized] = useState(false)
@@ -48,6 +50,18 @@ export function Echo({
   const [currentSkill, setCurrentSkill] = useState(skill)
   const scrollRef = useRef(null)
   const inputRef = useRef(null)
+  
+  // Set initial prompt based on context
+  useEffect(() => {
+    if (initialContext?.type === 'knowledge_gap' && initialContext.question) {
+      // Add a system message explaining the context
+      setMessages([{
+        role: 'assistant',
+        content: `I need to learn how to answer this question:\n\n**"${initialContext.question}"**\n\nPlease type the answer you'd like me to give when someone asks this. I'll save it to my knowledge base.`,
+        skill: 'knowledge'
+      }])
+    }
+  }, [initialContext])
 
   // Scroll to bottom on new messages
   useEffect(() => {
@@ -72,8 +86,8 @@ export function Echo({
 
   async function loadConversation() {
     try {
-      const res = await axios.get(`/.netlify/functions/api/signal/conversation/${conversationId}`)
-      setMessages(res.data.messages.map(m => ({
+      const data = await echoApi.getConversation(conversationId)
+      setMessages(data.messages.map(m => ({
         role: m.role === 'echo' ? 'assistant' : m.role,
         content: m.content,
         skill: m.skill_key || currentSkill
@@ -94,17 +108,13 @@ export function Echo({
 
     try {
       // Use module endpoint if skill is set, otherwise global
-      const endpoint = skill 
-        ? '/.netlify/functions/api/signal/echo/module'
-        : '/.netlify/functions/api/signal/echo/chat'
+      const chatFn = skill 
+        ? () => echoApi.moduleChat(skill, { message: userMessage, conversationId })
+        : () => echoApi.chat({ message: userMessage, conversationId })
 
-      const payload = skill 
-        ? { skill, message: userMessage, conversationId, contextId }
-        : { message: userMessage, conversationId }
-
-      const res = await axios.post(endpoint, payload)
+      const data = await chatFn()
       
-      const { message, conversation_id, skill: routedSkill } = res.data
+      const { message, conversation_id, skill: routedSkill } = data
       
       // Update conversation ID if new
       if (!conversationId && conversation_id) {
@@ -136,7 +146,7 @@ export function Echo({
   async function rateMessage(rating) {
     if (!conversationId) return
     try {
-      await axios.post('/.netlify/functions/api/signal/conversation/rate', {
+      await echoApi.rateResponse({
         conversationId,
         rating
       })

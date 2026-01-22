@@ -2,6 +2,7 @@ import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
 import { supabase, getCurrentUser, getSession, signOut, signInWithPassword, signUp as supabaseSignUp } from './supabase-auth'
 import axios from 'axios'
+import { authApi, adminApi } from './portal-api'
 
 // Global flag to prevent multiple simultaneous auth checks
 let isCheckingAuth = false
@@ -29,7 +30,7 @@ axios.interceptors.request.use(async config => {
   if (state.currentProject?.id) {
     config.headers['X-Project-Id'] = state.currentProject.id
     // Also set org_id to the project's organization for legacy compatibility
-    // Many tables use org_id which should be the project's org_id (same as organization_id)
+    // Many tables use org_id which should be the project's org_id (same as org_id)
     if (state.currentProject.org_id) {
       config.headers['X-Tenant-Org-Id'] = state.currentProject.org_id
     }
@@ -86,6 +87,10 @@ const useAuthStore = create(
       // Set project context (within the current organization)
       setProject: (project) => {
         set({ currentProject: project })
+        // Also persist to localStorage so it survives hard reloads
+        if (project) {
+          localStorage.setItem('currentTenantProject', JSON.stringify(project))
+        }
       },
       
       // Set available organizations
@@ -157,6 +162,7 @@ const useAuthStore = create(
 
             // Fetch user data from contacts table
             const contactUser = await getCurrentUser()
+            console.log('[AuthStore checkAuth] getCurrentUser returned:', contactUser?.email, 'org_id:', contactUser?.org_id)
             
             if (contactUser) {
               console.log('[AuthStore] Auth verification successful, user:', contactUser.email);
@@ -194,7 +200,19 @@ const useAuthStore = create(
           const storedOrg = localStorage.getItem('currentOrganization')
           const storedProject = localStorage.getItem('currentTenantProject')
           
-          // Restore project context if exists
+          // Restore org context first (parent org)
+          if (storedOrg) {
+            try {
+              const org = JSON.parse(storedOrg)
+              console.log('[AuthStore] Restoring org context:', org.name)
+              set({ currentOrg: org })
+            } catch (e) {
+              console.error('[AuthStore] Failed to parse stored org:', e)
+              localStorage.removeItem('currentOrganization')
+            }
+          }
+          
+          // Restore project context if exists (in addition to org)
           if (storedProject) {
             try {
               const project = JSON.parse(storedProject)
@@ -204,15 +222,17 @@ const useAuthStore = create(
               const projectContext = {
                 id: project.id,
                 name: project.title,
-                domain: project.tenant_domain || project.domain,
-                features: project.tenant_features || project.features || [],
+                domain: project.domain,
+                features: project.features || [],
+                brand_primary: project.brand_primary,
+                brand_secondary: project.brand_secondary,
                 theme: { 
-                  primaryColor: project.tenant_theme_color || project.theme?.primaryColor || '#4bbf39',
-                  logoUrl: project.tenant_logo_url || project.theme?.logoUrl,
-                  faviconUrl: project.tenant_favicon_url || project.theme?.faviconUrl
+                  primaryColor: project.brand_primary || project.theme?.primaryColor || '#4bbf39',
+                  logoUrl: project.theme?.logoUrl,
+                  faviconUrl: project.favicon_url || project.theme?.faviconUrl
                 },
                 isProjectTenant: true,
-                organization_id: project.organization_id
+                org_id: project.org_id
               }
               
               set({
@@ -225,24 +245,14 @@ const useAuthStore = create(
             }
           }
           
-          // Restore org context if exists (and no project override)
-          if (storedOrg && !storedProject) {
-            try {
-              const org = JSON.parse(storedOrg)
-              console.log('[AuthStore] Restoring org context:', org.name)
-              set({ currentOrg: org })
-            } catch (e) {
-              console.error('[AuthStore] Failed to parse stored org:', e)
-              localStorage.removeItem('currentOrganization')
-            }
-          }
+          // Fetch fresh context from Portal API
+          // Pass the stored org ID so backend returns projects for the correct org
+          const currentOrgId = get().currentOrg?.id
+          console.log('[AuthStore] About to call authApi.getMe() with orgId:', currentOrgId)
+          const response = await authApi.getMe(currentOrgId)
           
-          // Fetch fresh context from backend
-          const response = await axios.get('/.netlify/functions/auth-me', {
-            headers: {
-              Authorization: `Bearer ${accessToken}`
-            }
-          })
+          console.log('[AuthStore] FULL auth-me response:', response)
+          console.log('[AuthStore] Response data:', response.data)
           
           const { organization, availableOrgs, projects, isSuperAdmin, accessLevel } = response.data
           
@@ -254,12 +264,44 @@ const useAuthStore = create(
             accessLevel: accessLevel || 'organization' // Default to org-level for backwards compatibility
           })
           
+          // If admin/superAdmin has no org context, automatically set them to Uptrade Media org
+          if (!organization && (isSuperAdmin || get().user?.role === 'admin')) {
+            console.log('[AuthStore] Admin with no org - fetching Uptrade Media org')
+            const allOrgs = await get().fetchAllOrganizations()
+            const uptradeOrg = allOrgs?.find(org => 
+              org.slug === 'uptrade-media' || 
+              org.domain === 'uptrademedia.com' || 
+              org.org_type === 'agency'
+            )
+            
+            if (uptradeOrg) {
+              console.log('[AuthStore] Auto-setting admin to Uptrade Media org')
+              set({ currentOrg: uptradeOrg })
+              localStorage.setItem('currentOrganization', JSON.stringify(uptradeOrg))
+              return // Early return, no need to process further
+            }
+          }
+          
           if (organization) {
-            // Merge fresh org data with cached (to pick up new fields like org_type)
+            // Use the org from the API response - it's authoritative
+            // Only merge with cached if same org (to preserve any extra fields)
             const cachedOrg = get().currentOrg
-            const mergedOrg = cachedOrg?.id === organization.id 
-              ? { ...cachedOrg, ...organization } // Merge fresh data into cached
-              : (cachedOrg || organization) // Different org or no cache, use fresh
+            let mergedOrg
+            
+            if (cachedOrg?.id === organization.id) {
+              // Same org - merge fresh data into cached (preserves extra fields)
+              mergedOrg = { ...cachedOrg, ...organization }
+            } else if (cachedOrg) {
+              // Different org in cache vs API - trust the cached org
+              // but we need to re-fetch projects for the cached org
+              console.log('[AuthStore] Cached org differs from API org, keeping cached:', cachedOrg.name)
+              mergedOrg = cachedOrg
+              // The projects returned are for API org, not cached org
+              // This mismatch is resolved by passing currentOrgId to getMe above
+            } else {
+              // No cached org - use fresh from API
+              mergedOrg = organization
+            }
             
             set({ 
               currentOrg: mergedOrg,
@@ -274,10 +316,17 @@ const useAuthStore = create(
             // 1. User has exactly one project, OR
             // 2. This is a non-agency org and there's at least one project
             // AND no project is currently selected AND no stored project
+            // AND user hasn't explicitly chosen to stay at org level
             const storedProject = localStorage.getItem('currentTenantProject')
             const currentProject = get().currentProject
+            const preferOrgView = localStorage.getItem('preferOrgView')
             
-            if (!storedProject && !currentProject && projects?.length > 0) {
+            // Clear the preferOrgView flag after reading it (one-time use)
+            if (preferOrgView) {
+              localStorage.removeItem('preferOrgView')
+            }
+            
+            if (!storedProject && !currentProject && !preferOrgView && projects?.length > 0) {
               // Only skip auto-select for agency orgs with multiple projects
               // null/undefined org_type means regular client org - always auto-select
               const isAgencyWithMultipleProjects = organization.org_type === 'agency' && projects.length > 1
@@ -288,14 +337,16 @@ const useAuthStore = create(
                 const projectContext = {
                   id: firstProject.id,
                   name: firstProject.title,
-                  domain: firstProject.tenant_domain,
-                  features: firstProject.tenant_features || [],
+                  domain: firstProject.domain,
+                  features: firstProject.features || [],
+                  brand_primary: firstProject.brand_primary,
+                  brand_secondary: firstProject.brand_secondary,
                   theme: { 
-                    primaryColor: firstProject.tenant_theme_color || '#4bbf39',
-                    logoUrl: firstProject.tenant_logo_url
+                    primaryColor: firstProject.brand_primary || '#4bbf39',
+                    logoUrl: firstProject.logo_url
                   },
                   isProjectTenant: true,
-                  organization_id: organization.id
+                  org_id: organization.id
                 }
                 
                 console.log('[AuthStore] Auto-selecting project:', firstProject.title)
@@ -305,7 +356,13 @@ const useAuthStore = create(
             }
           }
         } catch (error) {
-          console.log('[AuthStore] Could not fetch org context (may not be set up yet):', error.message)
+          console.error('[AuthStore] ERROR fetching org context:', error)
+          console.error('[AuthStore] Error details:', {
+            message: error.message,
+            response: error.response?.data,
+            status: error.response?.status,
+            stack: error.stack
+          })
           // Not a fatal error - org context is optional during migration
         }
       },
@@ -319,53 +376,23 @@ const useAuthStore = create(
           const { data: { session } } = await getSession()
           if (!session) throw new Error('Not authenticated')
           
-          const response = await axios.post(
-            '/.netlify/functions/auth-switch-org',
-            { organizationId },
-            {
-              headers: {
-                Authorization: `Bearer ${session.access_token}`
-              }
-            }
-          )
+          const response = await authApi.switchOrg({ organizationId })
           
           const { organization, role, isSuperAdmin, projects } = response.data
           
-          // Auto-enter first project if available (for client orgs)
-          const firstProject = projects?.[0]
-          let projectContext = null
-          
-          if (firstProject && organization.org_type !== 'agency') {
-            // Build project context
-            projectContext = {
-              id: firstProject.id,
-              name: firstProject.title || firstProject.name,
-              domain: firstProject.tenant_domain || firstProject.domain,
-              features: firstProject.tenant_features || firstProject.features || [],
-              theme: { 
-                primaryColor: firstProject.tenant_theme_color || '#4bbf39',
-                logoUrl: firstProject.tenant_logo_url,
-                faviconUrl: firstProject.tenant_favicon_url
-              },
-              isProjectTenant: true,
-              organization_id: organization.id
-            }
-          }
+          // Don't auto-enter a project - show org dashboard first
+          // User can select a project from the org dashboard or project switcher
           
           set({
             currentOrg: { ...organization, userRole: role },
-            currentProject: projectContext, // Auto-enter first project
+            currentProject: null, // Start at org level - no project selected
             availableProjects: projects || [],
             isSuperAdmin,
             isLoading: false
           })
           
-          // Store contexts
-          if (projectContext) {
-            localStorage.setItem('currentTenantProject', JSON.stringify(firstProject))
-          } else {
-            localStorage.removeItem('currentTenantProject')
-          }
+          // Clear any stored project context
+          localStorage.removeItem('currentTenantProject')
           // Store org context
           localStorage.setItem('currentOrganization', JSON.stringify(organization))
           
@@ -389,35 +416,35 @@ const useAuthStore = create(
           const { data: { session } } = await getSession()
           if (!session) throw new Error('Not authenticated')
           
-          const response = await axios.post(
-            '/.netlify/functions/auth-switch-org',
-            { projectId },
-            {
-              headers: {
-                Authorization: `Bearer ${session.access_token}`
-              }
-            }
-          )
+          const response = await authApi.switchOrg({ projectId })
           
           const { organization, project, role, isSuperAdmin } = response.data
           
-          // Build the project context (for backward compatibility with existing code)
+          // Build the project context from the returned project data
           const projectContext = project ? {
             id: project.id,
             name: project.title,
-            domain: project.tenant_domain,
-            features: project.tenant_features || [],
+            domain: project.domain,
+            features: project.features || [],
+            brand_primary: project.brand_primary,
+            brand_secondary: project.brand_secondary,
             theme: { 
-              primaryColor: project.tenant_theme_color || '#4bbf39',
-              logoUrl: project.tenant_logo_url,
-              faviconUrl: project.tenant_favicon_url
+              primaryColor: project.brand_primary || '#4bbf39',
+              logoUrl: project.logo_url,
+              faviconUrl: project.favicon_url
             },
             isProjectTenant: true,
-            organization_id: project.organization_id || organization?.id
+            org_id: project.org_id || organization?.id
           } : null
           
+          // Use the PARENT organization if returned, otherwise keep current
+          // The backend now returns the actual parent org, not the project-as-org
+          const orgContext = organization 
+            ? { ...organization, userRole: role }
+            : get().currentOrg
+          
           set({
-            currentOrg: organization ? { ...organization, userRole: role } : get().currentOrg,
+            currentOrg: orgContext,
             currentProject: projectContext,
             isSuperAdmin,
             isLoading: false
@@ -426,12 +453,18 @@ const useAuthStore = create(
           // Store project context for restoration
           if (project) {
             localStorage.setItem('currentTenantProject', JSON.stringify(project))
+            // Clear prefer org view flag since user explicitly selected a project
+            localStorage.removeItem('preferOrgView')
+          }
+          // Store org context (the parent organization)
+          if (organization) {
+            localStorage.setItem('currentOrganization', JSON.stringify(organization))
           }
           
           // Reload the page to apply new context everywhere
           window.location.reload()
           
-          return { success: true, project: projectContext, organization }
+          return { success: true, project: projectContext, organization: orgContext }
         } catch (error) {
           console.error('[AuthStore] Switch project error:', error)
           set({ isLoading: false, error: error.message })
@@ -439,19 +472,21 @@ const useAuthStore = create(
         }
       },
       
-      // Return to admin/organization view (clear project context)
+      // Return to admin/organization view (clear project context, keep org)
       exitProjectView: async () => {
         set({ isLoading: true })
         
-        // Clear project context
+        // Clear project context but keep org
         localStorage.removeItem('currentTenantProject')
+        // Set flag to prevent auto-selecting project on reload
+        localStorage.setItem('preferOrgView', 'true')
         
         set({
           currentProject: null,
           isLoading: false
         })
         
-        // Reload to show org dashboard
+        // Reload to show org dashboard (not admin portal)
         window.location.reload()
         
         return { success: true }
@@ -460,17 +495,11 @@ const useAuthStore = create(
       // Fetch all organizations (super admin only)
       fetchAllOrganizations: async () => {
         try {
-          const { data: { session } } = await getSession()
-          if (!session) throw new Error('Not authenticated')
+          const response = await adminApi.listOrganizations()
+          const data = response.data || response
           
-          const response = await axios.get('/.netlify/functions/admin-tenants-list', {
-            headers: {
-              Authorization: `Bearer ${session.access_token}`
-            }
-          })
-          
-          set({ availableOrgs: response.data.organizations })
-          return response.data.organizations
+          set({ availableOrgs: data.organizations || [] })
+          return data.organizations || []
         } catch (error) {
           console.error('[AuthStore] Fetch all organizations error:', error)
           return []
@@ -519,6 +548,14 @@ const useAuthStore = create(
 
   // Logout function (signs out from Supabase)
   logout: async () => {
+    try {
+      // Invalidate Redis cache on backend before signing out
+      await authApi.logout()
+    } catch (error) {
+      // Don't block logout if cache invalidation fails
+      console.warn('Cache invalidation on logout failed:', error)
+    }
+    
     try {
       await signOut()
     } catch (error) {

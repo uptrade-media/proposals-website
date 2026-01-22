@@ -13,7 +13,7 @@ import {
   Sparkles, BarChart3
 } from 'lucide-react'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
-import api from '@/lib/api'
+import { portfolioApi } from '@/lib/portal-api'
 import useAuthStore from '@/lib/auth-store'
 import PortfolioAIDialog from './PortfolioAIDialog'
 
@@ -281,8 +281,8 @@ export default function PortfolioManagement() {
   const fetchPortfolioItems = async () => {
     setIsLoading(true)
     try {
-      const response = await api.get('/.netlify/functions/portfolio-list')
-      setPortfolioItems(response.data.portfolioItems || [])
+      const response = await portfolioApi.listItems()
+      setPortfolioItems(response.data.portfolioItems || response.data || [])
     } catch (err) {
       console.error('Failed to fetch portfolio items:', err)
       setPortfolioItems([])
@@ -326,7 +326,7 @@ export default function PortfolioManagement() {
 
   const handlePublish = async (portfolioId) => {
     try {
-      await api.post('/.netlify/functions/portfolio-publish', { portfolioId })
+      await portfolioApi.publishItem(portfolioId)
       setSuccess('Portfolio item published!')
       fetchPortfolioItems()
       setTimeout(() => setSuccess(''), 3000)

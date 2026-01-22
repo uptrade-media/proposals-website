@@ -137,7 +137,7 @@ function TeamMemberRow({ member, currentUserId, onEdit, onResendInvite, onStatus
           <div className="hidden lg:flex items-center gap-4 text-center">
             <div>
               <p className="text-lg font-semibold text-[var(--text-primary)]">{member.metrics.clientsAssigned}</p>
-              <p className="text-xs text-[var(--text-tertiary)]">Clients</p>
+              <p className="text-xs text-[var(--text-tertiary)]">Prospects</p>
             </div>
             <div>
               <p className="text-lg font-semibold text-[var(--text-primary)]">{member.metrics.auditsCreated}</p>

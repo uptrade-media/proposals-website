@@ -12,7 +12,10 @@ import {
   Brain,
   Settings,
   Bell,
-  TrendingUp
+  TrendingUp,
+  MapPin,
+  Link2,
+  Users
 } from 'lucide-react'
 
 const NAV_ITEMS = [
@@ -21,6 +24,9 @@ const NAV_ITEMS = [
   { id: 'keywords', label: 'Keywords', icon: Target },
   { id: 'content', label: 'Content', icon: Brain },
   { id: 'technical', label: 'Technical', icon: Shield },
+  { id: 'local', label: 'Local', icon: MapPin },
+  { id: 'backlinks', label: 'Backlinks', icon: Link2 },
+  { id: 'competitors', label: 'Competitors', icon: Users },
   { id: 'reports', label: 'Reports', icon: BarChart3 },
 ]
 

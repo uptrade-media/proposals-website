@@ -15,11 +15,11 @@ import {
   AlertCircle, Loader2, Plus, Trash2, Edit2, Eye, Search, 
   FileText, Calendar, Clock, Tag, Image as ImageIcon, 
   MoreVertical, ExternalLink, Copy, CheckCircle2,
-  Upload, X, Filter, ArrowUpDown, Star
+  Upload, X, Filter, ArrowUpDown, Star, BarChart3
 } from 'lucide-react'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from './ui/dropdown-menu'
 import useAuthStore from '../lib/auth-store'
-import api from '../lib/api'
+import { blogApi } from '@/lib/portal-api'
 import BlogAIDialog from './BlogAIDialog'
 
 // Tenant-specific category configurations
@@ -108,14 +108,14 @@ function BlogCard({ blog, onEdit, onDelete, onPreview, onToggleFeatured, onPubli
   }
 
   return (
-    <Card className="group hover:shadow-lg transition-all duration-300 overflow-hidden border-0 shadow-sm bg-[var(--glass-bg)]">
+    <Card className="group hover:shadow-lg transition-all duration-300 overflow-hidden border-0 shadow-sm bg-[var(--glass-bg)] p-0">
       <div className="flex">
-        {/* Image Section */}
+        {/* Image Section - fills left side edge-to-edge */}
         <div className="w-48 h-36 flex-shrink-0 bg-[var(--surface-secondary)] relative overflow-hidden">
-          {blog.featured_image ? (
+          {(blog.featuredImage || blog.featured_image) ? (
             <img 
-              src={blog.featured_image} 
-              alt={blog.featured_image_alt || blog.title}
+              src={blog.featuredImage || blog.featured_image} 
+              alt={blog.featuredImageAlt || blog.featured_image_alt || blog.title}
               className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
             />
           ) : (
@@ -196,13 +196,19 @@ function BlogCard({ blog, onEdit, onDelete, onPreview, onToggleFeatured, onPubli
             <Badge variant="secondary" className={`${categoryColors[blog.category] || 'bg-[var(--surface-secondary)] text-[var(--text-secondary)]'} border-0`}>
               {blog.category}
             </Badge>
+            {blog.viewCount > 0 && (
+              <span className="flex items-center gap-1" title="Views (last 30 days)">
+                <BarChart3 className="w-3 h-3" />
+                {blog.viewCount.toLocaleString()}
+              </span>
+            )}
             <span className="flex items-center gap-1">
               <Clock className="w-3 h-3" />
-              {blog.reading_time || 5} min
+              {blog.readingTime || blog.reading_time || 5} min
             </span>
             <span className="flex items-center gap-1">
               <Calendar className="w-3 h-3" />
-              {formatDate(blog.published_at || blog.created_at)}
+              {formatDate(blog.publishedAt || blog.published_at || blog.createdAt || blog.created_at)}
             </span>
           </div>
         </CardContent>
@@ -365,16 +371,22 @@ export default function BlogManagement() {
 
   useEffect(() => {
     fetchBlogs()
-  }, [])
+  }, [currentProject?.id])
 
   const fetchBlogs = async () => {
     setIsLoading(true)
     try {
-      console.log('[BlogManagement] Fetching all blogs...')
-      // Fetch ALL posts (published + draft) so AI-generated posts show immediately
-      const res = await api.get('/.netlify/functions/blog-list?limit=100')
-      if (res.data.success) {
-        const posts = res.data.posts || []
+      console.log('[BlogManagement] Fetching blogs for project:', currentProject?.id || 'all')
+      // Fetch posts filtered by project (or org if admin with no project selected)
+      const params = { limit: 100 }
+      if (currentProject?.id) {
+        params.projectId = currentProject.id
+      } else if (currentOrg?.id) {
+        params.orgId = currentOrg.id
+      }
+      const res = await blogApi.listPosts(params)
+      if (res.data.success || res.data.posts) {
+        const posts = res.data.posts || res.data || []
         console.log('[BlogManagement] ✅ Fetched', posts.length, 'blogs')
         console.log('[BlogManagement] Status breakdown:', {
           published: posts.filter(p => p.status === 'published').length,
@@ -408,6 +420,7 @@ export default function BlogManagement() {
       if (sortBy === 'newest') return new Date(b.created_at) - new Date(a.created_at)
       if (sortBy === 'oldest') return new Date(a.created_at) - new Date(b.created_at)
       if (sortBy === 'title') return a.title.localeCompare(b.title)
+      if (sortBy === 'views') return (b.viewCount || 0) - (a.viewCount || 0)
       return 0
     })
 
@@ -516,19 +529,13 @@ export default function BlogManagement() {
         publishedAt: formData.status === 'published' ? new Date().toISOString() : null
       }
 
-      const endpoint = editingBlog 
-        ? '/.netlify/functions/blog-update'
-        : '/.netlify/functions/blog-create'
-
       if (editingBlog) {
         blogPost.id = editingBlog.id
       }
 
-      const res = await api({
-        method: editingBlog ? 'PUT' : 'POST',
-        url: endpoint,
-        data: blogPost
-      })
+      const res = editingBlog 
+        ? await blogApi.updatePost(editingBlog.id, blogPost)
+        : await blogApi.createPost(blogPost)
 
       if (res.data.success || res.data.post) {
         setSuccess(editingBlog ? 'Blog updated!' : 'Blog created!')
@@ -549,7 +556,7 @@ export default function BlogManagement() {
 
     setIsLoading(true)
     try {
-      await api.delete('/.netlify/functions/blog-delete', { data: { id } })
+      await blogApi.deletePost(id)
       setSuccess('Blog deleted!')
       fetchBlogs()
       setTimeout(() => setSuccess(''), 3000)
@@ -563,8 +570,7 @@ export default function BlogManagement() {
   const handlePublish = async (id) => {
     setIsLoading(true)
     try {
-      await api.put('/.netlify/functions/blog-update', { 
-        id, 
+      await blogApi.updatePost(id, { 
         status: 'published',
         publishedAt: new Date().toISOString()
       })
@@ -580,7 +586,7 @@ export default function BlogManagement() {
 
   const handleToggleFeatured = async (id, featured) => {
     try {
-      await api.put('/.netlify/functions/blog-update', { id, featured })
+      await blogApi.updatePost(id, { featured })
       setSuccess(featured ? 'Post featured!' : 'Post unfeatured!')
       // Update local state immediately for better UX
       setBlogs(prev => prev.map(blog => 
@@ -714,6 +720,7 @@ export default function BlogManagement() {
                 <SelectContent>
                   <SelectItem value="newest">Newest First</SelectItem>
                   <SelectItem value="oldest">Oldest First</SelectItem>
+                  <SelectItem value="views">Most Views</SelectItem>
                   <SelectItem value="title">By Title</SelectItem>
                 </SelectContent>
               </Select>

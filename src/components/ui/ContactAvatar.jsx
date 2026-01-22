@@ -284,20 +284,19 @@ export default function ContactAvatar({
     ? { background: `linear-gradient(135deg, ${orgTheme.primaryColor}, ${orgTheme.primaryColor}dd)` }
     : undefined
 
-  // Echo type uses the echologo.svg
+  // Echo type uses the echologo.svg (fills the entire space)
   if (type === 'echo') {
     return (
       <div className={cn("relative inline-block", className)}>
         <div className={cn(
-          "rounded-full bg-gradient-to-br flex items-center justify-center",
-          "shadow-lg shadow-emerald-500/20",
-          sizeClass.container,
-          config.gradient
+          "rounded-full flex items-center justify-center overflow-hidden",
+          "shadow-lg shadow-emerald-500/20 bg-white dark:bg-gray-900",
+          sizeClass.container
         )}>
           <img 
             src="/echologo.svg" 
             alt="Echo AI" 
-            className={cn(sizeClass.logo, "object-contain")}
+            className="w-full h-full object-cover p-1"
           />
         </div>
         {showBadge && <StatusIndicator status="online" size={size} type="echo" />}

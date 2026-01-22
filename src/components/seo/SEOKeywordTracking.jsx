@@ -18,7 +18,7 @@ import {
   AlertTriangle
 } from 'lucide-react'
 
-export default function SEOKeywordTracking({ siteId }) {
+export default function SEOKeywordTracking({ projectId }) {
   const { 
     trackedKeywords, 
     keywordsSummary,
@@ -35,15 +35,15 @@ export default function SEOKeywordTracking({ siteId }) {
   const [filter, setFilter] = useState('all')
 
   useEffect(() => {
-    if (siteId) {
-      fetchTrackedKeywords(siteId)
+    if (projectId) {
+      fetchTrackedKeywords(projectId)
     }
-  }, [siteId])
+  }, [projectId])
 
   const handleRefresh = async () => {
     setIsRefreshing(true)
     try {
-      await refreshKeywordRankings(siteId)
+      await refreshKeywordRankings(projectId)
     } catch (error) {
       console.error('Refresh error:', error)
     }
@@ -53,7 +53,7 @@ export default function SEOKeywordTracking({ siteId }) {
   const handleAutoDiscover = async () => {
     setIsDiscovering(true)
     try {
-      await autoDiscoverKeywords(siteId)
+      await autoDiscoverKeywords(projectId)
     } catch (error) {
       console.error('Discovery error:', error)
     }
@@ -63,7 +63,7 @@ export default function SEOKeywordTracking({ siteId }) {
   const handleAddKeyword = async () => {
     if (!newKeyword.trim()) return
     try {
-      await trackKeywords(siteId, [newKeyword.trim()])
+      await trackKeywords(projectId, [newKeyword.trim()])
       setNewKeyword('')
     } catch (error) {
       console.error('Add keyword error:', error)
@@ -89,14 +89,17 @@ export default function SEOKeywordTracking({ siteId }) {
     return <Badge variant="outline">{Math.round(position)}</Badge>
   }
 
-  const filteredKeywords = trackedKeywords?.filter(kw => {
+  // Ensure trackedKeywords is always an array
+  const keywordsArray = Array.isArray(trackedKeywords) ? trackedKeywords : []
+  
+  const filteredKeywords = keywordsArray.filter(kw => {
     if (filter === 'all') return true
     if (filter === 'top10') return kw.current_position && kw.current_position <= 10
     if (filter === 'striking') return kw.current_position > 10 && kw.current_position <= 20
     if (filter === 'improving') return getPositionChange(kw) > 0
     if (filter === 'declining') return getPositionChange(kw) < 0
     return true
-  }) || []
+  })
 
   return (
     <div className="space-y-6">

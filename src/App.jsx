@@ -26,11 +26,27 @@ const InvoicePayment = lazy(() => import('./pages/InvoicePayment'))
 // SEO Module
 const SEOModule = lazy(() => import('./pages/seo/SEOModule'))
 
-// Ecommerce Module
+// Commerce Module - Unified products, services, classes, events, sales, customers
+const CommerceModule = lazy(() => import('./pages/commerce/CommerceModule'))
+
+// Legacy Ecommerce Module (redirects to Commerce)
 const EcommerceModule = lazy(() => import('./pages/ecommerce/EcommerceModule'))
 
 // Engage Module - Live chat and conversion optimization
 const Engage = lazy(() => import('./pages/Engage'))
+
+// Reputation Module
+const ReputationModule = lazy(() => import('./pages/reputation/ReputationModule'))
+
+// Customers Module - Post-sale customer management
+const CustomersModule = lazy(() => import('./pages/customers/CustomersModule'))
+
+// Broadcast Module - Social media management
+const Broadcast = lazy(() => import('./pages/broadcast'))
+
+// Sync Module - Calendar management and booking
+const SyncModule = lazy(() => import('./pages/sync'))
+const SyncOAuthCallback = lazy(() => import('./pages/sync/SyncOAuthCallback'))
 
 // Client SEO Dashboard (tenant-facing, read-only)
 const ClientSEODashboard = lazy(() => import('./pages/client/ClientSEODashboard'))
@@ -83,12 +99,12 @@ export default function App() {
   return (
     <ThemeProvider>
       <Router>
-        <div className="min-h-screen bg-[var(--surface-page)] transition-colors duration-300">
+        <div className="h-full bg-[var(--surface-page)] transition-colors duration-300">
           <Suspense fallback={<UptradeLoading />}>
             <Routes>
               <Route 
                 path="/" 
-                element={isAuthenticated ? <Navigate to="/dashboard" replace /> : <Navigate to="/login" replace />} 
+                element={isAuthenticated ? <Protected><Dashboard /></Protected> : <Navigate to="/login" replace />} 
               />
               <Route path="/login" element={<LoginPage />} />
               <Route path="/auth/callback" element={<AuthCallback />} />
@@ -98,70 +114,11 @@ export default function App() {
               <Route path="/p/:slug" element={<ProposalGate />} />
               <Route path="/audit/:id" element={<AuditGate />} />
               <Route path="/pay/:token" element={<InvoicePayment />} />
-              <Route
-                path="/dashboard"
-                element={
-                  <Protected>
-                    <Dashboard />
-                  </Protected>
-                }
-              />
-              <Route
-                path="/audits"
-                element={
-                  <Protected>
-                    <Audits />
-                  </Protected>
-                }
-              />
-              <Route
-                path="/audits/:id"
-                element={
-                  <Protected>
-                    <AuditDetail />
-                  </Protected>
-                }
-              />
-              <Route
-                path="/profile"
-                element={
-                  <Protected>
-                    <UserProfile />
-                  </Protected>
-                }
-              />
               
-              {/* SEO Module - Full-featured SEO dashboard */}
-              <Route
-                path="/seo/*"
-                element={
-                  <Protected>
-                    <SEOModule />
-                  </Protected>
-                }
-              />
+              {/* Sync OAuth Callback - must be standalone */}
+              <Route path="/sync/callback" element={<SyncOAuthCallback />} />
               
-              {/* Ecommerce Module - Shopify store management */}
-              <Route
-                path="/ecommerce/*"
-                element={
-                  <Protected>
-                    <EcommerceModule />
-                  </Protected>
-                }
-              />
-              
-              {/* Engage Module - Live chat and conversion optimization */}
-              <Route
-                path="/engage/*"
-                element={
-                  <Protected>
-                    <Engage />
-                  </Protected>
-                }
-              />
-              
-              {/* Client SEO Dashboard - Tenant-facing read-only view */}
+              {/* Client SEO Dashboard - Tenant-facing read-only view (standalone) */}
               <Route
                 path="/client/seo"
                 element={
@@ -171,8 +128,15 @@ export default function App() {
                 }
               />
               
-              {/* Redirect old /admin route to dashboard */}
-              <Route path="/admin" element={<Navigate to="/dashboard" replace />} />
+              {/* ALL authenticated routes go through MainLayout for persistent sidebar/header */}
+              <Route
+                path="/*"
+                element={
+                  <Protected>
+                    <Dashboard />
+                  </Protected>
+                }
+              />
 
             </Routes>
           </Suspense>

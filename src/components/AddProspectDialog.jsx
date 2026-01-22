@@ -26,7 +26,7 @@ import {
   SelectValue,
 } from './ui/select'
 import { Loader2, UserPlus, Building2, Mail, Phone, Globe, FileText } from 'lucide-react'
-import api from '../lib/api'
+import { crmApi } from '../lib/portal-api'
 import { toast } from '../lib/toast'
 
 const LEAD_SOURCES = [
@@ -66,24 +66,25 @@ export default function AddProspectDialog({
 
     setIsSubmitting(true)
     try {
-      const response = await api.post('/.netlify/functions/admin-clients-create', {
+      const response = await crmApi.createProspect({
         ...formData,
-        contactType: 'prospect',
-        pipeline_stage: 'new_lead'
+        pipelineStage: 'new_lead',
+        source: formData.source || 'manual',
       })
       
       toast.success('Prospect added successfully!')
       
       // Return the created prospect data
       if (onSuccess) {
+        const prospect = response.data?.prospect || response.data
         onSuccess({
-          id: response.data.contact?.id || response.data.id,
-          name: formData.name,
-          email: formData.email,
-          company: formData.company,
-          phone: formData.phone,
-          website: formData.website,
-          pipelineStage: 'new_lead'
+          id: prospect?.id,
+          name: prospect?.name || formData.name,
+          email: prospect?.email || formData.email,
+          company: prospect?.company || formData.company,
+          phone: prospect?.phone || formData.phone,
+          website: prospect?.website || formData.website,
+          pipelineStage: prospect?.pipelineStage || 'new_lead',
         })
       }
       
@@ -101,10 +102,19 @@ export default function AddProspectDialog({
       onClose()
     } catch (err) {
       console.error('Failed to add prospect:', err)
-      toast.error(err.response?.data?.error || 'Failed to add prospect')
+      toast.error(getErrorMessage(err))
     } finally {
       setIsSubmitting(false)
     }
+  }
+
+  const getErrorMessage = (err) => {
+    const apiError = err?.response?.data?.error
+    if (typeof apiError === 'string') return apiError
+    if (apiError?.message) return apiError.message
+    if (err?.response?.data?.message) return err.response.data.message
+    if (err?.message) return err.message
+    return 'Failed to add prospect'
   }
 
   const handleChange = (field, value) => {

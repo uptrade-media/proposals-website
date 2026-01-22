@@ -2,16 +2,12 @@
  * Analytics - World-class analytics dashboard
  * Full-featured analytics page with modular components
  */
-import { useState, useEffect, useRef, lazy, Suspense } from 'react'
+import { lazy, Suspense } from 'react'
 import { Alert, AlertDescription } from '@/components/ui/alert'
-import { Card, CardContent } from '@/components/ui/card'
-import { Button } from '@/components/ui/button'
 import { Loader2 } from 'lucide-react'
-import useSiteAnalyticsStore from '@/lib/site-analytics-store'
-import useAuthStore from '@/lib/auth-store'
+import { useAnalytics } from '@/hooks/useAnalytics'
 
 // Import modular components
-import { AnalyticsHeader } from '@/components/analytics/AnalyticsHeader'
 import { MetricsGrid } from '@/components/analytics/MetricsGrid'
 
 // Lazy load heavier components for better code splitting
@@ -39,214 +35,57 @@ function ChartLoader() {
 }
 
 export default function Analytics() {
-  const { currentOrg, currentProject } = useAuthStore()
-  // Use project context if available, otherwise org context
-  const activeContext = currentProject || currentOrg
-  const isProjectTenant = activeContext?.isProjectTenant === true || !!currentProject
-  const tenantName = activeContext?.name || 'Your Site'
-  const tenantDomain = activeContext?.domain
-  
   const {
+    // Project info
+    projectDomain,
+    
+    // State
+    isLoading,
+    isRefreshing,
+    error,
+    dateRange,
+    
+    // Raw data
     overview,
-    topPages,
-    pageViewsByDay,
-    pageViewsByHour,
     webVitals,
     sessions,
     scrollDepth,
     heatmap,
-    isLoading,
-    error,
-    dateRange,
-    setDateRange,
+    topReferrers,
+    topEvents,
+    
+    // Transformed data
+    trafficData,
+    deviceData,
+    pagesData,
+    hourlyData,
+    funnelData,
+    engagementData,
+    metrics,
+    
+    // Realtime
+    realtimeActiveVisitors,
+    realtimeEvents,
+    
+    // Handlers
+    handleRefresh,
+    clearError,
     fetchAllAnalytics,
-    setTenantId,
+    
+    // Formatters
     formatNumber,
     formatDuration,
-    formatPercent,
-    clearError,
-    // Realtime methods
-    subscribeToAnalytics,
-    unsubscribeFromAnalytics,
-    realtimeConnected,
-    lastUpdated
-  } = useSiteAnalyticsStore()
-
-  const hasFetchedRef = useRef(false)
-  const [isRefreshing, setIsRefreshing] = useState(false)
-  const [showComparison, setShowComparison] = useState(false)
-  const [tenantReady, setTenantReady] = useState(false)
-
-  // Set tenant ID for analytics filtering
-  useEffect(() => {
-    if (isProjectTenant && activeContext?.id && setTenantId) {
-      setTenantId(activeContext.id)
-      setTenantReady(true)
-    } else if (!isProjectTenant && setTenantId) {
-      setTenantId(null) // Reset to default (all data)
-      setTenantReady(true)
-    }
-  }, [isProjectTenant, activeContext?.id, setTenantId])
-
-  // Initial data fetch - wait for tenant to be ready
-  useEffect(() => {
-    if (!tenantReady) return
-    if (hasFetchedRef.current) return
-    hasFetchedRef.current = true
-    fetchAllAnalytics()
-  }, [tenantReady])
-
-  // Refetch when date range changes
-  useEffect(() => {
-    if (hasFetchedRef.current) {
-      fetchAllAnalytics()
-    }
-  }, [dateRange])
-
-  // Subscribe to realtime analytics updates
-  useEffect(() => {
-    if (!tenantReady) return
-    
-    // Subscribe with current tenant context
-    const tenantId = isProjectTenant ? activeContext?.id : null
-    subscribeToAnalytics(tenantId)
-    
-    // Cleanup on unmount
-    return () => {
-      unsubscribeFromAnalytics()
-    }
-  }, [tenantReady, isProjectTenant, activeContext?.id])
-  
-  // Handle refresh
-  const handleRefresh = async () => {
-    setIsRefreshing(true)
-    await fetchAllAnalytics()
-    setIsRefreshing(false)
-  }
-
-  // Handle date range change
-  const handleDateRangeChange = (range) => {
-    if (range.preset) {
-      setDateRange(range.days)
-    }
-  }
-
-  // Extract data from store
-  const summary = overview?.summary || {}
-  const deviceBreakdown = overview?.deviceBreakdown || {}
-  const topReferrers = overview?.topReferrers || []
-  const topEvents = overview?.topEvents || []
-  const dailyTrend = overview?.dailyTrend || pageViewsByDay || []
-
-  // Prepare metrics for grid
-  const metrics = [
-    {
-      label: 'Page Views',
-      value: formatNumber(summary.pageViews),
-      change: summary.pageViewsChange || null,
-      trend: summary.pageViewsTrend || 'neutral',
-      icon: 'eye'
-    },
-    {
-      label: 'Unique Sessions',
-      value: formatNumber(summary.uniqueSessions || summary.totalSessions),
-      change: summary.sessionsChange || null,
-      trend: summary.sessionsTrend || 'neutral',
-      icon: 'users'
-    },
-    {
-      label: 'Avg. Duration',
-      value: formatDuration(summary.avgSessionDuration),
-      change: summary.durationChange || null,
-      trend: summary.durationTrend || 'neutral',
-      icon: 'clock'
-    },
-    {
-      label: 'Bounce Rate',
-      value: `${(summary.bounceRate || 0).toFixed(1)}%`,
-      change: summary.bounceRateChange || null,
-      trend: summary.bounceRateTrend === 'up' ? 'down' : 'up', // Inverse for bounce rate
-      icon: 'target'
-    },
-    {
-      label: 'Conversions',
-      value: formatNumber(summary.conversions),
-      change: summary.conversionsChange || null,
-      trend: summary.conversionsTrend || 'neutral',
-      icon: 'target'
-    },
-    {
-      label: 'Engagement Rate',
-      value: `${(summary.engagementRate || (100 - (summary.bounceRate || 0))).toFixed(1)}%`,
-      change: null,
-      trend: 'neutral',
-      icon: 'activity'
-    }
-  ]
-
-  // Prepare traffic data for chart
-  const trafficData = dailyTrend.map(d => ({
-    date: d.date,
-    views: d.views || d.pageViews || 0,
-    sessions: d.sessions || d.uniqueSessions || Math.floor((d.views || 0) * 0.6)
-  }))
-
-  // Prepare device data
-  const deviceData = {
-    desktop: deviceBreakdown.desktop || 0,
-    mobile: deviceBreakdown.mobile || 0,
-    tablet: deviceBreakdown.tablet || 0
-  }
-
-  // Prepare pages data
-  const pagesData = (overview?.topPages || topPages || []).map(page => ({
-    path: page.path || page.title || '/',
-    title: page.title || page.path || 'Unknown',
-    views: page.views || page.pageViews || 0,
-    uniqueViews: page.uniqueViews || page.sessions || Math.floor((page.views || 0) * 0.75),
-    avgDuration: page.avgDuration || page.avgTimeOnPage || 0,
-    bounceRate: page.bounceRate || 45
-  }))
-
-  // Prepare hourly data
-  const hourlyData = (pageViewsByHour || []).map(h => ({
-    hour: typeof h.hour === 'number' ? h.hour : parseInt(h.label?.replace(':00', ''), 10) || 0,
-    visits: h.views || h.pageViews || 0
-  }))
-
-  // Prepare funnel data
-  const funnelData = {
-    uniqueVisitors: summary.uniqueSessions || summary.totalSessions || 0,
-    pageViews: summary.pageViews || 0,
-    engagedSessions: Math.floor((summary.uniqueSessions || 0) * ((100 - (summary.bounceRate || 40)) / 100)),
-    conversions: summary.conversions || 0
-  }
-
-  // Prepare engagement data
-  const engagementData = {
-    avgSessionDuration: summary.avgSessionDuration || 0,
-    pagesPerSession: summary.avgPagesPerSession || 0,
-    bounceRate: summary.bounceRate || 0,
-    engagementRate: summary.engagementRate || (100 - (summary.bounceRate || 0)),
-    avgScrollDepth: summary.avgScrollDepth || 65,
-    avgTimeOnPage: (summary.avgSessionDuration || 0) * 0.7
-  }
-
-  // Real-time mock data (would come from WebSocket in production)
-  const realtimeActiveVisitors = summary.activeNow || Math.floor(Math.random() * 10) + 1
-  const realtimeEvents = []
+    formatPercent
+  } = useAnalytics()
 
   if (error && !overview) {
     return (
       <div className="space-y-6">
-        <AnalyticsHeader
-          dateRange={{ preset: 'last30days', days: dateRange }}
-          onDateRangeChange={handleDateRangeChange}
-          onRefresh={handleRefresh}
-          isRefreshing={isRefreshing}
-          siteName={isProjectTenant ? tenantName : null}
-          siteDomain={isProjectTenant ? tenantDomain : null}
-        />
+        {projectDomain && (
+          <p className="text-muted-foreground text-sm">
+            Traffic and engagement for <span className="text-foreground font-medium">{projectDomain}</span>
+          </p>
+        )}
         <Alert variant="destructive">
           <AlertDescription className="flex items-center justify-between">
             <span>{error}</span>
@@ -264,24 +103,17 @@ export default function Analytics() {
 
   return (
     <div className="space-y-6 pb-8">
-      {/* Header with controls */}
-      <AnalyticsHeader
-        dateRange={{ preset: 'last30days', days: dateRange }}
-        onDateRangeChange={handleDateRangeChange}
-        onRefresh={handleRefresh}
-        isRefreshing={isRefreshing}
-        showComparison={showComparison}
-        onToggleComparison={() => setShowComparison(!showComparison)}
-        siteName={isProjectTenant ? tenantName : null}
-        siteDomain={isProjectTenant ? tenantDomain : 'uptrademedia.com'}
-        realtimeConnected={realtimeConnected}
-        lastUpdated={lastUpdated}
-      />
+      {/* Simple subtitle - header is handled by AnalyticsDashboard */}
+      {projectDomain && (
+        <p className="text-muted-foreground text-sm">
+          Traffic and engagement for <span className="text-foreground font-medium">{projectDomain}</span>
+        </p>
+      )}
 
       {/* Key Metrics */}
       <MetricsGrid
         metrics={metrics}
-        isLoading={isLoading && !overview}
+        isLoading={isLoading}
         columns={6}
       />
 
@@ -292,7 +124,7 @@ export default function Analytics() {
           <Suspense fallback={<ChartLoader />}>
             <TrafficChart
               data={trafficData}
-              isLoading={isLoading && !overview}
+              isLoading={isLoading}
               dateRange={dateRange}
               showSessions={true}
             />
@@ -317,7 +149,7 @@ export default function Analytics() {
         <Suspense fallback={<ChartLoader />}>
           <DeviceBreakdown
             data={deviceData}
-            isLoading={isLoading && !overview}
+            isLoading={isLoading}
             formatNumber={formatNumber}
             formatPercent={formatPercent}
           />
@@ -327,7 +159,7 @@ export default function Analytics() {
         <Suspense fallback={<ChartLoader />}>
           <HourlyChart
             data={hourlyData}
-            isLoading={isLoading && !overview}
+            isLoading={isLoading}
           />
         </Suspense>
       </div>
@@ -338,7 +170,7 @@ export default function Analytics() {
         <Suspense fallback={<ChartLoader />}>
           <ConversionFunnel
             data={funnelData}
-            isLoading={isLoading && !overview}
+            isLoading={isLoading}
             formatNumber={formatNumber}
           />
         </Suspense>
@@ -347,7 +179,7 @@ export default function Analytics() {
         <Suspense fallback={<ChartLoader />}>
           <EngagementMetrics
             data={engagementData}
-            isLoading={isLoading && !overview}
+            isLoading={isLoading}
             formatDuration={formatDuration}
           />
         </Suspense>
@@ -359,7 +191,7 @@ export default function Analytics() {
         <Suspense fallback={<ChartLoader />}>
           <TopPagesTable
             pages={pagesData}
-            isLoading={isLoading && !overview}
+            isLoading={isLoading}
             formatNumber={formatNumber}
             formatDuration={formatDuration}
           />
@@ -369,7 +201,7 @@ export default function Analytics() {
         <Suspense fallback={<ChartLoader />}>
           <ReferrersTable
             referrers={topReferrers}
-            isLoading={isLoading && !overview}
+            isLoading={isLoading}
             formatNumber={formatNumber}
           />
         </Suspense>
@@ -378,7 +210,7 @@ export default function Analytics() {
       {/* Performance Section */}
       <Suspense fallback={<ChartLoader />}>
         <WebVitalsCard
-          data={webVitals?.summary}
+          data={webVitals}
           isLoading={isLoading && !webVitals}
         />
       </Suspense>
@@ -386,11 +218,6 @@ export default function Analytics() {
       {/* Browser & OS Breakdown */}
       <Suspense fallback={<ChartLoader />}>
         <BrowserBreakdown sessions={sessions} />
-      </Suspense>
-
-      {/* UTM Campaign Tracking */}
-      <Suspense fallback={<ChartLoader />}>
-        <UTMCampaigns sessions={sessions} />
       </Suspense>
 
       {/* Scroll Depth Analytics */}
@@ -426,6 +253,11 @@ export default function Analytics() {
           </div>
         </div>
       )}
+
+      {/* UTM Campaign Tracking - at the very bottom */}
+      <Suspense fallback={<ChartLoader />}>
+        <UTMCampaigns sessions={sessions} />
+      </Suspense>
     </div>
   )
 }

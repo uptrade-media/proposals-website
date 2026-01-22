@@ -26,10 +26,12 @@ import {
   CheckCircle2,
   AlertCircle,
   Calendar,
-  Sparkles
+  Sparkles,
+  Package
 } from 'lucide-react'
 import { toast } from 'sonner'
 import { useEmailPlatformStore } from '@/lib/email-platform-store'
+import OfferingSelector from './OfferingSelector'
 
 const STEPS = [
   { id: 'details', label: 'Campaign Details', icon: FileText },
@@ -53,7 +55,10 @@ export default function CampaignComposer({ campaign, onSave, onBack, onEditTempl
     template_id: campaign?.template_id || '',
     list_ids: campaign?.list_ids || [],
     schedule_type: 'now', // 'now' or 'later'
-    scheduled_for: ''
+    scheduled_for: '',
+    // Commerce integration
+    offering_id: campaign?.offering_id || null,
+    offering_snapshot: campaign?.offering_snapshot || null
   })
 
   useEffect(() => {
@@ -234,6 +239,85 @@ export default function CampaignComposer({ campaign, onSave, onBack, onEditTempl
                   placeholder="e.g., Check out our exclusive holiday deals..."
                   rows={2}
                 />
+              </div>
+
+              {/* Commerce Integration - Link to Product/Service/Event */}
+              <div className="border rounded-lg p-4 bg-muted/30">
+                <div className="flex items-center gap-2 mb-2">
+                  <Package className="h-4 w-4 text-primary" />
+                  <Label className="text-base font-semibold">Link to Offering (Optional)</Label>
+                </div>
+                <p className="text-sm text-muted-foreground mb-3">
+                  Connect this campaign to a product, service, class, or event to auto-populate template variables
+                </p>
+                
+                {formData.offering_snapshot ? (
+                  <div className="flex items-center justify-between p-3 bg-background border rounded-md">
+                    <div className="flex items-center gap-3">
+                      {formData.offering_snapshot.featured_image && (
+                        <img 
+                          src={formData.offering_snapshot.featured_image} 
+                          alt="" 
+                          className="w-10 h-10 rounded object-cover"
+                        />
+                      )}
+                      <div>
+                        <p className="font-medium">{formData.offering_snapshot.name}</p>
+                        <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                          <Badge variant="secondary" className="text-xs capitalize">
+                            {formData.offering_snapshot.type}
+                          </Badge>
+                          {formData.offering_snapshot.price && (
+                            <span>${formData.offering_snapshot.price}</span>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => {
+                        updateField('offering_id', null)
+                        updateField('offering_snapshot', null)
+                      }}
+                    >
+                      Remove
+                    </Button>
+                  </div>
+                ) : (
+                  <OfferingSelector
+                    onSelect={(offering, templateVars, recommendedTemplate) => {
+                      updateField('offering_id', offering.id)
+                      updateField('offering_snapshot', {
+                        id: offering.id,
+                        type: offering.type,
+                        name: offering.name,
+                        slug: offering.slug,
+                        price: offering.price,
+                        featured_image: offering.featured_image,
+                        template_variables: templateVars
+                      })
+                      
+                      // If campaign name is empty, suggest one
+                      if (!formData.name) {
+                        updateField('name', `${offering.name} Campaign`)
+                      }
+                      
+                      // If subject is empty, suggest one based on type
+                      if (!formData.subject) {
+                        const subjectSuggestions = {
+                          product: `✨ Introducing ${offering.name}`,
+                          service: `🎯 Book Your ${offering.name} Today`,
+                          class: `📚 Join Our ${offering.name}`,
+                          event: `🎉 You're Invited: ${offering.name}`
+                        }
+                        updateField('subject', subjectSuggestions[offering.type] || `Check out ${offering.name}`)
+                      }
+                      
+                      toast.success('Offering linked! Template variables will be auto-filled.')
+                    }}
+                  />
+                )}
               </div>
 
               <div className="grid grid-cols-2 gap-4">

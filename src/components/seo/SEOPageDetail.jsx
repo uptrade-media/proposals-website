@@ -1,6 +1,7 @@
 // src/components/seo/SEOPageDetail.jsx
 // Detailed view for a single page
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
+import { useParams, useNavigate } from 'react-router-dom'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -23,30 +24,90 @@ import {
   Save,
   Search,
   Code,
-  Send
+  Send,
+  Sparkles,
+  Eye,
+  ArrowLeft
 } from 'lucide-react'
 import { useSeoStore } from '@/lib/seo-store'
+import { useSEOAIGeneration } from '@/lib/use-seo-ai-generation'
+import { AIPreviewModal, AIGenerateButton } from './signal'
+import SEOSerpPreview from './SEOSerpPreview'
 
-// Guard component - handles null page before any hooks run
-export default function SEOPageDetail({ page, site }) {
-  // Handle null page FIRST, before any hooks
+// Main component - fetches page from route params
+export default function SEOPageDetail({ projectId }) {
+  const { pageId } = useParams()
+  const navigate = useNavigate()
+  const { currentProject, fetchPageDetails } = useSeoStore()
+  const [page, setPage] = useState(null)
+  const [isLoading, setIsLoading] = useState(true)
+
+  // Fetch page details on mount or when pageId changes
+  useEffect(() => {
+    async function loadPage() {
+      if (!pageId || !projectId) return
+      
+      setIsLoading(true)
+      try {
+        const pageData = await fetchPageDetails(projectId, pageId)
+        setPage(pageData)
+      } catch (error) {
+        console.error('Failed to load page:', error)
+      } finally {
+        setIsLoading(false)
+      }
+    }
+    
+    loadPage()
+  }, [pageId, projectId])
+
+  // Loading state
+  if (isLoading) {
+    return (
+      <Card>
+        <CardContent className="py-12 text-center">
+          <Loader2 className="h-8 w-8 animate-spin mx-auto mb-4 text-muted-foreground" />
+          <p className="text-muted-foreground">Loading page details...</p>
+        </CardContent>
+      </Card>
+    )
+  }
+
+  // Handle null page
   if (!page) {
     return (
       <Card>
         <CardContent className="py-8 text-center">
-          <p className="text-muted-foreground">No page selected</p>
+          <p className="text-muted-foreground">Page not found</p>
+          <Button 
+            variant="outline" 
+            className="mt-4"
+            onClick={() => navigate('/seo/pages')}
+          >
+            <ArrowLeft className="mr-2 h-4 w-4" />
+            Back to Pages
+          </Button>
         </CardContent>
       </Card>
     )
   }
 
   // Render the inner component only when page exists
-  return <SEOPageDetailInner page={page} site={site} />
+  return <SEOPageDetailInner page={page} site={currentProject} projectId={projectId} />
 }
 
 // Inner component - safe to use hooks since page is guaranteed to exist
 function SEOPageDetailInner({ page, site }) {
   const { crawlPage, generateSchema, requestIndexing, inspectUrl } = useSeoStore()
+  const { 
+    isGenerating: isAIGenerating, 
+    suggestions: aiSuggestions, 
+    generateTitles, 
+    generateMetaDescriptions,
+    generateMore,
+    clearSuggestions 
+  } = useSEOAIGeneration()
+  
   const [crawling, setCrawling] = useState(false)
   const [requestingIndexing, setRequestingIndexing] = useState(false)
   const [generatingSchema, setGeneratingSchema] = useState(false)
@@ -55,6 +116,10 @@ function SEOPageDetailInner({ page, site }) {
   const [activeTab, setActiveTab] = useState('overview')
   const [editingTitle, setEditingTitle] = useState(false)
   const [editingMeta, setEditingMeta] = useState(false)
+  
+  // AI Preview Modal state
+  const [aiModalOpen, setAIModalOpen] = useState(false)
+  const [aiModalType, setAIModalType] = useState('title') // 'title' | 'meta_description'
   const [newTitle, setNewTitle] = useState(page.managed_title || page.title || '')
   const [newMeta, setNewMeta] = useState(page.managed_meta_description || page.meta_description || '')
 
@@ -373,6 +438,10 @@ function SEOPageDetailInner({ page, site }) {
       <Tabs value={activeTab} onValueChange={setActiveTab}>
         <TabsList>
           <TabsTrigger value="overview">Overview</TabsTrigger>
+          <TabsTrigger value="serp-preview">
+            <Eye className="h-3.5 w-3.5 mr-1.5" />
+            SERP Preview
+          </TabsTrigger>
           <TabsTrigger value="metadata">Metadata</TabsTrigger>
           <TabsTrigger value="content">Content</TabsTrigger>
           <TabsTrigger value="queries">Queries</TabsTrigger>
@@ -525,6 +594,18 @@ function SEOPageDetailInner({ page, site }) {
           )}
         </TabsContent>
 
+        <TabsContent value="serp-preview" className="mt-6">
+          <SEOSerpPreview 
+            page={page}
+            targetKeyword={page.target_keyword || ''}
+            onSave={async (updates) => {
+              // Save managed title/description
+              // TODO: Integrate with seo-store update function
+              console.log('Save SERP updates:', updates)
+            }}
+          />
+        </TabsContent>
+
         <TabsContent value="metadata" className="mt-6">
           <Card>
             <CardHeader>
@@ -534,10 +615,32 @@ function SEOPageDetailInner({ page, site }) {
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-6">
+              {/* Title Section */}
               <div>
                 <div className="flex items-center justify-between mb-2">
-                  <span className="text-sm font-medium text-[var(--text-secondary)]">Optimized Title</span>
-                  <span className="text-xs text-[var(--text-tertiary)]">
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm font-medium text-[var(--text-secondary)]">Optimized Title</span>
+                    <AIGenerateButton
+                      type="title"
+                      variant="icon"
+                      isLoading={isAIGenerating && aiModalType === 'title'}
+                      onClick={() => {
+                        setAIModalType('title')
+                        clearSuggestions()
+                        generateTitles({
+                          pageUrl: page.url,
+                          currentTitle: page.title,
+                          h1: page.h1,
+                          metaDescription: page.meta_description
+                        })
+                        setAIModalOpen(true)
+                      }}
+                    />
+                  </div>
+                  <span className={`text-xs ${
+                    newTitle.length === 0 ? 'text-red-400' :
+                    newTitle.length < 30 || newTitle.length > 60 ? 'text-yellow-400' : 'text-green-400'
+                  }`}>
                     {newTitle.length}/60 characters
                   </span>
                 </div>
@@ -549,10 +652,33 @@ function SEOPageDetailInner({ page, site }) {
                   rows={2}
                 />
               </div>
+              
+              {/* Meta Description Section */}
               <div>
                 <div className="flex items-center justify-between mb-2">
-                  <span className="text-sm font-medium text-[var(--text-secondary)]">Optimized Meta Description</span>
-                  <span className="text-xs text-[var(--text-tertiary)]">
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm font-medium text-[var(--text-secondary)]">Optimized Meta Description</span>
+                    <AIGenerateButton
+                      type="meta_description"
+                      variant="icon"
+                      isLoading={isAIGenerating && aiModalType === 'meta_description'}
+                      onClick={() => {
+                        setAIModalType('meta_description')
+                        clearSuggestions()
+                        generateMetaDescriptions({
+                          pageUrl: page.url,
+                          currentMeta: page.meta_description,
+                          title: page.title,
+                          h1: page.h1
+                        })
+                        setAIModalOpen(true)
+                      }}
+                    />
+                  </div>
+                  <span className={`text-xs ${
+                    newMeta.length === 0 ? 'text-red-400' :
+                    newMeta.length < 120 || newMeta.length > 160 ? 'text-yellow-400' : 'text-green-400'
+                  }`}>
                     {newMeta.length}/160 characters
                   </span>
                 </div>
@@ -564,18 +690,68 @@ function SEOPageDetailInner({ page, site }) {
                   rows={3}
                 />
               </div>
+              
               <div className="flex items-center gap-2">
                 <Button>
                   <Save className="h-4 w-4 mr-2" />
                   Save Changes
                 </Button>
-                <Button variant="outline">
-                  <Zap className="h-4 w-4 mr-2" />
+                <Button 
+                  variant="outline"
+                  onClick={() => {
+                    setAIModalType('title')
+                    clearSuggestions()
+                    generateTitles({
+                      pageUrl: page.url,
+                      currentTitle: page.title,
+                      h1: page.h1,
+                      metaDescription: page.meta_description
+                    })
+                    setAIModalOpen(true)
+                  }}
+                >
+                  <Sparkles className="h-4 w-4 mr-2" />
                   Generate with AI
                 </Button>
               </div>
             </CardContent>
           </Card>
+          
+          {/* AI Preview Modal */}
+          <AIPreviewModal
+            open={aiModalOpen}
+            onOpenChange={setAIModalOpen}
+            type={aiModalType}
+            currentValue={aiModalType === 'title' ? (page.title || '') : (page.meta_description || '')}
+            suggestions={aiSuggestions}
+            isLoading={isAIGenerating}
+            onSelect={(value) => {
+              if (aiModalType === 'title') {
+                setNewTitle(value)
+              } else {
+                setNewMeta(value)
+              }
+              setActionMessage({ type: 'success', text: `AI ${aiModalType === 'title' ? 'title' : 'meta description'} applied` })
+            }}
+            onGenerateMore={() => {
+              if (aiModalType === 'title') {
+                generateMore('title', {
+                  pageUrl: page.url,
+                  currentTitle: page.title,
+                  h1: page.h1,
+                  metaDescription: page.meta_description
+                })
+              } else {
+                generateMore('meta_description', {
+                  pageUrl: page.url,
+                  currentMeta: page.meta_description,
+                  title: page.title,
+                  h1: page.h1
+                })
+              }
+            }}
+            pageUrl={page.url}
+          />
         </TabsContent>
 
         <TabsContent value="content" className="mt-6">

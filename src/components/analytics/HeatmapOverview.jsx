@@ -141,24 +141,42 @@ export default function HeatmapOverview({ heatmap }) {
         <CardContent>
           {topClickedElements.length > 0 ? (
             <div className="space-y-2">
-              {topClickedElements.map((el, idx) => (
-                <div 
-                  key={idx}
-                  className="flex items-center justify-between py-2 px-3 bg-muted/50 rounded-lg"
-                >
-                  <div className="flex items-center gap-2 flex-1 min-w-0">
-                    <Badge variant="outline" className="shrink-0">
-                      {el.elementType || 'element'}
-                    </Badge>
-                    <span className="text-sm truncate font-mono text-muted-foreground">
-                      {el.selector || el.text || 'Unknown'}
+              {topClickedElements.map((el, idx) => {
+                // Prefer text content for display, fall back to selector
+                const displayText = el.text?.slice(0, 40) || null
+                const selectorText = el.selector || (el.id ? `#${el.id}` : el.class ? `.${el.class.split(' ')[0]}` : null)
+                
+                return (
+                  <div 
+                    key={idx}
+                    className="flex items-center justify-between py-2 px-3 bg-muted/50 rounded-lg"
+                  >
+                    <div className="flex items-center gap-2 flex-1 min-w-0">
+                      <Badge variant="outline" className="shrink-0">
+                        {el.elementType || el.tag || 'element'}
+                      </Badge>
+                      <div className="flex flex-col min-w-0">
+                        {displayText && (
+                          <span className="text-sm truncate text-foreground">
+                            "{displayText}"
+                          </span>
+                        )}
+                        {selectorText && (
+                          <span className="text-xs truncate font-mono text-muted-foreground">
+                            {selectorText}
+                          </span>
+                        )}
+                        {!displayText && !selectorText && (
+                          <span className="text-sm text-muted-foreground">Unknown</span>
+                        )}
+                      </div>
+                    </div>
+                    <span className="text-sm font-semibold ml-2">
+                      {el.clicks?.toLocaleString() || 0}
                     </span>
                   </div>
-                  <span className="text-sm font-semibold ml-2">
-                    {el.clicks?.toLocaleString() || 0}
-                  </span>
-                </div>
-              ))}
+                )
+              })}
             </div>
           ) : (
             <div className="flex flex-col items-center justify-center py-8 text-center">

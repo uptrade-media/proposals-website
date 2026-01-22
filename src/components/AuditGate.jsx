@@ -8,10 +8,7 @@ import { supabase } from '../lib/supabase'
 import UptradeLoading from './UptradeLoading'
 import AuditPublicView from './AuditPublicView'
 import { AlertTriangle, RefreshCw } from 'lucide-react'
-
-// Main site API for fallback token validation
-// Use portal proxy to avoid CORS issues with cross-origin preflight redirects
-const TOKEN_VALIDATE_API = '/.netlify/functions/audits-validate-token'
+import { auditsApi } from '@/lib/portal-api'
 
 // Error messages for better UX
 const errorMessages = {
@@ -164,20 +161,8 @@ export default function AuditGate() {
       console.log('[AuditGate] Fetching audit with session for user:', session.user?.email)
       
       // Call portal's audit-get-public function with session
-      const response = await fetch(`/.netlify/functions/audits-get-public?id=${id}`, {
-        headers: {
-          'Authorization': `Bearer ${session.access_token}`
-        }
-      })
-
-      if (!response.ok) {
-        const data = await response.json()
-        setError(data.error || 'Failed to load audit')
-        setIsLoading(false)
-        return
-      }
-
-      const data = await response.json()
+      const response = await auditsApi.getPublic(id)
+      const data = response.data
       
       // Cache for session
       const cacheKey = `audit_${id}`
@@ -192,7 +177,7 @@ export default function AuditGate() {
       setIsLoading(false)
 
       // Track view (fire and forget)
-      trackAuditView(id, session)
+      trackAuditView(id)
 
     } catch (err) {
       console.error('[AuditGate] Failed to fetch audit with session:', err)
@@ -204,50 +189,36 @@ export default function AuditGate() {
   // Fallback: Validate with legacy token via portal proxy
   const validateWithToken = async (token) => {
     try {
-      const response = await fetch(TOKEN_VALIDATE_API, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ auditId: id, token })
-      })
-
-      const data = await response.json()
-
-      if (!response.ok || !data.valid) {
-        setError(data.error || 'Failed to validate token')
-        setIsLoading(false)
-        return
-      }
+      const response = await auditsApi.getPublic(id, token)
+      const data = response.data
 
       // Cache for session
       const cacheKey = `audit_${id}`
       sessionStorage.setItem(cacheKey, JSON.stringify({
-        audit: data.audit,
-        contact: data.audit?.contact || null,
+        audit: data.audit || data,
+        contact: data.contact || data.audit?.contact || null,
         _cachedAt: Date.now()
       }))
 
-      setAudit(data.audit)
-      setContact(data.audit?.contact || null)
+      setAudit(data.audit || data)
+      setContact(data.contact || data.audit?.contact || null)
       setIsLoading(false)
+
+      // Track view (fire and forget)
+      trackAuditView(id)
 
     } catch (err) {
       console.error('[AuditGate] Token validation failed:', err)
-      setError('Failed to load audit report. Please try again.')
+      const message = err.response?.data?.error?.message || err.response?.data?.message
+      setError(message || 'Failed to load audit report. Please try again.')
       setIsLoading(false)
     }
   }
 
   // Track audit view for analytics
-  const trackAuditView = async (auditId, session) => {
+  const trackAuditView = async (auditId) => {
     try {
-      await fetch('/.netlify/functions/audits-track-view', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${session.access_token}`
-        },
-        body: JSON.stringify({ auditId })
-      })
+      await auditsApi.trackView(auditId)
     } catch (err) {
       console.warn('[AuditGate] Failed to track view:', err)
     }

@@ -3,6 +3,8 @@
 // Shows training status, knowledge base, and actionable recommendations
 import { useState, useEffect } from 'react'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { useSignalAccess } from '@/lib/signal-access'
+import SignalUpgradeCard from './signal/SignalUpgradeCard'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
@@ -32,7 +34,18 @@ import {
 } from 'lucide-react'
 import { useSeoStore, selectPendingRecommendations, selectHighImpactRecommendations, selectAutoFixableRecommendations } from '@/lib/seo-store'
 
-export default function SEOAIInsights({ site, onSelectPage }) {
+export default function SEOAIInsights({ site, projectId, onSelectPage }) {
+  const { hasAccess: hasSignalAccess } = useSignalAccess()
+
+  // Show upgrade prompt if no Signal access
+  if (!hasSignalAccess) {
+    return (
+      <div className="p-6">
+        <SignalUpgradeCard feature="insights" variant="default" />
+      </div>
+    )
+  }
+
   const {
     aiRecommendations,
     aiRecommendationsLoading,
@@ -42,7 +55,7 @@ export default function SEOAIInsights({ site, onSelectPage }) {
     aiTrainingStatus,
     aiAnalysisInProgress,
     trainSite,
-    fetchSiteKnowledge,
+    fetchProjectKnowledge,
     runAiBrain,
     fetchAiRecommendations,
     applyRecommendation,
@@ -54,11 +67,14 @@ export default function SEOAIInsights({ site, onSelectPage }) {
   const [applying, setApplying] = useState({})
   const [batchApplying, setBatchApplying] = useState(false)
 
+  // Use projectId directly (new architecture) or fallback to site.id (legacy)
+  const siteId = projectId || site?.id
+
   // Fetch knowledge and recommendations on mount
   useEffect(() => {
-    if (site?.id) {
-      fetchSiteKnowledge(site.id)
-      fetchAiRecommendations(site.id)
+    if (siteId) {
+      fetchProjectKnowledge(siteId)
+      fetchAiRecommendations(siteId)
     }
   }, [site?.id])
 
@@ -148,20 +164,20 @@ export default function SEOAIInsights({ site, onSelectPage }) {
   // Training required state
   if (!siteKnowledge && aiTrainingStatus !== 'training') {
     return (
-      <Card className="border-dashed border-[var(--accent-primary)]/30">
+      <Card className="border-dashed border-primary/30">
         <CardContent className="py-12 text-center">
-          <Brain className="h-12 w-12 mx-auto mb-4 text-[var(--accent-primary)]" />
-          <h3 className="text-lg font-semibold mb-2 text-[var(--text-primary)]">
+          <Brain className="h-12 w-12 mx-auto mb-4 text-primary" />
+          <h3 className="text-lg font-semibold mb-2 text-foreground">
             Train AI on Your Website
           </h3>
-          <p className="text-[var(--text-secondary)] mb-6 max-w-md mx-auto">
+          <p className="text-muted-foreground mb-6 max-w-md mx-auto">
             Before the AI can provide intelligent recommendations, it needs to learn about your business, 
             services, and content by analyzing your website.
           </p>
           <Button 
             onClick={handleTrainSite} 
             disabled={siteKnowledgeLoading}
-            className="bg-gradient-to-r from-[var(--accent-primary)] to-purple-500"
+            className="bg-gradient-to-r from-primary to-purple-500"
           >
             {siteKnowledgeLoading ? (
               <>
@@ -186,15 +202,15 @@ export default function SEOAIInsights({ site, onSelectPage }) {
       <Card>
         <CardContent className="py-12 text-center">
           <div className="relative">
-            <Brain className="h-12 w-12 mx-auto mb-4 text-[var(--accent-primary)]" />
+            <Brain className="h-12 w-12 mx-auto mb-4 text-primary" />
             <div className="absolute inset-0 flex items-center justify-center">
-              <div className="h-16 w-16 border-2 border-[var(--accent-primary)]/30 border-t-[var(--accent-primary)] rounded-full animate-spin" />
+              <div className="h-16 w-16 border-2 border-primary/30 border-t-primary rounded-full animate-spin" />
             </div>
           </div>
-          <h3 className="text-lg font-semibold mb-2 text-[var(--text-primary)]">
+          <h3 className="text-lg font-semibold mb-2 text-foreground">
             AI Training in Progress
           </h3>
-          <p className="text-[var(--text-secondary)] max-w-md mx-auto">
+          <p className="text-muted-foreground max-w-md mx-auto">
             Analyzing your website content, services, locations, and competitive positioning. 
             This may take a few minutes...
           </p>
@@ -208,12 +224,12 @@ export default function SEOAIInsights({ site, onSelectPage }) {
       {/* AI Header */}
       <div className="flex items-start justify-between">
         <div className="flex items-center gap-3">
-          <div className="p-2 rounded-lg bg-gradient-to-br from-[var(--accent-primary)]/20 to-purple-500/20">
-            <Brain className="h-6 w-6 text-[var(--accent-primary)]" />
+          <div className="p-2 rounded-lg bg-gradient-to-br from-primary/20 to-purple-500/20">
+            <Brain className="h-6 w-6 text-primary" />
           </div>
           <div>
-            <h2 className="text-xl font-semibold text-[var(--text-primary)]">AI SEO Brain</h2>
-            <p className="text-sm text-[var(--text-secondary)]">
+            <h2 className="text-xl font-semibold text-foreground">AI SEO Brain</h2>
+            <p className="text-sm text-muted-foreground">
               Intelligent recommendations powered by your business context
             </p>
           </div>
@@ -253,45 +269,45 @@ export default function SEOAIInsights({ site, onSelectPage }) {
 
       {/* Stats Cards */}
       <div className="grid grid-cols-4 gap-4">
-        <Card className="bg-[var(--bg-secondary)]">
+        <Card className="bg-muted/50">
           <CardContent className="p-4">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-xs text-[var(--text-tertiary)]">Pending</p>
-                <p className="text-2xl font-bold text-[var(--text-primary)]">{pendingRecs.length}</p>
+                <p className="text-xs text-muted-foreground">Pending</p>
+                <p className="text-2xl font-bold text-foreground">{pendingRecs.length}</p>
               </div>
               <Lightbulb className="h-8 w-8 text-yellow-400/50" />
             </div>
           </CardContent>
         </Card>
-        <Card className="bg-[var(--bg-secondary)]">
+        <Card className="bg-muted/50">
           <CardContent className="p-4">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-xs text-[var(--text-tertiary)]">High Impact</p>
+                <p className="text-xs text-muted-foreground">High Impact</p>
                 <p className="text-2xl font-bold text-orange-400">{highImpactRecs.length}</p>
               </div>
               <TrendingUp className="h-8 w-8 text-orange-400/50" />
             </div>
           </CardContent>
         </Card>
-        <Card className="bg-[var(--bg-secondary)]">
+        <Card className="bg-muted/50">
           <CardContent className="p-4">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-xs text-[var(--text-tertiary)]">Auto-Fixable</p>
+                <p className="text-xs text-muted-foreground">Auto-Fixable</p>
                 <p className="text-2xl font-bold text-green-400">{autoFixableRecs.length}</p>
               </div>
               <Wand2 className="h-8 w-8 text-green-400/50" />
             </div>
           </CardContent>
         </Card>
-        <Card className="bg-[var(--bg-secondary)]">
+        <Card className="bg-muted/50">
           <CardContent className="p-4">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-xs text-[var(--text-tertiary)]">Applied</p>
-                <p className="text-2xl font-bold text-[var(--text-primary)]">
+                <p className="text-xs text-muted-foreground">Applied</p>
+                <p className="text-2xl font-bold text-foreground">
                   {aiRecommendations.filter(r => r.status === 'applied').length}
                 </p>
               </div>
@@ -303,7 +319,7 @@ export default function SEOAIInsights({ site, onSelectPage }) {
 
       {/* Tabs */}
       <Tabs value={activeTab} onValueChange={setActiveTab}>
-        <TabsList className="bg-[var(--bg-secondary)]">
+        <TabsList className="bg-muted/50">
           <TabsTrigger value="recommendations">Recommendations</TabsTrigger>
           <TabsTrigger value="knowledge">Knowledge Base</TabsTrigger>
         </TabsList>
@@ -312,14 +328,14 @@ export default function SEOAIInsights({ site, onSelectPage }) {
         <TabsContent value="recommendations" className="space-y-4 mt-4">
           {aiRecommendationsLoading ? (
             <div className="flex items-center justify-center py-12">
-              <Loader2 className="h-8 w-8 animate-spin text-[var(--accent-primary)]" />
+              <Loader2 className="h-8 w-8 animate-spin text-primary" />
             </div>
           ) : pendingRecs.length === 0 ? (
             <Card>
               <CardContent className="py-12 text-center">
                 <CheckCircle className="h-12 w-12 mx-auto mb-4 text-green-400" />
-                <h3 className="text-lg font-semibold text-[var(--text-primary)]">All Caught Up!</h3>
-                <p className="text-[var(--text-secondary)]">
+                <h3 className="text-lg font-semibold text-foreground">All Caught Up!</h3>
+                <p className="text-muted-foreground">
                   No pending recommendations. Run a new analysis to find more opportunities.
                 </p>
               </CardContent>
@@ -327,16 +343,16 @@ export default function SEOAIInsights({ site, onSelectPage }) {
           ) : (
             <div className="space-y-3">
               {pendingRecs.map(rec => (
-                <Card key={rec.id} className="bg-[var(--bg-secondary)] hover:bg-[var(--bg-tertiary)] transition-colors">
+                <Card key={rec.id} className="bg-muted/50 hover:bg-muted/70 transition-colors">
                   <CardContent className="p-4">
                     <div className="flex items-start justify-between gap-4">
                       <div className="flex items-start gap-3 flex-1">
-                        <div className="p-2 rounded-lg bg-[var(--bg-primary)]">
+                        <div className="p-2 rounded-lg bg-background">
                           {getCategoryIcon(rec.category)}
                         </div>
                         <div className="flex-1 min-w-0">
                           <div className="flex items-center gap-2 mb-1">
-                            <h4 className="font-medium text-[var(--text-primary)] truncate">
+                            <h4 className="font-medium text-foreground truncate">
                               {rec.title}
                             </h4>
                             <Badge className={getImpactColor(rec.impact)}>
@@ -349,22 +365,22 @@ export default function SEOAIInsights({ site, onSelectPage }) {
                               </Badge>
                             )}
                           </div>
-                          <p className="text-sm text-[var(--text-secondary)] line-clamp-2">
+                          <p className="text-sm text-muted-foreground line-clamp-2">
                             {rec.description}
                           </p>
                           {rec.page && (
                             <button 
                               onClick={() => onSelectPage?.(rec.page.id)}
-                              className="text-xs text-[var(--accent-primary)] hover:underline mt-1 flex items-center gap-1"
+                              className="text-xs text-primary hover:underline mt-1 flex items-center gap-1"
                             >
                               {rec.page.url.replace(/^https?:\/\/[^/]+/, '')}
                               <ChevronRight className="h-3 w-3" />
                             </button>
                           )}
                           {rec.suggested_value && (
-                            <div className="mt-2 p-2 rounded bg-[var(--bg-primary)] text-xs">
-                              <span className="text-[var(--text-tertiary)]">Suggested: </span>
-                              <span className="text-[var(--text-secondary)]">
+                            <div className="mt-2 p-2 rounded bg-background text-xs">
+                              <span className="text-muted-foreground">Suggested: </span>
+                              <span className="text-foreground">
                                 {(() => {
                                   if (typeof rec.suggested_value === 'string') {
                                     return rec.suggested_value.length > 100 
@@ -392,7 +408,7 @@ export default function SEOAIInsights({ site, onSelectPage }) {
                           variant="ghost"
                           size="sm"
                           onClick={() => handleDismiss(rec.id)}
-                          className="text-[var(--text-tertiary)] hover:text-red-400"
+                          className="text-muted-foreground hover:text-red-400"
                         >
                           <XCircle className="h-4 w-4" />
                         </Button>
@@ -400,7 +416,7 @@ export default function SEOAIInsights({ site, onSelectPage }) {
                           size="sm"
                           onClick={() => handleApply(rec.id)}
                           disabled={applying[rec.id]}
-                          className="bg-[var(--accent-primary)] hover:bg-[var(--accent-primary)]/90"
+                          className="bg-primary hover:bg-primary/90"
                         >
                           {applying[rec.id] ? (
                             <Loader2 className="h-4 w-4 animate-spin" />
@@ -425,7 +441,7 @@ export default function SEOAIInsights({ site, onSelectPage }) {
           {siteKnowledge ? (
             <div className="grid grid-cols-2 gap-4">
               {/* Business Info */}
-              <Card className="bg-[var(--bg-secondary)]">
+              <Card className="bg-muted/50">
                 <CardHeader className="pb-3">
                   <CardTitle className="text-base flex items-center gap-2">
                     <Building2 className="h-4 w-4" />
@@ -434,20 +450,20 @@ export default function SEOAIInsights({ site, onSelectPage }) {
                 </CardHeader>
                 <CardContent className="space-y-3">
                   <div>
-                    <p className="text-xs text-[var(--text-tertiary)]">Business Name</p>
-                    <p className="text-sm text-[var(--text-primary)]">
+                    <p className="text-xs text-muted-foreground">Business Name</p>
+                    <p className="text-sm text-foreground">
                       {siteKnowledge.business_name || 'Not detected'}
                     </p>
                   </div>
                   <div>
-                    <p className="text-xs text-[var(--text-tertiary)]">Industry</p>
-                    <p className="text-sm text-[var(--text-primary)]">
+                    <p className="text-xs text-muted-foreground">Industry</p>
+                    <p className="text-sm text-foreground">
                       {siteKnowledge.industry || 'Not detected'}
                     </p>
                   </div>
                   <div>
-                    <p className="text-xs text-[var(--text-tertiary)]">Target Audience</p>
-                    <p className="text-sm text-[var(--text-primary)]">
+                    <p className="text-xs text-muted-foreground">Target Audience</p>
+                    <p className="text-sm text-foreground">
                       {siteKnowledge.target_audience || 'Not detected'}
                     </p>
                   </div>
@@ -455,7 +471,7 @@ export default function SEOAIInsights({ site, onSelectPage }) {
               </Card>
 
               {/* Services */}
-              <Card className="bg-[var(--bg-secondary)]">
+              <Card className="bg-muted/50">
                 <CardHeader className="pb-3">
                   <CardTitle className="text-base flex items-center gap-2">
                     <Tag className="h-4 w-4" />
@@ -470,7 +486,7 @@ export default function SEOAIInsights({ site, onSelectPage }) {
                       </Badge>
                     ))}
                     {siteKnowledge.services?.length > 8 && (
-                      <Badge variant="outline" className="text-xs text-[var(--text-tertiary)]">
+                      <Badge variant="outline" className="text-xs text-muted-foreground">
                         +{siteKnowledge.services.length - 8} more
                       </Badge>
                     )}
@@ -479,7 +495,7 @@ export default function SEOAIInsights({ site, onSelectPage }) {
               </Card>
 
               {/* Locations */}
-              <Card className="bg-[var(--bg-secondary)]">
+              <Card className="bg-muted/50">
                 <CardHeader className="pb-3">
                   <CardTitle className="text-base flex items-center gap-2">
                     <MapPin className="h-4 w-4" />
@@ -494,7 +510,7 @@ export default function SEOAIInsights({ site, onSelectPage }) {
                       </Badge>
                     ))}
                     {siteKnowledge.service_areas?.length > 6 && (
-                      <Badge variant="outline" className="text-xs text-[var(--text-tertiary)]">
+                      <Badge variant="outline" className="text-xs text-muted-foreground">
                         +{siteKnowledge.service_areas.length - 6} more
                       </Badge>
                     )}
@@ -503,7 +519,7 @@ export default function SEOAIInsights({ site, onSelectPage }) {
               </Card>
 
               {/* USPs */}
-              <Card className="bg-[var(--bg-secondary)]">
+              <Card className="bg-muted/50">
                 <CardHeader className="pb-3">
                   <CardTitle className="text-base flex items-center gap-2">
                     <Sparkles className="h-4 w-4" />
@@ -513,7 +529,7 @@ export default function SEOAIInsights({ site, onSelectPage }) {
                 <CardContent>
                   <ul className="space-y-1">
                     {siteKnowledge.unique_selling_points?.slice(0, 4).map((usp, i) => (
-                      <li key={i} className="text-sm text-[var(--text-secondary)] flex items-start gap-2">
+                      <li key={i} className="text-sm text-muted-foreground flex items-start gap-2">
                         <CheckCircle className="h-3 w-3 text-green-400 mt-1 shrink-0" />
                         {usp}
                       </li>
@@ -523,16 +539,16 @@ export default function SEOAIInsights({ site, onSelectPage }) {
               </Card>
 
               {/* Training Status */}
-              <Card className="bg-[var(--bg-secondary)] col-span-2">
+              <Card className="bg-muted/50 col-span-2">
                 <CardContent className="p-4">
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-3">
                       <CheckCircle className="h-5 w-5 text-green-400" />
                       <div>
-                        <p className="text-sm font-medium text-[var(--text-primary)]">
+                        <p className="text-sm font-medium text-foreground">
                           AI Trained Successfully
                         </p>
-                        <p className="text-xs text-[var(--text-tertiary)]">
+                        <p className="text-xs text-muted-foreground">
                           Last updated: {new Date(siteKnowledge.updated_at).toLocaleDateString()}
                           {' • '}{siteKnowledge.pages_analyzed || 0} pages analyzed
                         </p>
@@ -554,8 +570,8 @@ export default function SEOAIInsights({ site, onSelectPage }) {
           ) : (
             <Card>
               <CardContent className="py-12 text-center">
-                <Brain className="h-12 w-12 mx-auto mb-4 text-[var(--text-tertiary)]" />
-                <p className="text-[var(--text-secondary)]">
+                <Brain className="h-12 w-12 mx-auto mb-4 text-muted-foreground" />
+                <p className="text-muted-foreground">
                   No knowledge base found. Train the AI to get started.
                 </p>
               </CardContent>

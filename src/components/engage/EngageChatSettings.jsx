@@ -16,7 +16,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Checkbox } from '@/components/ui/checkbox'
 import { toast } from '@/lib/toast'
 import { cn } from '@/lib/utils'
-import api from '@/lib/api'
+import { engageApi, adminApi } from '@/lib/portal-api'
 import {
   MessageCircle,
   Settings,
@@ -117,7 +117,7 @@ export default function EngageChatSettings({ projectId, onClose }) {
   const fetchConfig = async () => {
     try {
       setLoading(true)
-      const { data } = await api.get(`/.netlify/functions/engage-chat-config?projectId=${projectId}`)
+      const { data } = await engageApi.getChatConfig(projectId)
       
       // Initialize business_hours if null
       const configWithDefaults = {
@@ -144,7 +144,7 @@ export default function EngageChatSettings({ projectId, onClose }) {
   const fetchTeamMembers = async (orgId) => {
     try {
       setLoadingMembers(true)
-      const { data } = await api.get(`/.netlify/functions/admin-org-members?organizationId=${orgId}`)
+      const { data } = await adminApi.listOrgMembers(orgId)
       setTeamMembers(data.members || [])
     } catch (error) {
       console.error('Failed to fetch team members:', error)
@@ -194,10 +194,7 @@ export default function EngageChatSettings({ projectId, onClose }) {
   const handleSave = async () => {
     try {
       setSaving(true)
-      await api.put('/.netlify/functions/engage-chat-config', {
-        projectId,
-        config
-      })
+      await engageApi.updateChatConfig(projectId, config)
       toast.success('Chat settings saved!')
     } catch (error) {
       console.error('Failed to save chat config:', error)

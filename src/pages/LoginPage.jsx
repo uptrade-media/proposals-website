@@ -9,6 +9,7 @@ import { Lock, Mail, Eye, EyeOff, ShieldCheck, Loader2, HelpCircle, ChevronRight
 const logo = '/logo.svg'
 import useAuthStore from '../lib/auth-store'
 import { signInWithGoogle, resetPasswordForEmail } from '../lib/supabase-auth'
+import { authApi } from '../lib/portal-api'
 
 // purely visual; server enforces access
 const BRAND_UI = {
@@ -170,16 +171,10 @@ export default function LoginPage() {
     setSupportLoading(true)
     setSupportMsg('')
     try {
-      const res = await fetch('/.netlify/functions/contact-support', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          email: (supportEmail || email).trim(),
-          message: supportBody || 'Support request from login screen.',
-        })
+      const { data } = await authApi.submitSupport({
+        email: (supportEmail || email).trim(),
+        message: supportBody || 'Support request from login screen.',
       })
-      const data = await res.json().catch(() => ({}))
-      if (!res.ok) throw new Error(data.error || 'Unable to send message')
       setSupportMsg('Thanks — your message was sent. We will get back to you shortly.')
       setSupportBody('')
     } catch (err) {

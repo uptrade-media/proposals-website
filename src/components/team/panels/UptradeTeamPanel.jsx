@@ -40,7 +40,7 @@ function StatCard({ icon: Icon, value, label, color = 'brand' }) {
   }
 
   return (
-    <Card className="bg-[var(--glass-bg)] border-[var(--glass-border)]">
+    <Card className="bg-card border-[var(--glass-border)]">
       <CardContent className="flex items-center gap-4 p-4">
         <div className={`p-3 rounded-xl bg-gradient-to-br ${colorClasses[color]}`}>
           <Icon className="h-5 w-5 text-white" />

@@ -61,6 +61,10 @@ export default defineConfig(({ mode }) => {
           if (warning.code === 'MODULE_LEVEL_DIRECTIVE' && warning.message.includes('"use"')) {
             return
           }
+          // Suppress circular dependency warnings for recharts
+          if (warning.code === 'CIRCULAR_DEPENDENCY' && warning.message.includes('recharts')) {
+            return
+          }
           warn(warning)
         },
         output: {
@@ -68,6 +72,21 @@ export default defineConfig(({ mode }) => {
           chunkFileNames: 'assets/js/[name]-[hash].js',
           entryFileNames: 'assets/js/[name]-[hash].js',
           assetFileNames: 'assets/[ext]/[name]-[hash].[ext]',
+          // Manual chunks to avoid circular dependencies
+          manualChunks: (id) => {
+            // Put recharts in its own chunk to avoid circular dependency issues
+            if (id.includes('node_modules/recharts')) {
+              return 'recharts'
+            }
+            // Put large commonly used stores in their own chunks
+            if (id.includes('auth-store')) {
+              return 'auth-store'
+            }
+            // Group all other node_modules into vendor chunk
+            if (id.includes('node_modules')) {
+              return 'vendor'
+            }
+          },
         },
       },
       // Enable minification with esbuild (faster than terser, no extra dep)
@@ -81,12 +100,13 @@ export default defineConfig(({ mode }) => {
     },
 
     // Some libs reference process.env in the browser; this avoids undefined errors.
-    // Also expose Square environment variables to the client
+    // Also expose environment variables to the client
     define: {
       'process.env': {},
       'import.meta.env.SQUARE_APPLICATION_ID': JSON.stringify(process.env.SQUARE_APPLICATION_ID),
       'import.meta.env.SQUARE_LOCATION_ID': JSON.stringify(process.env.SQUARE_LOCATION_ID),
       'import.meta.env.SQUARE_ENVIRONMENT': JSON.stringify(process.env.SQUARE_ENVIRONMENT),
+      'import.meta.env.GOOGLE_CLOUD_API_KEY': JSON.stringify(process.env.GOOGLE_CLOUD_API_KEY),
     },
   }
 })

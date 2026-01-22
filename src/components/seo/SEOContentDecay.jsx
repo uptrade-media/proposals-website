@@ -22,7 +22,7 @@ import {
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
-export default function SEOContentDecay({ siteId }) {
+export default function SEOContentDecay({ projectId }) {
   const { 
     decayingContent, 
     decaySummary,
@@ -35,19 +35,19 @@ export default function SEOContentDecay({ siteId }) {
   const [analysisComplete, setAnalysisComplete] = useState(false)
 
   useEffect(() => {
-    if (siteId) {
-      fetchContentDecay(siteId)
+    if (projectId) {
+      fetchContentDecay(projectId)
     }
-  }, [siteId])
+  }, [projectId])
 
   const handleDetectDecay = async () => {
     setIsAnalyzing(true)
     setAnalysisComplete(false)
     try {
-      await detectContentDecay(siteId)
+      await detectContentDecay(projectId)
       setAnalysisComplete(true)
       // Auto-refresh after detection
-      await fetchContentDecay(siteId)
+      await fetchContentDecay(projectId)
     } catch (error) {
       console.error('Decay detection error:', error)
     }
@@ -68,7 +68,7 @@ export default function SEOContentDecay({ siteId }) {
       case 'critical': return 'bg-red-500/10 border-red-500/30'
       case 'high': return 'bg-orange-500/10 border-orange-500/30'
       case 'medium': return 'bg-yellow-500/10 border-yellow-500/30'
-      default: return 'bg-[var(--glass-bg)] border-[var(--glass-border)]'
+      default: return 'bg-muted/30 border-border/50'
     }
   }
 
@@ -78,16 +78,16 @@ export default function SEOContentDecay({ siteId }) {
       <div className="space-y-6">
         <div className="flex items-center justify-between">
           <div>
-            <h2 className="text-2xl font-bold text-[var(--text-primary)]">Content Decay Detection</h2>
-            <p className="text-[var(--text-secondary)]">
+            <h2 className="text-2xl font-bold text-foreground">Content Decay Detection</h2>
+            <p className="text-muted-foreground">
               Identify content losing rankings and traffic for refresh
             </p>
           </div>
         </div>
-        <Card className="border-[var(--glass-border)]">
+        <Card className="border-border/50">
           <CardContent className="py-12 text-center">
-            <Loader2 className="h-10 w-10 mx-auto mb-4 text-[var(--accent-primary)] animate-spin" />
-            <p className="text-[var(--text-secondary)]">Loading content decay analysis...</p>
+            <Loader2 className="h-10 w-10 mx-auto mb-4 text-primary animate-spin" />
+            <p className="text-muted-foreground">Loading content decay analysis...</p>
           </CardContent>
         </Card>
       </div>
@@ -99,15 +99,15 @@ export default function SEOContentDecay({ siteId }) {
       {/* Header */}
       <div className="flex items-start justify-between">
         <div>
-          <h2 className="text-2xl font-bold text-[var(--text-primary)]">Content Decay Detection</h2>
-          <p className="text-[var(--text-secondary)]">
+          <h2 className="text-2xl font-bold text-foreground">Content Decay Detection</h2>
+          <p className="text-muted-foreground">
             Identify content losing rankings and traffic for refresh
           </p>
         </div>
         <Button 
           onClick={handleDetectDecay} 
           disabled={isAnalyzing}
-          className={isAnalyzing ? '' : 'bg-[var(--accent-primary)] hover:bg-[var(--accent-primary)]/90'}
+          className={isAnalyzing ? '' : 'bg-primary hover:bg-primary/90'}
         >
           {isAnalyzing ? (
             <>
@@ -125,15 +125,15 @@ export default function SEOContentDecay({ siteId }) {
 
       {/* Analysis in Progress */}
       {isAnalyzing && (
-        <Card className="border-[var(--accent-primary)]/30 bg-[var(--accent-primary)]/5">
+        <Card className="border-primary/30 bg-primary/5">
           <CardContent className="py-6">
             <div className="flex items-center gap-4">
-              <div className="p-3 bg-[var(--accent-primary)]/20 rounded-full">
-                <Sparkles className="h-6 w-6 text-[var(--accent-primary)] animate-pulse" />
+              <div className="p-3 bg-primary/20 rounded-full">
+                <Sparkles className="h-6 w-6 text-primary animate-pulse" />
               </div>
               <div className="flex-1">
-                <h3 className="font-medium text-[var(--text-primary)]">AI Analysis in Progress</h3>
-                <p className="text-sm text-[var(--text-secondary)]">
+                <h3 className="font-medium text-foreground">AI Analysis in Progress</h3>
+                <p className="text-sm text-muted-foreground">
                   Analyzing page performance trends from Google Search Console...
                 </p>
                 <div className="mt-2">
@@ -151,10 +151,10 @@ export default function SEOContentDecay({ siteId }) {
           <CardContent className="py-4">
             <div className="flex items-center gap-3">
               <CheckCircle className="h-5 w-5 text-green-400" />
-              <span className="text-[var(--text-primary)]">Analysis complete!</span>
+              <span className="text-foreground">Analysis complete!</span>
               <button 
                 onClick={() => setAnalysisComplete(false)}
-                className="ml-auto text-[var(--text-tertiary)] hover:text-[var(--text-primary)]"
+                className="ml-auto text-muted-foreground hover:text-foreground"
               >
                 ×
               </button>
@@ -166,17 +166,17 @@ export default function SEOContentDecay({ siteId }) {
       {/* Summary Cards */}
       {decaySummary && (decaySummary.totalDecaying > 0 || decaySummary.total > 0) && (
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-          <Card className="border-[var(--glass-border)]">
+          <Card className="border-border/50">
             <CardContent className="pt-6">
               <div className="flex items-center gap-3">
                 <div className="p-2 bg-red-500/20 rounded-lg">
                   <TrendingDown className="h-5 w-5 text-red-400" />
                 </div>
                 <div>
-                  <p className="text-2xl font-bold text-[var(--text-primary)]">
+                  <p className="text-2xl font-bold text-foreground">
                     {decaySummary.totalDecaying || decaySummary.total || 0}
                   </p>
-                  <p className="text-sm text-[var(--text-tertiary)]">Decaying Pages</p>
+                  <p className="text-sm text-muted-foreground">Decaying Pages</p>
                 </div>
               </div>
             </CardContent>
@@ -219,10 +219,10 @@ export default function SEOContentDecay({ siteId }) {
 
       {/* Decaying Content List */}
       {decayingContent?.length > 0 ? (
-        <Card className="border-[var(--glass-border)]">
+        <Card className="border-border/50">
           <CardHeader>
-            <CardTitle className="text-[var(--text-primary)]">Content Needing Refresh</CardTitle>
-            <CardDescription className="text-[var(--text-secondary)]">
+            <CardTitle className="text-foreground">Content Needing Refresh</CardTitle>
+            <CardDescription className="text-muted-foreground">
               Pages with declining performance - prioritized by impact
             </CardDescription>
           </CardHeader>
@@ -243,20 +243,20 @@ export default function SEOContentDecay({ siteId }) {
                           {page.decay_severity || page.severity || 'medium'}
                         </Badge>
                         {page.last_updated && (
-                          <span className="text-xs text-[var(--text-tertiary)] flex items-center gap-1">
+                          <span className="text-xs text-muted-foreground flex items-center gap-1">
                             <Clock className="h-3 w-3" />
                             Updated {new Date(page.last_updated).toLocaleDateString()}
                           </span>
                         )}
                       </div>
-                      <h4 className="font-semibold text-[var(--text-primary)] truncate">
+                      <h4 className="font-semibold text-foreground truncate">
                         {page.title || page.path || 'Untitled Page'}
                       </h4>
                       <a 
                         href={page.url || `https://${page.path}`} 
                         target="_blank" 
                         rel="noopener noreferrer"
-                        className="text-sm text-[var(--accent-primary)] hover:underline flex items-center gap-1"
+                        className="text-sm text-primary hover:underline flex items-center gap-1"
                       >
                         {(page.url || page.path)?.replace('https://', '').substring(0, 50)}
                         {(page.url || page.path)?.length > 50 && '...'}
@@ -294,7 +294,7 @@ export default function SEOContentDecay({ siteId }) {
                   {(page.decayFactors?.length > 0 || page.decay_reasons) && (
                     <div className="flex flex-wrap gap-2">
                       {(page.decayFactors || page.decay_reasons?.split(',') || []).map((factor, j) => (
-                        <Badge key={j} variant="outline" className="text-xs border-[var(--glass-border)] text-[var(--text-secondary)]">
+                        <Badge key={j} variant="outline" className="text-xs border-border/50 text-muted-foreground">
                           {String(factor).replace(/_/g, ' ')}
                         </Badge>
                       ))}
@@ -302,7 +302,7 @@ export default function SEOContentDecay({ siteId }) {
                   )}
 
                   {/* Action Buttons */}
-                  <div className="flex items-center gap-2 mt-4 pt-3 border-t border-[var(--glass-border)]">
+                  <div className="flex items-center gap-2 mt-4 pt-3 border-t border-border/50">
                     <Button size="sm" variant="outline" className="text-xs">
                       <RefreshCw className="h-3 w-3 mr-1" />
                       Refresh Content
@@ -317,15 +317,15 @@ export default function SEOContentDecay({ siteId }) {
           </CardContent>
         </Card>
       ) : (
-        <Card className="border-dashed border-[var(--glass-border)]">
+        <Card className="border-dashed border-border/50">
           <CardContent className="py-12 text-center">
             <div className="p-4 bg-green-500/10 rounded-full w-fit mx-auto mb-4">
               <CheckCircle className="h-10 w-10 text-green-400" />
             </div>
-            <h3 className="text-lg font-semibold mb-2 text-[var(--text-primary)]">
+            <h3 className="text-lg font-semibold mb-2 text-foreground">
               No Decaying Content Detected
             </h3>
-            <p className="text-[var(--text-secondary)] mb-6 max-w-md mx-auto">
+            <p className="text-muted-foreground mb-6 max-w-md mx-auto">
               Great news! Your content is performing well. Run analysis periodically to catch 
               any performance drops early.
             </p>
@@ -337,12 +337,12 @@ export default function SEOContentDecay({ siteId }) {
               </Button>
             </div>
             
-            <div className="mt-6 p-4 bg-[var(--glass-bg)] rounded-lg max-w-md mx-auto">
+            <div className="mt-6 p-4 bg-muted/30 rounded-lg max-w-md mx-auto">
               <div className="flex items-start gap-3 text-left">
-                <Info className="h-5 w-5 text-[var(--accent-primary)] flex-shrink-0 mt-0.5" />
+                <Info className="h-5 w-5 text-primary flex-shrink-0 mt-0.5" />
                 <div>
-                  <p className="text-sm font-medium text-[var(--text-primary)]">How decay detection works</p>
-                  <p className="text-xs text-[var(--text-tertiary)] mt-1">
+                  <p className="text-sm font-medium text-foreground">How decay detection works</p>
+                  <p className="text-xs text-muted-foreground mt-1">
                     We compare your page performance over 28-day periods using Google Search Console data. 
                     Pages with significant drops in clicks, impressions, or rankings are flagged for refresh.
                   </p>
@@ -366,12 +366,12 @@ function MetricChange({ label, before, after, change, inverse = false }) {
   const Icon = isNegative ? ArrowDown : ArrowUp
 
   return (
-    <div className="text-center p-2 bg-[var(--glass-bg)] rounded border border-[var(--glass-border)]">
-      <p className="text-xs text-[var(--text-tertiary)] mb-1">{label}</p>
+    <div className="text-center p-2 bg-muted/30 rounded border border-border/50">
+      <p className="text-xs text-muted-foreground mb-1">{label}</p>
       <div className="flex items-center justify-center gap-1">
-        <span className="text-sm font-medium text-[var(--text-secondary)]">{before ?? '-'}</span>
-        <span className="text-[var(--text-tertiary)]">→</span>
-        <span className="text-sm font-medium text-[var(--text-primary)]">{after ?? '-'}</span>
+        <span className="text-sm font-medium text-muted-foreground">{before ?? '-'}</span>
+        <span className="text-muted-foreground">→</span>
+        <span className="text-sm font-medium text-foreground">{after ?? '-'}</span>
       </div>
       {change !== undefined && change !== null && (
         <div className={`flex items-center justify-center gap-1 ${changeColor} text-xs mt-1`}>

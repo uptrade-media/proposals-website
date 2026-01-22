@@ -28,7 +28,7 @@ import {
   ExternalLink
 } from 'lucide-react'
 import ProposalView from './ProposalView'
-import api from '@/lib/api'
+import { proposalsApi } from '@/lib/portal-api'
 import { cn } from '@/lib/utils'
 
 // Analytics Summary Card
@@ -169,7 +169,7 @@ export default function ProposalViewWithAnalytics({ proposal, onBack, onEdit }) 
       
       setLoadingAnalytics(true)
       try {
-        const response = await api.get(`/.netlify/functions/proposals-analytics?id=${proposal.id}`)
+        const response = await proposalsApi.getAnalytics(proposal.id)
         setAnalytics(response.data.analytics)
       } catch (err) {
         console.error('Failed to fetch analytics:', err)

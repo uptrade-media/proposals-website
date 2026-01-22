@@ -16,7 +16,7 @@ import { Checkbox } from '@/components/ui/checkbox'
 import { Label } from '@/components/ui/label'
 import { Loader2, UserCheck, Mail, Sparkles, ArrowRight, Shield } from 'lucide-react'
 import { GlassCard, GlassAvatar } from './ui'
-import api from '@/lib/api'
+import { crmApi } from '@/lib/portal-api'
 import { toast } from '@/lib/toast'
 
 export default function ConvertDialog({ open, onOpenChange, prospect, onSuccess }) {
@@ -28,10 +28,7 @@ export default function ConvertDialog({ open, onOpenChange, prospect, onSuccess 
     
     setIsSubmitting(true)
     try {
-      await api.post('/.netlify/functions/crm-convert-prospect', {
-        prospectId: prospect.id,
-        sendMagicLink
-      })
+      await crmApi.convertProspect(prospect.id, { sendMagicLink })
       
       if (sendMagicLink) {
         toast.success('Magic link sent! Prospect is now a portal user.')

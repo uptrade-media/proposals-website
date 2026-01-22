@@ -1,46 +1,53 @@
 /**
- * ConversionFunnel - Visualize user journey through site
+ * ConversionFunnel - Visual funnel showing visitor journey
  */
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
-import { Loader2, TrendingDown, ArrowDown, Users, Eye, MousePointerClick, Send } from 'lucide-react'
-import { cn } from '@/lib/utils'
+import { Loader2, Users, Eye, Zap, Target } from 'lucide-react'
+import { useBrandColors } from '@/hooks/useBrandColors'
+
+const defaultFormatNumber = (num) => {
+  if (!num && num !== 0) return '0'
+  if (num >= 1000000) return (num / 1000000).toFixed(1) + 'M'
+  if (num >= 1000) return (num / 1000).toFixed(1) + 'K'
+  return num.toLocaleString()
+}
+
+const FUNNEL_STEPS = [
+  { key: 'uniqueVisitors', label: 'Visitors', icon: Users, description: 'Unique visitors' },
+  { key: 'engagedSessions', label: 'Engaged', icon: Zap, description: 'Active sessions' },
+  { key: 'conversions', label: 'Conversion', icon: Target, description: 'Goal completions' }
+]
 
 export function ConversionFunnel({ 
-  data = null, 
+  data = {}, 
   isLoading = false,
-  formatNumber = (n) => n?.toLocaleString() || '0'
+  formatNumber = defaultFormatNumber 
 }) {
-  // Default funnel stages with sample structure
-  const defaultStages = [
-    { id: 'visitors', label: 'Visitors', icon: Users, color: '#3b82f6' },
-    { id: 'pageviews', label: 'Page Views', icon: Eye, color: '#8b5cf6' },
-    { id: 'engaged', label: 'Engaged', icon: MousePointerClick, color: '#ec4899' },
-    { id: 'conversions', label: 'Conversions', icon: Send, color: '#10b981' }
-  ]
-
-  // Get values from data or use defaults
-  const getStageValue = (stageId) => {
-    if (!data) return 0
-    switch (stageId) {
-      case 'visitors': return data.uniqueVisitors || data.visitors || 0
-      case 'pageviews': return data.pageViews || data.pageviews || 0
-      case 'engaged': return data.engagedSessions || Math.floor((data.uniqueVisitors || 0) * 0.4) || 0
-      case 'conversions': return data.conversions || data.goals || 0
-      default: return 0
+  const { primary, secondary } = useBrandColors()
+  
+  // Calculate percentages relative to first step
+  const baseValue = data.uniqueVisitors || data.pageViews || 1
+  
+  const steps = FUNNEL_STEPS.map((step, index) => {
+    const value = data[step.key] || 0
+    const percentage = baseValue > 0 ? (value / baseValue) * 100 : 0
+    const dropOff = index > 0 
+      ? ((data[FUNNEL_STEPS[index - 1].key] || 0) - value) 
+      : 0
+    
+    return {
+      ...step,
+      value,
+      percentage,
+      dropOff,
+      width: Math.max(30, percentage) // Minimum width for visibility
     }
-  }
-
-  const stages = defaultStages.map(stage => ({
-    ...stage,
-    value: getStageValue(stage.id)
-  }))
-
-  const maxValue = Math.max(...stages.map(s => s.value), 1)
+  })
 
   if (isLoading) {
     return (
       <Card>
-        <CardContent className="flex items-center justify-center h-80">
+        <CardContent className="flex items-center justify-center h-72">
           <Loader2 className="h-8 w-8 animate-spin text-[var(--text-tertiary)]" />
         </CardContent>
       </Card>
@@ -50,84 +57,70 @@ export function ConversionFunnel({
   return (
     <Card>
       <CardHeader className="pb-2">
-        <CardTitle className="text-lg flex items-center gap-2">
-          <TrendingDown className="h-5 w-5 text-green-500" />
-          Conversion Funnel
-        </CardTitle>
-        <CardDescription>User journey from visit to conversion</CardDescription>
+        <CardTitle className="text-lg">Conversion Funnel</CardTitle>
+        <CardDescription>Visitor journey from arrival to conversion</CardDescription>
       </CardHeader>
       
-      <CardContent>
-        <div className="space-y-4 pt-2">
-          {stages.map((stage, index) => {
-            const Icon = stage.icon
-            const widthPercent = maxValue > 0 ? (stage.value / maxValue) * 100 : 0
-            const prevValue = index > 0 ? stages[index - 1].value : null
-            const dropOff = prevValue ? ((1 - stage.value / prevValue) * 100).toFixed(0) : null
-            
-            return (
-              <div key={stage.id}>
-                <div className="flex items-center justify-between mb-1.5">
-                  <div className="flex items-center gap-2">
-                    <div 
-                      className="p-1.5 rounded-md"
-                      style={{ backgroundColor: `${stage.color}20` }}
-                    >
-                      <Icon 
-                        className="h-3.5 w-3.5" 
-                        style={{ color: stage.color }} 
-                      />
-                    </div>
-                    <span className="text-sm font-medium text-[var(--text-primary)]">
-                      {stage.label}
-                    </span>
-                  </div>
+      <CardContent className="space-y-3">
+        {steps.map((step, index) => {
+          const Icon = step.icon
+          const opacity = 1 - (index * 0.15)
+          
+          return (
+            <div key={step.key} className="relative">
+              {/* Funnel bar */}
+              <div 
+                className="relative rounded-lg overflow-hidden transition-all duration-500"
+                style={{ 
+                  width: `${step.width}%`,
+                  marginLeft: `${(100 - step.width) / 2}%`
+                }}
+              >
+                <div 
+                  className="px-4 py-3 flex items-center justify-between"
+                  style={{ 
+                    background: `linear-gradient(135deg, ${primary}${Math.round(opacity * 255).toString(16).padStart(2, '0')}, ${secondary}${Math.round(opacity * 0.7 * 255).toString(16).padStart(2, '0')})`,
+                  }}
+                >
                   <div className="flex items-center gap-3">
-                    {dropOff && parseInt(dropOff) > 0 && (
-                      <span className="text-xs text-[var(--text-tertiary)]">
-                        -{dropOff}%
-                      </span>
-                    )}
-                    <span className="text-sm font-semibold text-[var(--text-primary)] tabular-nums">
-                      {formatNumber(stage.value)}
-                    </span>
+                    <div className="p-1.5 bg-white/20 rounded-md">
+                      <Icon className="w-4 h-4 text-white" />
+                    </div>
+                    <div>
+                      <p className="text-sm font-medium text-white">{step.label}</p>
+                      <p className="text-xs text-white/70">{step.description}</p>
+                    </div>
+                  </div>
+                  <div className="text-right">
+                    <p className="text-lg font-bold text-white tabular-nums">
+                      {formatNumber(step.value)}
+                    </p>
+                    <p className="text-xs text-white/70">
+                      {step.percentage.toFixed(1)}%
+                    </p>
                   </div>
                 </div>
-                
-                <div className="h-8 bg-[var(--glass-bg-inset)] rounded-lg overflow-hidden">
-                  <div 
-                    className="h-full rounded-lg transition-all duration-700 flex items-center justify-end pr-3"
-                    style={{ 
-                      width: `${Math.max(widthPercent, 2)}%`,
-                      backgroundColor: stage.color
-                    }}
-                  >
-                    {widthPercent > 15 && (
-                      <span className="text-xs font-medium text-white">
-                        {widthPercent.toFixed(0)}%
-                      </span>
-                    )}
-                  </div>
-                </div>
-                
-                {index < stages.length - 1 && (
-                  <div className="flex justify-center py-1">
-                    <ArrowDown className="h-4 w-4 text-[var(--text-tertiary)]" />
-                  </div>
-                )}
               </div>
-            )
-          })}
-        </div>
+              
+              {/* Drop-off indicator */}
+              {index > 0 && step.dropOff > 0 && (
+                <div className="absolute -top-1.5 right-4 text-xs text-red-400 font-medium">
+                  -{formatNumber(step.dropOff)} dropped
+                </div>
+              )}
+            </div>
+          )
+        })}
         
-        {/* Overall conversion rate */}
-        <div className="mt-6 pt-4 border-t border-[var(--glass-border)]">
+        {/* Conversion rate summary */}
+        <div className="pt-4 mt-4 border-t border-[var(--glass-border)]">
           <div className="flex items-center justify-between">
             <span className="text-sm text-[var(--text-secondary)]">Overall Conversion Rate</span>
-            <span className="text-lg font-bold text-green-500">
-              {stages[0].value > 0 
-                ? ((stages[stages.length - 1].value / stages[0].value) * 100).toFixed(2) 
-                : '0.00'}%
+            <span className="text-lg font-bold" style={{ color: primary }}>
+              {baseValue > 0 
+                ? ((data.conversions || 0) / baseValue * 100).toFixed(2)
+                : 0
+              }%
             </span>
           </div>
         </div>

@@ -35,7 +35,7 @@ import {
   Minimize2,
   Maximize2
 } from 'lucide-react'
-import api from '../lib/api'
+import { proposalsApi } from '../lib/portal-api'
 import { cn } from '../lib/utils'
 
 export default function ProposalPreview({
@@ -74,18 +74,7 @@ export default function ProposalPreview({
     setIsAiThinking(true)
 
     try {
-      const response = await api.post('/.netlify/functions/proposals-ai-edit', {
-        proposalId: proposal.id,
-        message: userMessage,
-        currentContent: proposal.mdxContent,
-        conversationHistory: chatMessages,
-        proposalData: {
-          paymentTerms: proposal.paymentTerms || proposal.payment_terms,
-          timeline: proposal.timeline,
-          totalAmount: proposal.totalAmount || proposal.total_amount,
-          validUntil: proposal.validUntil || proposal.valid_until
-        }
-      })
+      const response = await proposalsApi.updateAI(proposal.id, userMessage)
 
       // Check if any changes were made
       const hasChanges = response.data.updatedContent || response.data.updatedPrice || 

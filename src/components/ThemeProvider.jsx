@@ -1,13 +1,108 @@
 import { useEffect } from 'react'
 import useThemeStore from '@/lib/theme-store'
+import useAuthStore from '@/lib/auth-store'
+
+const DEFAULT_BRAND_PRIMARY = '#4bbf39'
+const DEFAULT_BRAND_SECONDARY = '#39bfb0'
+
+function isValidHexColor(value) {
+  return typeof value === 'string' && /^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/.test(value)
+}
+
+function normalizeHexColor(value, fallback) {
+  if (!value) return fallback
+  const trimmed = typeof value === 'string' ? value.trim() : ''
+  if (!isValidHexColor(trimmed)) return fallback
+
+  // Expand shorthand #abc => #aabbcc
+  if (trimmed.length === 4) {
+    const r = trimmed[1]
+    const g = trimmed[2]
+    const b = trimmed[3]
+    return `#${r}${r}${g}${g}${b}${b}`
+  }
+  return trimmed.toLowerCase()
+}
+
+function darkenHex(hex, amount = 0.14) {
+  const normalized = normalizeHexColor(hex, DEFAULT_BRAND_PRIMARY)
+  const r = parseInt(normalized.slice(1, 3), 16)
+  const g = parseInt(normalized.slice(3, 5), 16)
+  const b = parseInt(normalized.slice(5, 7), 16)
+
+  const factor = Math.max(0, Math.min(1, 1 - amount))
+  const nr = Math.round(r * factor)
+  const ng = Math.round(g * factor)
+  const nb = Math.round(b * factor)
+
+  const toHex = (n) => n.toString(16).padStart(2, '0')
+  return `#${toHex(nr)}${toHex(ng)}${toHex(nb)}`
+}
+
+function applyBrandVars({ primary, secondary }) {
+  if (typeof document === 'undefined') return
+  const root = document.documentElement
+  root.style.setProperty('--brand-primary', primary)
+  root.style.setProperty('--brand-primary-hover', darkenHex(primary, 0.18))
+  root.style.setProperty('--brand-secondary', secondary)
+  root.style.setProperty('--brand-secondary-hover', darkenHex(secondary, 0.18))
+}
 
 export function ThemeProvider({ children }) {
   const initTheme = useThemeStore((state) => state.initTheme)
+  const currentOrg = useAuthStore((state) => state.currentOrg)
+  const currentProject = useAuthStore((state) => state.currentProject)
   
   // Initialize theme on mount
   useEffect(() => {
     initTheme()
   }, [initTheme])
+
+  // Apply brand colors as CSS vars (project > org > defaults)
+  useEffect(() => {
+    // Exclusions: keep these areas on Uptrade defaults.
+    // - Proposals (/p/*)
+    // - Audit pages (/audit*, /audits*)
+    const pathname = typeof window !== 'undefined' ? window.location.pathname : ''
+    const isProposalRoute = pathname.startsWith('/p/')
+    const isAuditRoute = pathname.startsWith('/audit') || pathname.startsWith('/audits')
+
+    if (isProposalRoute || isAuditRoute) {
+      applyBrandVars({
+        primary: DEFAULT_BRAND_PRIMARY,
+        secondary: DEFAULT_BRAND_SECONDARY,
+      })
+      return
+    }
+
+    // Priority: project colors > org dedicated columns > legacy theme object > defaults
+    // 1. Project columns: project.brand_primary, project.brand_secondary (highest priority)
+    // 2. Org columns: org.brand_primary, org.brand_secondary
+    // 3. Legacy theme object: org.theme.brandColor1, etc.
+    // 4. Uptrade defaults
+    const orgTheme = currentOrg?.theme || {}
+
+    const primary = normalizeHexColor(
+      // Project-level color takes highest priority
+      currentProject?.brand_primary ||
+      // Then org-level color
+      currentOrg?.brand_primary ||
+      // Then legacy theme object
+      orgTheme.brandColor1 || orgTheme.primaryColor || orgTheme.primary,
+      DEFAULT_BRAND_PRIMARY,
+    )
+    const secondary = normalizeHexColor(
+      // Project-level color takes highest priority
+      currentProject?.brand_secondary ||
+      // Then org-level color
+      currentOrg?.brand_secondary ||
+      // Then legacy theme object
+      orgTheme.brandColor2 || orgTheme.secondaryColor || orgTheme.secondary,
+      DEFAULT_BRAND_SECONDARY,
+    )
+
+    applyBrandVars({ primary, secondary })
+  }, [currentOrg, currentProject])
   
   return children
 }

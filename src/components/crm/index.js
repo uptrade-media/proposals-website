@@ -15,16 +15,12 @@ export { default as ProspectDetailPanel } from './ProspectDetailPanel'
 export { default as CallsTab } from './CallsTab'
 export { default as TasksTab } from './TasksTab'
 export { default as FollowUpsTab } from './FollowUpsTab'
-export { default as UsersTab } from './UsersTab'
 export { default as TeamTab } from './TeamTab'
 
 // Dialogs
 export { default as AddProspectDialog } from './AddProspectDialog'
 export { default as ConvertDialog } from './ConvertDialog'
 export { default as AssignContactDialog } from './AssignContactDialog'
-
-// Stats
-export { default as CRMStats } from './CRMStats'
 
 // UI Components
 export * from './ui'

@@ -2,7 +2,6 @@
 // Main Engage module page - Live chat management
 
 import { useState, useEffect } from 'react'
-import { useSearchParams } from 'react-router-dom'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Badge } from '@/components/ui/badge'
@@ -13,15 +12,14 @@ import EngageElements from '@/components/engage/EngageElements'
 import EngageElementEditor from '@/components/engage/EngageElementEditor'
 import EngageAnalytics from '@/components/engage/EngageAnalytics'
 import useAuthStore from '@/lib/auth-store'
-import api from '@/lib/api'
+import { projectsApi } from '@/lib/portal-api'
 
 export default function Engage() {
-  const [searchParams, setSearchParams] = useSearchParams()
   const [projects, setProjects] = useState([])
-  const [selectedProjectId, setSelectedProjectId] = useState(searchParams.get('project') || '')
+  const [selectedProjectId, setSelectedProjectId] = useState('')
   const [loading, setLoading] = useState(true)
   const [editingElementId, setEditingElementId] = useState(null)
-  const activeTab = searchParams.get('tab') || 'inbox'
+  const [activeTab, setActiveTab] = useState('inbox')
   const { user } = useAuthStore()
 
   // Listen for Echo navigation requests to open elements
@@ -31,7 +29,7 @@ export default function Engage() {
       // Update project if different
       if (projectId && projectId !== selectedProjectId) {
         setSelectedProjectId(projectId)
-        setSearchParams({ tab: 'elements', project: projectId })
+        setActiveTab('elements')
       }
       // Open the element editor
       if (elementId) {
@@ -41,7 +39,7 @@ export default function Engage() {
     
     window.addEventListener('echo:openElement', handleOpenElement)
     return () => window.removeEventListener('echo:openElement', handleOpenElement)
-  }, [selectedProjectId, setSearchParams])
+  }, [selectedProjectId])
 
   // Fetch projects on mount
   useEffect(() => {
@@ -51,7 +49,7 @@ export default function Engage() {
   const fetchProjects = async () => {
     try {
       setLoading(true)
-      const { data } = await api.get('/.netlify/functions/projects-list')
+      const { data } = await projectsApi.list()
       setProjects(data.projects || [])
       
       // Auto-select first project if none selected
@@ -66,12 +64,11 @@ export default function Engage() {
   }
 
   const handleTabChange = (tab) => {
-    setSearchParams({ tab, project: selectedProjectId })
+    setActiveTab(tab)
   }
 
   const handleProjectChange = (projectId) => {
     setSelectedProjectId(projectId)
-    setSearchParams({ tab: activeTab, project: projectId })
   }
 
   if (loading) {

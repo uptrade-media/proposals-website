@@ -5,12 +5,11 @@
  * with ability to view, preview, and edit templates.
  */
 
-import { useState, useEffect, useRef, lazy, Suspense } from 'react'
+import { useState, useEffect } from 'react'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import {
   Dialog,
   DialogContent,
@@ -20,7 +19,6 @@ import {
   DialogFooter,
 } from '@/components/ui/dialog'
 import { Label } from '@/components/ui/label'
-import { Textarea } from '@/components/ui/textarea'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import {
   Tooltip,
@@ -33,28 +31,25 @@ import {
   Search,
   Eye,
   Edit,
-  Code,
   Copy,
   Check,
-  Sparkles,
   Shield,
   CreditCard,
   FileText,
   FolderKanban,
   Bell,
   Loader2,
-  ExternalLink,
-  Variable,
-  Info,
-  Send,
-  Settings,
-  RefreshCw,
   Smartphone,
   Monitor,
-  Layout,
-  ArrowLeft
+  RefreshCw,
+  Info,
+  Settings,
+  Variable,
+  Send,
+  Sparkles,
 } from 'lucide-react'
 import { toast } from 'sonner'
+import { EmailEditor } from './EmailEditor'
 import { 
   SYSTEM_EMAILS, 
   SYSTEM_EMAIL_CATEGORIES,
@@ -62,7 +57,8 @@ import {
   getSystemEmailById,
   getSystemEmailCategories 
 } from './system-emails-registry'
-import api from '@/lib/api'
+import { emailApi } from '@/lib/portal-api'
+import usePageContextStore from '@/lib/page-context-store'
 
 // Icon mapping for categories
 const CATEGORY_ICONS = {
@@ -271,7 +267,7 @@ export default function SystemEmailsTab({ onEditTemplate }) {
   const fetchCustomTemplates = async () => {
     setTemplatesLoading(true)
     try {
-      const res = await api.get('/.netlify/functions/system-emails-list')
+      const res = await emailApi.listSystemEmails()
       if (res.data?.templates) {
         const templatesMap = {}
         res.data.templates.forEach(t => {
@@ -314,19 +310,32 @@ export default function SystemEmailsTab({ onEditTemplate }) {
 
   const handleEdit = (email) => {
     setEditingEmail(email)  // Sets full-page edit mode
+    
+    // Set page context for Echo awareness - let AI know we're editing this email
+    const customTemplate = customTemplates[email.id]
+    usePageContextStore.getState().setEntity({
+      id: email.id,
+      type: 'system-email',
+      name: email.name,
+      data: {
+        currentHtml: customTemplate?.html_content || DEFAULT_TEMPLATES[email.id] || '',
+        currentSubject: customTemplate?.subject || email.defaultSubject,
+        description: email.description,
+        variables: email.variables?.map(v => v.name).join(', ')
+      }
+    })
   }
 
   const handleBackFromEditor = () => {
     setEditingEmail(null)
+    // Clear entity context when leaving editor
+    usePageContextStore.getState().clearEntity()
   }
 
   const handleSaveTemplate = async (emailId, updates) => {
     setLoading(true)
     try {
-      await api.post('/.netlify/functions/system-emails-update', {
-        emailId,
-        ...updates
-      })
+      await emailApi.updateSystemEmail(emailId, updates)
       toast.success('Email template saved')
       fetchCustomTemplates()
       setEditingEmail(null)  // Close full-page editor
@@ -341,7 +350,7 @@ export default function SystemEmailsTab({ onEditTemplate }) {
   const handleResetToDefault = async (emailId) => {
     setLoading(true)
     try {
-      await api.delete(`/.netlify/functions/system-emails-delete/${emailId}`)
+      await emailApi.deleteSystemEmail(emailId)
       toast.success('Reset to default template')
       fetchCustomTemplates()
     } catch (error) {
@@ -354,9 +363,7 @@ export default function SystemEmailsTab({ onEditTemplate }) {
   const handleSendTest = async (email) => {
     setLoading(true)
     try {
-      await api.post('/.netlify/functions/system-emails-test', {
-        emailId: email.id
-      })
+      await emailApi.testSystemEmail(email.id)
       toast.success('Test email sent to your address')
     } catch (error) {
       toast.error('Failed to send test email')
@@ -580,7 +587,7 @@ export default function SystemEmailsTab({ onEditTemplate }) {
 
       {/* Preview Dialog */}
       <Dialog open={showPreview} onOpenChange={setShowPreview}>
-        <DialogContent className="max-w-4xl max-h-[90vh]">
+        <DialogContent className="max-w-5xl w-[95vw] max-h-[90vh]">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <Eye className="h-5 w-5" />
@@ -696,7 +703,7 @@ export default function SystemEmailsTab({ onEditTemplate }) {
 }
 
 /**
- * Full-Page Email Editor - Takes over the entire view with back button
+ * Full-Page Email Editor wrapper - uses the universal EmailEditor component
  */
 function FullPageEmailEditor({ 
   email, 
@@ -704,301 +711,25 @@ function FullPageEmailEditor({
   onBack,
   onSave, 
   onReset, 
-  onCopyVariable, 
-  copiedVariable,
   loading 
 }) {
-  const [subject, setSubject] = useState(customTemplate?.subject || email.defaultSubject)
-  const [htmlContent, setHtmlContent] = useState(customTemplate?.html || getDefaultTemplate(email.id))
-  const [activeTab, setActiveTab] = useState('visual')
-  const [previewDevice, setPreviewDevice] = useState('desktop')
-  const editorRef = useRef(null)
-  const editorInstanceRef = useRef(null)
-
-  const hasChanges = subject !== (customTemplate?.subject || email.defaultSubject) ||
-                     htmlContent !== (customTemplate?.html || getDefaultTemplate(email.id))
-
-  // Initialize GrapesJS when visual tab is active
-  useEffect(() => {
-    if (activeTab === 'visual' && editorRef.current && !editorInstanceRef.current) {
-      initializeEditor()
-    }
-    
-    return () => {
-      if (editorInstanceRef.current) {
-        editorInstanceRef.current.destroy()
-        editorInstanceRef.current = null
-      }
-    }
-  }, [activeTab])
-
-  const initializeEditor = async () => {
-    const grapesjs = (await import('grapesjs')).default
-    await import('grapesjs/dist/css/grapes.min.css')
-    
-    const editor = grapesjs.init({
-      container: editorRef.current,
-      height: '100%',
-      width: 'auto',
-      storageManager: false,
-      panels: { defaults: [] },
-      blockManager: {
-        appendTo: '#system-email-blocks',
-        blocks: getEmailBlocks(email.variables || [])
-      },
-      deviceManager: {
-        devices: [
-          { name: 'Desktop', width: '' },
-          { name: 'Mobile', width: '375px', widthMedia: '480px' }
-        ]
-      },
-      canvas: {
-        styles: [
-          'https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap'
-        ]
-      }
-    })
-
-    // Load existing content
-    const contentToLoad = htmlContent || getDefaultTemplate(email.id)
-    if (contentToLoad) {
-      editor.setComponents(contentToLoad)
-    }
-
-    // Update HTML content when editor changes
-    editor.on('component:update', () => {
-      const html = editor.getHtml()
-      const css = editor.getCss()
-      setHtmlContent(`<style>${css}</style>${html}`)
-    })
-
-    editorInstanceRef.current = editor
+  const handleSave = ({ subject, html }) => {
+    onSave({ subject, html })
   }
 
-  // Get email-specific blocks with variable placeholders
-  const getEmailBlocks = (variables) => [
-    {
-      id: 'text-block',
-      label: 'Text',
-      category: 'Content',
-      content: '<p style="margin: 0 0 16px 0; font-family: Arial, sans-serif; font-size: 16px; line-height: 1.6; color: #333;">Your text here...</p>'
-    },
-    {
-      id: 'heading-block',
-      label: 'Heading',
-      category: 'Content',
-      content: '<h1 style="margin: 0 0 16px 0; font-family: Arial, sans-serif; font-size: 24px; font-weight: bold; color: #1a1a1a;">Heading</h1>'
-    },
-    {
-      id: 'button-block',
-      label: 'Button',
-      category: 'Content',
-      content: `
-        <table cellpadding="0" cellspacing="0" border="0" style="margin: 20px auto;">
-          <tr>
-            <td style="background-color: #4bbf39; border-radius: 8px;">
-              <a href="#" style="display: inline-block; padding: 14px 32px; font-family: Arial, sans-serif; font-size: 16px; font-weight: bold; color: #ffffff; text-decoration: none;">
-                Click Here
-              </a>
-            </td>
-          </tr>
-        </table>
-      `
-    },
-    {
-      id: 'divider-block',
-      label: 'Divider',
-      category: 'Layout',
-      content: '<hr style="border: none; border-top: 1px solid #e5e5e5; margin: 20px 0;" />'
-    },
-    {
-      id: 'spacer-block',
-      label: 'Spacer',
-      category: 'Layout',
-      content: '<div style="height: 30px;"></div>'
-    },
-    // Add variable blocks
-    ...variables.map(v => ({
-      id: `var-${v.name}`,
-      label: v.name.replace(/[{}]/g, ''),
-      category: 'Variables',
-      content: `<span>${v.name}</span>`
-    }))
-  ]
-
   return (
-    <div className="flex flex-col h-full min-h-[calc(100vh-200px)]">
-      {/* Header with Back Button */}
-      <div className="flex items-center justify-between pb-4 border-b mb-4">
-        <div className="flex items-center gap-4">
-          <Button variant="ghost" size="sm" onClick={onBack}>
-            <ArrowLeft className="h-4 w-4 mr-2" />
-            Back to System Emails
-          </Button>
-          <div className="h-6 w-px bg-border" />
-          <div>
-            <h2 className="text-xl font-bold flex items-center gap-2">
-              <Edit className="h-5 w-5" />
-              {email.name}
-            </h2>
-            <p className="text-sm text-muted-foreground">{email.description}</p>
-          </div>
-        </div>
-        <div className="flex items-center gap-2">
-          {customTemplate && (
-            <Button variant="outline" onClick={onReset} disabled={loading}>
-              <RefreshCw className="h-4 w-4 mr-2" />
-              Reset to Default
-            </Button>
-          )}
-          <Button
-            onClick={() => onSave({ subject, html: htmlContent })}
-            disabled={loading || !hasChanges}
-          >
-            {loading ? (
-              <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-            ) : (
-              <Check className="h-4 w-4 mr-2" />
-            )}
-            Save Changes
-          </Button>
-        </div>
-      </div>
-
-      {/* Subject Line */}
-      <div className="mb-4">
-        <Label htmlFor="subject" className="text-sm font-medium">Subject Line</Label>
-        <Input
-          id="subject"
-          value={subject}
-          onChange={(e) => setSubject(e.target.value)}
-          placeholder={email.defaultSubject}
-          className="mt-1 max-w-2xl"
-        />
-      </div>
-
-      {/* Variables Quick Reference */}
-      <div className="mb-4">
-        <Label className="text-sm font-medium mb-2 block">Available Variables</Label>
-        <div className="flex flex-wrap gap-2">
-          {email.variables?.map(v => (
-            <TooltipProvider key={v.name}>
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className="font-mono text-xs gap-1 h-7"
-                    onClick={() => onCopyVariable(v.name)}
-                  >
-                    {v.name}
-                    {copiedVariable === v.name ? (
-                      <Check className="h-3 w-3 text-green-500" />
-                    ) : (
-                      <Copy className="h-3 w-3" />
-                    )}
-                  </Button>
-                </TooltipTrigger>
-                <TooltipContent>{v.description}</TooltipContent>
-              </Tooltip>
-            </TooltipProvider>
-          ))}
-        </div>
-      </div>
-
-      {/* Editor Tabs - Full Height */}
-      <Tabs value={activeTab} onValueChange={setActiveTab} className="flex-1 flex flex-col">
-        <TabsList className="w-fit">
-          <TabsTrigger value="visual">
-            <Layout className="h-4 w-4 mr-2" />
-            Visual Editor
-          </TabsTrigger>
-          <TabsTrigger value="html">
-            <Code className="h-4 w-4 mr-2" />
-            HTML Source
-          </TabsTrigger>
-          <TabsTrigger value="preview">
-            <Eye className="h-4 w-4 mr-2" />
-            Preview
-          </TabsTrigger>
-        </TabsList>
-
-        <TabsContent value="visual" className="flex-1 mt-4">
-          <div className="grid grid-cols-[220px_1fr] gap-4 h-[500px]">
-            {/* Blocks sidebar */}
-            <div className="border rounded-lg p-3 bg-muted/30 overflow-y-auto">
-              <p className="text-xs font-medium text-muted-foreground mb-3 px-1">Drag to add</p>
-              <div id="system-email-blocks" className="space-y-1" />
-            </div>
-            {/* Editor canvas */}
-            <div className="border rounded-lg overflow-hidden bg-white">
-              <div ref={editorRef} className="h-full" />
-            </div>
-          </div>
-        </TabsContent>
-
-        <TabsContent value="html" className="flex-1 mt-4">
-          <Textarea
-            value={htmlContent}
-            onChange={(e) => setHtmlContent(e.target.value)}
-            placeholder="Paste or write your HTML email template here..."
-            className="font-mono text-sm h-[500px] resize-none"
-          />
-          <p className="text-xs text-muted-foreground mt-2">
-            Use inline styles for best email client compatibility. Variables like {'{{first_name}}'} will be replaced when the email is sent.
-          </p>
-        </TabsContent>
-
-        <TabsContent value="preview" className="flex-1 mt-4">
-          <div className="flex flex-col gap-4">
-            {/* Device Toggle */}
-            <div className="flex justify-center gap-2">
-              <Button
-                variant={previewDevice === 'desktop' ? 'default' : 'outline'}
-                size="sm"
-                onClick={() => setPreviewDevice('desktop')}
-              >
-                <Monitor className="h-4 w-4 mr-2" />
-                Desktop
-              </Button>
-              <Button
-                variant={previewDevice === 'mobile' ? 'default' : 'outline'}
-                size="sm"
-                onClick={() => setPreviewDevice('mobile')}
-              >
-                <Smartphone className="h-4 w-4 mr-2" />
-                Mobile
-              </Button>
-            </div>
-
-            {/* Preview Frame */}
-            <div 
-              className={`border rounded-lg bg-white overflow-hidden mx-auto shadow-lg ${
-                previewDevice === 'mobile' ? 'max-w-[375px]' : 'max-w-[700px] w-full'
-              }`}
-            >
-              <div className="bg-gray-100 px-4 py-2 border-b flex items-center gap-2">
-                <div className="flex gap-1.5">
-                  <div className="w-3 h-3 rounded-full bg-red-400" />
-                  <div className="w-3 h-3 rounded-full bg-yellow-400" />
-                  <div className="w-3 h-3 rounded-full bg-green-400" />
-                </div>
-                <div className="flex-1 text-center text-xs text-muted-foreground">
-                  {subject || email.defaultSubject}
-                </div>
-              </div>
-              <ScrollArea className="h-[450px]">
-                <div 
-                  className="p-0"
-                  dangerouslySetInnerHTML={{ 
-                    __html: htmlContent || getDefaultTemplate(email.id) || '<p class="p-8 text-center text-gray-500">No template content yet</p>' 
-                  }}
-                />
-              </ScrollArea>
-            </div>
-          </div>
-        </TabsContent>
-      </Tabs>
-    </div>
+    <EmailEditor
+      title={email.name}
+      description={email.description}
+      initialSubject={customTemplate?.subject || email.defaultSubject}
+      initialHtml={customTemplate?.html || getDefaultTemplate(email.id)}
+      variables={email.variables || []}
+      onSave={handleSave}
+      onBack={onBack}
+      onReset={onReset}
+      showReset={!!customTemplate}
+      loading={loading}
+      saveLabel="Save Changes"
+    />
   )
 }

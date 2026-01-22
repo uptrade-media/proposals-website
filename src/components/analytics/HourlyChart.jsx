@@ -6,6 +6,27 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/com
 import { BarChart } from '@tremor/react'
 import { Clock, Loader2 } from 'lucide-react'
 
+// Custom tooltip component for dark mode compatibility
+function CustomTooltip({ payload, active, label }) {
+  if (!active || !payload) return null
+  
+  return (
+    <div className="rounded-lg border bg-[rgba(44,44,46,0.95)] backdrop-blur-xl border-white/10 p-3 shadow-xl">
+      <p className="text-sm font-medium text-white/90 mb-2">{label}</p>
+      {payload.map((entry, index) => (
+        <div key={index} className="flex items-center gap-2 text-sm">
+          <span 
+            className="w-3 h-3 rounded-sm" 
+            style={{ backgroundColor: entry.color }}
+          />
+          <span className="text-white/70">{entry.dataKey}:</span>
+          <span className="text-white font-medium">{entry.value?.toLocaleString()}</span>
+        </div>
+      ))}
+    </div>
+  )
+}
+
 // Convert hour index to display label
 function formatHour(hour) {
   if (hour === 0) return '12am'
@@ -108,6 +129,7 @@ export function HourlyChart({
               yAxisWidth={48}
               autoMinValue={true}
               className="h-64"
+              customTooltip={CustomTooltip}
             />
           </div>
         ) : (

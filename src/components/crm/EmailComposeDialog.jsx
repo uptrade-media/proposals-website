@@ -41,11 +41,13 @@ import {
   Plus,
   X,
   CalendarClock,
-  Bell
+  Bell,
+  CalendarDays
 } from 'lucide-react'
 import { Switch } from '@/components/ui/switch'
 import { toast } from '@/lib/toast'
-import api from '@/lib/api'
+import { emailApi } from '@/lib/portal-api'
+import useAuthStore from '@/lib/auth-store'
 
 // Available "from" mailboxes - Gmail/Google Workspace accounts
 // All composed emails go through Gmail API for proper threading & replies
@@ -104,6 +106,23 @@ Best,
 Ramsey`
   },
   {
+    id: 'schedule_call',
+    name: 'Schedule Consultation',
+    subject: 'Let\'s chat about {{companyName}}\'s growth',
+    body: `Hi {{firstName}},
+
+I'd love to learn more about {{companyName}} and discuss how we might be able to help you achieve your goals.
+
+I've included a link below to book a time that works for you:
+
+{{schedulingLink}}
+
+Looking forward to connecting!
+
+Best,
+Ramsey`
+  },
+  {
     id: 'blank',
     name: 'Blank Email',
     subject: '',
@@ -115,12 +134,28 @@ export default function EmailComposeDialog({
   open,
   onOpenChange,
   contact,
+  projectId, // Project ID for Gmail OAuth
   audits = [], // Available audits for this contact
   proposals = [], // Available proposals for this contact
   defaultSubject = '',
   defaultBody = '',
   onSent
 }) {
+  const { currentOrg, currentProject } = useAuthStore()
+  
+  // Use passed projectId or fall back to current project
+  const effectiveProjectId = projectId || currentProject?.id
+  
+  // Schedule Consultation is Uptrade Media only feature
+  const isUptradeMedia = currentOrg?.slug === 'uptrade-media' || 
+                         currentOrg?.domain === 'uptrademedia.com' || 
+                         currentOrg?.org_type === 'agency'
+  
+  // Filter templates based on org
+  const availableTemplates = isUptradeMedia 
+    ? TEMPLATES 
+    : TEMPLATES.filter(t => t.id !== 'schedule_call')
+
   const [activeTab, setActiveTab] = useState('compose')
   const [selectedMailbox, setSelectedMailbox] = useState('ramsey')
   const [selectedTemplate, setSelectedTemplate] = useState('blank')
@@ -131,6 +166,8 @@ export default function EmailComposeDialog({
   const [isGeneratingAI, setIsGeneratingAI] = useState(false)
   const [selectedAudit, setSelectedAudit] = useState(null) // Audit to attach with magic link
   const [selectedProposal, setSelectedProposal] = useState(null) // Proposal to attach with magic link
+  const [includeSchedulingLink, setIncludeSchedulingLink] = useState(false) // Include scheduling button
+  const [selectedBookingType, setSelectedBookingType] = useState('discovery-call') // Default booking type
   const [includeSignature, setIncludeSignature] = useState(true)
   
   // Automated follow-up state
@@ -245,6 +282,7 @@ Ramsey`
       .replace('{{customContent}}', '')
       .replace('{{auditLink}}', '[Audit link will be inserted]')
       .replace('{{proposalLink}}', '[Proposal link will be inserted]')
+      .replace('{{schedulingLink}}', '[📅 Schedule a Call button will be inserted]')
 
     setSubject(newSubject)
     setBody(newBody)
@@ -268,11 +306,20 @@ Ramsey`
         : null
       setSelectedProposal(mostRecentProposal)
       setSelectedAudit(null)
+      setIncludeSchedulingLink(false)
+    }
+    // Auto-enable scheduling link for schedule template
+    else if (templateId === 'schedule_call') {
+      setIncludeSchedulingLink(true)
+      setSelectedBookingType('discovery-call')
+      setSelectedAudit(null)
+      setSelectedProposal(null)
     }
     // Clear attachments for other templates
     else {
       setSelectedAudit(null)
       setSelectedProposal(null)
+      setIncludeSchedulingLink(false)
     }
   }
 
@@ -282,7 +329,7 @@ Ramsey`
     
     setIsGeneratingAI(true)
     try {
-      const response = await api.post('/.netlify/functions/crm-ai-email-suggest', {
+      const response = await emailApi.generateAIEmail({
         contactId: contact.id,
         context: {
           name: contact.name,
@@ -320,7 +367,8 @@ Ramsey`
     setIsSending(true)
     try {
       // Use Gmail API for all composed emails
-      const response = await api.post('/.netlify/functions/gmail-send', {
+      const response = await emailApi.sendGmail({
+        projectId: effectiveProjectId, // For Gmail OAuth lookup
         contactId: contact?.id,
         to,
         fromEmail: mailbox.email,
@@ -328,6 +376,8 @@ Ramsey`
         content: body,
         auditId: selectedAudit?.id || null, // Include audit magic link if selected
         proposalId: selectedProposal?.id || null, // Include proposal magic link if selected
+        includeSchedulingLink, // Include scheduling CTA button
+        bookingType: includeSchedulingLink ? selectedBookingType : null, // Booking type for scheduling
         includeSignature, // Pull signature from Gmail settings
         // Include automated follow-ups if enabled
         followUps: enableFollowUps ? followUps.filter(f => f.enabled && f.subject && f.body).map(f => ({
@@ -352,6 +402,8 @@ Ramsey`
       setSelectedTemplate('blank')
       setSelectedAudit(null)
       setSelectedProposal(null)
+      setIncludeSchedulingLink(false)
+      setSelectedBookingType('discovery-call')
       setEnableFollowUps(false)
       setFollowUps([{ id: 1, daysAfter: 3, subject: '', body: '', enabled: true }])
     } catch (err) {
@@ -379,6 +431,15 @@ Ramsey`
     </div>
   ` : ''
 
+  // Build scheduling link section for preview
+  const schedulingLinkHtml = includeSchedulingLink ? `
+    <div style="margin: 24px 0; padding: 20px; background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%); border-radius: 12px; text-align: center;">
+      <p style="margin: 0 0 12px 0; color: white; font-weight: 600; font-size: 16px;">📅 Ready to chat?</p>
+      <p style="margin: 0 0 16px 0; color: rgba(255,255,255,0.9); font-size: 14px;">Book a time that works best for you</p>
+      <a href="[Scheduling Link]" style="display: inline-block; padding: 12px 28px; background: white; color: #6366f1; text-decoration: none; border-radius: 8px; font-weight: 600; font-size: 15px;">Schedule a Call →</a>
+    </div>
+  ` : ''
+
   // Preview HTML - dark background with light text to simulate email client
   const previewHtml = `
     <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; color: #1a1a1a;">
@@ -390,6 +451,7 @@ Ramsey`
       <div style="white-space: pre-wrap; line-height: 1.6; color: #1a1a1a;">${body}</div>
       ${auditLinkHtml}
       ${proposalLinkHtml}
+      ${schedulingLinkHtml}
       ${includeSignature ? `
         <div style="margin-top: 24px; padding-top: 16px; border-top: 1px solid #e0e0e0; color: #666; font-size: 13px;">
           <em>— Your Gmail signature will appear here —</em>
@@ -444,7 +506,7 @@ Ramsey`
                     <SelectValue placeholder="Select template..." />
                   </SelectTrigger>
                   <SelectContent>
-                    {TEMPLATES.map(template => (
+                    {availableTemplates.map(template => (
                       <SelectItem key={template.id} value={template.id}>
                         {template.name}
                       </SelectItem>
@@ -583,10 +645,47 @@ Ramsey`
                   </>
                 )}
 
+                {/* Show scheduling link selector when schedule template is selected */}
+                {selectedTemplate === 'schedule_call' && (
+                  <>
+                    <Select 
+                      value={selectedBookingType} 
+                      onValueChange={setSelectedBookingType}
+                    >
+                      <SelectTrigger className="border-[#6366f1]/50">
+                        <SelectValue placeholder="Select meeting type" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="discovery-call">Discovery Call (15 min)</SelectItem>
+                        <SelectItem value="strategy-session">Strategy Session (30 min)</SelectItem>
+                        <SelectItem value="project-kickoff">Project Kickoff (45 min)</SelectItem>
+                        <SelectItem value="audit-review">Audit Review (30 min)</SelectItem>
+                        <SelectItem value="quick-chat">Quick Chat (15 min)</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    <div className="flex items-center gap-2 pt-1">
+                      <Switch 
+                        checked={includeSchedulingLink} 
+                        onCheckedChange={setIncludeSchedulingLink}
+                        id="include-scheduling"
+                      />
+                      <Label htmlFor="include-scheduling" className="text-sm cursor-pointer">
+                        Include "Schedule a Call" button
+                      </Label>
+                    </div>
+                    {includeSchedulingLink && (
+                      <p className="text-xs text-[#6366f1] flex items-center gap-1">
+                        <CalendarDays className="h-3 w-3" />
+                        Booking link to portal.uptrademedia.com/schedule
+                      </p>
+                    )}
+                  </>
+                )}
+
                 {/* Show placeholder for other templates */}
-                {selectedTemplate !== 'audit_send' && selectedTemplate !== 'proposal_send' && (
+                {selectedTemplate !== 'audit_send' && selectedTemplate !== 'proposal_send' && selectedTemplate !== 'schedule_call' && (
                   <p className="text-sm text-[var(--text-tertiary)] py-2">
-                    Select "Send Audit Results" or "Proposal Follow-Up" template to attach a magic link
+                    Select a template to attach magic links or scheduling buttons
                   </p>
                 )}
               </div>

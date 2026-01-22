@@ -1,6 +1,6 @@
 import { useParams } from 'react-router-dom'
 import { useEffect, useState, useRef } from 'react'
-import api from '@/lib/api'
+import { proposalsApi } from '@/lib/portal-api'
 import UptradeLoading from './UptradeLoading'
 import ProposalTemplate from './ProposalTemplate'
 
@@ -27,14 +27,15 @@ export default function ProposalGate() {
       
       console.log('[ProposalGate] Fetching proposal by slug:', slug)
       
-      const response = await api.get(`/.netlify/functions/proposals-get?id=${slug}`)
+      const response = await proposalsApi.get(slug)
       
-      if (response.data?.proposal) {
-        setProposal(response.data.proposal)
-        console.log('[ProposalGate] Proposal loaded:', response.data.proposal.title)
+      if (response.data?.proposal || response.data) {
+        const proposalData = response.data.proposal || response.data
+        setProposal(proposalData)
+        console.log('[ProposalGate] Proposal loaded:', proposalData.title)
         
         // Track view (fire and forget)
-        trackProposalView(response.data.proposal.id)
+        trackProposalView(proposalData.id)
       } else {
         setError('Proposal not found')
       }
@@ -51,15 +52,7 @@ export default function ProposalGate() {
     if (!proposalId) return
     
     try {
-      await api.post('/.netlify/functions/proposals-track-view', {
-        proposalId,
-        event: 'view',
-        metadata: {
-          accessType: 'public_slug',
-          userAgent: navigator.userAgent,
-          referrer: document.referrer
-        }
-      })
+      await proposalsApi.trackView(proposalId)
     } catch (err) {
       // Ignore tracking errors
       console.warn('[ProposalGate] Failed to track view:', err)

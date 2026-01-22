@@ -78,7 +78,8 @@ function OpportunitiesCard({ opportunities = [], onViewAll }) {
 }
 
 function GSCConnectionCard({ site = {} }) {
-  const isConnected = !!site?.gsc_connected_at
+  // Support both old (gsc_connected_at) and new (gscConnected) API response format
+  const isConnected = !!site?.gscConnected || !!site?.gsc_connected_at
 
   return (
     <Card>

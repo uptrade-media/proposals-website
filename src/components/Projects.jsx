@@ -1,732 +1,354 @@
-// Projects.jsx - World-class internal project tracking and tenant management
-import { useState, useEffect, useRef, useMemo } from 'react'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
-import { Button } from '@/components/ui/button'
-import { Badge } from '@/components/ui/badge'
-import { Input } from '@/components/ui/input'
-import { Label } from '@/components/ui/label'
-import { Textarea } from '@/components/ui/textarea'
-import { Progress } from '@/components/ui/progress'
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
-import { Alert, AlertDescription } from '@/components/ui/alert'
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
-import { Switch } from '@/components/ui/switch'
-import { Separator } from '@/components/ui/separator'
-import { toast } from '@/lib/toast'
-import { EmptyState } from './EmptyState'
-import { ConfirmDialog } from './ConfirmDialog'
+/**
+ * Projects Module - Redesigned
+ * 
+ * A comprehensive project management interface with:
+ * - Project list with Kanban and table views
+ * - Creative pipeline for design requests
+ * - Task management
+ * - Time tracking
+ * - Approval workflows
+ */
+import { useEffect, useMemo, useState, useCallback } from 'react'
 import { 
-  Plus, 
-  Calendar, 
-  DollarSign, 
-  FileText, 
-  Clock, 
-  CheckCircle, 
-  CheckCircle2,
-  AlertCircle,
-  Eye,
-  Edit,
-  Loader2,
-  Trash2,
-  Building2,
-  ExternalLink,
-  Copy,
-  Check,
-  Globe,
-  Users,
-  Target,
-  TrendingUp,
-  MoreVertical,
-  Rocket,
-  Zap,
-  BarChart3,
-  Mail,
-  Search as SearchIcon,
-  PenTool,
-  ArrowRight,
-  LogIn,
-  ArrowLeft,
-  LayoutDashboard,
-  Brain
+  Plus, Search as SearchIcon, MoreVertical, Calendar, DollarSign, Users, 
+  Clock, CheckCircle2, Target, Building2, Globe, ExternalLink, Loader2,
+  Edit, Eye, Trash2, LayoutDashboard, Copy, Check, AlertCircle,
+  FolderKanban, ListTodo, Timer, ClipboardCheck, FileImage, Play, Pause,
+  ChevronRight, Filter, ArrowUpDown, LayoutGrid, List, Settings2
 } from 'lucide-react'
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu'
-import useProjectsStore from '@/lib/projects-store'
-import useAuthStore from '@/lib/auth-store'
-import api from '@/lib/api'
+import { toast } from 'sonner'
+
+// UI Components
+import { Button } from './ui/button'
+import { Input } from './ui/input'
+import { Card, CardHeader, CardTitle, CardDescription, CardContent } from './ui/card'
+import { Badge } from './ui/badge'
+import { Progress } from './ui/progress'
+import { Tabs, TabsList, TabsTrigger, TabsContent } from './ui/tabs'
+import { 
+  Dialog, DialogContent, DialogHeader, DialogTitle, 
+  DialogDescription, DialogFooter 
+} from './ui/dialog'
+import { Label } from './ui/label'
+import { Textarea } from './ui/textarea'
+import { 
+  Select, SelectTrigger, SelectValue, SelectContent, SelectItem 
+} from './ui/select'
+import { 
+  DropdownMenu, DropdownMenuTrigger, DropdownMenuContent,
+  DropdownMenuItem, DropdownMenuSeparator 
+} from './ui/dropdown-menu'
+import { Alert, AlertDescription } from './ui/alert'
+import { Separator } from './ui/separator'
+import { Switch } from './ui/switch'
+import { Skeleton } from './ui/skeleton'
+
+// Local components
+import EmptyState from './EmptyState'
+import ConfirmDialog from './ConfirmDialog'
 import TenantSetupWizard from './TenantSetupWizard'
+import { adminApi } from '@/lib/portal-api'
 
-// Project status configuration
-const STATUS_CONFIG = {
-  planning: { 
-    label: 'Planning', 
-    color: 'bg-slate-500/20 text-slate-600 border-slate-500/30',
-    icon: Target,
-    progress: 10
-  },
-  discovery: { 
-    label: 'Discovery', 
-    color: 'bg-purple-500/20 text-purple-600 border-purple-500/30',
-    icon: SearchIcon,
-    progress: 20
-  },
-  design: { 
-    label: 'Design', 
-    color: 'bg-pink-500/20 text-pink-600 border-pink-500/30',
-    icon: PenTool,
-    progress: 40
-  },
-  development: { 
-    label: 'Development', 
-    color: 'bg-blue-500/20 text-blue-600 border-blue-500/30',
-    icon: Zap,
-    progress: 60
-  },
-  review: { 
-    label: 'Review', 
-    color: 'bg-amber-500/20 text-amber-600 border-amber-500/30',
-    icon: Eye,
-    progress: 80
-  },
-  launch: { 
-    label: 'Launch Ready', 
-    color: 'bg-emerald-500/20 text-emerald-600 border-emerald-500/30',
-    icon: Rocket,
-    progress: 95
-  },
-  completed: { 
-    label: 'Completed', 
-    color: 'bg-green-500/20 text-green-600 border-green-500/30',
-    icon: CheckCircle2,
-    progress: 100
-  },
-  on_hold: { 
-    label: 'On Hold', 
-    color: 'bg-red-500/20 text-red-600 border-red-500/30',
-    icon: AlertCircle,
-    progress: 0
-  }
-}
+// Sub-components (to be created)
+import ProjectDetailPanel from './projects/ProjectDetailPanel'
+import TasksPanel from './projects/TasksPanel'
+import TimeTrackingPanel from './projects/TimeTrackingPanel'
+import CreativePipelinePanel from './projects/CreativePipelinePanel'
+import ApprovalsPanel from './projects/ApprovalsPanel'
+import TenantModulesDialog from './projects/TenantModulesDialog'
 
-// Tenant modules configuration
+// Store
+import useProjectsStore, { PROJECT_STATUS_CONFIG } from '../lib/projects-store'
+import useAuthStore from '../lib/auth-store'
+
+// Tenant module configuration - modules that can be toggled
+// Note: analytics, forms, and messages are always enabled for tenants
 const TENANT_MODULES = [
-  { 
-    key: 'signal', 
-    label: 'Signal AI', 
-    description: 'AI-powered chat widget, knowledge base, and lead capture',
-    icon: Brain,
-    recommended: true
-  },
-  { 
-    key: 'engage', 
-    label: 'Engage', 
-    description: 'Popups, banners, exit-intent modals, and A/B testing',
-    icon: Zap,
-    recommended: true
-  },
-  { 
-    key: 'analytics', 
-    label: 'Website Analytics', 
-    description: 'Track visitors, sessions, page views, and user behavior',
-    icon: BarChart3,
-    recommended: true
-  },
-  { 
-    key: 'blog', 
-    label: 'Blog Manager', 
-    description: 'Create and manage blog posts with SEO optimization',
-    icon: FileText,
-    recommended: false
-  },
-  { 
-    key: 'crm', 
-    label: 'Lead Management', 
-    description: 'Simple CRM for tracking leads and contacts',
-    icon: Users,
-    recommended: true
-  },
-  { 
-    key: 'email_campaigns', 
-    label: 'Email Campaigns', 
-    description: 'Send newsletters and marketing emails',
-    icon: Mail,
-    recommended: false
-  },
-  { 
-    key: 'seo', 
-    label: 'SEO Manager', 
-    description: 'Search rankings, audits, and optimization tools',
-    icon: TrendingUp,
-    recommended: true
-  },
+  { key: 'seo', label: 'SEO Tools', icon: Target, description: 'Search optimization and keyword tracking' },
+  { key: 'blog', label: 'Blog/CMS', icon: Edit, description: 'Content management system' },
+  { key: 'crm', label: 'CRM', icon: Users, description: 'Customer relationship management' },
+  { key: 'engage', label: 'Engage', icon: Eye, description: 'Popups, nudges, and live chat' },
+  { key: 'email_manager', label: 'Outreach', icon: Target, description: 'Email campaigns and SMS messaging' },
+  { key: 'signal', label: 'Signal AI', icon: Target, description: 'AI assistant and knowledge base' },
 ]
 
+// Format helpers
+const formatCurrency = (amount) => {
+  if (!amount) return '$0'
+  return new Intl.NumberFormat('en-US', { 
+    style: 'currency', 
+    currency: 'USD',
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 0,
+  }).format(amount)
+}
+
+const formatDate = (date) => {
+  if (!date) return '—'
+  return new Date(date).toLocaleDateString('en-US', { 
+    month: 'short', 
+    day: 'numeric',
+    year: 'numeric',
+  })
+}
+
+const getDeadlineStatus = (endDate) => {
+  if (!endDate) return null
+  const today = new Date()
+  const deadline = new Date(endDate)
+  const daysUntil = Math.ceil((deadline - today) / (1000 * 60 * 60 * 24))
+  
+  if (daysUntil < 0) return { label: 'Overdue', color: 'bg-red-100 text-red-700' }
+  if (daysUntil <= 3) return { label: `${daysUntil}d left`, color: 'bg-orange-100 text-orange-700' }
+  if (daysUntil <= 7) return { label: `${daysUntil}d left`, color: 'bg-amber-100 text-amber-700' }
+  return null
+}
+
+/**
+ * Main Projects Component
+ */
 const Projects = ({ onNavigate }) => {
-  const { user, isSuperAdmin, currentOrg, switchOrganization } = useAuthStore()
-  const isAdmin = user?.role === 'admin' || isSuperAdmin
+  const { user, isAdmin: authIsAdmin, currentOrg, currentProject, isSuperAdmin, switchOrganization } = useAuthStore()
+  
+  // Uptrade Media org should show admin view, client orgs show tenant view
+  const isUptradeMediaOrg = currentOrg?.slug === 'uptrade-media' || currentOrg?.domain === 'uptrademedia.com' || currentOrg?.org_type === 'agency'
+  const isInTenantContext = (!!currentProject && !isUptradeMediaOrg) || (!!currentOrg && !isUptradeMediaOrg)
+  const isAdmin = (authIsAdmin || isSuperAdmin) && !isInTenantContext
   const { 
     projects, 
-    fetchProjects, 
-    createProject, 
+    currentProject: selectedProject,
+    pendingApprovals,
+    activeTimer,
+    isLoading, 
+    error,
+    fetchProjects,
+    fetchProject,
+    createProject,
     updateProject,
     deleteProject,
-    isLoading, 
-    error, 
-    clearError 
+    fetchPendingApprovals,
+    setCurrentProject,
+    clearError,
   } = useProjectsStore()
-  
-  const hasFetchedRef = useRef(false)
-  
-  // View state
-  const [activeTab, setActiveTab] = useState('active')
+
+  // UI State
+  const [activeTab, setActiveTab] = useState('projects')
+  const [viewMode, setViewMode] = useState('grid') // 'grid' | 'list'
+  const [projectFilter, setProjectFilter] = useState('active') // 'active' | 'completed' | 'tenants' | 'all'
   const [searchQuery, setSearchQuery] = useState('')
-  const [enteringTenant, setEnteringTenant] = useState(null) // Track which tenant we're entering
   
   // Dialog states
   const [createDialogOpen, setCreateDialogOpen] = useState(false)
   const [editDialogOpen, setEditDialogOpen] = useState(false)
-  const [detailsDialogOpen, setDetailsDialogOpen] = useState(false)
+  const [detailsDrawerOpen, setDetailsDrawerOpen] = useState(false)
   const [convertDialogOpen, setConvertDialogOpen] = useState(false)
+  const [modulesDialogOpen, setModulesDialogOpen] = useState(false)
   const [deleteDialog, setDeleteDialog] = useState({ open: false, project: null })
-  
-  // Selected project for operations
-  const [selectedProject, setSelectedProject] = useState(null)
   
   // Form state
   const [formData, setFormData] = useState({
-    contactId: '',
     title: '',
     description: '',
+    contactId: '',
     status: 'planning',
     budget: '',
-    start_date: '',
-    end_date: ''
+    startDate: '',
+    endDate: '',
   })
   
-  const [copied, setCopied] = useState(false)
-  
-  // Module toggle state
-  const [togglingModule, setTogglingModule] = useState(null)
-
-  // Clients for dropdown
+  // Clients list for dropdown
   const [clients, setClients] = useState([])
-
-  // Fetch data
+  
+  // Load data on mount
   useEffect(() => {
-    if (hasFetchedRef.current) return
-    hasFetchedRef.current = true
     fetchProjects()
-    if (isAdmin) fetchClients()
+    if (isAdmin) {
+      fetchPendingApprovals()
+      loadClients()
+    }
   }, [])
-
-  const fetchClients = async () => {
+  
+  // Load clients for admin
+  const loadClients = async () => {
     try {
-      const response = await api.get('/.netlify/functions/admin-clients-list')
-      setClients(response.data.clients || [])
+      const response = await adminApi.listClients()
+      setClients(response.data.clients || response.data || [])
     } catch (err) {
-      console.error('Failed to fetch clients:', err)
+      console.error('Failed to load clients:', err)
     }
   }
-
-  // Computed project lists
-  const { activeProjects, completedProjects, tenants, stats } = useMemo(() => {
-    const active = projects.filter(p => p.status !== 'completed' && p.status !== 'on_hold')
-    const onHold = projects.filter(p => p.status === 'on_hold')
-    const completed = projects.filter(p => p.status === 'completed' && !p.is_tenant)
-    const tenantList = projects.filter(p => p.is_tenant)
+  
+  // Computed: filtered projects
+  const filteredProjects = useMemo(() => {
+    let list = projects
     
-    // Filter by search
-    const filterBySearch = (list) => {
-      if (!searchQuery) return list
-      const q = searchQuery.toLowerCase()
-      return list.filter(p => 
-        p.title?.toLowerCase().includes(q) || 
-        p.client_name?.toLowerCase().includes(q) ||
-        p.description?.toLowerCase().includes(q)
+    // Apply filter
+    if (projectFilter === 'active') {
+      // Show all in-progress projects, including tenant web apps
+      list = list.filter(p => !['completed', 'on_hold'].includes(p.status))
+    } else if (projectFilter === 'completed') {
+      // Completed projects of any type
+      list = list.filter(p => p.status === 'completed')
+    } else if (projectFilter === 'tenants') {
+      list = list.filter(p => p.domain)
+    }
+    
+    // Apply search
+    if (searchQuery) {
+      const query = searchQuery.toLowerCase()
+      list = list.filter(p => 
+        p.title?.toLowerCase().includes(query) ||
+        p.description?.toLowerCase().includes(query) ||
+        p.client_name?.toLowerCase().includes(query)
       )
     }
-
-    return {
-      activeProjects: filterBySearch(active),
-      completedProjects: filterBySearch(completed),
-      tenants: filterBySearch(tenantList),
-      stats: {
-        total: projects.length,
-        active: active.length,
-        onHold: onHold.length,
-        completed: completed.length,
-        tenants: tenantList.length,
-        totalRevenue: projects.reduce((sum, p) => sum + (parseFloat(p.budget) || 0), 0)
-      }
-    }
-  }, [projects, searchQuery])
-
-  // Helpers
-  const getDaysUntilDeadline = (endDate) => {
-    if (!endDate) return null
-    const end = new Date(endDate)
-    const now = new Date()
-    const diff = Math.ceil((end - now) / (1000 * 60 * 60 * 24))
-    return diff
-  }
-
-  const getDeadlineStatus = (endDate) => {
-    const days = getDaysUntilDeadline(endDate)
-    if (days === null) return null
-    if (days < 0) return { label: `${Math.abs(days)}d overdue`, color: 'text-red-600 bg-red-100' }
-    if (days === 0) return { label: 'Due today', color: 'text-amber-600 bg-amber-100' }
-    if (days <= 7) return { label: `${days}d left`, color: 'text-amber-600 bg-amber-100' }
-    return { label: `${days}d left`, color: 'text-slate-600 bg-slate-100' }
-  }
-
-  const formatCurrency = (amount) => {
-    if (!amount) return '-'
-    return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', minimumFractionDigits: 0 }).format(amount)
-  }
-
-  const formatDate = (date) => {
-    if (!date) return '-'
-    return new Date(date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
-  }
-
+    
+    return list
+  }, [projects, projectFilter, searchQuery])
+  
+  // Computed: stats
+  const stats = useMemo(() => ({
+    // Count all projects; tenants also contribute to active/completed
+    active: projects.filter(p => !['completed', 'on_hold'].includes(p.status)).length,
+    completed: projects.filter(p => p.status === 'completed').length,
+    tenants: projects.filter(p => p.domain).length,
+    totalRevenue: projects.reduce((sum, p) => sum + (p.budget || 0), 0),
+  }), [projects])
+  
   // Form handlers
-  const resetForm = () => {
-    setFormData({
-      contactId: '',
-      title: '',
-      description: '',
-      status: 'planning',
-      budget: '',
-      start_date: '',
-      end_date: ''
-    })
-  }
-
   const handleFormChange = (field, value) => {
     setFormData(prev => ({ ...prev, [field]: value }))
-    if (error) clearError()
   }
-
+  
+  const resetForm = () => {
+    setFormData({
+      title: '',
+      description: '',
+      contactId: '',
+      status: 'planning',
+      budget: '',
+      startDate: '',
+      endDate: '',
+    })
+    clearError()
+  }
+  
+  // CRUD handlers
   const handleCreateProject = async (e) => {
     e.preventDefault()
-    const projectData = {
-      ...formData,
-      budget: formData.budget ? parseFloat(formData.budget) : null
-    }
-    const result = await createProject(projectData)
-    if (result.success) {
-      toast.success('Project created successfully!')
+    try {
+      await createProject({
+        title: formData.title,
+        description: formData.description,
+        contactId: formData.contactId,
+        status: formData.status,
+        budget: formData.budget ? parseFloat(formData.budget) : null,
+        startDate: formData.startDate || null,
+        endDate: formData.endDate || null,
+      })
+      toast.success('Project created successfully')
       setCreateDialogOpen(false)
       resetForm()
+    } catch (err) {
+      toast.error(err.message || 'Failed to create project')
     }
   }
-
+  
   const handleEditProject = async (e) => {
     e.preventDefault()
     if (!selectedProject) return
-    const projectData = {
-      ...formData,
-      budget: formData.budget ? parseFloat(formData.budget) : null
-    }
-    const result = await updateProject(selectedProject.id, projectData)
-    if (result.success) {
-      toast.success('Project updated!')
+    
+    try {
+      await updateProject(selectedProject.id, {
+        title: formData.title,
+        description: formData.description,
+        status: formData.status,
+        budget: formData.budget ? parseFloat(formData.budget) : null,
+        startDate: formData.startDate || null,
+        endDate: formData.endDate || null,
+      })
+      toast.success('Project updated successfully')
       setEditDialogOpen(false)
-      setSelectedProject(null)
       resetForm()
+    } catch (err) {
+      toast.error(err.message || 'Failed to update project')
     }
   }
-
+  
   const handleDeleteProject = async () => {
     if (!deleteDialog.project) return
-    const result = await deleteProject(deleteDialog.project.id)
-    if (result.success) {
-      toast.success('Project deleted!')
+    
+    try {
+      await deleteProject(deleteDialog.project.id)
+      toast.success('Project deleted')
       setDeleteDialog({ open: false, project: null })
-    } else {
-      toast.error(result.error || 'Failed to delete')
+    } catch (err) {
+      toast.error(err.message || 'Failed to delete project')
     }
   }
-
+  
+  // Open dialogs
   const openEditDialog = (project) => {
-    setSelectedProject(project)
+    setCurrentProject(project)
     setFormData({
-      contactId: project.contact_id || '',
       title: project.title || '',
       description: project.description || '',
+      contactId: project.contact_id || '',
       status: project.status || 'planning',
-      budget: project.budget ? project.budget.toString() : '',
-      start_date: project.start_date || '',
-      end_date: project.end_date || ''
+      budget: project.budget?.toString() || '',
+      startDate: project.start_date?.split('T')[0] || '',
+      endDate: project.end_date?.split('T')[0] || '',
     })
     setEditDialogOpen(true)
   }
-
-  const openDetailsDialog = (project) => {
-    setSelectedProject(project)
-    setDetailsDialogOpen(true)
+  
+  const openDetailsDrawer = async (project) => {
+    setCurrentProject(project)
+    setDetailsDrawerOpen(true)
+    // Fetch full project details
+    await fetchProject(project.id)
   }
   
-  // Toggle a module for a tenant project
-  const toggleModule = async (moduleKey) => {
-    if (!selectedProject?.id || togglingModule) return
-    
-    setTogglingModule(moduleKey)
-    
-    const currentModules = selectedProject.tenant_modules || {}
-    const newValue = !currentModules[moduleKey]
-    
-    try {
-      const response = await api.put(`/.netlify/functions/projects-update/${selectedProject.id}`, {
-        tenant_features: { [moduleKey]: newValue }
-      })
-      
-      // Update local state
-      const updatedProject = {
-        ...selectedProject,
-        tenant_modules: {
-          ...currentModules,
-          [moduleKey]: newValue
-        }
-      }
-      setSelectedProject(updatedProject)
-      
-      // Refresh projects list to keep in sync
-      fetchProjects()
-      
-      toast.success(`${TENANT_MODULES.find(m => m.key === moduleKey)?.label} ${newValue ? 'enabled' : 'disabled'}`)
-    } catch (error) {
-      console.error('Failed to toggle module:', error)
-      toast.error('Failed to update module settings')
-    } finally {
-      setTogglingModule(null)
-    }
-  }
-
-  // Tenant conversion - now uses wizard
   const openConvertDialog = (project) => {
-    setSelectedProject(project)
+    setCurrentProject(project)
     setConvertDialogOpen(true)
   }
   
-  // Handle tenant wizard completion
-  const handleTenantComplete = (result) => {
-    toast.success(`🎉 ${result.organization?.name || 'Tenant'} created successfully!`)
-    fetchProjects() // Refresh projects list
-    setSelectedProject(null)
-    setActiveTab('tenants')
+  const openModulesDialog = (project) => {
+    setCurrentProject(project)
+    setModulesDialogOpen(true)
   }
-
-  const generateTrackingScript = (project) => {
-    return `<!-- Uptrade Portal Analytics -->
-<script>
-  (function(w,d,s,o,f,js,fjs){
-    w['UPT']=o;w[o]=w[o]||function(){(w[o].q=w[o].q||[]).push(arguments)};
-    js=d.createElement(s);fjs=d.getElementsByTagName(s)[0];
-    js.id=o;js.src=f;js.async=1;fjs.parentNode.insertBefore(js,fjs);
-  })(window,document,'script','upt','https://portal.uptrademedia.com/t.js');
-  upt('init', '${project.id}');
-</script>`
-  }
-
-  const copyTrackingScript = (project) => {
-    navigator.clipboard.writeText(generateTrackingScript(project))
-    setCopied(true)
-    toast.success('Tracking script copied!')
-    setTimeout(() => setCopied(false), 2000)
-  }
-
-  // Enter a tenant's dashboard context
+  
+  // Tenant navigation
   const enterTenantDashboard = async (project) => {
-    if (!project.is_tenant) {
+    if (!project.domain) {
       toast.error('This project is not a web app yet')
       return
     }
     
-    setEnteringTenant(project.id)
-    
     try {
-      // Switch to the project-based tenant context
       const result = await switchOrganization(null, { projectId: project.id })
-      
-      if (result.success) {
-        // The page will reload automatically after org switch
-        // and user will be taken to dashboard
+      if (result?.success) {
         toast.success(`Entering ${project.title} dashboard...`)
-      } else {
-        // If org switch fails, just navigate to dashboard with project context
-        toast.info(`Viewing ${project.title}`)
-        if (onNavigate) {
-          onNavigate('dashboard', { tenantId: project.id, tenantName: project.title })
-        }
       }
     } catch (err) {
-      console.error('Error entering tenant dashboard:', err)
-      // Fallback: just navigate with context
-      toast.error('Failed to switch context. ' + (err.message || ''))
-      if (onNavigate) {
-        onNavigate('dashboard', { tenantId: project.id, tenantName: project.title })
-      }
-    } finally {
-      setEnteringTenant(null)
+      toast.error('Failed to switch context')
+      console.error(err)
     }
   }
-
-  // Project Card Component
-  const ProjectCard = ({ project, showTenantActions = false }) => {
-    const statusConfig = STATUS_CONFIG[project.status] || STATUS_CONFIG.planning
-    const StatusIcon = statusConfig.icon
-    const deadlineStatus = getDeadlineStatus(project.end_date)
-    
-    // Generate screenshot URL using a public screenshot service
-    // microlink.io provides free screenshot API
-    const getWebsitePreviewUrl = (domain) => {
-      if (!domain) return null
-      const fullUrl = domain.startsWith('http') ? domain : `https://${domain}`
-      // Using microlink screenshot API - free tier
-      return `https://api.microlink.io/?url=${encodeURIComponent(fullUrl)}&screenshot=true&meta=false&embed=screenshot.url`
-    }
-
-    return (
-      <Card className="group hover:shadow-lg transition-all duration-200 border-[var(--glass-border)] overflow-hidden">
-        {/* Website Preview for Web Apps with domain */}
-        {project.is_tenant && project.tenant_domain && (
-          <div className="relative h-32 bg-[var(--surface-secondary)] overflow-hidden">
-            <img
-              src={`https://image.thum.io/get/width/400/crop/300/${project.tenant_domain.startsWith('http') ? project.tenant_domain : 'https://' + project.tenant_domain}`}
-              alt={`${project.title} website preview`}
-              className="w-full h-full object-cover object-top opacity-90 group-hover:opacity-100 transition-opacity"
-              loading="lazy"
-              onError={(e) => {
-                // Hide image on error and show fallback
-                e.target.style.display = 'none'
-              }}
-            />
-            {/* Gradient overlay */}
-            <div className="absolute inset-0 bg-gradient-to-t from-[var(--surface-primary)] via-transparent to-transparent" />
-            {/* Live badge if site appears accessible */}
-            <div className="absolute top-2 right-2">
-              <Badge variant="secondary" className="text-xs bg-black/50 text-white border-0">
-                <Globe className="w-3 h-3 mr-1" />
-                {project.tenant_domain}
-              </Badge>
-            </div>
-          </div>
-        )}
-        
-        <CardHeader className="pb-3">
-          <div className="flex items-start justify-between gap-2">
-            <div className="flex-1 min-w-0">
-              <div className="flex items-center gap-2 mb-1">
-                {project.is_tenant && (
-                  <Badge variant="outline" className="text-xs bg-emerald-50 text-emerald-700 border-emerald-200">
-                    <Building2 className="w-3 h-3 mr-1" />
-                    Web App
-                  </Badge>
-                )}
-                {deadlineStatus && (
-                  <Badge className={`text-xs ${deadlineStatus.color}`}>
-                    {deadlineStatus.label}
-                  </Badge>
-                )}
-              </div>
-              <CardTitle className="text-lg truncate">{project.title}</CardTitle>
-              <CardDescription className="mt-1 flex items-center gap-2">
-                <Users className="w-3 h-3" />
-                {project.client_name || project.contacts?.name || 'No client assigned'}
-              </CardDescription>
-            </div>
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button variant="ghost" size="icon" className="opacity-0 group-hover:opacity-100 transition-opacity">
-                  <MoreVertical className="w-4 h-4" />
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end">
-                {project.is_tenant && (
-                  <>
-                    <DropdownMenuItem onClick={() => enterTenantDashboard(project)}>
-                      <LayoutDashboard className="w-4 h-4 mr-2" />
-                      Enter Dashboard
-                    </DropdownMenuItem>
-                    <DropdownMenuSeparator />
-                  </>
-                )}
-                <DropdownMenuItem onClick={() => openDetailsDialog(project)}>
-                  <Eye className="w-4 h-4 mr-2" />
-                  View Details
-                </DropdownMenuItem>
-                <DropdownMenuItem onClick={() => openEditDialog(project)}>
-                  <Edit className="w-4 h-4 mr-2" />
-                  Edit Project
-                </DropdownMenuItem>
-                {project.status === 'completed' && !project.is_tenant && (
-                  <DropdownMenuItem onClick={() => openConvertDialog(project)}>
-                    <Building2 className="w-4 h-4 mr-2" />
-                    Convert to Web App
-                  </DropdownMenuItem>
-                )}
-                {project.is_tenant && (
-                  <>
-                    <DropdownMenuItem onClick={() => copyTrackingScript(project)}>
-                      <Copy className="w-4 h-4 mr-2" />
-                      Copy Tracking Script
-                    </DropdownMenuItem>
-                    {project.tenant_domain && (
-                      <DropdownMenuItem onClick={() => window.open(`https://${project.tenant_domain}`, '_blank')}>
-                        <ExternalLink className="w-4 h-4 mr-2" />
-                        Visit Website
-                      </DropdownMenuItem>
-                    )}
-                  </>
-                )}
-                <DropdownMenuSeparator />
-                <DropdownMenuItem 
-                  className="text-red-600"
-                  onClick={() => setDeleteDialog({ open: true, project })}
-                >
-                  <Trash2 className="w-4 h-4 mr-2" />
-                  Delete
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
-          </div>
-        </CardHeader>
-        
-        <CardContent className="space-y-4">
-          {/* Progress Bar */}
-          <div className="space-y-2">
-            <div className="flex items-center justify-between text-sm">
-              <Badge className={statusConfig.color}>
-                <StatusIcon className="w-3 h-3 mr-1" />
-                {statusConfig.label}
-              </Badge>
-              <span className="text-[var(--text-secondary)]">{statusConfig.progress}%</span>
-            </div>
-            <Progress value={statusConfig.progress} className="h-2" />
-          </div>
-
-          {/* Quick Stats */}
-          <div className="grid grid-cols-2 gap-3 text-sm">
-            <div className="flex items-center gap-2 text-[var(--text-secondary)]">
-              <DollarSign className="w-4 h-4" />
-              <span className="font-medium text-[var(--text-primary)]">{formatCurrency(project.budget)}</span>
-            </div>
-            <div className="flex items-center gap-2 text-[var(--text-secondary)]">
-              <Calendar className="w-4 h-4" />
-              <span>{formatDate(project.end_date)}</span>
-            </div>
-          </div>
-
-          {/* Tenant Modules (for tenants only) */}
-          {project.is_tenant && project.tenant_modules && (
-            <div className="flex flex-wrap gap-1">
-              {Object.entries(project.tenant_modules)
-                .filter(([_, enabled]) => enabled)
-                .map(([key]) => {
-                  const module = TENANT_MODULES.find(m => m.key === key)
-                  if (!module) return null
-                  const ModuleIcon = module.icon
-                  return (
-                    <Badge key={key} variant="secondary" className="text-xs">
-                      <ModuleIcon className="w-3 h-3 mr-1" />
-                      {module.label}
-                    </Badge>
-                  )
-                })
-              }
-            </div>
-          )}
-
-          {/* Actions */}
-          <div className="flex gap-2 pt-2">
-            {/* For web apps (tenants) - primary action is Enter Dashboard */}
-            {project.is_tenant ? (
-              <>
-                <Button 
-                  variant="glass-primary" 
-                  size="sm" 
-                  className="flex-1"
-                  onClick={() => enterTenantDashboard(project)}
-                  disabled={enteringTenant === project.id}
-                >
-                  {enteringTenant === project.id ? (
-                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                  ) : (
-                    <LayoutDashboard className="w-4 h-4 mr-2" />
-                  )}
-                  Enter Dashboard
-                </Button>
-                <Button 
-                  variant="outline" 
-                  size="sm"
-                  onClick={() => openDetailsDialog(project)}
-                >
-                  <Eye className="w-4 h-4" />
-                </Button>
-                {project.tenant_domain && (
-                  <Button 
-                    variant="outline" 
-                    size="sm"
-                    onClick={() => window.open(`https://${project.tenant_domain}`, '_blank')}
-                  >
-                    <ExternalLink className="w-4 h-4" />
-                  </Button>
-                )}
-              </>
-            ) : (
-              <>
-                <Button 
-                  variant="outline" 
-                  size="sm" 
-                  className="flex-1"
-                  onClick={() => openDetailsDialog(project)}
-                >
-                  <Eye className="w-4 h-4 mr-2" />
-                  Details
-                </Button>
-                {project.status === 'completed' && (
-                  <Button 
-                    variant="glass-primary" 
-                    size="sm" 
-                    className="flex-1"
-                    onClick={() => openConvertDialog(project)}
-                  >
-                    <Building2 className="w-4 h-4 mr-2" />
-                    Make Web App
-                  </Button>
-                )}
-              </>
-            )}
-          </div>
-        </CardContent>
-      </Card>
-    )
+  
+  // Tenant wizard completion
+  const handleTenantComplete = (result) => {
+    toast.success(`🎉 ${result.organization?.name || 'Tenant'} created successfully!`)
+    fetchProjects()
+    setConvertDialogOpen(false)
+    setProjectFilter('tenants')
   }
 
-  // Stats Cards
-  const StatsCard = ({ icon: Icon, label, value, color = 'brand' }) => (
-    <Card className="border-[var(--glass-border)]">
-      <CardContent className="p-4 flex items-center gap-4">
-        <div className={`p-3 rounded-lg ${color === 'brand' ? 'bg-[var(--brand-primary)]/10' : `bg-${color}-500/10`}`}>
-          <Icon className={`w-5 h-5 ${color === 'brand' ? 'text-[var(--brand-primary)]' : `text-${color}-600`}`} />
-        </div>
-        <div>
-          <p className="text-2xl font-bold text-[var(--text-primary)]">{value}</p>
-          <p className="text-sm text-[var(--text-secondary)]">{label}</p>
-        </div>
-      </CardContent>
-    </Card>
-  )
-
+  // ============= Render =============
+  
+  // Client view (simplified)
   if (!isAdmin) {
-    // Client view - simplified
     return (
       <div className="space-y-6">
         <div>
@@ -740,14 +362,18 @@ const Projects = ({ onNavigate }) => {
           </div>
         ) : projects.length === 0 ? (
           <EmptyState
-            icon={FileText}
+            icon={FolderKanban}
             title="No projects yet"
             description="No projects have been created for your account yet."
           />
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             {projects.map((project) => (
-              <ProjectCard key={project.id} project={project} />
+              <ProjectCard 
+                key={project.id} 
+                project={project} 
+                onViewDetails={() => openDetailsDrawer(project)}
+              />
             ))}
           </div>
         )}
@@ -755,114 +381,184 @@ const Projects = ({ onNavigate }) => {
     )
   }
 
+  // Admin view (full features)
   return (
     <div className="space-y-6">
       {/* Header */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-[var(--text-primary)]">Projects & Web Apps</h1>
-          <p className="text-[var(--text-secondary)]">Track projects and enter web app dashboards to manage analytics, blog, CRM, and more</p>
+          <h1 className="text-2xl font-bold text-[var(--text-primary)]">Projects</h1>
+          <p className="text-[var(--text-secondary)]">
+            Manage projects, creative requests, tasks, and time tracking
+          </p>
         </div>
-        <Button variant="glass-primary" onClick={() => setCreateDialogOpen(true)}>
-          <Plus className="w-4 h-4 mr-2" />
-          New Project
-        </Button>
-      </div>
-
-      {/* Stats Overview */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-        <StatsCard icon={Target} label="Active Projects" value={stats.active} />
-        <StatsCard icon={CheckCircle2} label="Completed" value={stats.completed} />
-        <StatsCard icon={Building2} label="Web Apps" value={stats.tenants} color="emerald" />
-        <StatsCard icon={DollarSign} label="Total Revenue" value={formatCurrency(stats.totalRevenue)} color="green" />
-      </div>
-
-      {/* Search */}
-      <div className="flex flex-col sm:flex-row gap-4">
-        <div className="relative flex-1">
-          <SearchIcon className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[var(--text-tertiary)]" />
-          <Input
-            placeholder="Search projects..."
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            className="pl-10"
-          />
+        <div className="flex items-center gap-2">
+          {activeTimer && (
+            <Badge variant="secondary" className="gap-2 animate-pulse">
+              <Timer className="w-3 h-3" />
+              Timer Running
+            </Badge>
+          )}
+          {pendingApprovals.length > 0 && (
+            <Badge variant="destructive" className="gap-2">
+              <ClipboardCheck className="w-3 h-3" />
+              {pendingApprovals.length} Pending
+            </Badge>
+          )}
+          <Button variant="glass-primary" onClick={() => setCreateDialogOpen(true)}>
+            <Plus className="w-4 h-4 mr-2" />
+            New Project
+          </Button>
         </div>
       </div>
 
-      {/* Tabs */}
+      {/* Main Tabs */}
       <Tabs value={activeTab} onValueChange={setActiveTab}>
-        <TabsList className="grid w-full grid-cols-3">
-          <TabsTrigger value="active" className="flex items-center gap-2">
-            <Clock className="w-4 h-4" />
-            Active ({activeProjects.length})
+        <TabsList className="grid w-full grid-cols-5">
+          <TabsTrigger value="projects" className="flex items-center gap-2">
+            <FolderKanban className="w-4 h-4" />
+            <span className="hidden sm:inline">Projects</span>
           </TabsTrigger>
-          <TabsTrigger value="completed" className="flex items-center gap-2">
-            <CheckCircle2 className="w-4 h-4" />
-            Completed ({completedProjects.length})
+          <TabsTrigger value="creative" className="flex items-center gap-2">
+            <FileImage className="w-4 h-4" />
+            <span className="hidden sm:inline">Creative</span>
           </TabsTrigger>
-          <TabsTrigger value="tenants" className="flex items-center gap-2">
-            <Building2 className="w-4 h-4" />
-            Web Apps ({tenants.length})
+          <TabsTrigger value="tasks" className="flex items-center gap-2">
+            <ListTodo className="w-4 h-4" />
+            <span className="hidden sm:inline">Tasks</span>
+          </TabsTrigger>
+          <TabsTrigger value="time" className="flex items-center gap-2">
+            <Timer className="w-4 h-4" />
+            <span className="hidden sm:inline">Time</span>
+          </TabsTrigger>
+          <TabsTrigger value="approvals" className="flex items-center gap-2 relative">
+            <ClipboardCheck className="w-4 h-4" />
+            <span className="hidden sm:inline">Approvals</span>
+            {pendingApprovals.length > 0 && (
+              <span className="absolute -top-1 -right-1 w-4 h-4 bg-red-500 rounded-full text-[10px] text-white flex items-center justify-center">
+                {pendingApprovals.length}
+              </span>
+            )}
           </TabsTrigger>
         </TabsList>
 
-        <TabsContent value="active" className="mt-6">
-          {isLoading && activeProjects.length === 0 ? (
+        {/* Projects Tab */}
+        <TabsContent value="projects" className="mt-6 space-y-6">
+          {/* Stats Overview */}
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            <StatsCard icon={Target} label="Active" value={stats.active} />
+            <StatsCard icon={CheckCircle2} label="Completed" value={stats.completed} />
+            <StatsCard icon={Building2} label="Web Apps" value={stats.tenants} color="emerald" />
+            <StatsCard icon={DollarSign} label="Revenue" value={formatCurrency(stats.totalRevenue)} color="green" />
+          </div>
+
+          {/* Filters & Search */}
+          <div className="flex flex-col sm:flex-row gap-4">
+            <div className="relative flex-1">
+              <SearchIcon className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[var(--text-tertiary)]" />
+              <Input
+                placeholder="Search projects..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="pl-10"
+              />
+            </div>
+            <div className="flex gap-2">
+              <Select value={projectFilter} onValueChange={setProjectFilter}>
+                <SelectTrigger className="w-[140px]">
+                  <Filter className="w-4 h-4 mr-2" />
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="active">Active</SelectItem>
+                  <SelectItem value="completed">Completed</SelectItem>
+                  <SelectItem value="tenants">Web Apps</SelectItem>
+                  <SelectItem value="all">All</SelectItem>
+                </SelectContent>
+              </Select>
+              <div className="flex border rounded-md">
+                <Button 
+                  variant={viewMode === 'grid' ? 'default' : 'ghost'} 
+                  size="icon"
+                  onClick={() => setViewMode('grid')}
+                >
+                  <LayoutGrid className="w-4 h-4" />
+                </Button>
+                <Button 
+                  variant={viewMode === 'list' ? 'default' : 'ghost'} 
+                  size="icon"
+                  onClick={() => setViewMode('list')}
+                >
+                  <List className="w-4 h-4" />
+                </Button>
+              </div>
+            </div>
+          </div>
+
+          {/* Projects Grid/List */}
+          {isLoading && filteredProjects.length === 0 ? (
             <div className="flex items-center justify-center py-12">
               <Loader2 className="h-8 w-8 animate-spin text-[var(--brand-primary)]" />
             </div>
-          ) : activeProjects.length === 0 ? (
+          ) : filteredProjects.length === 0 ? (
             <EmptyState
-              icon={Target}
-              title="No active projects"
-              description="Create a new project to get started."
+              icon={FolderKanban}
+              title="No projects found"
+              description={searchQuery ? 'Try adjusting your search' : 'Create a new project to get started'}
               actionLabel="Create Project"
               onAction={() => setCreateDialogOpen(true)}
             />
-          ) : (
+          ) : viewMode === 'grid' ? (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {activeProjects.map((project) => (
-                <ProjectCard key={project.id} project={project} />
+              {filteredProjects.map((project) => (
+                <ProjectCard 
+                  key={project.id} 
+                  project={project}
+                  onViewDetails={() => openDetailsDrawer(project)}
+                  onEdit={() => openEditDialog(project)}
+                  onDelete={() => setDeleteDialog({ open: true, project })}
+                  onConvert={() => openConvertDialog(project)}
+                  onEnterTenant={() => enterTenantDashboard(project)}
+                  onManageModules={() => openModulesDialog(project)}
+                  isAdmin={isAdmin}
+                />
               ))}
             </div>
+          ) : (
+            <ProjectsTable 
+              projects={filteredProjects}
+              onViewDetails={openDetailsDrawer}
+              onEdit={openEditDialog}
+              onDelete={(p) => setDeleteDialog({ open: true, project: p })}
+              onConvert={openConvertDialog}
+              onEnterTenant={enterTenantDashboard}
+              onManageModules={openModulesDialog}
+            />
           )}
         </TabsContent>
 
-        <TabsContent value="completed" className="mt-6">
-          {completedProjects.length === 0 ? (
-            <EmptyState
-              icon={CheckCircle2}
-              title="No completed projects"
-              description="Completed projects will appear here and can be converted to web apps."
-            />
-          ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {completedProjects.map((project) => (
-                <ProjectCard key={project.id} project={project} />
-              ))}
-            </div>
-          )}
+        {/* Creative Pipeline Tab */}
+        <TabsContent value="creative" className="mt-6">
+          <CreativePipelinePanel projects={projects} />
         </TabsContent>
 
-        <TabsContent value="tenants" className="mt-6">
-          {tenants.length === 0 ? (
-            <EmptyState
-              icon={Building2}
-              title="No web apps yet"
-              description="Convert completed projects to create web apps with their own analytics and tools. Click 'Enter Dashboard' to manage each app."
-            />
-          ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {tenants.map((project) => (
-                <ProjectCard key={project.id} project={project} showTenantActions />
-              ))}
-            </div>
-          )}
+        {/* Tasks Tab */}
+        <TabsContent value="tasks" className="mt-6">
+          <TasksPanel projects={projects} />
+        </TabsContent>
+
+        {/* Time Tracking Tab */}
+        <TabsContent value="time" className="mt-6">
+          <TimeTrackingPanel projects={projects} />
+        </TabsContent>
+
+        {/* Approvals Tab */}
+        <TabsContent value="approvals" className="mt-6">
+          <ApprovalsPanel projects={projects} />
         </TabsContent>
       </Tabs>
 
-      {/* Create Project Dialog */}
+      {/* Create Dialog */}
       <Dialog open={createDialogOpen} onOpenChange={setCreateDialogOpen}>
         <DialogContent className="max-w-lg">
           <DialogHeader>
@@ -917,16 +613,16 @@ const Projects = ({ onNavigate }) => {
                 <Label>Start Date</Label>
                 <Input
                   type="date"
-                  value={formData.start_date}
-                  onChange={(e) => handleFormChange('start_date', e.target.value)}
+                  value={formData.startDate}
+                  onChange={(e) => handleFormChange('startDate', e.target.value)}
                 />
               </div>
               <div className="space-y-2">
                 <Label>End Date</Label>
                 <Input
                   type="date"
-                  value={formData.end_date}
-                  onChange={(e) => handleFormChange('end_date', e.target.value)}
+                  value={formData.endDate}
+                  onChange={(e) => handleFormChange('endDate', e.target.value)}
                 />
               </div>
             </div>
@@ -955,12 +651,11 @@ const Projects = ({ onNavigate }) => {
         </DialogContent>
       </Dialog>
 
-      {/* Edit Project Dialog */}
+      {/* Edit Dialog */}
       <Dialog open={editDialogOpen} onOpenChange={setEditDialogOpen}>
         <DialogContent className="max-w-lg">
           <DialogHeader>
             <DialogTitle>Edit Project</DialogTitle>
-            <DialogDescription>Update project details and status</DialogDescription>
           </DialogHeader>
           <form onSubmit={handleEditProject} className="space-y-4">
             <div className="space-y-2">
@@ -988,12 +683,9 @@ const Projects = ({ onNavigate }) => {
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  {Object.entries(STATUS_CONFIG).map(([key, config]) => (
+                  {Object.entries(PROJECT_STATUS_CONFIG).map(([key, config]) => (
                     <SelectItem key={key} value={key}>
-                      <div className="flex items-center gap-2">
-                        <config.icon className="w-4 h-4" />
-                        {config.label}
-                      </div>
+                      {config.label}
                     </SelectItem>
                   ))}
                 </SelectContent>
@@ -1005,16 +697,16 @@ const Projects = ({ onNavigate }) => {
                 <Label>Start Date</Label>
                 <Input
                   type="date"
-                  value={formData.start_date}
-                  onChange={(e) => handleFormChange('start_date', e.target.value)}
+                  value={formData.startDate}
+                  onChange={(e) => handleFormChange('startDate', e.target.value)}
                 />
               </div>
               <div className="space-y-2">
                 <Label>End Date</Label>
                 <Input
                   type="date"
-                  value={formData.end_date}
-                  onChange={(e) => handleFormChange('end_date', e.target.value)}
+                  value={formData.endDate}
+                  onChange={(e) => handleFormChange('endDate', e.target.value)}
                 />
               </div>
             </div>
@@ -1042,7 +734,18 @@ const Projects = ({ onNavigate }) => {
         </DialogContent>
       </Dialog>
 
-      {/* Tenant Setup Wizard - replaces inline convert dialog */}
+      {/* Details Drawer/Panel */}
+      <ProjectDetailPanel 
+        open={detailsDrawerOpen}
+        onOpenChange={setDetailsDrawerOpen}
+        project={selectedProject}
+        onEdit={() => {
+          setDetailsDrawerOpen(false)
+          openEditDialog(selectedProject)
+        }}
+      />
+
+      {/* Tenant Wizard */}
       <TenantSetupWizard
         open={convertDialogOpen}
         onOpenChange={setConvertDialogOpen}
@@ -1050,147 +753,12 @@ const Projects = ({ onNavigate }) => {
         onComplete={handleTenantComplete}
       />
 
-      {/* Project Details Dialog */}
-      <Dialog open={detailsDialogOpen} onOpenChange={setDetailsDialogOpen}>
-        <DialogContent className="max-w-2xl">
-          <DialogHeader>
-            <DialogTitle>{selectedProject?.title}</DialogTitle>
-            <DialogDescription>
-              {selectedProject?.client_name || 'No client assigned'}
-            </DialogDescription>
-          </DialogHeader>
-          
-          {selectedProject && (
-            <div className="space-y-6">
-              {/* Status & Progress */}
-              <div className="space-y-2">
-                <div className="flex items-center justify-between">
-                  <Badge className={STATUS_CONFIG[selectedProject.status]?.color}>
-                    {STATUS_CONFIG[selectedProject.status]?.label}
-                  </Badge>
-                  <span className="text-sm text-[var(--text-secondary)]">
-                    {STATUS_CONFIG[selectedProject.status]?.progress}% complete
-                  </span>
-                </div>
-                <Progress value={STATUS_CONFIG[selectedProject.status]?.progress || 0} className="h-2" />
-              </div>
-
-              {/* Details Grid */}
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-1">
-                  <Label className="text-[var(--text-tertiary)]">Budget</Label>
-                  <p className="font-medium">{formatCurrency(selectedProject.budget)}</p>
-                </div>
-                <div className="space-y-1">
-                  <Label className="text-[var(--text-tertiary)]">Timeline</Label>
-                  <p className="font-medium">
-                    {formatDate(selectedProject.start_date)} → {formatDate(selectedProject.end_date)}
-                  </p>
-                </div>
-              </div>
-
-              {/* Description */}
-              {selectedProject.description && (
-                <div className="space-y-1">
-                  <Label className="text-[var(--text-tertiary)]">Description</Label>
-                  <p className="text-[var(--text-secondary)]">{selectedProject.description}</p>
-                </div>
-              )}
-
-              {/* Tenant Info */}
-              {selectedProject.is_tenant && (
-                <>
-                  <Separator />
-                  <div className="space-y-4">
-                    <h4 className="font-medium flex items-center gap-2">
-                      <Building2 className="w-4 h-4" />
-                      Tenant Portal
-                    </h4>
-                    
-                    {selectedProject.tenant_domain && (
-                      <div className="flex items-center gap-2">
-                        <Globe className="w-4 h-4 text-[var(--text-tertiary)]" />
-                        <a 
-                          href={`https://${selectedProject.tenant_domain}`}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="text-[var(--brand-primary)] hover:underline"
-                        >
-                          {selectedProject.tenant_domain}
-                        </a>
-                      </div>
-                    )}
-
-                    {/* Module Toggles */}
-                    <div className="space-y-3">
-                      <Label className="text-sm font-medium">Enabled Modules</Label>
-                      <div className="grid grid-cols-1 gap-2">
-                        {TENANT_MODULES.map((module) => {
-                          const ModuleIcon = module.icon
-                          const isEnabled = selectedProject.tenant_modules?.[module.key] || false
-                          const isToggling = togglingModule === module.key
-                          return (
-                            <div 
-                              key={module.key}
-                              className="flex items-center justify-between p-3 rounded-lg bg-[var(--surface-secondary)] border border-[var(--glass-border)]"
-                            >
-                              <div className="flex items-center gap-3">
-                                <div className={`p-2 rounded-lg ${isEnabled ? 'bg-[var(--brand-primary)]/10' : 'bg-[var(--surface-tertiary)]'}`}>
-                                  <ModuleIcon className={`w-4 h-4 ${isEnabled ? 'text-[var(--brand-primary)]' : 'text-[var(--text-tertiary)]'}`} />
-                                </div>
-                                <div>
-                                  <p className="text-sm font-medium text-[var(--text-primary)]">{module.label}</p>
-                                  <p className="text-xs text-[var(--text-tertiary)]">{module.description}</p>
-                                </div>
-                              </div>
-                              <Switch
-                                checked={isEnabled}
-                                onCheckedChange={() => toggleModule(module.key)}
-                                disabled={isToggling}
-                              />
-                            </div>
-                          )
-                        })}
-                      </div>
-                    </div>
-
-                    {/* Tracking Script */}
-                    <div className="space-y-2">
-                      <Label>Tracking Script</Label>
-                      <div className="relative">
-                        <pre className="p-3 bg-[var(--surface-secondary)] rounded-lg text-xs overflow-x-auto">
-                          {generateTrackingScript(selectedProject)}
-                        </pre>
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          className="absolute top-2 right-2"
-                          onClick={() => copyTrackingScript(selectedProject)}
-                        >
-                          {copied ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
-                        </Button>
-                      </div>
-                    </div>
-                  </div>
-                </>
-              )}
-            </div>
-          )}
-
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setDetailsDialogOpen(false)}>
-              Close
-            </Button>
-            <Button variant="glass-primary" onClick={() => {
-              setDetailsDialogOpen(false)
-              openEditDialog(selectedProject)
-            }}>
-              <Edit className="w-4 h-4 mr-2" />
-              Edit Project
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      {/* Tenant Modules Dialog */}
+      <TenantModulesDialog
+        open={modulesDialogOpen}
+        onOpenChange={setModulesDialogOpen}
+        project={selectedProject}
+      />
 
       {/* Delete Confirmation */}
       <ConfirmDialog
@@ -1201,6 +769,277 @@ const Projects = ({ onNavigate }) => {
         confirmText="Delete"
         onConfirm={handleDeleteProject}
       />
+    </div>
+  )
+}
+
+// ============= Sub-Components =============
+
+/**
+ * Stats Card Component
+ */
+const StatsCard = ({ icon: Icon, label, value, color = 'brand' }) => (
+  <Card className="border-[var(--glass-border)] bg-card">
+    <CardContent className="p-4 flex items-center gap-4">
+      <div className={`p-3 rounded-lg ${color === 'brand' ? 'bg-gradient-to-br from-[var(--brand-primary)] to-[var(--brand-secondary)]' : `bg-gradient-to-br from-${color}-500 to-${color}-600`}`}>
+        <Icon className={`w-5 h-5 text-white`} />
+      </div>
+      <div>
+        <p className="text-2xl font-bold text-[var(--text-primary)]">{value}</p>
+        <p className="text-sm text-[var(--text-secondary)]">{label}</p>
+      </div>
+    </CardContent>
+  </Card>
+)
+
+/**
+ * Project Card Component
+ */
+const ProjectCard = ({ 
+  project, 
+  onViewDetails, 
+  onEdit, 
+  onDelete, 
+  onConvert,
+  onEnterTenant,
+  onManageModules,
+  isAdmin = false 
+}) => {
+  const statusConfig = PROJECT_STATUS_CONFIG[project.status] || PROJECT_STATUS_CONFIG.planning
+  const deadlineStatus = getDeadlineStatus(project.end_date)
+  const tenantUrl = project.domain
+    ? (project.domain.startsWith('http') ? project.domain : `https://${project.domain}`)
+    : null
+  const showIframePreview = Boolean(project.domain && tenantUrl && project.status === 'completed')
+  const showThumbnailPreview = Boolean(project.domain && tenantUrl && !showIframePreview)
+  
+  return (
+    <Card className="group hover:shadow-lg transition-all duration-200 border-[var(--glass-border)] overflow-hidden">
+      {/* Website preview for tenant projects */}
+      {showIframePreview && (
+        <div className="relative h-40 bg-[var(--surface-secondary)] overflow-hidden">
+          <iframe
+            src={tenantUrl}
+            title={`${project.title} live preview`}
+            loading="lazy"
+            className="w-full h-full border-0 pointer-events-none"
+            sandbox="allow-same-origin"
+            referrerPolicy="no-referrer"
+          />
+          <div className="absolute inset-0 bg-gradient-to-t from-[var(--surface-primary)] via-transparent to-transparent" />
+          <Badge variant="secondary" className="absolute top-2 right-2 text-xs bg-black/50 text-white border-0">
+            <Globe className="w-3 h-3 mr-1" />
+            {project.domain}
+          </Badge>
+          <Badge variant="outline" className="absolute top-2 left-2 text-xs bg-black/40 text-white border-0">
+            Live preview
+          </Badge>
+        </div>
+      )}
+
+      {showThumbnailPreview && (
+        <div className="relative h-32 bg-[var(--surface-secondary)] overflow-hidden">
+          <img
+            src={`https://image.thum.io/get/width/400/crop/300/${tenantUrl}`}
+            alt={`${project.title} preview`}
+            className="w-full h-full object-cover object-top opacity-90 group-hover:opacity-100 transition-opacity"
+            loading="lazy"
+            onError={(e) => e.target.style.display = 'none'}
+          />
+          <div className="absolute inset-0 bg-gradient-to-t from-[var(--surface-primary)] via-transparent to-transparent" />
+          <Badge variant="secondary" className="absolute top-2 right-2 text-xs bg-black/50 text-white border-0">
+            <Globe className="w-3 h-3 mr-1" />
+            {project.domain}
+          </Badge>
+        </div>
+      )}
+      
+      <CardHeader className="pb-3">
+        <div className="flex items-start justify-between gap-2">
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center gap-2 mb-1 flex-wrap">
+              {project.domain && (
+                <Badge variant="outline" className="text-xs bg-emerald-50 text-emerald-700 border-emerald-200">
+                  <Building2 className="w-3 h-3 mr-1" />
+                  Web App
+                </Badge>
+              )}
+              {deadlineStatus && (
+                <Badge className={`text-xs ${deadlineStatus.color}`}>
+                  {deadlineStatus.label}
+                </Badge>
+              )}
+            </div>
+            <CardTitle className="text-lg truncate">{project.title}</CardTitle>
+            <CardDescription className="mt-1 flex items-center gap-2">
+              <Users className="w-3 h-3" />
+              {project.client_name || project.contacts?.name || 'No client'}
+            </CardDescription>
+          </div>
+          
+          {isAdmin && (
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="ghost" size="icon" className="opacity-0 group-hover:opacity-100 transition-opacity">
+                  <MoreVertical className="w-4 h-4" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                {project.domain && (
+                  <>
+                    <DropdownMenuItem onClick={onEnterTenant}>
+                      <LayoutDashboard className="w-4 h-4 mr-2" />
+                      Enter Dashboard
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onClick={onManageModules}>
+                      <Settings2 className="w-4 h-4 mr-2" />
+                      Manage Modules
+                    </DropdownMenuItem>
+                    <DropdownMenuSeparator />
+                  </>
+                )}
+                <DropdownMenuItem onClick={onViewDetails}>
+                  <Eye className="w-4 h-4 mr-2" />
+                  View Details
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={onEdit}>
+                  <Edit className="w-4 h-4 mr-2" />
+                  Edit
+                </DropdownMenuItem>
+                {project.status === 'completed' && !project.domain && (
+                  <DropdownMenuItem onClick={onConvert}>
+                    <Building2 className="w-4 h-4 mr-2" />
+                    Convert to Web App
+                  </DropdownMenuItem>
+                )}
+                <DropdownMenuSeparator />
+                <DropdownMenuItem className="text-red-600" onClick={onDelete}>
+                  <Trash2 className="w-4 h-4 mr-2" />
+                  Delete
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          )}
+        </div>
+      </CardHeader>
+      
+      <CardContent className="space-y-4">
+        {/* Progress */}
+        <div className="space-y-2">
+          <div className="flex items-center justify-between text-sm">
+            <Badge className={statusConfig.color}>{statusConfig.label}</Badge>
+            <span className="text-[var(--text-secondary)]">{statusConfig.progress}%</span>
+          </div>
+          <Progress value={statusConfig.progress} className="h-2" />
+        </div>
+
+        {/* Stats */}
+        <div className="grid grid-cols-2 gap-3 text-sm">
+          <div className="flex items-center gap-2 text-[var(--text-secondary)]">
+            <DollarSign className="w-4 h-4" />
+            <span className="font-medium text-[var(--text-primary)]">{formatCurrency(project.budget)}</span>
+          </div>
+          <div className="flex items-center gap-2 text-[var(--text-secondary)]">
+            <Calendar className="w-4 h-4" />
+            <span>{formatDate(project.end_date)}</span>
+          </div>
+        </div>
+
+        {/* Actions */}
+        <div className="flex gap-2 pt-2">
+          {project.domain ? (
+            <>
+              <Button variant="glass-primary" size="sm" className="flex-1" onClick={onEnterTenant}>
+                <LayoutDashboard className="w-4 h-4 mr-2" />
+                Enter Dashboard
+              </Button>
+              <Button variant="outline" size="sm" onClick={onViewDetails}>
+                <Eye className="w-4 h-4" />
+              </Button>
+            </>
+          ) : (
+            <>
+              <Button variant="outline" size="sm" className="flex-1" onClick={onViewDetails}>
+                <Eye className="w-4 h-4 mr-2" />
+                Details
+              </Button>
+              {project.status === 'completed' && (
+                <Button variant="glass-primary" size="sm" className="flex-1" onClick={onConvert}>
+                  <Building2 className="w-4 h-4 mr-2" />
+                  Web App
+                </Button>
+              )}
+            </>
+          )}
+        </div>
+      </CardContent>
+    </Card>
+  )
+}
+
+/**
+ * Projects Table Component (list view)
+ */
+const ProjectsTable = ({ projects, onViewDetails, onEdit, onDelete, onConvert, onEnterTenant, onManageModules }) => {
+  return (
+    <div className="border rounded-lg overflow-hidden">
+      <table className="w-full">
+        <thead className="bg-[var(--surface-secondary)]">
+          <tr>
+            <th className="text-left p-3 font-medium text-sm">Project</th>
+            <th className="text-left p-3 font-medium text-sm">Client</th>
+            <th className="text-left p-3 font-medium text-sm">Status</th>
+            <th className="text-left p-3 font-medium text-sm">Budget</th>
+            <th className="text-left p-3 font-medium text-sm">Deadline</th>
+            <th className="text-right p-3 font-medium text-sm">Actions</th>
+          </tr>
+        </thead>
+        <tbody className="divide-y divide-[var(--glass-border)]">
+          {projects.map((project) => {
+            const statusConfig = PROJECT_STATUS_CONFIG[project.status] || PROJECT_STATUS_CONFIG.planning
+            return (
+              <tr key={project.id} className="hover:bg-[var(--surface-secondary)]/50">
+                <td className="p-3">
+                  <div className="flex items-center gap-2">
+                    {project.domain && (
+                      <Building2 className="w-4 h-4 text-emerald-600" />
+                    )}
+                    <span className="font-medium">{project.title}</span>
+                  </div>
+                </td>
+                <td className="p-3 text-[var(--text-secondary)]">
+                  {project.client_name || 'No client'}
+                </td>
+                <td className="p-3">
+                  <Badge className={statusConfig.color}>{statusConfig.label}</Badge>
+                </td>
+                <td className="p-3">{formatCurrency(project.budget)}</td>
+                <td className="p-3 text-[var(--text-secondary)]">{formatDate(project.end_date)}</td>
+                <td className="p-3 text-right">
+                  <div className="flex items-center justify-end gap-1">
+                    <Button variant="ghost" size="icon" onClick={() => onViewDetails(project)}>
+                      <Eye className="w-4 h-4" />
+                    </Button>
+                    <Button variant="ghost" size="icon" onClick={() => onEdit(project)}>
+                      <Edit className="w-4 h-4" />
+                    </Button>
+                    {project.domain && (
+                      <>
+                        <Button variant="ghost" size="icon" onClick={() => onManageModules(project)} title="Manage Modules">
+                          <Settings2 className="w-4 h-4" />
+                        </Button>
+                        <Button variant="ghost" size="icon" onClick={() => onEnterTenant(project)} title="Enter Dashboard">
+                          <LayoutDashboard className="w-4 h-4" />
+                        </Button>
+                      </>
+                    )}
+                  </div>
+                </td>
+              </tr>
+            )
+          })}
+        </tbody>
+      </table>
     </div>
   )
 }

@@ -86,12 +86,16 @@ import {
   ThermometerSun,
   History,
   X,
-  Image
+  Image,
+  PanelLeftClose,
+  Bell,
+  PanelLeft
 } from 'lucide-react'
 import { toast } from 'sonner'
+import { useLocation, useNavigate } from 'react-router-dom'
 import useAuthStore from '@/lib/auth-store'
 import { useEmailPlatformStore } from '@/lib/email-platform-store'
-import EmailTemplateEditor from './EmailTemplateEditor'
+import { EmailEditor } from './EmailEditor'
 import AutomationBuilder from './AutomationBuilder'
 import CampaignComposer from './CampaignComposer'
 import CampaignAnalytics from './CampaignAnalytics'
@@ -99,7 +103,9 @@ import SegmentBuilder from './SegmentBuilder'
 import ImageLibrary from './ImageLibrary'
 import ListManagement from './ListManagement'
 import ABTestingPanel from './ABTestingPanel'
-import SystemEmailsTab from './SystemEmailsTab'
+import PeopleTab from './PeopleTab'
+import EmailConfigWarning from './EmailConfigWarning'
+import { GmailConnectCard } from './GmailConnectCard'
 
 // ============================================
 // DASHBOARD OVERVIEW TAB
@@ -443,6 +449,9 @@ function CampaignsTab({ onCreateCampaign, onEditCampaign, onViewAnalytics }) {
 
   return (
     <div className="space-y-6">
+      {/* Email Config Warning */}
+      <EmailConfigWarning />
+
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
@@ -615,12 +624,49 @@ function CampaignsTab({ onCreateCampaign, onEditCampaign, onViewAnalytics }) {
 // ============================================
 function AutomationsTab({ onCreateAutomation, onEditAutomation }) {
   const { automations, automationsLoading, fetchAutomations, toggleAutomationStatus } = useEmailPlatformStore()
+  const [forms, setForms] = useState([])
 
   useEffect(() => {
     fetchAutomations()
+    // Fetch forms to display form names in automation triggers
+    const fetchForms = async () => {
+      try {
+        const { currentProject } = useAuthStore.getState()
+        if (currentProject?.id) {
+          const response = await fetch(`/api/forms?projectId=${currentProject.id}`)
+          if (response.ok) {
+            const data = await response.json()
+            setForms(data.forms || [])
+          }
+        }
+      } catch (err) {
+        console.error('Failed to fetch forms:', err)
+      }
+    }
+    fetchForms()
   }, [fetchAutomations])
 
   const getTriggerLabel = (type, config) => {
+    if (type === 'form_submitted' && config?.formId) {
+      const form = forms.find(f => f.id === config.formId)
+      if (form) {
+        return (
+          <span className="flex items-center gap-1.5">
+            <span>When</span>
+            <Badge variant="outline" className="font-normal">{form.name}</Badge>
+            <span>is submitted</span>
+            {config.sendConfirmation && (
+              <Badge variant="secondary" className="text-xs ml-1">
+                <Mail className="h-3 w-3 mr-1" />
+                Sends confirmation
+              </Badge>
+            )}
+          </span>
+        )
+      }
+      return 'When form is submitted'
+    }
+
     const labels = {
       subscriber_added: 'When someone subscribes',
       tag_added: `When tag "${config?.tagName}" is added`,
@@ -636,6 +682,9 @@ function AutomationsTab({ onCreateAutomation, onEditAutomation }) {
 
   return (
     <div className="space-y-6">
+      {/* Email Config Warning */}
+      <EmailConfigWarning />
+
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
@@ -820,28 +869,196 @@ function AutomationsTab({ onCreateAutomation, onEditAutomation }) {
 }
 
 // ============================================
+// TRANSACTIONAL TAB
+// ============================================
+
+// Default transactional email definitions (pre-seeded per project)
+const defaultTransactionalEmails = [
+  { 
+    id: 'default-form-confirmation', 
+    name: 'Form Submission Confirmation',
+    description: 'Sent automatically when someone submits a form',
+    system_type: 'form-confirmation',
+    is_default: true
+  },
+  { 
+    id: 'default-thank-you', 
+    name: 'Thank You Email',
+    description: 'General thank you email for various actions',
+    system_type: 'thank-you',
+    is_default: true
+  }
+]
+
+function TransactionalTab({ onEditTemplate }) {
+  const { templates, templatesLoading, fetchTemplates } = useEmailPlatformStore()
+  const [searchQuery, setSearchQuery] = useState('')
+
+  useEffect(() => {
+    fetchTemplates()
+  }, [fetchTemplates])
+
+  // Get transactional templates (category = 'transactional' OR is_system with transactional types)
+  const transactionalTemplates = templates.filter(t => 
+    t.category === 'transactional' || 
+    (t.is_system && ['form-confirmation', 'thank-you'].includes(t.system_type))
+  )
+
+  const filteredTemplates = transactionalTemplates.filter(t => {
+    if (searchQuery && !t.name.toLowerCase().includes(searchQuery.toLowerCase())) return false
+    return true
+  })
+
+  const getTemplateGradient = (template) => {
+    const gradients = {
+      'form-confirmation': 'from-emerald-500 to-green-600',
+      'thank-you': 'from-rose-400 to-red-500',
+      'transactional': 'from-amber-400 to-orange-500',
+      'default': 'from-blue-400 to-indigo-500',
+    }
+    return gradients[template.system_type] || gradients[template.category] || gradients.default
+  }
+
+  return (
+    <div className="space-y-6">
+      {/* Header */}
+      <div className="flex items-center justify-between">
+        <div>
+          <h2 className="text-2xl font-bold flex items-center gap-2">
+            <Bell className="h-6 w-6 text-amber-500" />
+            Transactional Emails
+          </h2>
+          <p className="text-muted-foreground">
+            Automated emails sent by triggers like form submissions, purchases, etc.
+          </p>
+        </div>
+      </div>
+
+      {/* Info Banner */}
+      <Card className="bg-amber-50 border-amber-200 dark:bg-amber-950/20 dark:border-amber-800">
+        <CardContent className="py-3 px-4 flex items-center gap-3">
+          <Sparkles className="h-5 w-5 text-amber-600 flex-shrink-0" />
+          <p className="text-sm text-amber-800 dark:text-amber-200">
+            Transactional emails are automatically sent by <strong>Automations</strong>. 
+            Customize the content here, then select them in your automation workflows.
+          </p>
+        </CardContent>
+      </Card>
+
+      {/* Search */}
+      <div className="relative max-w-sm">
+        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+        <Input
+          placeholder="Search transactional emails..."
+          value={searchQuery}
+          onChange={(e) => setSearchQuery(e.target.value)}
+          className="pl-9"
+        />
+      </div>
+
+      {/* Templates Grid - List Style (no image tiles) */}
+      {templatesLoading ? (
+        <div className="flex items-center justify-center py-12">
+          <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+        </div>
+      ) : filteredTemplates.length === 0 && transactionalTemplates.length === 0 ? (
+        <Card>
+          <CardContent className="flex flex-col items-center justify-center py-12">
+            <Bell className="h-12 w-12 text-muted-foreground mb-4" />
+            <h3 className="text-lg font-semibold mb-2">No transactional emails yet</h3>
+            <p className="text-muted-foreground mb-4 text-center max-w-md">
+              Transactional emails are created automatically when you set up automations like form confirmations.
+              Go to <strong>Automations</strong> to create one.
+            </p>
+          </CardContent>
+        </Card>
+      ) : filteredTemplates.length === 0 ? (
+        <Card>
+          <CardContent className="flex flex-col items-center justify-center py-12">
+            <Search className="h-12 w-12 text-muted-foreground mb-4" />
+            <h3 className="text-lg font-semibold mb-2">No matches found</h3>
+            <p className="text-muted-foreground">Try a different search term</p>
+          </CardContent>
+        </Card>
+      ) : (
+        <div className="space-y-3">
+          {filteredTemplates.map((template) => (
+            <Card 
+              key={template.id} 
+              className="hover:shadow-md transition-all cursor-pointer group hover:border-amber-300"
+              onClick={() => onEditTemplate(template)}
+            >
+              <CardContent className="py-4 px-5 flex items-center gap-4">
+                {/* Color indicator */}
+                <div className={`w-12 h-12 rounded-lg bg-gradient-to-br ${getTemplateGradient(template)} flex items-center justify-center flex-shrink-0`}>
+                  <Mail className="h-6 w-6 text-white" />
+                </div>
+                
+                {/* Content */}
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2 mb-1">
+                    <h3 className="font-semibold truncate">{template.name}</h3>
+                    {template.is_system && (
+                      <Badge variant="secondary" className="text-xs bg-amber-100 text-amber-700 dark:bg-amber-900 dark:text-amber-300">
+                        Default
+                      </Badge>
+                    )}
+                  </div>
+                  <p className="text-sm text-muted-foreground truncate">
+                    {template.description || 'No description'}
+                  </p>
+                </div>
+                
+                {/* Stats */}
+                <div className="text-right text-sm text-muted-foreground flex-shrink-0">
+                  <div>Used {template.use_count || 0}×</div>
+                </div>
+                
+                {/* Edit button */}
+                <Button 
+                  variant="outline" 
+                  size="sm" 
+                  className="gap-2 opacity-0 group-hover:opacity-100 transition-opacity"
+                  onClick={(e) => { e.stopPropagation(); onEditTemplate(template) }}
+                >
+                  <Edit className="h-4 w-4" />
+                  Edit
+                </Button>
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
+// ============================================
 // TEMPLATES TAB
 // ============================================
 
-// Starter template gallery
-const starterTemplates = [
-  { id: 'starter-1', name: 'Welcome Email', category: 'welcome', description: 'Greet new subscribers with a warm welcome', gradient: 'from-green-400 to-emerald-500' },
-  { id: 'starter-2', name: 'Newsletter', category: 'newsletter', description: 'Share updates, news, and content', gradient: 'from-blue-400 to-indigo-500' },
-  { id: 'starter-3', name: 'Product Announcement', category: 'promotional', description: 'Launch new products or features', gradient: 'from-purple-400 to-pink-500' },
-  { id: 'starter-4', name: 'Sale/Promotion', category: 'promotional', description: 'Announce sales and special offers', gradient: 'from-amber-400 to-orange-500' },
-  { id: 'starter-5', name: 'Event Invitation', category: 'newsletter', description: 'Invite subscribers to events', gradient: 'from-cyan-400 to-blue-500' },
-  { id: 'starter-6', name: 'Thank You', category: 'transactional', description: 'Show appreciation to customers', gradient: 'from-rose-400 to-red-500' },
-]
+// Default gradient colors for system templates by type
+const templateGradients = {
+  'form-confirmation': 'from-green-400 to-emerald-500',
+  'welcome': 'from-green-400 to-emerald-500',
+  'newsletter': 'from-blue-400 to-indigo-500',
+  'promotional': 'from-purple-400 to-pink-500',
+  'thank-you': 'from-rose-400 to-red-500',
+  'appointment-reminder': 'from-cyan-400 to-blue-500',
+  'transactional': 'from-amber-400 to-orange-500',
+  'default': 'from-gray-400 to-slate-500',
+}
 
-function TemplatesTab({ onEditTemplate, onCreateTemplate, onOpenImageLibrary }) {
-  const { templates, templatesLoading, fetchTemplates } = useEmailPlatformStore()
+function TemplatesTab({ onEditTemplate, onCreateTemplate, onOpenImageLibrary, onUseSystemTemplate }) {
+  const { templates, templatesLoading, fetchTemplates, systemTemplates, systemTemplatesLoading, fetchSystemTemplates } = useEmailPlatformStore()
   const [showStarterGallery, setShowStarterGallery] = useState(false)
   const [searchQuery, setSearchQuery] = useState('')
   const [categoryFilter, setCategoryFilter] = useState('all')
 
   useEffect(() => {
     fetchTemplates()
-  }, [fetchTemplates])
+    fetchSystemTemplates()
+  }, [fetchTemplates, fetchSystemTemplates])
 
   const getCategoryColor = (category) => {
     const colors = {
@@ -856,7 +1073,23 @@ function TemplatesTab({ onEditTemplate, onCreateTemplate, onOpenImageLibrary }) 
     return colors[category] || colors.general
   }
 
+  const getTemplateGradient = (template) => {
+    return templateGradients[template.system_type] || templateGradients[template.category] || templateGradients.default
+  }
+
+  // Handle using a system template (creates copy with content)
+  const handleUseSystemTemplate = (template) => {
+    setShowStarterGallery(false)
+    if (onUseSystemTemplate) {
+      onUseSystemTemplate(template)
+    }
+  }
+
   const filteredTemplates = templates.filter(t => {
+    // Don't show system templates in main grid (they're in starter gallery)
+    if (t.is_system) return false
+    // Exclude transactional templates - they have their own tab
+    if (t.category === 'transactional') return false
     if (categoryFilter !== 'all' && t.category !== categoryFilter) return false
     if (searchQuery && !t.name.toLowerCase().includes(searchQuery.toLowerCase())) return false
     return true
@@ -868,7 +1101,9 @@ function TemplatesTab({ onEditTemplate, onCreateTemplate, onOpenImageLibrary }) 
       <div className="flex items-center justify-between">
         <div>
           <h2 className="text-2xl font-bold">Templates</h2>
-          <p className="text-muted-foreground">Reusable email templates with drag-and-drop editor</p>
+          <p className="text-muted-foreground">
+            Reusable email templates for campaigns and newsletters
+          </p>
         </div>
         <div className="flex items-center gap-2">
           <Button variant="outline" onClick={onOpenImageLibrary} className="gap-2">
@@ -898,16 +1133,17 @@ function TemplatesTab({ onEditTemplate, onCreateTemplate, onOpenImageLibrary }) 
           />
         </div>
         <Select value={categoryFilter} onValueChange={setCategoryFilter}>
-          <SelectTrigger className="w-40">
+          <SelectTrigger className="w-48">
             <SelectValue placeholder="Category" />
           </SelectTrigger>
           <SelectContent>
             <SelectItem value="all">All Categories</SelectItem>
-            <SelectItem value="welcome">Welcome</SelectItem>
-            <SelectItem value="newsletter">Newsletter</SelectItem>
-            <SelectItem value="promotional">Promotional</SelectItem>
-            <SelectItem value="transactional">Transactional</SelectItem>
-            <SelectItem value="marketing">Marketing</SelectItem>
+            <SelectItem value="welcome">👋 Welcome</SelectItem>
+            <SelectItem value="newsletter">📰 Newsletter</SelectItem>
+            <SelectItem value="promotional">🎁 Promotional</SelectItem>
+            <SelectItem value="announcement">📢 Announcement</SelectItem>
+            <SelectItem value="marketing">📈 Marketing</SelectItem>
+            <SelectItem value="custom">⚙️ Custom</SelectItem>
           </SelectContent>
         </Select>
       </div>
@@ -917,7 +1153,7 @@ function TemplatesTab({ onEditTemplate, onCreateTemplate, onOpenImageLibrary }) 
         <div className="flex items-center justify-center py-12">
           <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
         </div>
-      ) : filteredTemplates.length === 0 && templates.length === 0 ? (
+      ) : filteredTemplates.length === 0 && templates.filter(t => !t.is_system).length === 0 ? (
         <div className="space-y-6">
           {/* Empty state with starter templates */}
           <Card>
@@ -938,30 +1174,32 @@ function TemplatesTab({ onEditTemplate, onCreateTemplate, onOpenImageLibrary }) 
             </CardContent>
           </Card>
 
-          {/* Featured Starters */}
-          <div>
-            <h3 className="text-lg font-semibold mb-4">Popular Starter Templates</h3>
-            <div className="grid grid-cols-3 gap-4">
-              {starterTemplates.slice(0, 3).map((starter) => (
-                <Card key={starter.id} className="hover:shadow-md transition-shadow cursor-pointer group"
-                  onClick={onCreateTemplate}>
-                  <div className={`aspect-[4/3] bg-gradient-to-br ${starter.gradient} rounded-t-lg flex items-center justify-center relative`}>
-                    <Mail className="h-12 w-12 text-white/80" />
-                    <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center rounded-t-lg">
-                      <Button variant="secondary" size="sm" className="gap-2">
-                        <Plus className="h-4 w-4" />
-                        Use Template
-                      </Button>
+          {/* Featured Starters - now from database */}
+          {systemTemplates.length > 0 && (
+            <div>
+              <h3 className="text-lg font-semibold mb-4">Popular Starter Templates</h3>
+              <div className="grid grid-cols-3 gap-4">
+                {systemTemplates.slice(0, 3).map((starter) => (
+                  <Card key={starter.id} className="hover:shadow-md transition-shadow cursor-pointer group"
+                    onClick={() => handleUseSystemTemplate(starter)}>
+                    <div className={`aspect-[4/3] bg-gradient-to-br ${getTemplateGradient(starter)} rounded-t-lg flex items-center justify-center relative`}>
+                      <Mail className="h-12 w-12 text-white/80" />
+                      <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center rounded-t-lg">
+                        <Button variant="secondary" size="sm" className="gap-2">
+                          <Plus className="h-4 w-4" />
+                          Use Template
+                        </Button>
+                      </div>
                     </div>
-                  </div>
-                  <CardContent className="p-4">
-                    <h3 className="font-semibold">{starter.name}</h3>
-                    <p className="text-sm text-muted-foreground">{starter.description}</p>
-                  </CardContent>
-                </Card>
-              ))}
+                    <CardContent className="p-4">
+                      <h3 className="font-semibold">{starter.name}</h3>
+                      <p className="text-sm text-muted-foreground">{starter.description}</p>
+                    </CardContent>
+                  </Card>
+                ))}
+              </div>
             </div>
-          </div>
+          )}
         </div>
       ) : filteredTemplates.length === 0 ? (
         <Card>
@@ -976,7 +1214,7 @@ function TemplatesTab({ onEditTemplate, onCreateTemplate, onOpenImageLibrary }) 
           {filteredTemplates.map((template) => (
             <Card key={template.id} className="hover:shadow-md transition-shadow cursor-pointer group"
               onClick={() => onEditTemplate(template)}>
-              <div className="aspect-[4/3] bg-gradient-to-br from-gray-100 to-gray-200 rounded-t-lg flex items-center justify-center relative">
+              <div className="aspect-[4/3] bg-gradient-to-br from-gray-100 to-gray-200 dark:from-gray-800 dark:to-gray-900 rounded-t-lg flex items-center justify-center relative">
                 <Mail className="h-12 w-12 text-gray-400" />
                 <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center rounded-t-lg gap-2">
                   <Button variant="secondary" size="sm" className="gap-2">
@@ -997,7 +1235,7 @@ function TemplatesTab({ onEditTemplate, onCreateTemplate, onOpenImageLibrary }) 
                   </Badge>
                 </div>
                 <div className="flex items-center justify-between text-xs text-muted-foreground">
-                  <span>Used {template.times_used || 0} times</span>
+                  <span>Used {template.use_count || 0} times</span>
                   <span>Updated {new Date(template.updated_at).toLocaleDateString()}</span>
                 </div>
               </CardContent>
@@ -1006,7 +1244,7 @@ function TemplatesTab({ onEditTemplate, onCreateTemplate, onOpenImageLibrary }) 
         </div>
       )}
 
-      {/* Starter Gallery Dialog */}
+      {/* Starter Gallery Dialog - now from database */}
       <Dialog open={showStarterGallery} onOpenChange={setShowStarterGallery}>
         <DialogContent className="max-w-4xl">
           <DialogHeader>
@@ -1014,29 +1252,34 @@ function TemplatesTab({ onEditTemplate, onCreateTemplate, onOpenImageLibrary }) 
             <DialogDescription>Choose a pre-built template to customize</DialogDescription>
           </DialogHeader>
           <div className="grid grid-cols-3 gap-4 py-4 max-h-[60vh] overflow-y-auto">
-            {starterTemplates.map((starter) => (
-              <Card key={starter.id} className="hover:shadow-md transition-shadow cursor-pointer group"
-                onClick={() => { setShowStarterGallery(false); onCreateTemplate(); }}>
-                <div className={`aspect-[4/3] bg-gradient-to-br ${starter.gradient} rounded-t-lg flex items-center justify-center relative`}>
-                  <Mail className="h-10 w-10 text-white/80" />
-                  <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center rounded-t-lg">
-                    <Button variant="secondary" size="sm" className="gap-2">
-                      <Plus className="h-4 w-4" />
+            {systemTemplatesLoading ? (
+              <div className="col-span-3 flex items-center justify-center py-12">
+                <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+              </div>
+            ) : systemTemplates.length === 0 ? (
+              <div className="col-span-3 text-center py-8 text-muted-foreground">
+                No starter templates available yet
+              </div>
+            ) : (
+              systemTemplates.map((starter) => (
+                <Card key={starter.id} className="hover:shadow-md transition-shadow cursor-pointer group"
+                  onClick={() => handleUseSystemTemplate(starter)}>
+                  <CardContent className="p-4">
+                    <div className="flex items-center justify-between mb-2">
+                      <h3 className="font-semibold text-base">{starter.name}</h3>
+                      <Badge variant="outline" className={`text-xs ${getCategoryColor(starter.category)}`}>
+                        {starter.category}
+                      </Badge>
+                    </div>
+                    <p className="text-sm text-muted-foreground mb-3">{starter.description}</p>
+                    <Button variant="outline" size="sm" className="w-full gap-2 group-hover:bg-primary group-hover:text-primary-foreground transition-colors">
+                      <Plus className="h-3 w-3" />
                       Use Template
                     </Button>
-                  </div>
-                </div>
-                <CardContent className="p-3">
-                  <div className="flex items-center justify-between mb-1">
-                    <h3 className="font-medium text-sm">{starter.name}</h3>
-                    <Badge variant="outline" className={`text-xs ${getCategoryColor(starter.category)}`}>
-                      {starter.category}
-                    </Badge>
-                  </div>
-                  <p className="text-xs text-muted-foreground">{starter.description}</p>
-                </CardContent>
-              </Card>
-            ))}
+                  </CardContent>
+                </Card>
+              ))
+            )}
           </div>
         </DialogContent>
       </Dialog>
@@ -1615,6 +1858,16 @@ function SettingsTab() {
         </CardContent>
       </Card>
 
+      {/* Gmail Connection - Alternative to Resend */}
+      <GmailConnectCard className="mb-0" />
+
+      {/* Or Divider */}
+      <div className="flex items-center gap-4">
+        <div className="flex-1 border-t border-dashed" />
+        <span className="text-xs text-muted-foreground uppercase">or use Resend settings below</span>
+        <div className="flex-1 border-t border-dashed" />
+      </div>
+
       {/* Sender Settings */}
       <Card>
         <CardHeader>
@@ -1710,6 +1963,9 @@ function SettingsTab() {
 // MAIN COMPONENT
 // ============================================
 export default function EmailPlatform() {
+  const location = useLocation()
+  const navigate = useNavigate()
+  const { currentOrg } = useAuthStore()
   const [activeTab, setActiveTab] = useState('overview')
   const [showTemplateEditor, setShowTemplateEditor] = useState(false)
   const [editingTemplate, setEditingTemplate] = useState(null)
@@ -1721,7 +1977,55 @@ export default function EmailPlatform() {
   const [viewingCampaign, setViewingCampaign] = useState(null)
   const [showSegmentBuilder, setShowSegmentBuilder] = useState(false)
   const [showImageLibrary, setShowImageLibrary] = useState(false)
+  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false)
   const { createTemplate, updateTemplate, fetchTemplates, createAutomation, fetchAutomations, createCampaign, fetchCampaigns } = useEmailPlatformStore()
+
+  // Only Uptrade Media can see System Emails
+  const isUptradeMedia = currentOrg?.slug === 'uptrade-media' || 
+                         currentOrg?.domain === 'uptrademedia.com' || 
+                         currentOrg?.org_type === 'agency'
+
+  // Check for incoming offering from Commerce module
+  useEffect(() => {
+    if (location.state?.offering) {
+      const offering = location.state.offering
+      // Pre-populate campaign with offering data
+      const templateVars = {
+        product_name: offering.name,
+        product_description: offering.short_description || '',
+        product_price: offering.price ? `$${offering.price}` : '',
+        product_image: offering.featured_image || '',
+        product_url: offering.slug ? `{{website_url}}/${offering.type}s/${offering.slug}` : ''
+      }
+      
+      // Determine subject suggestion based on type
+      const subjectSuggestions = {
+        product: `✨ Introducing ${offering.name}`,
+        service: `🎯 Book Your ${offering.name} Today`,
+        class: `📚 Join Our ${offering.name}`,
+        event: `🎉 You're Invited: ${offering.name}`
+      }
+      
+      setEditingCampaign({
+        name: `${offering.name} Campaign`,
+        subject: subjectSuggestions[offering.type] || `Check out ${offering.name}`,
+        offering_id: offering.id,
+        offering_snapshot: {
+          id: offering.id,
+          type: offering.type,
+          name: offering.name,
+          slug: offering.slug,
+          price: offering.price,
+          featured_image: offering.featured_image,
+          template_variables: templateVars
+        }
+      })
+      setShowCampaignComposer(true)
+      
+      // Clear the state to prevent re-triggering
+      navigate(location.pathname, { replace: true, state: {} })
+    }
+  }, [location.state, navigate, location.pathname])
 
   const handleCreateTemplate = () => {
     setEditingTemplate(null)
@@ -1730,6 +2034,19 @@ export default function EmailPlatform() {
 
   const handleEditTemplate = (template) => {
     setEditingTemplate(template)
+    setShowTemplateEditor(true)
+  }
+
+  // Use a system template (creates new template with system template's content)
+  const handleUseSystemTemplate = (systemTemplate) => {
+    // Create a new template based on the system template
+    setEditingTemplate({
+      ...systemTemplate,
+      id: null, // Mark as new (will create, not update)
+      name: `${systemTemplate.name} (Copy)`,
+      is_system: false,
+      system_type: null,
+    })
     setShowTemplateEditor(true)
   }
 
@@ -1840,10 +2157,19 @@ export default function EmailPlatform() {
   // Show full-screen template editor
   if (showTemplateEditor) {
     return (
-      <EmailTemplateEditor
-        template={editingTemplate}
+      <EmailEditor
+        mode="template"
+        templateName={editingTemplate?.name || ''}
+        templateCategory={editingTemplate?.category || 'marketing'}
+        initialSubject={editingTemplate?.subject || ''}
+        initialHtml={editingTemplate?.html || ''}
         onSave={handleSaveTemplate}
         onBack={() => setShowTemplateEditor(false)}
+        showGallery={!editingTemplate}
+        showImageLibrary={true}
+        isNew={!editingTemplate}
+        saveLabel={editingTemplate ? 'Save Template' : 'Create Template'}
+        height="calc(100vh - 80px)"
       />
     )
   }
@@ -1851,100 +2177,196 @@ export default function EmailPlatform() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-3xl font-bold text-[var(--text-primary)]">Email Platform</h1>
+        <h1 className="text-3xl font-bold text-[var(--text-primary)]">Outreach</h1>
         <p className="text-[var(--text-secondary)] mt-1">
           Create newsletters, automate sequences, and grow your audience
         </p>
       </div>
 
       <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-        <TabsList className="grid w-full grid-cols-9 max-w-5xl">
-          <TabsTrigger value="overview" className="flex items-center gap-2">
-            <BarChart3 className="h-4 w-4" />
-            <span className="hidden sm:inline">Overview</span>
-          </TabsTrigger>
-          <TabsTrigger value="campaigns" className="flex items-center gap-2">
-            <Send className="h-4 w-4" />
-            <span className="hidden sm:inline">Campaigns</span>
-          </TabsTrigger>
-          <TabsTrigger value="automations" className="flex items-center gap-2">
-            <Zap className="h-4 w-4" />
-            <span className="hidden sm:inline">Automations</span>
-          </TabsTrigger>
-          <TabsTrigger value="system-emails" className="flex items-center gap-2">
-            <Mail className="h-4 w-4" />
-            <span className="hidden sm:inline">System</span>
-          </TabsTrigger>
-          <TabsTrigger value="templates" className="flex items-center gap-2">
-            <FileText className="h-4 w-4" />
-            <span className="hidden sm:inline">Templates</span>
-          </TabsTrigger>
-          <TabsTrigger value="subscribers" className="flex items-center gap-2">
-            <Users className="h-4 w-4" />
-            <span className="hidden sm:inline">Subscribers</span>
-          </TabsTrigger>
-          <TabsTrigger value="lists" className="flex items-center gap-2">
-            <Tag className="h-4 w-4" />
-            <span className="hidden sm:inline">Lists</span>
-          </TabsTrigger>
-          <TabsTrigger value="testing" className="flex items-center gap-2">
-            <Target className="h-4 w-4" />
-            <span className="hidden sm:inline">A/B Tests</span>
-          </TabsTrigger>
-          <TabsTrigger value="settings" className="flex items-center gap-2">
-            <Settings className="h-4 w-4" />
-            <span className="hidden sm:inline">Settings</span>
-          </TabsTrigger>
-        </TabsList>
+        <div className="flex gap-6">
+          {/* Sidebar Navigation - Collapsible */}
+          <div className={`flex-shrink-0 transition-all duration-300 ${isSidebarCollapsed ? 'w-12' : 'w-48'}`}>
+            <div className="flex flex-col h-full">
+              {/* Collapse Toggle */}
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setIsSidebarCollapsed(!isSidebarCollapsed)}
+                className={`mb-2 ${isSidebarCollapsed ? 'w-full justify-center' : 'self-end'} text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--glass-bg-hover)]`}
+              >
+                {isSidebarCollapsed ? <PanelLeft className="h-4 w-4" /> : <PanelLeftClose className="h-4 w-4" />}
+              </Button>
+              
+              <TabsList className="flex flex-col h-auto w-full bg-transparent gap-1 p-0">
+                <TooltipProvider delayDuration={0}>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <TabsTrigger value="overview" className={`w-full gap-2 py-2 data-[state=active]:bg-[var(--glass-bg)] data-[state=active]:shadow-sm ${isSidebarCollapsed ? 'justify-center px-2' : 'justify-start px-3'}`}>
+                        <BarChart3 className="h-4 w-4 flex-shrink-0" />
+                        {!isSidebarCollapsed && <span>Overview</span>}
+                      </TabsTrigger>
+                    </TooltipTrigger>
+                    {isSidebarCollapsed && <TooltipContent side="right">Overview</TooltipContent>}
+                  </Tooltip>
+                  
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <TabsTrigger value="campaigns" className={`w-full gap-2 py-2 data-[state=active]:bg-[var(--glass-bg)] data-[state=active]:shadow-sm ${isSidebarCollapsed ? 'justify-center px-2' : 'justify-start px-3'}`}>
+                        <Send className="h-4 w-4 flex-shrink-0" />
+                        {!isSidebarCollapsed && <span>Campaigns</span>}
+                      </TabsTrigger>
+                    </TooltipTrigger>
+                    {isSidebarCollapsed && <TooltipContent side="right">Campaigns</TooltipContent>}
+                  </Tooltip>
+                  
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <TabsTrigger value="automations" className={`w-full gap-2 py-2 data-[state=active]:bg-[var(--glass-bg)] data-[state=active]:shadow-sm ${isSidebarCollapsed ? 'justify-center px-2' : 'justify-start px-3'}`}>
+                        <Zap className="h-4 w-4 flex-shrink-0" />
+                        {!isSidebarCollapsed && <span>Automations</span>}
+                      </TabsTrigger>
+                    </TooltipTrigger>
+                    {isSidebarCollapsed && <TooltipContent side="right">Automations</TooltipContent>}
+                  </Tooltip>
+                  
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <TabsTrigger value="transactional" className={`w-full gap-2 py-2 data-[state=active]:bg-[var(--glass-bg)] data-[state=active]:shadow-sm ${isSidebarCollapsed ? 'justify-center px-2' : 'justify-start px-3'}`}>
+                        <Bell className="h-4 w-4 flex-shrink-0" />
+                        {!isSidebarCollapsed && <span>Transactional</span>}
+                      </TabsTrigger>
+                    </TooltipTrigger>
+                    {isSidebarCollapsed && <TooltipContent side="right">Transactional Emails</TooltipContent>}
+                  </Tooltip>
+                  
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <TabsTrigger value="templates" className={`w-full gap-2 py-2 data-[state=active]:bg-[var(--glass-bg)] data-[state=active]:shadow-sm ${isSidebarCollapsed ? 'justify-center px-2' : 'justify-start px-3'}`}>
+                        <FileText className="h-4 w-4 flex-shrink-0" />
+                        {!isSidebarCollapsed && <span>Templates</span>}
+                      </TabsTrigger>
+                    </TooltipTrigger>
+                    {isSidebarCollapsed && <TooltipContent side="right">Templates</TooltipContent>}
+                  </Tooltip>
+                  
+                  <div className="border-t border-[var(--glass-border)] my-2" />
+                  
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <TabsTrigger value="subscribers" className={`w-full gap-2 py-2 data-[state=active]:bg-[var(--glass-bg)] data-[state=active]:shadow-sm ${isSidebarCollapsed ? 'justify-center px-2' : 'justify-start px-3'}`}>
+                        <Users className="h-4 w-4 flex-shrink-0" />
+                        {!isSidebarCollapsed && <span>Subscribers</span>}
+                      </TabsTrigger>
+                    </TooltipTrigger>
+                    {isSidebarCollapsed && <TooltipContent side="right">Subscribers</TooltipContent>}
+                  </Tooltip>
+                  
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <TabsTrigger value="lists" className={`w-full gap-2 py-2 data-[state=active]:bg-[var(--glass-bg)] data-[state=active]:shadow-sm ${isSidebarCollapsed ? 'justify-center px-2' : 'justify-start px-3'}`}>
+                        <Tag className="h-4 w-4 flex-shrink-0" />
+                        {!isSidebarCollapsed && <span>Lists</span>}
+                      </TabsTrigger>
+                    </TooltipTrigger>
+                    {isSidebarCollapsed && <TooltipContent side="right">Lists</TooltipContent>}
+                  </Tooltip>
+                  
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <TabsTrigger value="people" className={`w-full gap-2 py-2 data-[state=active]:bg-[var(--glass-bg)] data-[state=active]:shadow-sm ${isSidebarCollapsed ? 'justify-center px-2' : 'justify-start px-3'}`}>
+                        <UserPlus className="h-4 w-4 flex-shrink-0" />
+                        {!isSidebarCollapsed && <span>People</span>}
+                      </TabsTrigger>
+                    </TooltipTrigger>
+                    {isSidebarCollapsed && <TooltipContent side="right">People (CRM)</TooltipContent>}
+                  </Tooltip>
+                  
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <TabsTrigger value="testing" className={`w-full gap-2 py-2 data-[state=active]:bg-[var(--glass-bg)] data-[state=active]:shadow-sm ${isSidebarCollapsed ? 'justify-center px-2' : 'justify-start px-3'}`}>
+                        <Target className="h-4 w-4 flex-shrink-0" />
+                        {!isSidebarCollapsed && <span>A/B Tests</span>}
+                      </TabsTrigger>
+                    </TooltipTrigger>
+                    {isSidebarCollapsed && <TooltipContent side="right">A/B Tests</TooltipContent>}
+                  </Tooltip>
+                  
+                  <div className="border-t border-[var(--glass-border)] my-2" />
+                  
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <TabsTrigger value="settings" className={`w-full gap-2 py-2 data-[state=active]:bg-[var(--glass-bg)] data-[state=active]:shadow-sm ${isSidebarCollapsed ? 'justify-center px-2' : 'justify-start px-3'}`}>
+                        <Settings className="h-4 w-4 flex-shrink-0" />
+                        {!isSidebarCollapsed && <span>Settings</span>}
+                      </TabsTrigger>
+                    </TooltipTrigger>
+                    {isSidebarCollapsed && <TooltipContent side="right">Settings</TooltipContent>}
+                  </Tooltip>
+                </TooltipProvider>
+              </TabsList>
+            </div>
+          </div>
+          
+          {/* Main Content */}
+          <div className="flex-1 min-w-0">
+            <TabsContent value="overview" className="mt-0">
+              <OverviewTab onNavigate={setActiveTab} />
+            </TabsContent>
 
-        <TabsContent value="overview" className="mt-6">
-          <OverviewTab onNavigate={setActiveTab} />
-        </TabsContent>
+            <TabsContent value="campaigns" className="mt-0">
+              <CampaignsTab 
+                onCreateCampaign={handleCreateCampaign}
+                onEditCampaign={handleEditCampaign}
+                onViewAnalytics={handleViewCampaignAnalytics}
+              />
+            </TabsContent>
 
-        <TabsContent value="campaigns" className="mt-6">
-          <CampaignsTab 
-            onCreateCampaign={handleCreateCampaign}
-            onEditCampaign={handleEditCampaign}
-            onViewAnalytics={handleViewCampaignAnalytics}
-          />
-        </TabsContent>
+            <TabsContent value="automations" className="mt-0">
+              <AutomationsTab 
+                onCreateAutomation={handleCreateAutomation}
+                onEditAutomation={handleEditAutomation}
+              />
+            </TabsContent>
 
-        <TabsContent value="automations" className="mt-6">
-          <AutomationsTab 
-            onCreateAutomation={handleCreateAutomation}
-            onEditAutomation={handleEditAutomation}
-          />
-        </TabsContent>
+            <TabsContent value="transactional" className="mt-0">
+              <TransactionalTab 
+                onEditTemplate={handleEditTemplate}
+              />
+            </TabsContent>
 
-        <TabsContent value="system-emails" className="mt-6">
-          <SystemEmailsTab />
-        </TabsContent>
+            <TabsContent value="templates" className="mt-0">
+              <TemplatesTab 
+                onEditTemplate={handleEditTemplate}
+                onCreateTemplate={handleCreateTemplate}
+                onUseSystemTemplate={handleUseSystemTemplate}
+                onOpenImageLibrary={() => setShowImageLibrary(true)}
+              />
+            </TabsContent>
 
-        <TabsContent value="templates" className="mt-6">
-          <TemplatesTab 
-            onEditTemplate={handleEditTemplate}
-            onCreateTemplate={handleCreateTemplate}
-            onOpenImageLibrary={() => setShowImageLibrary(true)}
-          />
-        </TabsContent>
+            <TabsContent value="subscribers" className="mt-0">
+              <SubscribersTab 
+                onOpenSegmentBuilder={() => setShowSegmentBuilder(true)}
+              />
+            </TabsContent>
 
-        <TabsContent value="subscribers" className="mt-6">
-          <SubscribersTab 
-            onOpenSegmentBuilder={() => setShowSegmentBuilder(true)}
-          />
-        </TabsContent>
+            <TabsContent value="lists" className="mt-0">
+              <ListManagement />
+            </TabsContent>
 
-        <TabsContent value="lists" className="mt-6">
-          <ListManagement />
-        </TabsContent>
+            <TabsContent value="people" className="mt-0">
+              <PeopleTab />
+            </TabsContent>
 
-        <TabsContent value="testing" className="mt-6">
-          <ABTestingPanel />
-        </TabsContent>
+            <TabsContent value="testing" className="mt-0">
+              <ABTestingPanel />
+            </TabsContent>
 
-        <TabsContent value="settings" className="mt-6">
-          <SettingsTab />
-        </TabsContent>
+            <TabsContent value="settings" className="mt-0">
+              <SettingsTab />
+            </TabsContent>
+          </div>
+        </div>
       </Tabs>
 
       {/* Modals */}

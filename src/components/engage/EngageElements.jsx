@@ -10,7 +10,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuSeparator } from '@/components/ui/dropdown-menu'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { toast } from '@/lib/toast'
-import api from '@/lib/api'
+import { engageApi } from '@/lib/portal-api'
 import {
   Plus,
   MoreHorizontal,
@@ -53,11 +53,11 @@ export default function EngageElements({ projectId, onEditElement }) {
   const fetchElements = async () => {
     try {
       setLoading(true)
-      const params = new URLSearchParams({ projectId })
-      if (filter.type !== 'all') params.set('type', filter.type)
-      if (filter.status !== 'all') params.set('status', filter.status)
+      const params = { projectId }
+      if (filter.type !== 'all') params.type = filter.type
+      if (filter.status !== 'all') params.status = filter.status
 
-      const { data } = await api.get(`/.netlify/functions/engage-elements?${params}`)
+      const { data } = await engageApi.getElements(params)
       setElements(data.elements || [])
     } catch (error) {
       console.error('Failed to fetch elements:', error)
@@ -71,10 +71,10 @@ export default function EngageElements({ projectId, onEditElement }) {
     try {
       if (action === 'delete') {
         if (!confirm('Are you sure you want to delete this element?')) return
-        await api.delete(`/.netlify/functions/engage-elements?elementId=${elementId}`)
+        await engageApi.deleteElement(elementId)
         toast.success('Element deleted')
       } else {
-        await api.put('/.netlify/functions/engage-elements', { elementId, action })
+        await engageApi.updateElement(elementId, { action })
         toast.success(`Element ${action}ed`)
       }
       fetchElements()
@@ -86,7 +86,7 @@ export default function EngageElements({ projectId, onEditElement }) {
 
   const handleCreate = async (type) => {
     try {
-      const { data } = await api.post('/.netlify/functions/engage-elements', {
+      const { data } = await engageApi.createElement({
         projectId,
         name: `New ${ELEMENT_TYPES[type]?.label || 'Element'}`,
         element_type: type,
@@ -277,7 +277,11 @@ export default function EngageElements({ projectId, onEditElement }) {
                   : '0'
                 
                 return (
-                  <TableRow key={el.id} className="cursor-pointer hover:bg-muted/50">
+                  <TableRow 
+                    key={el.id} 
+                    className="cursor-pointer hover:bg-muted/50"
+                    onClick={() => onEditElement?.(el)}
+                  >
                     <TableCell>
                       <div className="flex flex-col">
                         <span className="font-medium">{el.name}</span>
@@ -315,7 +319,7 @@ export default function EngageElements({ projectId, onEditElement }) {
                           </Button>
                         </DropdownMenuTrigger>
                         <DropdownMenuContent align="end">
-                          <DropdownMenuItem onClick={() => onEditElement?.(el.id)}>
+                          <DropdownMenuItem onClick={() => onEditElement?.(el)}>
                             <Pencil className="w-4 h-4 mr-2" />
                             Edit
                           </DropdownMenuItem>

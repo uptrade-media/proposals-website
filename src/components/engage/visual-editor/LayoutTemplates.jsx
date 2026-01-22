@@ -369,7 +369,7 @@ export default function LayoutTemplates({ onSelect, onClose }) {
   
   return (
     <Dialog open onOpenChange={onClose}>
-      <DialogContent className="max-w-4xl max-h-[85vh] flex flex-col p-0 gap-0">
+      <DialogContent className="max-w-[90vw] max-h-[90vh] flex flex-col p-0 gap-0">
         <DialogHeader className="p-6 pb-0">
           <DialogTitle className="flex items-center gap-2">
             <Sparkles className="h-5 w-5 text-[var(--brand-primary)]" />
@@ -406,7 +406,7 @@ export default function LayoutTemplates({ onSelect, onClose }) {
         
         {/* Templates Grid */}
         <div className="flex-1 overflow-y-auto p-6">
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
             {currentCategory.templates.map((template) => (
               <motion.div
                 key={template.id}

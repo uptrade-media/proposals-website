@@ -6,10 +6,17 @@ import { ScrollArea } from '@/components/ui/scroll-area'
 import { FileText, TrendingUp, Clock, ExternalLink, Loader2 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
+const defaultFormatNumber = (num) => {
+  if (!num && num !== 0) return '0'
+  if (num >= 1000000) return (num / 1000000).toFixed(1) + 'M'
+  if (num >= 1000) return (num / 1000).toFixed(1) + 'K'
+  return num.toLocaleString()
+}
+
 export function TopPagesTable({ 
   pages = [], 
   isLoading = false,
-  formatNumber,
+  formatNumber = defaultFormatNumber,
   limit = 15
 }) {
   const displayPages = pages.slice(0, limit)

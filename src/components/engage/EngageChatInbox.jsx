@@ -1,7 +1,8 @@
 // src/components/engage/EngageChatInbox.jsx
 // Portal inbox for viewing and responding to live chat sessions
+// Uses Portal API WebSocket for real-time messaging and typing indicators
 
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, useCallback } from 'react'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -11,7 +12,8 @@ import { Separator } from '@/components/ui/separator'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { toast } from '@/lib/toast'
 import { cn } from '@/lib/utils'
-import api from '@/lib/api'
+import { engageApi } from '@/lib/portal-api'
+import useEngageChatSocket from '@/lib/useEngageChatSocket'
 import {
   MessageCircle,
   Send,
@@ -25,9 +27,27 @@ import {
   RefreshCw,
   CheckCheck,
   Bot,
-  Sparkles
+  Sparkles,
+  Wifi,
+  WifiOff
 } from 'lucide-react'
 import { formatDistanceToNow } from 'date-fns'
+
+// Typing indicator component
+function TypingIndicator({ visitorName }) {
+  return (
+    <div className="flex justify-start">
+      <div className="bg-background border shadow-sm rounded-2xl rounded-bl-md px-4 py-2 flex items-center gap-2 text-muted-foreground">
+        <div className="flex gap-1">
+          <span className="w-2 h-2 bg-current rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
+          <span className="w-2 h-2 bg-current rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
+          <span className="w-2 h-2 bg-current rounded-full animate-bounce" style={{ animationDelay: '300ms' }} />
+        </div>
+        <span className="text-xs">{visitorName || 'Visitor'} is typing...</span>
+      </div>
+    </div>
+  )
+}
 
 // Status badge config
 const STATUS_STYLES = {
@@ -46,26 +66,65 @@ export default function EngageChatInbox({ projectId }) {
   const [sending, setSending] = useState(false)
   const [message, setMessage] = useState('')
   const messagesEndRef = useRef(null)
-  const pollingRef = useRef(null)
+  const typingTimeoutRef = useRef(null)
+  const lastTypingRef = useRef(null)
 
-  // Fetch sessions on mount
+  // ─────────────────────────────────────────────────────────────────────────────
+  // WebSocket connection for real-time updates
+  // ─────────────────────────────────────────────────────────────────────────────
+  const {
+    isConnected,
+    connectionError,
+    sendMessage: sendViaSocket,
+    setAgentTyping,
+    joinSession: joinViaSocket,
+    isVisitorTyping,
+    visitorTypingStates,
+  } = useEngageChatSocket({
+    enabled: true,
+    projectId,
+    onMessage: (data) => {
+      // New message received
+      if (selectedSession?.id === data.sessionId) {
+        setSelectedSession(prev => prev ? {
+          ...prev,
+          messages: [...(prev.messages || []), data.message]
+        } : prev)
+      }
+      // Update session in list
+      setSessions(prev => prev.map(s =>
+        s.id === data.sessionId
+          ? { ...s, last_message_at: new Date().toISOString(), message_count: (s.message_count || 0) + 1 }
+          : s
+      ))
+    },
+    onVisitorTyping: (data) => {
+      // Handled by hook's visitorTypingStates
+      console.log('[EngageChatInbox] Visitor typing:', data.sessionId, data.isTyping)
+    },
+    onSessionUpdate: (session) => {
+      setSessions(prev => prev.map(s => s.id === session.id ? { ...s, ...session } : s))
+      if (selectedSession?.id === session.id) {
+        setSelectedSession(prev => prev ? { ...prev, ...session } : prev)
+      }
+    },
+    onHandoffRequest: (data) => {
+      toast.info(`Handoff requested: ${data.session?.visitor_name || 'Visitor'}`)
+      fetchSessions(true)
+    },
+  })
+
+  // Fetch sessions on mount (initial load only, WebSocket handles updates)
   useEffect(() => {
     fetchSessions()
-    
-    // Set up polling
-    pollingRef.current = setInterval(() => {
-      fetchSessions(true)
-      if (selectedSession) {
-        fetchSessionDetails(selectedSession.id, true)
-      }
-    }, 5000)
-
-    return () => {
-      if (pollingRef.current) {
-        clearInterval(pollingRef.current)
-      }
-    }
   }, [projectId])
+
+  // Join session room when selected
+  useEffect(() => {
+    if (selectedSession?.id) {
+      joinViaSocket(selectedSession.id)
+    }
+  }, [selectedSession?.id, joinViaSocket])
 
   // Scroll to bottom when messages change
   useEffect(() => {
@@ -75,8 +134,7 @@ export default function EngageChatInbox({ projectId }) {
   const fetchSessions = async (silent = false) => {
     try {
       if (!silent) setLoading(true)
-      const params = projectId ? `?projectId=${projectId}` : ''
-      const { data } = await api.get(`/.netlify/functions/engage-chat-messages${params}`)
+      const { data } = await engageApi.getChatSessions({ projectId })
       setSessions(data.sessions || [])
     } catch (error) {
       console.error('Failed to fetch sessions:', error)
@@ -89,7 +147,7 @@ export default function EngageChatInbox({ projectId }) {
   const fetchSessionDetails = async (sessionId, silent = false) => {
     try {
       if (!silent) setLoadingMessages(true)
-      const { data } = await api.get(`/.netlify/functions/engage-chat-messages?sessionId=${sessionId}`)
+      const { data } = await engageApi.getChatSession(sessionId)
       setSelectedSession(data.session)
     } catch (error) {
       console.error('Failed to fetch session:', error)
@@ -104,6 +162,32 @@ export default function EngageChatInbox({ projectId }) {
     fetchSessionDetails(session.id)
   }
 
+  // Handle input change with debounced typing indicator
+  const handleInputChange = useCallback((e) => {
+    const value = e.target.value
+    setMessage(value)
+    
+    if (!selectedSession?.id) return
+    
+    // Emit typing start (debounced - don't spam)
+    const now = Date.now()
+    if (!lastTypingRef.current || now - lastTypingRef.current > 500) {
+      setAgentTyping(selectedSession.id, true)
+      lastTypingRef.current = now
+    }
+    
+    // Clear existing timeout
+    if (typingTimeoutRef.current) {
+      clearTimeout(typingTimeoutRef.current)
+    }
+    
+    // Auto-stop typing after 2 seconds of no input
+    typingTimeoutRef.current = setTimeout(() => {
+      setAgentTyping(selectedSession.id, false)
+      lastTypingRef.current = null
+    }, 2000)
+  }, [selectedSession?.id, setAgentTyping])
+
   const handleSendMessage = async (e) => {
     e.preventDefault()
     if (!message.trim() || !selectedSession) return
@@ -111,18 +195,45 @@ export default function EngageChatInbox({ projectId }) {
     const content = message.trim()
     setMessage('')
     setSending(true)
+    
+    // Clear typing indicator
+    if (typingTimeoutRef.current) {
+      clearTimeout(typingTimeoutRef.current)
+    }
+    setAgentTyping(selectedSession.id, false)
+    lastTypingRef.current = null
+
+    // Optimistic update - add message immediately
+    const optimisticMessage = {
+      id: `temp-${Date.now()}`,
+      role: 'agent',
+      content,
+      created_at: new Date().toISOString(),
+    }
+    setSelectedSession(prev => ({
+      ...prev,
+      messages: [...(prev.messages || []), optimisticMessage]
+    }))
 
     try {
-      const { data } = await api.post('/.netlify/functions/engage-chat-messages', {
-        sessionId: selectedSession.id,
-        content
-      })
-
-      // Add message to local state
-      setSelectedSession(prev => ({
-        ...prev,
-        messages: [...(prev.messages || []), data.message]
-      }))
+      // Try WebSocket first for real-time
+      const sent = sendViaSocket(selectedSession.id, content)
+      
+      if (!sent) {
+        // Fallback to HTTP if WebSocket not connected
+        const { data } = await engageApi.sendChatMessage({
+          sessionId: selectedSession.id,
+          content
+        })
+        
+        // Replace optimistic message with real one
+        setSelectedSession(prev => ({
+          ...prev,
+          messages: prev.messages.map(m => 
+            m.id === optimisticMessage.id ? data.message : m
+          )
+        }))
+      }
 
       // Update session in list
       setSessions(prev => prev.map(s => 
@@ -133,7 +244,12 @@ export default function EngageChatInbox({ projectId }) {
     } catch (error) {
       console.error('Failed to send message:', error)
       toast.error('Failed to send message')
-      setMessage(content) // Restore message
+      // Remove optimistic message and restore input
+      setSelectedSession(prev => ({
+        ...prev,
+        messages: prev.messages.filter(m => m.id !== optimisticMessage.id)
+      }))
+      setMessage(content)
     } finally {
       setSending(false)
     }
@@ -161,6 +277,11 @@ export default function EngageChatInbox({ projectId }) {
             <h3 className="font-semibold flex items-center gap-2">
               <MessageCircle className="w-4 h-4" />
               Live Chats
+              {isConnected ? (
+                <Wifi className="w-3 h-3 text-green-500" />
+              ) : (
+                <WifiOff className="w-3 h-3 text-muted-foreground" />
+              )}
             </h3>
             <Button size="sm" variant="ghost" onClick={() => fetchSessions()}>
               <RefreshCw className="w-4 h-4" />
@@ -187,11 +308,17 @@ export default function EngageChatInbox({ projectId }) {
                   onClick={() => selectSession(session)}
                 >
                   <div className="flex items-start gap-3">
-                    <Avatar className="w-10 h-10">
-                      <AvatarFallback className="bg-primary/10 text-primary text-sm">
-                        {getInitials(session.visitor_name)}
-                      </AvatarFallback>
-                    </Avatar>
+                    <div className="relative">
+                      <Avatar className="w-10 h-10">
+                        <AvatarFallback className="bg-primary/10 text-primary text-sm">
+                          {getInitials(session.visitor_name)}
+                        </AvatarFallback>
+                      </Avatar>
+                      {/* Show typing dot on session list item */}
+                      {isVisitorTyping(session.id) && (
+                        <span className="absolute -bottom-0.5 -right-0.5 w-3 h-3 bg-green-500 rounded-full border-2 border-background animate-pulse" />
+                      )}
+                    </div>
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center justify-between gap-2">
                         <span className="font-medium truncate">
@@ -202,7 +329,9 @@ export default function EngageChatInbox({ projectId }) {
                         </Badge>
                       </div>
                       <p className="text-sm text-muted-foreground truncate">
-                        {session.visitor_email || 'No email'}
+                        {isVisitorTyping(session.id) 
+                          ? <span className="text-green-600">Typing...</span>
+                          : session.visitor_email || 'No email'}
                       </p>
                       <div className="flex items-center gap-2 mt-1 text-xs text-muted-foreground">
                         <span>{session.message_count || 0} messages</span>
@@ -334,6 +463,10 @@ export default function EngageChatInbox({ projectId }) {
                     </div>
                   </div>
                 ))}
+                {/* Visitor typing indicator */}
+                {selectedSession && isVisitorTyping(selectedSession.id) && (
+                  <TypingIndicator visitorName={selectedSession.visitor_name} />
+                )}
                 <div ref={messagesEndRef} />
               </div>
             </ScrollArea>
@@ -344,7 +477,7 @@ export default function EngageChatInbox({ projectId }) {
                 <div className="flex gap-2 max-w-2xl mx-auto">
                   <Input
                     value={message}
-                    onChange={(e) => setMessage(e.target.value)}
+                    onChange={handleInputChange}
                     placeholder="Type your reply..."
                     disabled={sending}
                     className="flex-1"

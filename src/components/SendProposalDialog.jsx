@@ -43,7 +43,7 @@ import {
   Plus,
   Users
 } from 'lucide-react'
-import api from '../lib/api'
+import { proposalsApi } from '../lib/portal-api'
 import { cn } from '../lib/utils'
 
 export default function SendProposalDialog({
@@ -135,8 +135,7 @@ export default function SendProposalDialog({
 
     setIsSending(true)
     try {
-      const response = await api.post('/.netlify/functions/proposals-send', {
-        proposalId: proposal.id,
+      const response = await proposalsApi.send(proposal.id, {
         recipients: recipients,
         subject: emailData.subject,
         personalMessage: emailData.personalMessage

@@ -1,10 +1,13 @@
 import { create } from 'zustand'
-import api from './api'
+import { filesApi } from './portal-api'
+import { supabase } from './supabase'
 
 const useFilesStore = create((set, get) => ({
   files: [],
+  folders: [],
   categories: [],
   currentProjectId: null,
+  currentFolderPath: null,
   isLoading: false,
   error: null,
   uploadProgress: 0,
@@ -13,14 +16,32 @@ const useFilesStore = create((set, get) => ({
   clearError: () => set({ error: null }),
 
   // Set current project
-  setCurrentProject: (projectId) => set({ currentProjectId: projectId }),
+  setCurrentProject: (projectId) => set({ currentProjectId: projectId, currentFolderPath: null }),
+
+  // Set current folder
+  setCurrentFolder: (folderPath) => set({ currentFolderPath: folderPath }),
+
+  // Fetch folders for a project
+  fetchFolders: async (projectId) => {
+    try {
+      const response = await filesApi.listFolders(projectId)
+      const data = response.data || response
+      set({ folders: data.folders || [] })
+      return { success: true, data }
+    } catch (error) {
+      const errorMessage = error.response?.data?.error || 'Failed to fetch folders'
+      set({ error: errorMessage })
+      return { success: false, error: errorMessage }
+    }
+  },
 
   // Fetch file categories
   fetchCategories: async () => {
     try {
-      const response = await api.get('/files/categories')
-      set({ categories: response.data.categories })
-      return { success: true, data: response.data }
+      const response = await filesApi.getCategories()
+      const data = response.data || response
+      set({ categories: data.categories || data })
+      return { success: true, data }
     } catch (error) {
       const errorMessage = error.response?.data?.error || 'Failed to fetch categories'
       set({ error: errorMessage })
@@ -33,21 +54,16 @@ const useFilesStore = create((set, get) => ({
     set({ isLoading: true, error: null })
     
     try {
-      const params = new URLSearchParams()
-      if (projectId) params.append('projectId', projectId)
-      if (filters.category) params.append('category', filters.category)
-      if (filters.isPublic !== undefined) params.append('isPublic', filters.isPublic)
-      
-      const url = `/.netlify/functions/files-list${params.toString() ? `?${params.toString()}` : ''}`
-      const response = await api.get(url)
+      const response = await filesApi.listFiles({ projectId, ...filters })
+      const data = response.data || response
       
       set({ 
-        files: response.data.files || [],
+        files: data.files || data || [],
         currentProjectId: projectId,
         isLoading: false 
       })
       
-      return { success: true, data: response.data }
+      return { success: true, data }
     } catch (error) {
       const errorMessage = error.response?.data?.error || 'Failed to fetch files'
       set({ 
@@ -59,38 +75,55 @@ const useFilesStore = create((set, get) => ({
   },
 
   // Upload file
-  uploadFile: async (projectId, file, category = 'general', isPublic = false) => {
+  uploadFile: async (projectId, file, category = 'general', isPublic = false, folderPath = null) => {
     set({ isLoading: true, error: null, uploadProgress: 0 })
     
     try {
-      // Convert file to base64
-      const reader = new FileReader()
-      const base64Data = await new Promise((resolve, reject) => {
-        reader.onload = () => resolve(reader.result.split(',')[1])
-        reader.onerror = reject
-        reader.readAsDataURL(file)
-      })
+      // Generate unique file ID and path
+      const fileId = crypto.randomUUID()
+      const ext = file.name.split('.').pop()?.toLowerCase() || 'bin'
+      const storagePath = `${category}/${fileId}.${ext}`
       
-      const response = await api.post('/.netlify/functions/files-upload', {
+      // Upload directly to Supabase Storage
+      const { error: uploadError } = await supabase.storage
+        .from('files')
+        .upload(storagePath, file, {
+          contentType: file.type || 'application/octet-stream',
+          upsert: false,
+        })
+      
+      if (uploadError) throw uploadError
+      
+      // Get public URL
+      const { data: urlData } = supabase.storage
+        .from('files')
+        .getPublicUrl(storagePath)
+      
+      // Register the file with the API
+      const response = await filesApi.registerFile({
+        fileId,
         filename: file.name,
         mimeType: file.type,
         fileSize: file.size,
-        base64Data,
+        storagePath,
+        publicUrl: urlData.publicUrl,
         projectId,
+        folderPath,
         category,
         isPublic
       })
+      const data = response.data || response
       
       // Add new file to the list
       set(state => ({ 
-        files: [response.data.file, ...state.files],
+        files: [data.file || data, ...state.files],
         isLoading: false,
         uploadProgress: 100
       }))
       
       setTimeout(() => set({ uploadProgress: 0 }), 1000)
       
-      return { success: true, data: response.data }
+      return { success: true, data }
     } catch (error) {
       const errorMessage = error.response?.data?.error || 'Failed to upload file'
       set({ 
@@ -142,12 +175,11 @@ const useFilesStore = create((set, get) => ({
     set({ isLoading: true, error: null })
     
     try {
-      const response = await api.get(`/.netlify/functions/files-download/${fileId}`, {
-        responseType: 'blob'
-      })
+      const response = await filesApi.downloadFile(fileId)
+      const data = response.data || response
       
       // Create download link
-      const url = window.URL.createObjectURL(new Blob([response.data]))
+      const url = window.URL.createObjectURL(new Blob([data]))
       const link = document.createElement('a')
       link.href = url
       link.setAttribute('download', filename)
@@ -173,17 +205,19 @@ const useFilesStore = create((set, get) => ({
     set({ isLoading: true, error: null })
     
     try {
-      const response = await api.put(`/files/${fileId}`, fileData)
+      const response = await filesApi.updateFile(fileId, fileData)
+      const data = response.data || response
+      const file = data.file || data
       
       // Update file in the list
       set(state => ({
         files: state.files.map(f => 
-          f.id === fileId ? response.data.file : f
+          f.id === fileId ? file : f
         ),
         isLoading: false
       }))
       
-      return { success: true, data: response.data }
+      return { success: true, data }
     } catch (error) {
       const errorMessage = error.response?.data?.error || 'Failed to update file'
       set({ 
@@ -199,7 +233,7 @@ const useFilesStore = create((set, get) => ({
     set({ isLoading: true, error: null })
     
     try {
-      await api.delete(`/.netlify/functions/files-delete/${fileId}`)
+      await filesApi.deleteFile(fileId)
       
       // Remove file from the list
       set(state => ({
@@ -213,6 +247,48 @@ const useFilesStore = create((set, get) => ({
       set({ 
         isLoading: false, 
         error: errorMessage 
+      })
+      return { success: false, error: errorMessage }
+    }
+  },
+
+  // Replace file contents (keeps same URL/path)
+  replaceFile: async (fileId, file) => {
+    set({ isLoading: true, error: null, uploadProgress: 0 })
+
+    try {
+      const reader = new FileReader()
+      const base64Data = await new Promise((resolve, reject) => {
+        reader.onload = () => resolve(reader.result.split(',')[1])
+        reader.onerror = reject
+        reader.readAsDataURL(file)
+      })
+
+      const response = await filesApi.replaceFile(fileId, {
+        filename: file.name,
+        mimeType: file.type,
+        fileSize: file.size,
+        base64Data
+      })
+
+      const data = response.data || response
+      const updatedFile = data.file || data
+
+      set(state => ({
+        files: state.files.map(f => f.id === fileId ? { ...f, ...updatedFile } : f),
+        isLoading: false,
+        uploadProgress: 100
+      }))
+
+      setTimeout(() => set({ uploadProgress: 0 }), 500)
+
+      return { success: true, data }
+    } catch (error) {
+      const errorMessage = error.response?.data?.error || 'Failed to replace file'
+      set({ 
+        isLoading: false, 
+        error: errorMessage,
+        uploadProgress: 0
       })
       return { success: false, error: errorMessage }
     }

@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Loader2, TrendingUp, TrendingDown } from 'lucide-react'
-import axios from 'axios'
+import { reportsApi } from '@/lib/portal-api'
 
 const trendConfig = {
   revenue: {
@@ -39,9 +39,7 @@ export function TrendIndicators({ period = 'month', showComparison = true }) {
   const fetchTrends = async () => {
     try {
       setLoading(true)
-      const response = await axios.get(
-        `/.netlify/functions/dashboard-trends?period=${period}`
-      )
+      const response = await reportsApi.getDashboard({ period })
       setTrends(response.data.trends)
       setError(null)
     } catch (err) {

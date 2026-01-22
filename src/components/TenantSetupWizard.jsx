@@ -52,7 +52,7 @@ import {
   ClipboardList,
 } from 'lucide-react'
 import { toast } from 'sonner'
-import api from '@/lib/api'
+import portalApi, { adminApi } from '@/lib/portal-api'
 
 // Modules always included for every tenant (Uptrade internal tools)
 const INCLUDED_MODULES = {
@@ -295,7 +295,7 @@ export default function TenantSetupWizard({
     
     setSlugChecking(true)
     try {
-      const response = await api.get(`/.netlify/functions/admin-tenants-check-slug?slug=${slug}`)
+      const response = await adminApi.checkTenantSlug(slug)
       setSlugAvailable(response.data.available)
     } catch {
       setSlugAvailable(null)
@@ -437,46 +437,57 @@ export default function TenantSetupWizard({
     setIsSubmitting(true)
     
     try {
-      // Prepare the payload
-      const payload = {
-        // If coming from a project, include projectId
-        projectId: project?.id,
-        
-        // Basic info
-        name: form.name,
-        slug: form.slug,
-        domain: form.domain.replace(/^https?:\/\//, '').replace(/\/$/, ''),
-        adminEmail: form.adminEmail || undefined,
-        adminName: form.adminName || undefined,
-        
-        // Convert modules object to features format
-        features: form.modules,
-        
-        // Branding
-        theme: form.theme,
-        
-        // Secrets (only if provided)
-        secrets: Object.fromEntries(
-          Object.entries(form.secrets).filter(([_, v]) => v)
-        ),
-        
-        // Plan defaults to free for now
-        plan: 'starter',
-      }
+      const domain = form.domain.replace(/^https?:\/\//, '').replace(/\/$/, '')
       
-      // Call the setup API
-      const response = await api.post('/.netlify/functions/tenant-setup-wizard', payload)
+      let response
       
-      if (response.data.success) {
-        toast.success('🎉 Tenant created successfully!')
-        onComplete?.(response.data)
-        onOpenChange(false)
+      if (project?.id) {
+        // Convert existing project to tenant using projects API
+        const tenantConfig = {
+          domain,
+          features: Object.keys(form.modules).filter(k => form.modules[k]),
+          themeColor: form.theme?.primary,
+          logoUrl: form.theme?.logo,
+          faviconUrl: form.theme?.favicon,
+        }
+        response = await portalApi.post(`/projects/${project.id}/convert-to-tenant`, tenantConfig)
+        
+        if (response.data) {
+          toast.success('🎉 Project converted to tenant successfully!')
+          onComplete?.(response.data)
+          onOpenChange(false)
+        } else {
+          throw new Error('Failed to convert project to tenant')
+        }
       } else {
-        throw new Error(response.data.error || 'Failed to create tenant')
+        // Create new organization (no project)
+        const payload = {
+          name: form.name,
+          slug: form.slug,
+          domain,
+          adminEmail: form.adminEmail || undefined,
+          adminName: form.adminName || undefined,
+          features: form.modules,
+          theme: form.theme,
+          secrets: Object.fromEntries(
+            Object.entries(form.secrets).filter(([_, v]) => v)
+          ),
+          plan: 'starter',
+        }
+        
+        response = await adminApi.createTenant(payload)
+        
+        if (response.data.success) {
+          toast.success('🎉 Tenant created successfully!')
+          onComplete?.(response.data)
+          onOpenChange(false)
+        } else {
+          throw new Error(response.data.error || 'Failed to create tenant')
+        }
       }
     } catch (error) {
       console.error('Tenant setup error:', error)
-      toast.error(error.response?.data?.error || error.message || 'Failed to create tenant')
+      toast.error(error.response?.data?.error || error.message || 'Failed to set up tenant')
     } finally {
       setIsSubmitting(false)
     }
@@ -1023,14 +1034,10 @@ function SecretsStep({ form, setForm, requiredSecrets, enabledModules }) {
 function ReviewStep({ form, modules, enabledModules, project }) {
   const [copied, setCopied] = useState(false)
   
+  // Use project.id as the tenant identifier for analytics tracking
+  const apiUrl = import.meta.env.VITE_PORTAL_API_URL || 'https://api.uptrademedia.com'
   const trackingScript = `<!-- Uptrade Portal Analytics -->
-<script>
-  window.UPTRADE_CONFIG = {
-    orgSlug: '${form.slug}',
-    domain: '${form.domain}'
-  };
-</script>
-<script src="https://portal.uptrademedia.com/tracking.js" defer></script>`
+<script async src="${apiUrl}/analytics/a.js" data-site="${project?.id || 'PROJECT_ID'}"></script>`
   
   const copyScript = () => {
     navigator.clipboard.writeText(trackingScript)

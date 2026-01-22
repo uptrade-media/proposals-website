@@ -97,12 +97,13 @@ const SiteAnalytics = () => {
   const deviceBreakdown = overview?.deviceBreakdown || {}
   const topReferrers = overview?.topReferrers || []
   const topEvents = overview?.topEvents || []
-  const dailyTrend = overview?.dailyTrend || pageViewsByDay || []
+  // API returns dailyPageViews with { date, count } format
+  const dailyTrend = overview?.dailyPageViews || overview?.dailyTrend || pageViewsByDay || []
 
-  // Format data for Tremor charts
+  // Format data for Tremor charts - handle count field from API
   const trendData = dailyTrend.map(d => ({
     date: new Date(d.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
-    'Page Views': d.views || 0
+    'Page Views': d.views || d.count || 0
   }))
 
   const totalDevices = (deviceBreakdown.desktop || 0) + (deviceBreakdown.mobile || 0) + (deviceBreakdown.tablet || 0)

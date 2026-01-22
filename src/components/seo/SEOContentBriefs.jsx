@@ -2,6 +2,8 @@
 // AI Content Briefs - generate comprehensive content briefs
 import { useState, useEffect } from 'react'
 import { useSeoStore } from '@/lib/seo-store'
+import { useSignalAccess } from '@/lib/signal-access'
+import SignalUpgradeCard from './signal/SignalUpgradeCard'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -23,7 +25,18 @@ import {
   ChevronUp
 } from 'lucide-react'
 
-export default function SEOContentBriefs({ siteId }) {
+export default function SEOContentBriefs({ projectId }) {
+  const { hasAccess: hasSignalAccess } = useSignalAccess()
+
+  // Show upgrade prompt if no Signal access
+  if (!hasSignalAccess) {
+    return (
+      <div className="p-6">
+        <SignalUpgradeCard feature="brief" variant="default" />
+      </div>
+    )
+  }
+
   const { 
     contentBriefs, 
     currentBrief,
@@ -40,16 +53,16 @@ export default function SEOContentBriefs({ siteId }) {
   const [copiedId, setCopiedId] = useState(null)
 
   useEffect(() => {
-    if (siteId) {
-      fetchContentBriefs(siteId)
+    if (projectId) {
+      fetchContentBriefs(projectId)
     }
-  }, [siteId])
+  }, [projectId])
 
   const handleGenerate = async () => {
     if (!targetKeyword.trim()) return
     setIsGenerating(true)
     try {
-      await generateContentBrief(siteId, targetKeyword.trim(), contentType, additionalContext)
+      await generateContentBrief(projectId, targetKeyword.trim(), contentType, additionalContext)
       setTargetKeyword('')
       setAdditionalContext('')
     } catch (error) {

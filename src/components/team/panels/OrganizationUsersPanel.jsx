@@ -76,7 +76,8 @@ export default function OrganizationUsersPanel({ organizationId, organizationNam
       toast.success(`Invite sent to ${formData.email}`)
       setShowInviteDialog(false)
     } catch (error) {
-      toast.error(error.response?.data?.error || 'Failed to send invite')
+      const errorMsg = error.response?.data?.error?.message || error.response?.data?.error || error.message || 'Failed to send invite'
+      toast.error(errorMsg)
     } finally {
       setIsSubmitting(false)
     }
@@ -102,7 +103,8 @@ export default function OrganizationUsersPanel({ organizationId, organizationNam
       setShowEditDialog(false)
       setSelectedUser(null)
     } catch (error) {
-      toast.error(error.response?.data?.error || 'Failed to update user')
+      const errorMsg = error.response?.data?.error?.message || error.response?.data?.error || error.message || 'Failed to update user'
+      toast.error(errorMsg)
     } finally {
       setIsSubmitting(false)
     }
@@ -148,7 +150,7 @@ export default function OrganizationUsersPanel({ organizationId, organizationNam
 
       {/* Stats */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-        <Card className="bg-[var(--glass-bg)] border-[var(--glass-border)]">
+        <Card className="bg-card border-[var(--glass-border)]">
           <CardContent className="flex items-center gap-4 p-4">
             <div className="p-3 rounded-xl bg-gradient-to-br from-[var(--brand-primary)] to-[var(--brand-secondary)]">
               <Users className="h-5 w-5 text-white" />
@@ -159,7 +161,7 @@ export default function OrganizationUsersPanel({ organizationId, organizationNam
             </div>
           </CardContent>
         </Card>
-        <Card className="bg-[var(--glass-bg)] border-[var(--glass-border)]">
+        <Card className="bg-card border-[var(--glass-border)]">
           <CardContent className="flex items-center gap-4 p-4">
             <div className="p-3 rounded-xl bg-gradient-to-br from-purple-500 to-purple-600">
               <Building2 className="h-5 w-5 text-white" />
@@ -170,7 +172,7 @@ export default function OrganizationUsersPanel({ organizationId, organizationNam
             </div>
           </CardContent>
         </Card>
-        <Card className="bg-[var(--glass-bg)] border-[var(--glass-border)]">
+        <Card className="bg-card border-[var(--glass-border)]">
           <CardContent className="flex items-center gap-4 p-4">
             <div className="p-3 rounded-xl bg-gradient-to-br from-blue-500 to-blue-600">
               <FolderOpen className="h-5 w-5 text-white" />
@@ -181,7 +183,7 @@ export default function OrganizationUsersPanel({ organizationId, organizationNam
             </div>
           </CardContent>
         </Card>
-        <Card className="bg-[var(--glass-bg)] border-[var(--glass-border)]">
+        <Card className="bg-card border-[var(--glass-border)]">
           <CardContent className="flex items-center gap-4 p-4">
             <div className="p-3 rounded-xl bg-gradient-to-br from-amber-500 to-orange-600">
               <Headphones className="h-5 w-5 text-white" />

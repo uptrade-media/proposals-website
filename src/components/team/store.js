@@ -8,7 +8,7 @@
  */
 
 import { create } from 'zustand'
-import axios from 'axios'
+import { adminApi, messagesApi, projectsApi } from '../../lib/portal-api'
 
 const useTeamStore = create((set, get) => ({
   // ============================================================================
@@ -45,9 +45,9 @@ const useTeamStore = create((set, get) => ({
   fetchTeamMembers: async () => {
     set({ loading: true, error: null })
     try {
-      const response = await axios.get('/.netlify/functions/admin-team-list')
+      const response = await adminApi.listTeamMembers()
       set({ 
-        teamMembers: response.data.teamMembers || [],
+        teamMembers: response.data.teamMembers || response.data.team || [],
         teamSummary: response.data.summary || null,
         loading: false 
       })
@@ -65,7 +65,7 @@ const useTeamStore = create((set, get) => ({
   createTeamMember: async (memberData) => {
     set({ loading: true, error: null })
     try {
-      const response = await axios.post('/.netlify/functions/admin-team-create', memberData)
+      const response = await adminApi.createTeamMember(memberData)
       const newMember = response.data.teamMember
       
       set(state => ({
@@ -91,7 +91,7 @@ const useTeamStore = create((set, get) => ({
   updateTeamMember: async (id, updates) => {
     set({ loading: true, error: null })
     try {
-      const response = await axios.put('/.netlify/functions/admin-team-update', { id, ...updates })
+      const response = await adminApi.updateTeamMember(id, updates)
       const updatedMember = response.data.teamMember
       
       set(state => ({
@@ -114,10 +114,7 @@ const useTeamStore = create((set, get) => ({
    */
   resendTeamInvite: async (id) => {
     try {
-      const response = await axios.put('/.netlify/functions/admin-team-update', { 
-        id, 
-        resendInvite: true 
-      })
+      const response = await adminApi.resendInvite(id)
       return response.data
     } catch (error) {
       const errorMessage = error.response?.data?.error || error.message
@@ -159,9 +156,7 @@ const useTeamStore = create((set, get) => ({
 
     set({ loading: true, error: null })
     try {
-      const res = await axios.get('/.netlify/functions/admin-org-members', {
-        params: { organizationId }
-      })
+      const res = await adminApi.listOrgMembers(organizationId)
       set({ orgMembers: res.data.members || [], loading: false })
       return res.data.members
     } catch (error) {
@@ -176,14 +171,12 @@ const useTeamStore = create((set, get) => ({
    */
   addOrgMember: async (organizationId, { email, name, role = 'member', accessLevel = 'organization', projectIds = [] }) => {
     try {
-      const res = await axios.post('/.netlify/functions/admin-org-members', {
+      const res = await adminApi.addOrgMember(organizationId, {
         email,
         name,
         role,
         accessLevel,
         projectIds
-      }, {
-        params: { organizationId }
       })
       
       // Refresh members list
@@ -201,12 +194,7 @@ const useTeamStore = create((set, get) => ({
    */
   updateOrgMember: async (organizationId, contactId, updates) => {
     try {
-      const res = await axios.put('/.netlify/functions/admin-org-members', {
-        contactId,
-        ...updates
-      }, {
-        params: { organizationId }
-      })
+      const res = await adminApi.updateOrgMember(organizationId, contactId, updates)
       
       // Refresh members list
       await get().fetchOrgMembers(organizationId)
@@ -223,9 +211,7 @@ const useTeamStore = create((set, get) => ({
    */
   removeOrgMember: async (organizationId, contactId) => {
     try {
-      await axios.delete('/.netlify/functions/admin-org-members', {
-        params: { organizationId, contactId }
-      })
+      await adminApi.removeOrgMember(organizationId, contactId)
       
       set(state => ({
         orgMembers: state.orgMembers.filter(m => m.contact?.id !== contactId)
@@ -253,10 +239,8 @@ const useTeamStore = create((set, get) => ({
     if (!organizationId) return []
     
     try {
-      // Use the messages-contacts endpoint which already has this logic
-      const res = await axios.get('/.netlify/functions/messages-contacts', {
-        headers: { 'X-Organization-Id': organizationId }
-      })
+      // Use the messages contacts endpoint which already has this logic
+      const res = await messagesApi.getContacts()
       
       // Filter to only uptrade_team contacts
       const uptradeTeam = (res.data.contacts || []).filter(c => c.contactType === 'uptrade_team')
@@ -280,9 +264,7 @@ const useTeamStore = create((set, get) => ({
 
     set({ loading: true, error: null })
     try {
-      const res = await axios.get('/.netlify/functions/admin-project-members', {
-        params: { projectId }
-      })
+      const res = await adminApi.listProjectMembers(projectId)
       set(state => ({
         projectMembers: {
           ...state.projectMembers,
@@ -303,12 +285,7 @@ const useTeamStore = create((set, get) => ({
    */
   addProjectMember: async (projectId, contactId, role = 'member') => {
     try {
-      const res = await axios.post('/.netlify/functions/admin-project-members', {
-        contactId,
-        role
-      }, {
-        params: { projectId }
-      })
+      const res = await adminApi.addProjectMember(projectId, contactId, role)
       
       await get().fetchProjectMembers(projectId)
       return res.data
@@ -323,12 +300,7 @@ const useTeamStore = create((set, get) => ({
    */
   updateProjectMember: async (projectId, contactId, role) => {
     try {
-      const res = await axios.put('/.netlify/functions/admin-project-members', {
-        contactId,
-        role
-      }, {
-        params: { projectId }
-      })
+      const res = await adminApi.updateProjectMember(projectId, contactId, role)
       
       await get().fetchProjectMembers(projectId)
       return res.data
@@ -343,9 +315,7 @@ const useTeamStore = create((set, get) => ({
    */
   removeProjectMember: async (projectId, contactId) => {
     try {
-      await axios.delete('/.netlify/functions/admin-project-members', {
-        params: { projectId, contactId }
-      })
+      await adminApi.removeProjectMember(projectId, contactId)
       
       set(state => ({
         projectMembers: {
@@ -384,9 +354,7 @@ const useTeamStore = create((set, get) => ({
    */
   fetchProjects: async (organizationId) => {
     try {
-      const res = await axios.get('/.netlify/functions/projects-list', {
-        headers: { 'X-Organization-Id': organizationId }
-      })
+      const res = await projectsApi.list()
       set({ projects: res.data.projects || [] })
       return res.data.projects
     } catch (error) {

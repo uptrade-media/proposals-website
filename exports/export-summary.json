@@ -1,0 +1,103 @@
+{
+  "timestamp": "2026-01-15T14:35:01.826Z",
+  "tables": {
+    "admin_users": {
+      "exists": true,
+      "count": 1
+    },
+    "sessions": {
+      "exists": true,
+      "count": 1025
+    },
+    "page_views": {
+      "exists": true,
+      "count": 3002
+    },
+    "events": {
+      "exists": true,
+      "count": 9790
+    },
+    "active_sessions": {
+      "exists": true,
+      "count": 950
+    },
+    "form_abandonment": {
+      "exists": true,
+      "count": 0
+    },
+    "frustration_events": {
+      "exists": true,
+      "count": 2378
+    },
+    "video_engagement": {
+      "exists": true,
+      "count": 0
+    },
+    "user_journeys": {
+      "exists": true,
+      "count": 109
+    },
+    "ai_insights": {
+      "exists": true,
+      "count": 0
+    },
+    "blog_categories": {
+      "exists": true,
+      "count": 0
+    },
+    "blog_posts": {
+      "exists": true,
+      "count": 0
+    },
+    "event_registrations": {
+      "exists": true,
+      "count": 0
+    },
+    "leads": {
+      "exists": true,
+      "count": 27
+    },
+    "valuations": {
+      "exists": true,
+      "count": 0
+    },
+    "email_templates": {
+      "exists": true,
+      "count": 0
+    },
+    "recipients": {
+      "exists": true,
+      "count": 0
+    },
+    "recipient_lists": {
+      "exists": true,
+      "count": 0
+    },
+    "recipient_list_members": {
+      "exists": true,
+      "count": 0
+    },
+    "email_campaigns": {
+      "exists": true,
+      "count": 0
+    },
+    "email_send_history": {
+      "exists": true,
+      "count": 0
+    },
+    "payment_transactions": {
+      "exists": true,
+      "count": 0
+    },
+    "payment_refunds": {
+      "exists": true,
+      "count": 0
+    },
+    "settings": {
+      "exists": true,
+      "count": 5
+    }
+  },
+  "totalRows": 17287,
+  "errors": []
+}

@@ -23,7 +23,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { toast } from '@/lib/toast'
-import api from '@/lib/api'
+import { engageApi } from '@/lib/portal-api'
 import { cn } from '@/lib/utils'
 
 const MAX_FILE_SIZE = 5 * 1024 * 1024 // 5MB
@@ -45,7 +45,7 @@ export default function MediaLibrary({ projectId, onSelect, onClose }) {
   const loadLibrary = useCallback(async () => {
     try {
       setLoadingLibrary(true)
-      const { data } = await api.get(`/.netlify/functions/engage-media?projectId=${projectId}`)
+      const { data } = await engageApi.getMedia(projectId)
       setLibrary(data.media || [])
     } catch (error) {
       console.error('Failed to load media library:', error)
@@ -84,7 +84,7 @@ export default function MediaLibrary({ projectId, onSelect, onClose }) {
       }, 100)
       
       // Upload to server
-      const { data } = await api.post('/.netlify/functions/engage-media', {
+      const { data } = await engageApi.uploadMedia({
         projectId,
         filename: file.name,
         mimeType: file.type,

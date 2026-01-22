@@ -1,0 +1,57 @@
+{
+  "name": "@uptrade/seo",
+  "version": "0.1.0",
+  "description": "SEO management package for Uptrade client sites - instant updates from Portal",
+  "main": "./dist/index.js",
+  "module": "./dist/index.mjs",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "import": "./dist/index.mjs",
+      "require": "./dist/index.js",
+      "types": "./dist/index.d.ts"
+    },
+    "./server": {
+      "import": "./dist/server.mjs",
+      "require": "./dist/server.js",
+      "types": "./dist/server.d.ts"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsup",
+    "dev": "tsup --watch",
+    "typecheck": "tsc --noEmit",
+    "clean": "rm -rf dist"
+  },
+  "peerDependencies": {
+    "@supabase/supabase-js": "^2.0.0",
+    "next": "^14.0.0 || ^15.0.0",
+    "react": "^18.0.0 || ^19.0.0"
+  },
+  "devDependencies": {
+    "@supabase/supabase-js": "^2.45.0",
+    "@types/node": "^20.0.0",
+    "@types/react": "^18.0.0",
+    "next": "^15.0.0",
+    "react": "^19.0.0",
+    "tsup": "^8.0.0",
+    "typescript": "^5.0.0"
+  },
+  "keywords": [
+    "seo",
+    "nextjs",
+    "react",
+    "metadata",
+    "schema",
+    "uptrade"
+  ],
+  "author": "Uptrade Media",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/uptrade-media/uptrade-portal"
+  }
+}

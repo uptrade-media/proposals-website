@@ -49,12 +49,13 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
 import { cn } from '@/lib/utils'
-import api from '@/lib/api'
+import { proposalsApi, adminApi } from '@/lib/portal-api'
 import SendProposalDialog from './SendProposalDialog'
 import ProposalView from './ProposalView'
 import EditProposalDialog from './EditProposalDialog'
 import jsPDF from 'jspdf'
 import html2canvas from 'html2canvas'
+import usePageContextStore from '@/lib/page-context-store'
 
 // Status badge component
 function StatusBadge({ status }) {
@@ -115,7 +116,7 @@ export default function ProposalEditor({ proposalId, onBack }) {
     
     setIsSavingTitle(true)
     try {
-      const response = await api.put(`/.netlify/functions/proposals-update?id=${proposal.id}`, {
+      const response = await proposalsApi.update(proposal.id, {
         title: editedTitle.trim()
       })
       
@@ -152,7 +153,7 @@ export default function ProposalEditor({ proposalId, onBack }) {
       
       setIsLoadingClients(true)
       try {
-        const response = await api.get('/.netlify/functions/admin-clients-list')
+        const response = await adminApi.listClients()
         setClients(response.data.clients || [])
         // Set current client as selected
         if (proposal?.contact_id || proposal?.contactId) {
@@ -173,15 +174,18 @@ export default function ProposalEditor({ proposalId, onBack }) {
     
     setIsSavingClient(true)
     try {
-      const response = await api.put(`/.netlify/functions/proposals-update?id=${proposal.id}`, {
+      const response = await proposalsApi.update(proposal.id, {
         contactId: selectedClientId
       })
       
-      if (response.data.proposal) {
+      const updatedProposal = response.data.proposal || response.data
+      
+      if (updatedProposal) {
         // Fetch fresh data to get client details
-        const refreshResponse = await api.get(`/.netlify/functions/proposals-get?id=${proposal.id}`)
-        if (refreshResponse.data.proposal) {
-          setProposal(refreshResponse.data.proposal)
+        const refreshResponse = await proposalsApi.get(proposal.id)
+        const freshProposal = refreshResponse.data.proposal || refreshResponse.data
+        if (freshProposal) {
+          setProposal(freshProposal)
         }
       }
       setShowAssignDialog(false)
@@ -200,9 +204,31 @@ export default function ProposalEditor({ proposalId, onBack }) {
       
       setIsLoading(true)
       try {
-        const response = await api.get(`/.netlify/functions/proposals-get?id=${proposalId}`)
-        if (response.data.proposal) {
-          setProposal(response.data.proposal)
+        const response = await proposalsApi.get(proposalId)
+        const p = response.data.proposal || response.data
+        
+        if (p && p.id) {
+          setProposal(p)
+          
+          // Set page context for Echo awareness - include MDX content for AI edits
+          usePageContextStore.getState().setModule('proposals', 'editor')
+          usePageContextStore.getState().setEntity({
+            id: p.id,
+            type: 'proposal',
+            name: p.title,
+            data: {
+              status: p.status,
+              clientName: p.contact?.name || p.contactName,
+              company: p.contact?.company || p.company,
+              services: p.sections?.map(s => s.title).join(', '),
+              totalValue: p.totalValue || p.total_value || p.total_amount,
+              description: `Proposal for ${p.contact?.name || p.contactName || 'client'}`,
+              // Include MDX content so Echo can make edits
+              mdxContent: p.mdxContent || p.mdx_content,
+              // Editing instructions
+              editingContext: 'You are viewing the proposal editor. The user can ask you to edit sections of this proposal. Use the proposal edit API to make changes to the MDX content.'
+            }
+          })
         } else {
           setError('Proposal not found')
         }
@@ -215,6 +241,11 @@ export default function ProposalEditor({ proposalId, onBack }) {
     }
 
     fetchProposal()
+    
+    // Clear entity context when leaving
+    return () => {
+      usePageContextStore.getState().clearEntity()
+    }
   }, [proposalId])
 
   // Poll for updates if proposal is generating
@@ -228,10 +259,10 @@ export default function ProposalEditor({ proposalId, onBack }) {
 
     if (hasContent || (proposal.status !== 'draft' && proposal.status !== 'generating')) return
 
-    // Poll every 3 seconds
+    // Poll every 10 seconds (AI generation can take 30-60s)
     const interval = setInterval(async () => {
       try {
-        const response = await api.get(`/.netlify/functions/proposals-get?id=${proposalId}`)
+        const response = await proposalsApi.get(proposalId)
         if (response.data.proposal) {
           setProposal(response.data.proposal)
           
@@ -243,7 +274,7 @@ export default function ProposalEditor({ proposalId, onBack }) {
       } catch (err) {
         console.error('Poll error:', err)
       }
-    }, 3000)
+    }, 10000)
 
     return () => clearInterval(interval)
   }, [proposal, proposalId])
@@ -467,7 +498,7 @@ export default function ProposalEditor({ proposalId, onBack }) {
         onClose={() => setShowSendDialog(false)}
         onSent={() => {
           setShowSendDialog(false)
-          api.get(`/.netlify/functions/proposals-get?id=${proposalId}`)
+          proposalsApi.get(proposalId)
             .then(res => setProposal(res.data.proposal))
         }}
       />

@@ -36,9 +36,9 @@ api.interceptors.request.use(
     // X-Project-Id: The specific project (GWA NextJS Site) - for project-level tools (CRM, SEO, Blog)
     if (state.currentProject?.id) {
       config.headers['X-Project-Id'] = state.currentProject.id
-      // Also set the project's organization_id for tables that use org_id
-      if (state.currentProject.organization_id) {
-        config.headers['X-Tenant-Org-Id'] = state.currentProject.organization_id
+      // Also set the project's org_id for tables that use org_id
+      if (state.currentProject.org_id) {
+        config.headers['X-Tenant-Org-Id'] = state.currentProject.org_id
       }
     }
     
@@ -48,7 +48,7 @@ api.interceptors.request.use(
       if (storedTenantProject) {
         try {
           const project = JSON.parse(storedTenantProject)
-          config.headers['X-Organization-Id'] = project.org_id || project.organization_id || project.id
+          config.headers['X-Organization-Id'] = project.org_id || project.org_id || project.id
           config.headers['X-Project-Id'] = project.id
         } catch (e) {
           // Ignore parse errors

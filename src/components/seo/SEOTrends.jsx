@@ -19,7 +19,7 @@ import {
 import { useSeoStore } from '@/lib/seo-store'
 import { cn } from '@/lib/utils'
 
-export default function SEOTrends({ site, onViewDetails }) {
+export default function SEOTrends({ site, projectId, onViewDetails }) {
   const { 
     rankingHistory,
     rankingTrends,
@@ -32,12 +32,15 @@ export default function SEOTrends({ site, onViewDetails }) {
 
   const [activeTab, setActiveTab] = useState('rankings')
 
+  // Use projectId directly (new architecture) or fallback to site.id (legacy)
+  const siteId = projectId || site?.id
+
   useEffect(() => {
-    if (site?.id) {
-      fetchRankingHistory(site.id, null, { limit: 30 })
-      fetchCwvSummary(site.id)
+    if (siteId) {
+      fetchRankingHistory(siteId, null, { limit: 30 })
+      fetchCwvSummary(siteId)
     }
-  }, [site?.id])
+  }, [siteId])
 
   return (
     <Card>

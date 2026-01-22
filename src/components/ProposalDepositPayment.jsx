@@ -2,11 +2,7 @@ import { useState, useEffect } from 'react'
 import { Button } from '@/components/ui/button'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { CreditCard, CheckCircle, Loader2, Lock, Shield } from 'lucide-react'
-
-// Square Web Payments SDK
-const SQUARE_APPLICATION_ID = import.meta.env.SQUARE_APPLICATION_ID
-const SQUARE_LOCATION_ID = import.meta.env.SQUARE_LOCATION_ID
-const SQUARE_ENVIRONMENT = import.meta.env.SQUARE_ENVIRONMENT || 'sandbox'
+import { proposalsApi, configApi } from '@/lib/portal-api'
 
 export default function ProposalDepositPayment({
   proposalId,
@@ -19,6 +15,7 @@ export default function ProposalDepositPayment({
 }) {
   const [card, setCard] = useState(null)
   const [payments, setPayments] = useState(null)
+  const [squareConfig, setSquareConfig] = useState(null)
   const [loading, setLoading] = useState(true)
   const [processing, setProcessing] = useState(false)
   const [error, setError] = useState('')
@@ -28,17 +25,27 @@ export default function ProposalDepositPayment({
   useEffect(() => {
     const initSquare = async () => {
       try {
+        // Fetch Square config for this proposal
+        const config = await configApi.getSquareConfigByProposalId(proposalId)
+        setSquareConfig(config)
+        
+        if (!config?.applicationId || !config?.locationId) {
+          setError('Payment system not configured. Please contact support.')
+          setLoading(false)
+          return
+        }
+        
         if (!window.Square) {
           // Load Square SDK
           const script = document.createElement('script')
-          script.src = SQUARE_ENVIRONMENT === 'production' 
+          script.src = config.environment === 'production' 
             ? 'https://web.squarecdn.com/v1/square.js'
             : 'https://sandbox.web.squarecdn.com/v1/square.js'
           script.async = true
-          script.onload = () => initPayments()
+          script.onload = () => initPayments(config)
           document.body.appendChild(script)
         } else {
-          await initPayments()
+          await initPayments(config)
         }
       } catch (err) {
         console.error('Error loading Square:', err)
@@ -47,9 +54,9 @@ export default function ProposalDepositPayment({
       }
     }
 
-    const initPayments = async () => {
+    const initPayments = async (config) => {
       try {
-        const paymentsInstance = window.Square.payments(SQUARE_APPLICATION_ID, SQUARE_LOCATION_ID)
+        const paymentsInstance = window.Square.payments(config.applicationId, config.locationId)
         setPayments(paymentsInstance)
 
         const cardInstance = await paymentsInstance.card()
@@ -70,7 +77,7 @@ export default function ProposalDepositPayment({
         card.destroy()
       }
     }
-  }, [])
+  }, [proposalId])
 
   const handlePayment = async () => {
     if (!card) {
@@ -90,18 +97,12 @@ export default function ProposalDepositPayment({
       }
 
       // Send to our backend
-      const response = await fetch('/.netlify/functions/proposals-pay-deposit', {
-        method: 'POST',
-        credentials: 'include',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          proposalId,
-          sourceId: tokenResult.token,
-          verificationToken: tokenResult.verificationToken
-        })
+      const response = await proposalsApi.payDeposit(proposalId, {
+        sourceId: tokenResult.token,
+        verificationToken: tokenResult.verificationToken
       })
 
-      const data = await response.json()
+      const data = response.data
 
       if (!response.ok) {
         throw new Error(data.error || 'Payment failed')

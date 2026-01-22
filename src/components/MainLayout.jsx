@@ -1,8 +1,13 @@
 import { useState, useEffect, lazy, Suspense } from 'react'
+import { useSearchParams, useLocation, Routes, Route, Navigate, useNavigate } from 'react-router-dom'
+import { motion, AnimatePresence } from 'framer-motion'
 import Sidebar from './Sidebar'
+import TopHeader from './TopHeader'
+import GlobalCommandPalette from './GlobalCommandPalette'
 import UptradeLoading from './UptradeLoading'
 import useAuthStore from '@/lib/auth-store'
 import useMessagesStore from '@/lib/messages-store'
+import usePageContextStore from '@/lib/page-context-store'
 import { Menu, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 
@@ -10,14 +15,14 @@ import { Button } from '@/components/ui/button'
 const Dashboard = lazy(() => import('./Dashboard'))
 const RepDashboard = lazy(() => import('./RepDashboard'))
 const TeamMetrics = lazy(() => import('./TeamMetrics'))
-const Analytics = lazy(() => import('./Analytics'))
-const Projects = lazy(() => import('./Projects'))
+// Analytics Module - new sidebar-based layout with per-page views
+const AnalyticsModuleWrapper = lazy(() => import('./analytics/AnalyticsModuleWrapper'))
 const Proposals = lazy(() => import('./Proposals'))
 const FilesDrive = lazy(() => import('./FilesDrive'))
-const Messages = lazy(() => import('./MessagesNew'))
+const Messages = lazy(() => import('./Messages'))
 const Billing = lazy(() => import('./Billing'))
-const ClientManagement = lazy(() => import('./ClientManagement'))
-const TenantClients = lazy(() => import('./TenantClients'))
+// CRM Dashboard - unified for all org types (isAgency layer handles capability filtering)
+const CRMDashboard = lazy(() => import('./crm/CRMDashboard'))
 const TeamTab = lazy(() => import('./crm/TeamTab'))
 const TeamModule = lazy(() => import('./team/TeamModule'))
 const Outreach = lazy(() => import('@/pages/Outreach'))
@@ -25,125 +30,144 @@ const BlogManagement = lazy(() => import('./BlogManagement'))
 const PortfolioManagement = lazy(() => import('./PortfolioManagement'))
 const Audits = lazy(() => import('@/pages/Audits'))
 const ProposalEditor = lazy(() => import('./ProposalEditor'))
-import ChatBubble from './ChatBubble'
+import ChatBubbleManager from './ChatBubbleManager'
 const FormsManager = lazy(() => import('./forms/FormsManager'))
 const TenantSales = lazy(() => import('./tenant/TenantSales'))
-// SEO Module sections
-const SEOModuleWrapper = lazy(() => import('./seo/SEOModuleWrapper'))
-// Ecommerce Module
+// Sales Prospecting Module
+const SalesDashboard = lazy(() => import('./sales/SalesDashboard'))
+// SEO Module - Motion-inspired layout
+const SEOModule = lazy(() => import('../pages/seo/SEOModule'))
+// Ecommerce Module (legacy)
 const EcommerceModuleWrapper = lazy(() => import('./ecommerce/EcommerceModuleWrapper'))
+// Commerce Module (unified products, services, classes, events, sales)
+const CommerceModuleWrapper = lazy(() => import('./commerce/CommerceModuleWrapper'))
 // Engage Module
 const EngageModuleDashboard = lazy(() => import('./engage/EngageModuleDashboard'))
-// Signal Module
-const SignalModuleDashboard = lazy(() => import('./signal/SignalModuleDashboard'))
+// Reputation Module
+const ReputationModuleDashboard = lazy(() => import('./reputation/ReputationModuleDashboard'))
+// Broadcast Module
+const BroadcastModuleDashboard = lazy(() => import('./broadcast/BroadcastModuleDashboard'))
+// Affiliates Module - affiliate tracking
+const AffiliatesModule = lazy(() => import('./affiliates/AffiliatesModule'))
+// Sync Module - calendar and scheduling
+const SyncModuleDashboard = lazy(() => import('./sync/SyncModule'))
+// Signal Module (v2)
+const SignalModule = lazy(() => import('./signal/SignalModule'))
+// Customers Module - post-sale customer management
+const CustomersModuleWrapper = lazy(() => import('./customers/CustomersModuleWrapper'))
+// Projects V2 Module - Three-view system
+const ProjectsV2 = lazy(() => import('./projects/ProjectsV2'))
 const Settings = lazy(() => import('./Settings'))
 // Tenants management moved to Projects.jsx
 
 const MainLayout = () => {
-  const [activeSection, setActiveSection] = useState('dashboard')
-  const [activeSectionData, setActiveSectionData] = useState(null) // For passing data like proposalId
+  const [searchParams, setSearchParams] = useSearchParams()
+  const location = useLocation()
+  const navigate = useNavigate()
+  
+  // Determine section from URL path for sidebar highlighting
+  const getSectionFromPath = () => {
+    const path = location.pathname
+    if (path === '/') return 'dashboard'
+    // Extract first segment after /
+    const segment = path.split('/')[1]
+    return segment || 'dashboard'
+  }
+  
+  const [activeSection, setActiveSection] = useState(() => getSectionFromPath())
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false)
-  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false)
+  const [sidebarWidth, setSidebarWidth] = useState(56)
+  const [sidebarMode, setSidebarMode] = useState('hover')
+  const [commandPaletteOpen, setCommandPaletteOpen] = useState(false)
   const { user, isLoading } = useAuthStore()
   
   // Get messaging methods for global initialization
   const { prefetchAll, subscribeToMessages, unsubscribeFromMessages, realtimeConnected } = useMessagesStore()
 
-  // Initialize messaging system on app mount (before widget is opened)
-  // This ensures conversations are loaded and realtime is subscribed immediately
+  // Sync activeSection with URL path for sidebar highlighting
+  useEffect(() => {
+    const pathSection = getSectionFromPath()
+    if (pathSection !== activeSection) {
+      setActiveSection(pathSection)
+    }
+  }, [location.pathname])
+
+  // Handle sidebar section change - navigates to the route
+  const handleSectionChange = (section) => {
+    setActiveSection(section)
+    // Navigate to the section's base route
+    navigate(`/${section === 'dashboard' ? '' : section}`)
+  }
+
+  // Handle sidebar expansion state changes
+  const handleSidebarExpandedChange = (isExpanded, mode) => {
+    setSidebarMode(mode)
+    setSidebarWidth(mode === 'expanded' ? 240 : 56)
+  }
+
+  // Update page context when section changes (for Echo awareness)
+  useEffect(() => {
+    if (activeSection) {
+      const moduleMap = {
+        'dashboard': 'dashboard',
+        'analytics': 'analytics',
+        'seo': 'seo',
+        'engage': 'engage',
+        'outreach': 'email',
+        'email': 'email',
+        'messages': 'messages',
+        'proposals': 'proposals',
+        'billing': 'billing',
+        'clients': 'crm',
+        'prospects': 'crm',
+        'crm': 'crm',
+        'team': 'team',
+        'sales': 'sales',
+        'settings': 'settings',
+        'files': 'files',
+        'blog': 'content',
+        'portfolio': 'content',
+        'signal': 'signal',
+        'broadcast': 'broadcast',
+        'affiliates': 'affiliates',
+        'ecommerce': 'commerce',
+        'commerce': 'commerce',
+        'forms': 'forms',
+        'sync': 'sync',
+        'projects': 'projects',
+      }
+      const module = moduleMap[activeSection] || activeSection
+      usePageContextStore.getState().setModule(module)
+    }
+  }, [activeSection])
+
+  // Initialize messaging system on app mount
   useEffect(() => {
     if (!user?.id || !user?.org_id || isLoading) return
     
     console.log('[MainLayout] Initializing messaging system for user:', user.email)
-    
-    // Prefetch all messaging data in background
     prefetchAll()
     
-    // Subscribe to realtime updates
     if (!realtimeConnected) {
       subscribeToMessages(user.id, user.org_id, user.name || 'User')
     }
     
-    // Cleanup on unmount
     return () => {
       unsubscribeFromMessages()
     }
   }, [user?.id, user?.org_id, isLoading])
 
-  // Navigation function that can pass data
+  // Navigation function for child components
   const navigateTo = (section, data = null) => {
-    setActiveSection(section)
-    setActiveSectionData(data)
+    handleSectionChange(section)
   }
 
-  // Check if user is a sales rep (not admin or manager)
+  // Check if user is a sales rep
   const isSalesRep = user?.teamRole === 'sales_rep'
-
-  // Debug logging
-  console.log('[MainLayout] Render', { activeSection, isLoading, hasUser: !!user, userEmail: user?.email, teamRole: user?.teamRole, isSalesRep })
-
-  // No need to check auth here - App.jsx and Protected.jsx already handle it
-
-  const renderContent = () => {
-    switch (activeSection) {
-      case 'dashboard':
-        // Sales reps see their personal dashboard, admins/managers see full dashboard
-        return isSalesRep ? <RepDashboard onNavigate={navigateTo} /> : <Dashboard onNavigate={navigateTo} />
-      case 'audits':
-        return <Audits />
-      case 'analytics':
-        return <Analytics />
-      case 'projects':
-        return <Projects onNavigate={navigateTo} />
-      case 'proposals':
-        return <Proposals onNavigate={navigateTo} />
-      case 'files':
-        return <FilesDrive />
-      case 'messages':
-        return <Messages />
-      case 'billing':
-        return <Billing />
-      case 'clients':
-        return <ClientManagement />
-      case 'tenant-clients':
-        return <TenantClients />
-      case 'team':
-      case 'users':
-        return <TeamModule />
-      case 'team-metrics':
-        return <TeamMetrics />
-      case 'blog':
-        return <BlogManagement />
-      case 'portfolio':
-        return <PortfolioManagement />
-      case 'email':
-        return <Outreach />
-      case 'forms':
-        return <FormsManager />
-      case 'my-sales':
-        return <TenantSales />
-      case 'seo':
-        return <SEOModuleWrapper onNavigate={navigateTo} />
-      case 'ecommerce':
-        return <EcommerceModuleWrapper onNavigate={navigateTo} />
-      case 'engage':
-        return <EngageModuleDashboard onNavigate={navigateTo} />
-      case 'signal':
-        return <SignalModuleDashboard onNavigate={navigateTo} />
-      case 'settings':
-        return <Settings />
-      case 'proposal-editor':
-        return (
-          <ProposalEditor 
-            proposalId={activeSectionData?.proposalId} 
-            onBack={() => navigateTo('proposals')} 
-          />
-        )
-      // tenants case removed - now handled in Projects.jsx
-      default:
-        return <Dashboard onNavigate={navigateTo} />
-    }
-  }
+  
+  // Modules that use full height (have their own sidebars/scrolling)
+  const fullHeightModules = ['broadcast', 'affiliates', 'commerce', 'seo', 'crm', 'sync', 'analytics', 'projects', 'engage', 'reputation', 'customers', 'signal', 'forms', 'team', 'messages', 'files']
+  const isFullHeight = fullHeightModules.includes(activeSection)
 
   if (isLoading) {
     return (
@@ -154,66 +178,155 @@ const MainLayout = () => {
   }
 
   return (
-    <div className="flex h-screen bg-[var(--surface-primary)]">
-      {/* Mobile Sidebar Toggle */}
-      <div className="lg:hidden fixed top-4 left-4 z-50">
-        <Button
-          variant="glass"
-          size="sm"
-          onClick={() => setIsMobileSidebarOpen(!isMobileSidebarOpen)}
-          className="shadow-[var(--shadow-md)]"
-        >
-          {isMobileSidebarOpen ? (
-            <X className="h-5 w-5" />
-          ) : (
-            <Menu className="h-5 w-5" />
-          )}
-        </Button>
-      </div>
+    <div className="flex flex-col h-screen bg-background">
+      {/* Top Header - Always persistent */}
+      <TopHeader 
+        onNavigate={navigateTo}
+        onOpenSearch={() => setCommandPaletteOpen(true)}
+      />
 
-      {/* Desktop Sidebar */}
-      <aside className={`hidden lg:flex flex-col bg-[var(--glass-bg)] backdrop-blur-[var(--blur-xl)] border-r border-[var(--glass-border)] transition-all duration-300 ${isSidebarCollapsed ? 'w-16' : 'w-64'}`}>
-        <Sidebar
-          activeSection={activeSection}
-          onSectionChange={setActiveSection}
-          isCollapsed={isSidebarCollapsed}
-          onToggleCollapse={() => setIsSidebarCollapsed(!isSidebarCollapsed)}
-        />
-      </aside>
+      <div className="flex flex-1 overflow-hidden">
+        {/* Mobile Sidebar Toggle */}
+        <div className="lg:hidden fixed top-14 left-4 z-50">
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => setIsMobileSidebarOpen(!isMobileSidebarOpen)}
+            className="shadow-md bg-card"
+          >
+            {isMobileSidebarOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
+          </Button>
+        </div>
 
-      {/* Mobile Sidebar */}
-      {isMobileSidebarOpen && (
-        <>
-          <div
-            className="lg:hidden fixed inset-0 bg-black/40 backdrop-blur-[var(--blur-sm)] z-[100]"
-            onClick={() => setIsMobileSidebarOpen(false)}
-          />
-          <aside className="lg:hidden fixed inset-y-0 left-0 w-64 bg-[var(--glass-bg)] backdrop-blur-[var(--blur-xl)] border-r border-[var(--glass-border)] shadow-[var(--shadow-xl)] z-[101] overflow-y-auto">
+        {/* Desktop Sidebar - Always persistent */}
+        <div className="hidden lg:block relative">
+          <div className="h-full flex-shrink-0 transition-all duration-150" style={{ width: sidebarWidth }} />
+          <aside className="absolute inset-y-0 left-0 z-20">
             <Sidebar
               activeSection={activeSection}
-              onSectionChange={(section) => {
-                setActiveSection(section)
-                setIsMobileSidebarOpen(false)
-              }}
-              isMobile={true}
+              onSectionChange={handleSectionChange}
+              isCollapsed={true}
+              minimal={true}
+              onExpandedChange={handleSidebarExpandedChange}
             />
           </aside>
-        </>
-      )}
-
-      {/* Main Content */}
-      <main className="flex-1 overflow-y-auto">
-        <div className="p-6 lg:p-8">
-          <Suspense fallback={<UptradeLoading />}>
-            {renderContent()}
-          </Suspense>
         </div>
-      </main>
 
-      {/* Floating Chat Bubble - Always mounted for realtime, hidden on messages/proposal-editor pages */}
+        {/* Mobile Sidebar */}
+        {isMobileSidebarOpen && (
+          <>
+            <div
+              className="lg:hidden fixed inset-0 bg-black/40 backdrop-blur-sm z-[100]"
+              onClick={() => setIsMobileSidebarOpen(false)}
+            />
+            <aside className="lg:hidden fixed inset-y-0 left-0 w-64 bg-card border-r border-border/50 shadow-xl z-[101] overflow-y-auto">
+              <Sidebar
+                activeSection={activeSection}
+                onSectionChange={(section) => {
+                  handleSectionChange(section)
+                  setIsMobileSidebarOpen(false)
+                }}
+                isMobile={true}
+              />
+            </aside>
+          </>
+        )}
+
+        {/* Main Content - Uses React Router for nested routes */}
+        <main className={`flex-1 ${isFullHeight ? 'overflow-hidden' : 'overflow-y-auto'}`}>
+          <Suspense fallback={
+            <div className="flex items-center justify-center h-full">
+              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary" />
+            </div>
+          }>
+            <div className={isFullHeight ? 'h-full' : 'p-6 lg:p-8'}>
+              <Routes>
+                {/* Dashboard */}
+                <Route index element={isSalesRep ? <RepDashboard onNavigate={navigateTo} /> : <Dashboard onNavigate={navigateTo} />} />
+                <Route path="dashboard" element={isSalesRep ? <RepDashboard onNavigate={navigateTo} /> : <Dashboard onNavigate={navigateTo} />} />
+                
+                {/* SEO Module - supports nested routes like /seo/dashboard, /seo/keywords, etc */}
+                <Route path="seo/*" element={<SEOModule />} />
+                
+                {/* Analytics Module */}
+                <Route path="analytics/*" element={<AnalyticsModuleWrapper onNavigate={navigateTo} />} />
+                
+                {/* Projects */}
+                <Route path="projects/*" element={<ProjectsV2 onNavigate={navigateTo} />} />
+                
+                {/* CRM - all variations route to same component */}
+                <Route path="crm/*" element={<CRMDashboard />} />
+                <Route path="clients/*" element={<CRMDashboard />} />
+                <Route path="prospects/*" element={<CRMDashboard />} />
+                
+                {/* Commerce Module */}
+                <Route path="commerce/*" element={<CommerceModuleWrapper onNavigate={navigateTo} />} />
+                <Route path="ecommerce/*" element={<EcommerceModuleWrapper onNavigate={navigateTo} />} />
+                
+                {/* Engage Module */}
+                <Route path="engage/*" element={<EngageModuleDashboard onNavigate={navigateTo} />} />
+                
+                {/* Sync Module */}
+                <Route path="sync/*" element={<SyncModuleDashboard onNavigate={navigateTo} />} />
+                
+                {/* Signal AI */}
+                <Route path="signal/*" element={<SignalModule onNavigate={navigateTo} />} />
+                
+                {/* Reputation */}
+                <Route path="reputation/*" element={<ReputationModuleDashboard onNavigate={navigateTo} />} />
+                
+                {/* Broadcast */}
+                <Route path="broadcast/*" element={<BroadcastModuleDashboard onNavigate={navigateTo} />} />
+                
+                {/* Affiliates */}
+                <Route path="affiliates/*" element={<AffiliatesModule onNavigate={navigateTo} />} />
+                
+                {/* Customers */}
+                <Route path="customers/*" element={<CustomersModuleWrapper onNavigate={navigateTo} />} />
+                
+                {/* Team */}
+                <Route path="team/*" element={<TeamModule />} />
+                <Route path="users/*" element={<TeamModule />} />
+                <Route path="team-metrics" element={<TeamMetrics />} />
+                
+                {/* Forms */}
+                <Route path="forms/*" element={<FormsManager />} />
+                
+                {/* Simple pages */}
+                <Route path="audits" element={<Audits />} />
+                <Route path="proposals" element={<Proposals onNavigate={navigateTo} />} />
+                <Route path="files/*" element={<FilesDrive />} />
+                <Route path="messages/*" element={<Messages />} />
+                <Route path="billing" element={<Billing />} />
+                <Route path="email/*" element={<Outreach />} />
+                <Route path="blog" element={<BlogManagement />} />
+                <Route path="portfolio" element={<PortfolioManagement />} />
+                <Route path="my-sales" element={<TenantSales />} />
+                <Route path="sales/*" element={<SalesDashboard />} />
+                <Route path="settings" element={<Settings />} />
+                
+                {/* Proposal Editor (special case) */}
+                <Route path="proposal-editor/:proposalId?" element={<ProposalEditor onBack={() => navigateTo('proposals')} />} />
+                
+                {/* Catch-all - redirect to dashboard instead of rendering it */}
+                <Route path="*" element={<Navigate to="/" replace />} />
+              </Routes>
+            </div>
+          </Suspense>
+        </main>
+      </div>
+
+      {/* Floating Chat Bubble */}
       <Suspense fallback={null}>
-        <ChatBubble hidden={activeSection === 'messages' || activeSection === 'proposal-editor'} />
+        <ChatBubbleManager hidden={activeSection === 'messages'} />
       </Suspense>
+
+      {/* Global Command Palette */}
+      <GlobalCommandPalette 
+        open={commandPaletteOpen}
+        onOpenChange={setCommandPaletteOpen}
+        onNavigate={navigateTo}
+      />
     </div>
   )
 }

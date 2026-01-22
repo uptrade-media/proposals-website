@@ -83,30 +83,21 @@ const ProspectCard = memo(function ProspectCard({
       draggable
       onDragStart={handleDragStart}
       className={cn(
-        // Base glass card styling
-        'group relative rounded-2xl transition-all duration-300 cursor-grab',
-        'bg-[var(--glass-bg)] backdrop-blur-md',
-        'border border-[var(--glass-border)]',
+        // Base card styling - modern rounded-xl
+        'group relative p-3 cursor-grab transition-all duration-200 rounded-xl',
+        'bg-[var(--glass-bg)] border border-[var(--glass-border)]',
         // Hover state
-        'hover:bg-[var(--glass-bg-hover)] hover:shadow-lg hover:-translate-y-0.5',
-        'hover:border-[var(--glass-border-strong)]',
+        'hover:shadow-md hover:border-[var(--text-tertiary)]',
         // Dragging state
         isDragging && 'opacity-50 scale-95',
         // Selected state
-        isSelected && 'ring-2 ring-[var(--brand-primary)] border-[var(--brand-primary)]/30',
+        isSelected && 'ring-2 ring-offset-2 ring-offset-[var(--bg-primary)]',
         className
       )}
+      style={isSelected ? { '--tw-ring-color': stageConfig?.color || 'var(--brand-primary)' } : undefined}
       onClick={() => onClick?.(prospect)}
     >
-      {/* Stage accent line */}
-      <div 
-        className={cn(
-          'absolute top-0 left-4 right-4 h-0.5 rounded-full opacity-60',
-          stageConfig?.color
-        )} 
-      />
-      
-      <div className="p-4">
+      <div>
         {/* Header: Avatar, Name, Score */}
         <div className="flex items-start gap-3">
           {/* Selection checkbox - appears on hover or when selected */}

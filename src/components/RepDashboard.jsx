@@ -26,7 +26,7 @@ import {
 import { Button } from '@/components/ui/button'
 import { Progress } from '@/components/ui/progress'
 import { GlassCard, GlassEmptyState } from '@/components/crm/ui'
-import api from '@/lib/api'
+import { reportsApi } from '@/lib/portal-api'
 import useAuthStore from '@/lib/auth-store'
 
 // Format currency
@@ -170,7 +170,7 @@ export default function RepDashboard({ onNavigate }) {
 
   const fetchDashboard = async () => {
     try {
-      const response = await api.get('/.netlify/functions/rep-dashboard')
+      const response = await reportsApi.getRepDashboard()
       setDashboard(response.data)
       setError(null)
     } catch (err) {
@@ -243,7 +243,7 @@ export default function RepDashboard({ onNavigate }) {
       {/* Top Metrics */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         <MetricCard
-          label="Assigned Clients"
+          label="Assigned Prospects"
           value={metrics?.assignedClients || 0}
           icon={Users}
           color="blue"

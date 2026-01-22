@@ -7,7 +7,7 @@ import { Loader2, CheckCircle2, XCircle } from 'lucide-react'
 import { Button } from '../components/ui/button'
 import { supabase, getCurrentUser } from '../lib/supabase-auth'
 import useAuthStore from '../lib/auth-store'
-import axios from 'axios'
+import { authApi } from '../lib/portal-api'
 
 export default function MagicLogin() {
   const navigate = useNavigate()
@@ -45,10 +45,8 @@ export default function MagicLogin() {
     try {
       console.log('[MagicLogin] Validating database token...')
       
-      // Validate the token against the database (withCredentials to accept session cookie)
-      const response = await axios.post('/.netlify/functions/auth-magic-validate', { token }, {
-        withCredentials: true
-      })
+      // Validate the token against the Portal API
+      const response = await authApi.validateMagicLink(token)
       
       if (response.data.valid && response.data.contact) {
         const contact = response.data.contact

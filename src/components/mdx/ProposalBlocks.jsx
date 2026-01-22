@@ -15,6 +15,9 @@ export { PricingSection, PricingTier } from './proposal-blocks/PricingSection'
 export { Timeline, Phase } from './proposal-blocks/Timeline'
 export { NewWebsiteBuild, WebsiteFeature } from './proposal-blocks/NewWebsiteBuild'
 export { DownloadBlock } from './proposal-blocks/DownloadBlock'
+export { SignalAISection } from './proposal-blocks/SignalAISection'
+export { InvestmentSection } from './proposal-blocks/InvestmentSection'
+export { WhyUs } from './proposal-blocks/WhyUs'
 
 // Advanced conversion-focused components
 export { 
@@ -31,6 +34,20 @@ export {
   WebsitePortfolio
 } from './proposal-blocks/AdvancedBlocks'
 
+// Liquid Glass components (Apple-inspired premium design)
+export {
+  GlassHero,
+  PortalModulesGrid,
+  AppFeatureShowcase,
+  BrandShowcase,
+  IntegrationFlow,
+  SiteAnalysisCard,
+  SignalAIGlass,
+  GlassPricing,
+  GlassTimeline,
+  GlassCTA
+} from './proposal-blocks/LiquidGlassBlocks'
+
 // Import for mdxComponents object
 import { ProposalHero } from './proposal-blocks/ProposalHero'
 import { Section } from './proposal-blocks/Section'
@@ -41,6 +58,9 @@ import { PricingSection, PricingTier } from './proposal-blocks/PricingSection'
 import { Timeline, Phase } from './proposal-blocks/Timeline'
 import { NewWebsiteBuild, WebsiteFeature } from './proposal-blocks/NewWebsiteBuild'
 import { DownloadBlock } from './proposal-blocks/DownloadBlock'
+import { SignalAISection } from './proposal-blocks/SignalAISection'
+import { InvestmentSection } from './proposal-blocks/InvestmentSection'
+import { WhyUs } from './proposal-blocks/WhyUs'
 import { 
   ValueStack,
   GuaranteeBadge,
@@ -54,6 +74,18 @@ import {
   BonusSection,
   WebsitePortfolio
 } from './proposal-blocks/AdvancedBlocks'
+import {
+  GlassHero,
+  PortalModulesGrid,
+  AppFeatureShowcase,
+  BrandShowcase,
+  IntegrationFlow,
+  SiteAnalysisCard,
+  SignalAIGlass,
+  GlassPricing,
+  GlassTimeline,
+  GlassCTA
+} from './proposal-blocks/LiquidGlassBlocks'
 
 // Lucide icons for MDX usage
 import { 
@@ -75,7 +107,17 @@ import {
   Search,
   Mail,
   Calendar,
-  ArrowRight
+  ArrowRight,
+  Bot,
+  Plug,
+  Palette,
+  Code2,
+  Layers,
+  Database,
+  Cloud,
+  Lock,
+  Rocket,
+  Workflow
 } from 'lucide-react'
 
 // Export all components for MDX runtime
@@ -95,6 +137,9 @@ export const mdxComponents = {
   NewWebsiteBuild,
   WebsiteFeature,
   DownloadBlock,
+  InvestmentSection,
+  SignalAISection,
+  WhyUs,
   
   // Advanced conversion components
   ValueStack,
@@ -108,6 +153,18 @@ export const mdxComponents = {
   IconFeatureGrid,
   BonusSection,
   WebsitePortfolio,
+  
+  // Liquid Glass components (premium)
+  GlassHero,
+  PortalModulesGrid,
+  AppFeatureShowcase,
+  BrandShowcase,
+  IntegrationFlow,
+  SiteAnalysisCard,
+  SignalAIGlass,
+  GlassPricing,
+  GlassTimeline,
+  GlassCTA,
   
   // Lucide icons for use in MDX
   CheckCircle,
@@ -128,5 +185,15 @@ export const mdxComponents = {
   Search,
   Mail,
   Calendar,
-  ArrowRight
+  ArrowRight,
+  Bot,
+  Plug,
+  Palette,
+  Code2,
+  Layers,
+  Database,
+  Cloud,
+  Lock,
+  Rocket,
+  Workflow
 }

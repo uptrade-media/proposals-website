@@ -25,65 +25,58 @@ import { GlassEmptyState } from './ui'
 export const PIPELINE_STAGES = {
   new_lead: { 
     label: 'New Lead', 
-    color: 'bg-[#4bbf39]', 
-    textColor: 'text-[#4bbf39]', 
-    bgLight: 'bg-[#4bbf39]/10',
-    borderColor: 'border-[#4bbf39]/20',
-    gradientFrom: 'from-[#4bbf39]/20',
+    color: '#3B82F6',
+    bgLight: 'rgba(59, 130, 246, 0.1)',
+    textColor: '#3B82F6',
+    borderColor: 'rgba(59, 130, 246, 0.2)',
     icon: Sparkles 
   },
   contacted: { 
     label: 'Contacted', 
-    color: 'bg-[#39bfb0]', 
-    textColor: 'text-[#39bfb0]', 
-    bgLight: 'bg-[#39bfb0]/10',
-    borderColor: 'border-[#39bfb0]/20',
-    gradientFrom: 'from-[#39bfb0]/20',
+    color: '#39bfb0',
+    bgLight: 'rgba(57, 191, 176, 0.1)',
+    textColor: '#39bfb0',
+    borderColor: 'rgba(57, 191, 176, 0.2)',
     icon: PhoneCall 
   },
   qualified: { 
     label: 'Qualified', 
-    color: 'bg-amber-500', 
-    textColor: 'text-amber-600', 
-    bgLight: 'bg-amber-500/10',
-    borderColor: 'border-amber-500/20',
-    gradientFrom: 'from-amber-500/20',
+    color: '#F59E0B',
+    bgLight: 'rgba(245, 158, 11, 0.1)',
+    textColor: '#F59E0B',
+    borderColor: 'rgba(245, 158, 11, 0.2)',
     icon: CheckCircle2 
   },
   proposal_sent: { 
     label: 'Proposal Sent', 
-    color: 'bg-[#39bfb0]', 
-    textColor: 'text-[#39bfb0]', 
-    bgLight: 'bg-[#39bfb0]/10',
-    borderColor: 'border-[#39bfb0]/20',
-    gradientFrom: 'from-[#39bfb0]/20',
+    color: '#8B5CF6',
+    bgLight: 'rgba(139, 92, 246, 0.1)',
+    textColor: '#8B5CF6',
+    borderColor: 'rgba(139, 92, 246, 0.2)',
     icon: Send 
   },
   negotiating: { 
     label: 'Negotiating', 
-    color: 'bg-orange-500', 
-    textColor: 'text-orange-600', 
-    bgLight: 'bg-orange-500/10',
-    borderColor: 'border-orange-500/20',
-    gradientFrom: 'from-orange-500/20',
+    color: '#F97316',
+    bgLight: 'rgba(249, 115, 22, 0.1)',
+    textColor: '#F97316',
+    borderColor: 'rgba(249, 115, 22, 0.2)',
     icon: MessageSquare 
   },
   closed_won: { 
     label: 'Won', 
-    color: 'bg-[#4bbf39]', 
-    textColor: 'text-[#4bbf39]', 
-    bgLight: 'bg-[#4bbf39]/10',
-    borderColor: 'border-[#4bbf39]/20',
-    gradientFrom: 'from-[#4bbf39]/20',
+    color: '#22C55E',
+    bgLight: 'rgba(34, 197, 94, 0.1)',
+    textColor: '#22C55E',
+    borderColor: 'rgba(34, 197, 94, 0.2)',
     icon: CheckCheck 
   },
   closed_lost: { 
     label: 'Lost', 
-    color: 'bg-red-500', 
-    textColor: 'text-red-600', 
-    bgLight: 'bg-red-500/10',
-    borderColor: 'border-red-500/20',
-    gradientFrom: 'from-red-500/20',
+    color: '#EF4444',
+    bgLight: 'rgba(239, 68, 68, 0.1)',
+    textColor: '#EF4444',
+    borderColor: 'rgba(239, 68, 68, 0.2)',
     icon: XCircle 
   }
 }
@@ -141,50 +134,45 @@ function PipelineColumn({
       onDragLeave={handleDragLeave}
       onDrop={handleDrop}
     >
-      {/* Column Header - Glass styled */}
-      <div className={cn(
-        'rounded-t-2xl p-4 backdrop-blur-md border border-b-0',
-        'bg-gradient-to-b',
-        config.gradientFrom,
-        'to-transparent',
-        config.borderColor
-      )}>
+      {/* Column Header - Fully rounded, separated */}
+      <div 
+        className="rounded-xl p-3 mb-2 bg-[var(--glass-bg)] border"
+        style={{ borderColor: config.borderColor }}
+      >
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2.5">
-            <div className={cn(
-              'p-2 rounded-xl',
-              config.color
-            )}>
+            <div 
+              className="p-2 rounded-lg"
+              style={{ backgroundColor: config.color }}
+            >
               <StageIcon className="h-4 w-4 text-white" />
             </div>
-            <div>
-              <span className={cn('font-semibold text-sm', config.textColor)}>
-                {config.label}
-              </span>
-            </div>
+            <span 
+              className="font-semibold text-sm"
+              style={{ color: config.textColor }}
+            >
+              {config.label}
+            </span>
           </div>
           
-          {/* Count badge */}
-          <div className={cn(
-            'px-2.5 py-1 rounded-full text-xs font-bold',
-            'backdrop-blur-sm',
-            config.bgLight,
-            config.textColor
-          )}>
+          {/* Count badge - colored background */}
+          <div 
+            className="px-2.5 py-1 rounded-full text-xs font-bold text-white"
+            style={{ backgroundColor: config.color }}
+          >
             {prospects.length}
           </div>
         </div>
       </div>
       
-      {/* Column Content */}
+      {/* Column Content - Separate from header */}
       <ScrollArea className={cn(
-        'flex-1 min-h-[500px] max-h-[calc(100vh-320px)]',
-        'rounded-b-2xl border backdrop-blur-sm',
-        config.borderColor,
-        'bg-[var(--glass-bg)]/30',
+        'flex-1 min-h-0 rounded-xl border bg-[var(--glass-bg)]/50',
         'transition-all duration-200',
         isDragOver && 'ring-2 ring-[var(--brand-primary)] bg-[var(--brand-primary)]/5'
-      )}>
+      )}
+      style={{ borderColor: config.borderColor }}
+      >
         <div className="p-3 space-y-3">
           {prospects.length === 0 ? (
             <GlassEmptyState
@@ -234,21 +222,28 @@ function ClosedDealsSummary({
 
   return (
     <div className="flex flex-col min-w-0">
-      {/* Toggle Header */}
+      {/* Toggle Header - Rounded with modern styling */}
       <button
         onClick={onToggle}
         className={cn(
-          'flex items-center justify-between p-4 rounded-2xl',
-          'glass hover:bg-[var(--glass-bg-hover)]',
-          'transition-all duration-300'
+          'flex items-center justify-between p-4 rounded-xl',
+          'bg-[var(--glass-bg)] border border-[var(--glass-border)]',
+          'hover:border-[var(--text-tertiary)]',
+          'transition-all duration-200'
         )}
       >
         <div className="flex items-center gap-4">
           <div className="flex items-center gap-2">
-            <div className={cn('p-1.5 rounded-lg', wonConfig.color)}>
+            <div 
+              className="p-1.5 rounded-lg"
+              style={{ backgroundColor: wonConfig.color }}
+            >
               <CheckCheck className="h-3.5 w-3.5 text-white" />
             </div>
-            <span className={cn('font-semibold text-sm', wonConfig.textColor)}>
+            <span 
+              className="font-semibold text-sm"
+              style={{ color: wonConfig.textColor }}
+            >
               {wonProspects.length} Won
             </span>
           </div>
@@ -256,10 +251,16 @@ function ClosedDealsSummary({
           <div className="h-4 w-px bg-[var(--glass-border)]" />
           
           <div className="flex items-center gap-2">
-            <div className={cn('p-1.5 rounded-lg', lostConfig.color)}>
+            <div 
+              className="p-1.5 rounded-lg"
+              style={{ backgroundColor: lostConfig.color }}
+            >
               <XCircle className="h-3.5 w-3.5 text-white" />
             </div>
-            <span className={cn('font-semibold text-sm', lostConfig.textColor)}>
+            <span 
+              className="font-semibold text-sm"
+              style={{ color: lostConfig.textColor }}
+            >
               {lostProspects.length} Lost
             </span>
           </div>
@@ -391,12 +392,12 @@ export default function PipelineKanban({
   }
 
   return (
-    <div className={cn('space-y-4', className)} onDragEnd={handleDragEnd}>
-      {/* Kanban Board - Horizontally scrollable */}
+    <div className={cn('flex flex-col h-full', className)} onDragEnd={handleDragEnd}>
+      {/* Kanban Board - Horizontally scrollable, fills vertical space */}
       <div 
         ref={scrollRef}
         className={cn(
-          'overflow-x-auto pb-4 -mx-4 px-4',
+          'flex-1 overflow-x-auto overflow-y-hidden pb-4 -mx-4 px-4',
           'scroll-smooth snap-x snap-mandatory touch-pan-x',
           isScrollDragging ? 'cursor-grabbing' : 'cursor-grab'
         )}
@@ -407,7 +408,7 @@ export default function PipelineKanban({
         onMouseLeave={handleMouseUp}
       >
         <div 
-          className="grid gap-4"
+          className="grid gap-4 h-full"
           style={{ 
             gridTemplateColumns: `repeat(${ACTIVE_STAGES.length}, minmax(280px, 1fr))`,
             minWidth: `${ACTIVE_STAGES.length * 300}px`
@@ -437,6 +438,7 @@ export default function PipelineKanban({
       </div>
       
       {/* Closed Deals Section */}
+      <div className="flex-shrink-0 pt-4">
       <ClosedDealsSummary
         wonProspects={prospectsByStage.closed_won || []}
         lostProspects={prospectsByStage.closed_lost || []}
@@ -446,6 +448,7 @@ export default function PipelineKanban({
         onSelectProspect={onSelectProspect}
         onProspectClick={onProspectClick}
       />
+      </div>
     </div>
   )
 }

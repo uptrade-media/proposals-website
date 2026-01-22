@@ -178,8 +178,15 @@ export function PriorityActionsCard({
 
 /**
  * PriorityActionItem - Single priority action display
+ * Handles both string format (legacy) and object format (AI insights: {issue, impact, effort})
  */
 function PriorityActionItem({ index, action }) {
+  // Handle both string and object formats
+  const isObject = typeof action === 'object' && action !== null
+  const title = isObject ? action.issue : action
+  const impact = isObject ? action.impact : null
+  const effort = isObject ? action.effort : null
+  
   return (
     <motion.div 
       variants={fadeInUp}
@@ -189,8 +196,30 @@ function PriorityActionItem({ index, action }) {
       <div className="w-8 h-8 rounded-full bg-gradient-to-br from-[var(--brand-primary)] to-[var(--brand-secondary)] flex items-center justify-center flex-shrink-0 shadow-lg shadow-[var(--brand-primary)]/20">
         <span className="text-white font-bold text-sm">{index + 1}</span>
       </div>
-      <div>
-        <p className="text-gray-200 text-sm leading-relaxed">{action}</p>
+      <div className="flex-1">
+        <p className="text-gray-200 text-sm leading-relaxed">{title}</p>
+        {(impact || effort) && (
+          <div className="flex gap-3 mt-2">
+            {impact && (
+              <span className={`text-xs px-2 py-0.5 rounded-full ${
+                impact === 'High' ? 'bg-red-500/20 text-red-300' :
+                impact === 'Medium' ? 'bg-yellow-500/20 text-yellow-300' :
+                'bg-green-500/20 text-green-300'
+              }`}>
+                {impact} Impact
+              </span>
+            )}
+            {effort && (
+              <span className={`text-xs px-2 py-0.5 rounded-full ${
+                effort === 'Hard' ? 'bg-purple-500/20 text-purple-300' :
+                effort === 'Medium' ? 'bg-blue-500/20 text-blue-300' :
+                'bg-cyan-500/20 text-cyan-300'
+              }`}>
+                {effort} Effort
+              </span>
+            )}
+          </div>
+        )}
       </div>
     </motion.div>
   )

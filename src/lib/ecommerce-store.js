@@ -2,7 +2,7 @@
 // Zustand store for Ecommerce (Shopify) module
 
 import { create } from 'zustand'
-import api from './api'
+import { ecommerceApi } from './portal-api'
 
 export const useEcommerceStore = create((set, get) => ({
   // =========================================================================
@@ -44,8 +44,9 @@ export const useEcommerceStore = create((set, get) => ({
   fetchStore: async () => {
     set({ storeLoading: true, storeError: null })
     try {
-      const res = await api.get('/.netlify/functions/shopify-stores')
-      const stores = res.data.stores || []
+      const res = await ecommerceApi.getStores()
+      const data = res.data || res
+      const stores = data.stores || []
       // We support single store per org for now
       set({ store: stores[0] || null, storeLoading: false })
       return stores[0] || null
@@ -59,12 +60,10 @@ export const useEcommerceStore = create((set, get) => ({
   connectStore: async (shopDomain, accessToken) => {
     set({ storeLoading: true, storeError: null })
     try {
-      const res = await api.post('/.netlify/functions/shopify-stores', {
-        shopDomain,
-        accessToken
-      })
-      set({ store: res.data.store, storeLoading: false })
-      return { success: true, store: res.data.store }
+      const res = await ecommerceApi.connectStore({ shopDomain, accessToken })
+      const data = res.data || res
+      set({ store: data.store, storeLoading: false })
+      return { success: true, store: data.store }
     } catch (error) {
       const msg = error.response?.data?.error || error.message
       set({ storeError: msg, storeLoading: false })
@@ -78,9 +77,7 @@ export const useEcommerceStore = create((set, get) => ({
     
     set({ storeLoading: true, storeError: null })
     try {
-      await api.delete('/.netlify/functions/shopify-stores', {
-        data: { storeId: store.id }
-      })
+      await ecommerceApi.disconnectStore(store.id)
       set({ 
         store: null, 
         storeLoading: false,
@@ -102,14 +99,14 @@ export const useEcommerceStore = create((set, get) => ({
   fetchProducts: async (params = {}) => {
     set({ productsLoading: true, productsError: null })
     try {
-      // api module automatically adds X-Organization-Id and X-Project-Id headers
-      const res = await api.get('/.netlify/functions/shopify-products', { params })
+      const res = await ecommerceApi.listProducts(params)
+      const data = res.data || res
       set({ 
-        products: res.data.products || [],
-        productsTotal: res.data.total || 0,
+        products: data.products || [],
+        productsTotal: data.total || 0,
         productsLoading: false 
       })
-      return res.data.products
+      return data.products || []
     } catch (error) {
       const msg = error.response?.data?.error || error.message
       console.error('[ecommerce-store] fetchProducts error:', msg)
@@ -121,9 +118,10 @@ export const useEcommerceStore = create((set, get) => ({
   fetchProduct: async (productId) => {
     set({ selectedProductLoading: true })
     try {
-      const res = await api.get(`/.netlify/functions/shopify-products?id=${productId}`)
-      set({ selectedProduct: res.data.product, selectedProductLoading: false })
-      return res.data.product
+      const res = await ecommerceApi.getProduct(productId)
+      const data = res.data || res
+      set({ selectedProduct: data.product, selectedProductLoading: false })
+      return data.product
     } catch (error) {
       set({ selectedProductLoading: false })
       return null
@@ -132,20 +130,18 @@ export const useEcommerceStore = create((set, get) => ({
   
   updateProduct: async (productId, data) => {
     try {
-      const res = await api.put('/.netlify/functions/shopify-products', {
-        productId,
-        ...data
-      })
+      const res = await ecommerceApi.updateProduct(productId, data)
+      const resData = res.data || res
       // Update in local state
       set(state => ({
         products: state.products.map(p => 
-          p.id === productId ? { ...p, ...res.data.product } : p
+          p.id === productId ? { ...p, ...resData.product } : p
         ),
         selectedProduct: state.selectedProduct?.id === productId 
-          ? { ...state.selectedProduct, ...res.data.product }
+          ? { ...state.selectedProduct, ...resData.product }
           : state.selectedProduct
       }))
-      return { success: true, product: res.data.product }
+      return { success: true, product: resData.product }
     } catch (error) {
       return { success: false, error: error.response?.data?.error || error.message }
     }
@@ -158,11 +154,8 @@ export const useEcommerceStore = create((set, get) => ({
   updateInventory: async (variantId, locationId, quantity) => {
     set({ inventoryLoading: true })
     try {
-      const res = await api.post('/.netlify/functions/shopify-inventory', {
-        variantId,
-        locationId,
-        quantity
-      })
+      const res = await ecommerceApi.updateInventory(variantId, { locationId, quantity })
+      const data = res.data || res
       set({ inventoryLoading: false })
       
       // Refresh the selected product to get updated inventory
@@ -171,7 +164,7 @@ export const useEcommerceStore = create((set, get) => ({
         get().fetchProduct(selectedProduct.id)
       }
       
-      return { success: true, level: res.data.level }
+      return { success: true, level: data.level }
     } catch (error) {
       set({ inventoryLoading: false })
       return { success: false, error: error.response?.data?.error || error.message }
@@ -181,11 +174,8 @@ export const useEcommerceStore = create((set, get) => ({
   adjustInventory: async (variantId, locationId, adjustment) => {
     set({ inventoryLoading: true })
     try {
-      const res = await api.post('/.netlify/functions/shopify-inventory', {
-        variantId,
-        locationId,
-        adjustment
-      })
+      const res = await ecommerceApi.adjustInventory({ variantId, locationId, adjustment })
+      const data = res.data || res
       set({ inventoryLoading: false })
       
       // Refresh the selected product to get updated inventory
@@ -194,7 +184,7 @@ export const useEcommerceStore = create((set, get) => ({
         get().fetchProduct(selectedProduct.id)
       }
       
-      return { success: true, level: res.data.level }
+      return { success: true, level: data.level }
     } catch (error) {
       set({ inventoryLoading: false })
       return { success: false, error: error.response?.data?.error || error.message }
@@ -208,13 +198,14 @@ export const useEcommerceStore = create((set, get) => ({
   fetchOrders: async (params = {}) => {
     set({ ordersLoading: true, ordersError: null })
     try {
-      const res = await api.get('/.netlify/functions/shopify-orders', { params })
+      const res = await ecommerceApi.listOrders(params)
+      const data = res.data || res
       set({ 
-        orders: res.data.orders || [],
-        ordersTotal: res.data.total || 0,
+        orders: data.orders || [],
+        ordersTotal: data.total || 0,
         ordersLoading: false 
       })
-      return res.data.orders
+      return data.orders || []
     } catch (error) {
       const msg = error.response?.data?.error || error.message
       set({ ordersError: msg, ordersLoading: false })
@@ -224,8 +215,9 @@ export const useEcommerceStore = create((set, get) => ({
   
   fetchOrder: async (orderId) => {
     try {
-      const res = await api.get(`/.netlify/functions/shopify-orders?id=${orderId}`)
-      return res.data.order
+      const res = await ecommerceApi.getOrder(orderId)
+      const data = res.data || res
+      return data.order
     } catch (error) {
       console.error('[ecommerce-store] fetchOrder error:', error)
       return null
@@ -238,10 +230,8 @@ export const useEcommerceStore = create((set, get) => ({
   
   updateVariant: async (variantId, data) => {
     try {
-      const res = await api.put('/.netlify/functions/shopify-variants', {
-        variantId,
-        ...data
-      })
+      const res = await ecommerceApi.updateVariant(variantId, data)
+      const resData = res.data || res
       
       // Refresh selected product to reflect changes
       const { selectedProduct } = get()
@@ -249,7 +239,7 @@ export const useEcommerceStore = create((set, get) => ({
         get().fetchProduct(selectedProduct.id)
       }
       
-      return { success: true, variant: res.data.variant }
+      return { success: true, variant: resData.variant }
     } catch (error) {
       return { success: false, error: error.response?.data?.error || error.message }
     }
@@ -262,12 +252,13 @@ export const useEcommerceStore = create((set, get) => ({
   triggerSync: async (syncType = 'full') => {
     set({ isSyncing: true })
     try {
-      const res = await api.post('/.netlify/functions/shopify-sync', { syncType })
+      const res = await ecommerceApi.triggerSync(syncType)
+      const data = res.data || res
       set({ 
-        syncStatus: res.data.status,
-        isSyncing: res.data.status === 'syncing'
+        syncStatus: data.status,
+        isSyncing: data.status === 'syncing'
       })
-      return { success: true, status: res.data.status }
+      return { success: true, status: data.status }
     } catch (error) {
       set({ isSyncing: false })
       return { success: false, error: error.response?.data?.error || error.message }
@@ -276,12 +267,13 @@ export const useEcommerceStore = create((set, get) => ({
   
   fetchSyncStatus: async () => {
     try {
-      const res = await api.get('/.netlify/functions/shopify-sync')
+      const res = await ecommerceApi.getSyncStatus()
+      const data = res.data || res
       set({ 
-        syncStatus: res.data.status,
-        isSyncing: res.data.status === 'syncing'
+        syncStatus: data.status,
+        isSyncing: data.status === 'syncing'
       })
-      return res.data
+      return data
     } catch (error) {
       return null
     }

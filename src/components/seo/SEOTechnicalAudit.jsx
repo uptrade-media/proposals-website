@@ -2,6 +2,8 @@
 // Technical SEO Hub - Core Web Vitals, Indexing, Schema, Internal Links
 import { useState, useEffect, useMemo } from 'react'
 import { useSeoStore } from '@/lib/seo-store'
+import { useSignalAccess } from '@/lib/signal-access'
+import SignalUpgradeCard from './signal/SignalUpgradeCard'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -40,11 +42,22 @@ import { cn } from '@/lib/utils'
  * Uses existing data from pages & CWV instead of broken API
  */
 export default function SEOTechnicalAudit({ 
-  siteId, 
+  projectId, 
   pages = [], 
   cwvSummary = null,
   onRefresh 
 }) {
+  const { hasAccess: hasSignalAccess } = useSignalAccess()
+
+  // Show upgrade prompt if no Signal access
+  if (!hasSignalAccess) {
+    return (
+      <div className="p-6">
+        <SignalUpgradeCard feature="default" variant="default" />
+      </div>
+    )
+  }
+
   const { 
     fetchCwvSummary,
     crawlSitemap,
@@ -178,12 +191,12 @@ export default function SEOTechnicalAudit({
   }, [pages, cwvSummary])
 
   const handleRefresh = async () => {
-    if (!siteId) return
+    if (!projectId) return
     setIsRefreshing(true)
     try {
       await Promise.all([
-        fetchPages(siteId, { limit: 100 }),
-        fetchCwvSummary(siteId)
+        fetchPages(projectId, { limit: 100 }),
+        fetchCwvSummary(projectId)
       ])
       onRefresh?.()
     } finally {
@@ -218,12 +231,12 @@ export default function SEOTechnicalAudit({
     return (
       <Card className="border-dashed">
         <CardContent className="py-12 text-center">
-          <Shield className="h-12 w-12 mx-auto mb-4 text-[var(--text-tertiary)]" />
-          <h3 className="text-lg font-semibold mb-2 text-[var(--text-primary)]">No Pages Analyzed</h3>
-          <p className="text-[var(--text-secondary)] mb-4 max-w-md mx-auto">
+          <Shield className="h-12 w-12 mx-auto mb-4 text-muted-foreground" />
+          <h3 className="text-lg font-semibold mb-2 text-foreground">No Pages Analyzed</h3>
+          <p className="text-muted-foreground mb-4 max-w-md mx-auto">
             Crawl your sitemap to analyze technical SEO factors like Core Web Vitals, indexing, and internal linking.
           </p>
-          <Button onClick={() => crawlSitemap(siteId)}>
+          <Button onClick={() => crawlSitemap(projectId)}>
             <Globe className="mr-2 h-4 w-4" />
             Crawl Sitemap
           </Button>
@@ -237,8 +250,8 @@ export default function SEOTechnicalAudit({
       {/* Header */}
       <div className="flex items-start justify-between">
         <div>
-          <h2 className="text-2xl font-bold text-[var(--text-primary)]">Technical SEO</h2>
-          <p className="text-[var(--text-secondary)]">
+          <h2 className="text-2xl font-bold text-foreground">Technical SEO</h2>
+          <p className="text-muted-foreground">
             Core Web Vitals, indexing status, schema, and internal linking
           </p>
         </div>
@@ -270,7 +283,7 @@ export default function SEOTechnicalAudit({
                   {getGrade(auditData.score)}
                 </div>
                 <div>
-                  <p className="text-sm text-[var(--text-tertiary)]">Technical Score</p>
+                  <p className="text-sm text-muted-foreground">Technical Score</p>
                   <p className={cn('text-3xl font-bold', getScoreColor(auditData.score))}>
                     {auditData.score}
                   </p>
@@ -287,8 +300,8 @@ export default function SEOTechnicalAudit({
                   <XCircle className="h-5 w-5 text-red-400" />
                 </div>
                 <div>
-                  <p className="text-2xl font-bold text-[var(--text-primary)]">{auditData.issues.length}</p>
-                  <p className="text-sm text-[var(--text-tertiary)]">Critical Issues</p>
+                  <p className="text-2xl font-bold text-foreground">{auditData.issues.length}</p>
+                  <p className="text-sm text-muted-foreground">Critical Issues</p>
                 </div>
               </div>
             </CardContent>
@@ -301,8 +314,8 @@ export default function SEOTechnicalAudit({
                   <AlertTriangle className="h-5 w-5 text-yellow-400" />
                 </div>
                 <div>
-                  <p className="text-2xl font-bold text-[var(--text-primary)]">{auditData.warnings.length}</p>
-                  <p className="text-sm text-[var(--text-tertiary)]">Warnings</p>
+                  <p className="text-2xl font-bold text-foreground">{auditData.warnings.length}</p>
+                  <p className="text-sm text-muted-foreground">Warnings</p>
                 </div>
               </div>
             </CardContent>
@@ -315,8 +328,8 @@ export default function SEOTechnicalAudit({
                   <CheckCircle className="h-5 w-5 text-green-400" />
                 </div>
                 <div>
-                  <p className="text-2xl font-bold text-[var(--text-primary)]">{auditData.passed.length}</p>
-                  <p className="text-sm text-[var(--text-tertiary)]">Passed Checks</p>
+                  <p className="text-2xl font-bold text-foreground">{auditData.passed.length}</p>
+                  <p className="text-sm text-muted-foreground">Passed Checks</p>
                 </div>
               </div>
             </CardContent>
@@ -326,7 +339,7 @@ export default function SEOTechnicalAudit({
 
       {/* Tabs */}
       <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4">
-        <TabsList className="bg-[var(--glass-bg)] border border-[var(--glass-border)]">
+        <TabsList className="bg-muted/30 border border-border/50">
           <TabsTrigger value="overview" className="gap-2">
             <Shield className="h-4 w-4" />
             Overview
@@ -360,7 +373,7 @@ export default function SEOTechnicalAudit({
                 <div className="space-y-2">
                   {auditData.issues.map((issue, i) => (
                     <div key={i} className="flex items-center justify-between p-3 bg-red-500/10 rounded-lg">
-                      <span className="text-[var(--text-primary)]">{issue.message}</span>
+                      <span className="text-foreground">{issue.message}</span>
                       <Badge variant="destructive">{issue.count}</Badge>
                     </div>
                   ))}
@@ -381,7 +394,7 @@ export default function SEOTechnicalAudit({
                 <div className="space-y-2">
                   {auditData.warnings.map((warning, i) => (
                     <div key={i} className="flex items-center justify-between p-3 bg-yellow-500/10 rounded-lg">
-                      <span className="text-[var(--text-primary)]">{warning.message}</span>
+                      <span className="text-foreground">{warning.message}</span>
                       <Badge className="bg-yellow-500/20 text-yellow-400">{warning.count}</Badge>
                     </div>
                   ))}
@@ -403,7 +416,7 @@ export default function SEOTechnicalAudit({
                   {auditData.passed.map((check, i) => (
                     <div key={i} className="flex items-center gap-2 p-2 bg-green-500/10 rounded">
                       <CheckCircle2 className="h-4 w-4 text-green-400 flex-shrink-0" />
-                      <span className="text-sm text-[var(--text-primary)]">{check}</span>
+                      <span className="text-sm text-foreground">{check}</span>
                     </div>
                   ))}
                 </div>
@@ -467,17 +480,17 @@ function MetricCard({ icon: Icon, label, value, status }) {
     warning: 'bg-yellow-500/10 border-yellow-500/30',
     poor: 'bg-red-500/10 border-red-500/30',
     'needs-improvement': 'bg-yellow-500/10 border-yellow-500/30',
-    unknown: 'bg-[var(--glass-bg)] border-[var(--glass-border)]'
+    unknown: 'bg-muted/30 border-border/50'
   }
 
   return (
     <Card className={cn('border', statusStyles[status] || statusStyles.unknown)}>
       <CardContent className="pt-4">
         <div className="flex items-center gap-2 mb-2">
-          <Icon className="h-4 w-4 text-[var(--text-tertiary)]" />
-          <span className="text-xs text-[var(--text-tertiary)]">{label}</span>
+          <Icon className="h-4 w-4 text-muted-foreground" />
+          <span className="text-xs text-muted-foreground">{label}</span>
         </div>
-        <p className="text-xl font-bold text-[var(--text-primary)] capitalize">{value}</p>
+        <p className="text-xl font-bold text-foreground capitalize">{value}</p>
       </CardContent>
     </Card>
   )
@@ -488,8 +501,8 @@ function CwvSection({ cwvSummary }) {
     return (
       <Card className="border-dashed">
         <CardContent className="py-8 text-center">
-          <Zap className="h-10 w-10 mx-auto mb-3 text-[var(--text-tertiary)]" />
-          <p className="text-[var(--text-secondary)]">
+          <Zap className="h-10 w-10 mx-auto mb-3 text-muted-foreground" />
+          <p className="text-muted-foreground">
             Core Web Vitals data not yet available. 
             <br />
             <span className="text-sm">Data is collected from Google PageSpeed Insights.</span>
@@ -550,10 +563,10 @@ function CwvSection({ cwvSummary }) {
             <div className="flex items-center gap-4 mb-4">
               <CwvGauge score={cwvSummary.avgMobileScore} />
               <div>
-                <p className="text-2xl font-bold text-[var(--text-primary)]">
+                <p className="text-2xl font-bold text-foreground">
                   {cwvSummary.avgMobileScore || '-'}
                 </p>
-                <p className="text-sm text-[var(--text-tertiary)]">Average Score</p>
+                <p className="text-sm text-muted-foreground">Average Score</p>
               </div>
             </div>
           </CardContent>
@@ -571,10 +584,10 @@ function CwvSection({ cwvSummary }) {
             <div className="flex items-center gap-4 mb-4">
               <CwvGauge score={cwvSummary.avgDesktopScore} />
               <div>
-                <p className="text-2xl font-bold text-[var(--text-primary)]">
+                <p className="text-2xl font-bold text-foreground">
                   {cwvSummary.avgDesktopScore || '-'}
                 </p>
-                <p className="text-sm text-[var(--text-tertiary)]">Average Score</p>
+                <p className="text-sm text-muted-foreground">Average Score</p>
               </div>
             </div>
           </CardContent>
@@ -634,7 +647,7 @@ function CwvGauge({ score }) {
           cy="32"
           r={radius}
           strokeWidth="6"
-          className="fill-none stroke-[var(--glass-border)]"
+          className="fill-none stroke-border/50"
         />
         <circle
           cx="32"
@@ -669,7 +682,7 @@ function CwvMetricCard({ metric, mobileValue, desktopValue }) {
     good: 'text-green-400',
     warning: 'text-yellow-400',
     poor: 'text-red-400',
-    unknown: 'text-[var(--text-tertiary)]'
+    unknown: 'text-muted-foreground'
   }
 
   const formatValue = (val) => {
@@ -680,22 +693,22 @@ function CwvMetricCard({ metric, mobileValue, desktopValue }) {
   }
 
   return (
-    <div className="p-4 bg-[var(--glass-bg)] rounded-lg border border-[var(--glass-border)]">
+    <div className="p-4 bg-muted/30 rounded-lg border border-border/50">
       <div className="flex items-start justify-between mb-2">
         <div>
-          <p className="font-medium text-[var(--text-primary)]">{metric.label}</p>
-          <p className="text-xs text-[var(--text-tertiary)]">{metric.description}</p>
+          <p className="font-medium text-foreground">{metric.label}</p>
+          <p className="text-xs text-muted-foreground">{metric.description}</p>
         </div>
       </div>
       <div className="flex items-center gap-6 mt-3">
         <div className="flex items-center gap-2">
-          <Smartphone className="h-4 w-4 text-[var(--text-tertiary)]" />
+          <Smartphone className="h-4 w-4 text-muted-foreground" />
           <span className={cn('font-mono font-bold', statusColors[getStatus(mobileValue)])}>
             {formatValue(mobileValue)}
           </span>
         </div>
         <div className="flex items-center gap-2">
-          <Monitor className="h-4 w-4 text-[var(--text-tertiary)]" />
+          <Monitor className="h-4 w-4 text-muted-foreground" />
           <span className={cn('font-mono font-bold', statusColors[getStatus(desktopValue)])}>
             {formatValue(desktopValue)}
           </span>
@@ -730,10 +743,10 @@ function IndexingSection({ data }) {
         <CardContent>
           <div className="mb-4">
             <div className="flex justify-between text-sm mb-1">
-              <span className="text-[var(--text-secondary)]">
+              <span className="text-muted-foreground">
                 {data.indexed} of {data.total} pages indexed
               </span>
-              <span className="text-[var(--text-primary)] font-medium">
+              <span className="text-foreground font-medium">
                 {data.total > 0 ? Math.round(data.indexed / data.total * 100) : 0}%
               </span>
             </div>
@@ -763,9 +776,9 @@ function IndexingSection({ data }) {
                     section.color === 'blue' && 'text-blue-400',
                     section.color === 'red' && 'text-red-400'
                   )} />
-                  <span className="text-sm text-[var(--text-tertiary)]">{section.label}</span>
+                  <span className="text-sm text-muted-foreground">{section.label}</span>
                 </div>
-                <p className="text-xl font-bold text-[var(--text-primary)]">
+                <p className="text-xl font-bold text-foreground">
                   {data[section.key] || 0}
                 </p>
               </div>
@@ -789,8 +802,8 @@ function IndexingSection({ data }) {
           <CardContent>
             <div className="space-y-2 max-h-64 overflow-y-auto">
               {data.pages?.notIndexed?.slice(0, 10).map((page, i) => (
-                <div key={i} className="flex items-center justify-between p-2 bg-[var(--glass-bg)] rounded">
-                  <span className="text-sm text-[var(--text-primary)] truncate flex-1">
+                <div key={i} className="flex items-center justify-between p-2 bg-muted/30 rounded">
+                  <span className="text-sm text-foreground truncate flex-1">
                     {page.path || page.url}
                   </span>
                   <Button variant="ghost" size="sm" className="text-xs">
@@ -800,7 +813,7 @@ function IndexingSection({ data }) {
                 </div>
               ))}
               {data.notIndexed > 10 && (
-                <p className="text-sm text-[var(--text-tertiary)] text-center pt-2">
+                <p className="text-sm text-muted-foreground text-center pt-2">
                   +{data.notIndexed - 10} more pages
                 </p>
               )}
@@ -826,8 +839,8 @@ function InternalLinksSection({ data, pages = [] }) {
                 <Link2 className="h-5 w-5 text-blue-400" />
               </div>
               <div>
-                <p className="text-2xl font-bold text-[var(--text-primary)]">{data.avgLinks}</p>
-                <p className="text-sm text-[var(--text-tertiary)]">Avg Links Per Page</p>
+                <p className="text-2xl font-bold text-foreground">{data.avgLinks}</p>
+                <p className="text-sm text-muted-foreground">Avg Links Per Page</p>
               </div>
             </div>
           </CardContent>
@@ -840,8 +853,8 @@ function InternalLinksSection({ data, pages = [] }) {
                 <CheckCircle className="h-5 w-5 text-green-400" />
               </div>
               <div>
-                <p className="text-2xl font-bold text-[var(--text-primary)]">{data.wellLinked}</p>
-                <p className="text-sm text-[var(--text-tertiary)]">Well-Linked Pages</p>
+                <p className="text-2xl font-bold text-foreground">{data.wellLinked}</p>
+                <p className="text-sm text-muted-foreground">Well-Linked Pages</p>
               </div>
             </div>
           </CardContent>
@@ -860,10 +873,10 @@ function InternalLinksSection({ data, pages = [] }) {
                 )} />
               </div>
               <div>
-                <p className="text-2xl font-bold text-[var(--text-primary)]">
+                <p className="text-2xl font-bold text-foreground">
                   {data.orphanPages?.length || 0}
                 </p>
-                <p className="text-sm text-[var(--text-tertiary)]">Orphan Pages</p>
+                <p className="text-sm text-muted-foreground">Orphan Pages</p>
               </div>
             </div>
           </CardContent>
@@ -885,12 +898,12 @@ function InternalLinksSection({ data, pages = [] }) {
           <CardContent>
             <div className="space-y-2 max-h-64 overflow-y-auto">
               {data.orphanPages.slice(0, 10).map((page, i) => (
-                <div key={i} className="flex items-center justify-between p-2 bg-[var(--glass-bg)] rounded">
+                <div key={i} className="flex items-center justify-between p-2 bg-muted/30 rounded">
                   <div className="flex-1 min-w-0">
-                    <p className="text-sm text-[var(--text-primary)] truncate">
+                    <p className="text-sm text-foreground truncate">
                       {page.title || page.path || page.url}
                     </p>
-                    <p className="text-xs text-[var(--text-tertiary)] truncate">
+                    <p className="text-xs text-muted-foreground truncate">
                       {page.path || page.url}
                     </p>
                   </div>
@@ -900,7 +913,7 @@ function InternalLinksSection({ data, pages = [] }) {
                 </div>
               ))}
               {data.orphanPages.length > 10 && (
-                <p className="text-sm text-[var(--text-tertiary)] text-center pt-2">
+                <p className="text-sm text-muted-foreground text-center pt-2">
                   +{data.orphanPages.length - 10} more orphan pages
                 </p>
               )}
@@ -922,12 +935,12 @@ function InternalLinksSection({ data, pages = [] }) {
               .sort((a, b) => (b.internal_links_in || 0) - (a.internal_links_in || 0))
               .slice(0, 5)
               .map((page, i) => (
-                <div key={i} className="flex items-center justify-between p-2 bg-[var(--glass-bg)] rounded">
+                <div key={i} className="flex items-center justify-between p-2 bg-muted/30 rounded">
                   <div className="flex-1 min-w-0">
-                    <p className="text-sm text-[var(--text-primary)] truncate">
+                    <p className="text-sm text-foreground truncate">
                       {page.title || page.path || page.url}
                     </p>
-                    <p className="text-xs text-[var(--text-tertiary)] truncate">
+                    <p className="text-xs text-muted-foreground truncate">
                       {page.path}
                     </p>
                   </div>
@@ -937,7 +950,7 @@ function InternalLinksSection({ data, pages = [] }) {
                 </div>
               ))}
             {pages.filter(p => p.internal_links_in > 0).length === 0 && (
-              <p className="text-sm text-[var(--text-tertiary)] text-center py-4">
+              <p className="text-sm text-muted-foreground text-center py-4">
                 No internal link data available. Crawl your sitemap to analyze internal linking.
               </p>
             )}

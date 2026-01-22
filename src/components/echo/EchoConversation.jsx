@@ -27,6 +27,7 @@ import EchoMessageBubble from './EchoMessageBubble'
 import EchoTypingIndicator from './EchoTypingIndicator'
 import useMessagesStore from '@/lib/messages-store'
 import useAuthStore from '@/lib/auth-store'
+import usePageContextStore from '@/lib/page-context-store'
 
 // Default quick prompts for new conversations
 const DEFAULT_PROMPTS = [
@@ -69,10 +70,13 @@ export function EchoConversation({
     setSending(true)
     
     try {
+      // Get page context for Echo awareness
+      const pageContext = usePageContextStore.getState().getContext()
       await sendToEcho({
         recipientId: echoContact.id,
         content: message,
-        subject: 'Echo Conversation'
+        subject: 'Echo Conversation',
+        pageContext
       })
     } catch (error) {
       console.error('Failed to send to Echo:', error)

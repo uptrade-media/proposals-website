@@ -59,6 +59,7 @@ import {
   DollarSign
 } from 'lucide-react'
 import axios from 'axios'
+import { ecommerceApi } from '@/lib/portal-api'
 
 export default function ProductDetail({ embedded = false, onNavigate, productId: propProductId }) {
   // Support both route params and props for embedded mode
@@ -178,8 +179,7 @@ export default function ProductDetail({ embedded = false, onNavigate, productId:
     setSaveSuccess(false)
     
     try {
-      const response = await axios.put('/.netlify/functions/shopify-products', {
-        productId: product.id,
+      const { data } = await ecommerceApi.updateProduct(product.id, {
         title: product.title,
         body_html: product.body_html,
         vendor: product.vendor,
@@ -195,8 +195,8 @@ export default function ProductDetail({ embedded = false, onNavigate, productId:
         }))
       })
       
-      setProduct(response.data.product)
-      setImages(response.data.product.images || [])
+      setProduct(data.product)
+      setImages(data.product.images || [])
       setIsDirty(false)
       setSaveSuccess(true)
       setTimeout(() => setSaveSuccess(false), 3000)
@@ -232,15 +232,12 @@ export default function ProductDetail({ embedded = false, onNavigate, productId:
       reader.onload = async (event) => {
         const base64 = event.target.result.split(',')[1]
         
-        const response = await axios.post('/.netlify/functions/shopify-products', {
-          productId: product.id,
-          image: {
-            attachment: base64,
-            filename: file.name
-          }
+        const { data } = await ecommerceApi.uploadProductImage(product.id, {
+          attachment: base64,
+          filename: file.name
         })
         
-        setImages(response.data.images || [])
+        setImages(data.images || [])
         setUploadingImage(false)
       }
       reader.readAsDataURL(file)
@@ -259,14 +256,9 @@ export default function ProductDetail({ embedded = false, onNavigate, productId:
     if (!imageToDelete) return
     
     try {
-      const response = await axios.delete('/.netlify/functions/shopify-products', {
-        data: {
-          productId: product.id,
-          imageId: imageToDelete.id
-        }
-      })
+      const { data } = await ecommerceApi.deleteProductImage(product.id, imageToDelete.id)
       
-      setImages(response.data.images || [])
+      setImages(data.images || [])
       setImageToDelete(null)
     } catch (error) {
       setSaveError(error.response?.data?.error || 'Failed to delete image')

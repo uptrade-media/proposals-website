@@ -18,8 +18,9 @@ import {
   TrendingUp
 } from 'lucide-react'
 import { useSeoStore } from '@/lib/seo-store'
+import EffortEstimate, { calculateTotalEffort } from './signal/EffortEstimate'
 
-export default function SEOOpportunities({ site, onSelectPage }) {
+export default function SEOOpportunities({ site, projectId, onSelectPage }) {
   const { 
     opportunities,
     opportunitiesLoading,
@@ -34,21 +35,24 @@ export default function SEOOpportunities({ site, onSelectPage }) {
   const [detecting, setDetecting] = useState(false)
   const [updatingIds, setUpdatingIds] = useState(new Set())
 
+  // Use projectId directly (new architecture) or fallback to site.id (legacy)
+  const siteId = projectId || site?.id
+
   // Fetch opportunities when filters change
   useEffect(() => {
-    if (site?.id) {
-      fetchOpportunities(site.id, {
+    if (siteId) {
+      fetchOpportunities(siteId, {
         status: statusFilter !== 'all' ? statusFilter : undefined,
         priority: priorityFilter !== 'all' ? priorityFilter : undefined,
         type: typeFilter !== 'all' ? typeFilter : undefined
       })
     }
-  }, [site?.id, statusFilter, priorityFilter, typeFilter])
+  }, [siteId, statusFilter, priorityFilter, typeFilter])
 
   const handleDetect = async () => {
     setDetecting(true)
     try {
-      await detectOpportunities(site.id)
+      await detectOpportunities(siteId)
     } finally {
       setDetecting(false)
     }
@@ -80,7 +84,7 @@ export default function SEOOpportunities({ site, onSelectPage }) {
     switch (status) {
       case 'completed': return <CheckCircle className="h-4 w-4 text-green-400" />
       case 'in-progress': return <Play className="h-4 w-4 text-blue-400" />
-      case 'dismissed': return <XCircle className="h-4 w-4 text-[var(--text-tertiary)]" />
+      case 'dismissed': return <XCircle className="h-4 w-4 text-muted-foreground" />
       default: return <Clock className="h-4 w-4 text-yellow-400" />
     }
   }
@@ -124,57 +128,76 @@ export default function SEOOpportunities({ site, onSelectPage }) {
   const openCount = opportunities.filter(o => o.status === 'open').length
   const inProgressCount = opportunities.filter(o => o.status === 'in-progress').length
   const completedCount = opportunities.filter(o => o.status === 'completed').length
+  
+  // Calculate total effort for open opportunities
+  const openOpportunities = opportunities.filter(o => o.status === 'open')
+  const effortSummary = calculateTotalEffort(openOpportunities)
 
   return (
     <div className="space-y-6">
       {/* Header Stats */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
         <Card 
-          className={`cursor-pointer transition-colors ${statusFilter === 'open' ? 'border-[var(--accent-primary)]' : ''}`}
+          className={`cursor-pointer transition-colors ${statusFilter === 'open' ? 'border-primary' : ''}`}
           onClick={() => setStatusFilter('open')}
         >
           <CardContent className="pt-4">
             <div className="flex items-center gap-2">
               <Clock className="h-5 w-5 text-yellow-400" />
-              <span className="text-sm text-[var(--text-secondary)]">Open</span>
+              <span className="text-sm text-muted-foreground">Open</span>
             </div>
-            <span className="text-2xl font-bold text-[var(--text-primary)]">{openCount}</span>
+            <span className="text-2xl font-bold text-foreground">{openCount}</span>
           </CardContent>
         </Card>
         <Card 
-          className={`cursor-pointer transition-colors ${statusFilter === 'in-progress' ? 'border-[var(--accent-primary)]' : ''}`}
+          className={`cursor-pointer transition-colors ${statusFilter === 'in-progress' ? 'border-primary' : ''}`}
           onClick={() => setStatusFilter('in-progress')}
         >
           <CardContent className="pt-4">
             <div className="flex items-center gap-2">
               <Play className="h-5 w-5 text-blue-400" />
-              <span className="text-sm text-[var(--text-secondary)]">In Progress</span>
+              <span className="text-sm text-muted-foreground">In Progress</span>
             </div>
-            <span className="text-2xl font-bold text-[var(--text-primary)]">{inProgressCount}</span>
+            <span className="text-2xl font-bold text-foreground">{inProgressCount}</span>
           </CardContent>
         </Card>
         <Card 
-          className={`cursor-pointer transition-colors ${statusFilter === 'completed' ? 'border-[var(--accent-primary)]' : ''}`}
+          className={`cursor-pointer transition-colors ${statusFilter === 'completed' ? 'border-primary' : ''}`}
           onClick={() => setStatusFilter('completed')}
         >
           <CardContent className="pt-4">
             <div className="flex items-center gap-2">
               <CheckCircle className="h-5 w-5 text-green-400" />
-              <span className="text-sm text-[var(--text-secondary)]">Completed</span>
+              <span className="text-sm text-muted-foreground">Completed</span>
             </div>
-            <span className="text-2xl font-bold text-[var(--text-primary)]">{completedCount}</span>
+            <span className="text-2xl font-bold text-foreground">{completedCount}</span>
           </CardContent>
         </Card>
         <Card 
-          className={`cursor-pointer transition-colors ${statusFilter === 'all' ? 'border-[var(--accent-primary)]' : ''}`}
+          className={`cursor-pointer transition-colors ${statusFilter === 'all' ? 'border-primary' : ''}`}
           onClick={() => setStatusFilter('all')}
         >
           <CardContent className="pt-4">
             <div className="flex items-center gap-2">
-              <Zap className="h-5 w-5 text-[var(--accent-primary)]" />
-              <span className="text-sm text-[var(--text-secondary)]">All</span>
+              <Zap className="h-5 w-5 text-primary" />
+              <span className="text-sm text-muted-foreground">All</span>
             </div>
-            <span className="text-2xl font-bold text-[var(--text-primary)]">{opportunities.length}</span>
+            <span className="text-2xl font-bold text-foreground">{opportunities.length}</span>
+          </CardContent>
+        </Card>
+        {/* Effort Summary Card */}
+        <Card className="border-dashed">
+          <CardContent className="pt-4">
+            <div className="flex items-center gap-2">
+              <Clock className="h-5 w-5 text-purple-400" />
+              <span className="text-sm text-muted-foreground">Est. Time</span>
+            </div>
+            <span className="text-2xl font-bold text-foreground">{effortSummary.totalTimeLabel}</span>
+            {effortSummary.autoApplyCount > 0 && (
+              <p className="text-xs text-green-400 mt-1">
+                ✨ {effortSummary.autoApplyCount} can be auto-fixed
+              </p>
+            )}
           </CardContent>
         </Card>
       </div>
@@ -223,10 +246,10 @@ export default function SEOOpportunities({ site, onSelectPage }) {
         <CardContent className="p-0">
           {opportunitiesLoading ? (
             <div className="flex items-center justify-center py-12">
-              <Loader2 className="h-8 w-8 animate-spin text-[var(--accent-primary)]" />
+              <Loader2 className="h-8 w-8 animate-spin text-primary" />
             </div>
           ) : opportunities.length === 0 ? (
-            <div className="text-center py-12 text-[var(--text-tertiary)]">
+            <div className="text-center py-12 text-muted-foreground">
               <Zap className="h-12 w-12 mx-auto mb-4 opacity-50" />
               <p className="text-lg mb-2">No opportunities found</p>
               <p className="text-sm mb-4">
@@ -239,11 +262,11 @@ export default function SEOOpportunities({ site, onSelectPage }) {
               </Button>
             </div>
           ) : (
-            <div className="divide-y divide-[var(--glass-border)]">
+            <div className="divide-y divide-border/50">
               {opportunities.map((opp) => (
                 <div 
                   key={opp.id}
-                  className="p-4 hover:bg-[var(--surface-elevated)] transition-colors"
+                  className="p-4 hover:bg-muted/50 transition-colors"
                 >
                   <div className="flex items-start justify-between gap-4">
                     <div className="flex items-start gap-3 flex-1 min-w-0">
@@ -259,25 +282,30 @@ export default function SEOOpportunities({ site, onSelectPage }) {
                             {getTypeIcon(opp.type)}
                             <span className="ml-1">{getTypeLabel(opp.type)}</span>
                           </Badge>
+                          <EffortEstimate 
+                            effort={opp.effort} 
+                            taskType={opp.type} 
+                            variant="badge"
+                          />
                         </div>
-                        <h4 className="font-medium text-[var(--text-primary)] mb-1">
+                        <h4 className="font-medium text-foreground mb-1">
                           {opp.title}
                         </h4>
-                        <p className="text-sm text-[var(--text-secondary)] mb-2">
+                        <p className="text-sm text-muted-foreground mb-2">
                           {opp.description}
                         </p>
                         {opp.page_path && (
                           <button
                             onClick={() => opp.page_id && onSelectPage(opp.page_id)}
-                            className="text-sm text-[var(--accent-primary)] hover:underline"
+                            className="text-sm text-primary hover:underline"
                           >
                             {opp.page_path}
                           </button>
                         )}
                         {opp.ai_recommendation && (
-                          <div className="mt-3 p-3 rounded bg-[var(--glass-bg)] text-sm">
-                            <p className="text-xs text-[var(--text-tertiary)] mb-1">AI Recommendation</p>
-                            <p className="text-[var(--text-primary)]">{opp.ai_recommendation}</p>
+                          <div className="mt-3 p-3 rounded bg-muted/30 text-sm">
+                            <p className="text-xs text-muted-foreground mb-1">AI Recommendation</p>
+                            <p className="text-foreground">{opp.ai_recommendation}</p>
                           </div>
                         )}
                         {(opp.current_value || opp.recommended_value) && (
@@ -285,7 +313,7 @@ export default function SEOOpportunities({ site, onSelectPage }) {
                             {opp.current_value && (
                               <div className="p-2 rounded bg-red-500/10 border border-red-500/20">
                                 <p className="text-xs text-red-400 mb-1">Current</p>
-                                <p className="text-[var(--text-primary)] text-xs truncate">
+                                <p className="text-foreground text-xs truncate">
                                   {opp.current_value}
                                 </p>
                               </div>
@@ -293,7 +321,7 @@ export default function SEOOpportunities({ site, onSelectPage }) {
                             {opp.recommended_value && (
                               <div className="p-2 rounded bg-green-500/10 border border-green-500/20">
                                 <p className="text-xs text-green-400 mb-1">Recommended</p>
-                                <p className="text-[var(--text-primary)] text-xs truncate">
+                                <p className="text-foreground text-xs truncate">
                                   {opp.recommended_value}
                                 </p>
                               </div>
@@ -354,7 +382,7 @@ export default function SEOOpportunities({ site, onSelectPage }) {
                         </Badge>
                       )}
                       {opp.status === 'dismissed' && (
-                        <Badge variant="outline" className="text-[var(--text-tertiary)]">
+                        <Badge variant="outline" className="text-muted-foreground">
                           Dismissed
                         </Badge>
                       )}
