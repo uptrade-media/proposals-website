@@ -78,21 +78,6 @@ export default defineConfig(({ mode }) => {
           chunkFileNames: 'assets/js/[name]-[hash].js',
           entryFileNames: 'assets/js/[name]-[hash].js',
           assetFileNames: 'assets/[ext]/[name]-[hash].[ext]',
-          // Manual chunks to avoid circular dependencies
-          manualChunks: (id) => {
-            // Put recharts in its own chunk to avoid circular dependency issues
-            if (id.includes('node_modules/recharts')) {
-              return 'recharts'
-            }
-            // Put large commonly used stores in their own chunks
-            if (id.includes('auth-store')) {
-              return 'auth-store'
-            }
-            // Group all other node_modules into vendor chunk
-            if (id.includes('node_modules')) {
-              return 'vendor'
-            }
-          },
         },
       },
       // Enable minification with esbuild (faster than terser, no extra dep)
