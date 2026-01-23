@@ -91,11 +91,16 @@ function ModuleCard({ moduleKey, config, stats, onClick }) {
     >
       <CardContent className="p-4">
         <div className="flex items-center gap-3 mb-3">
-          <div className={cn(
-            "p-2 rounded-lg",
-            config?.color?.replace('text-', 'bg-')?.replace('-700', '-100') || 'bg-muted'
-          )}>
-            <Icon className="h-5 w-5" />
+          <div 
+            className="p-2.5 rounded-xl"
+            style={{ 
+              backgroundColor: 'color-mix(in srgb, var(--brand-primary) 15%, transparent)',
+            }}
+          >
+            <Icon 
+              className="h-5 w-5" 
+              style={{ color: 'var(--brand-primary)' }}
+            />
           </div>
           <div className="flex-1">
             <h4 className="font-medium text-sm">{config?.label || moduleKey}</h4>

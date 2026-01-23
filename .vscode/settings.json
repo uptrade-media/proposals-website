@@ -5,15 +5,5 @@
   ],
   "deno.unstable": true,
   "deno.importMap": ".netlify/edge-functions-import-map.json",
-  "deno.path": "C:\\Users\\Ramsey\\AppData\\Roaming\\netlify\\Config\\deno-cli\\deno.exe",
-  "github.copilot.chat.mcp.servers": {
-    "supabase": {
-      "command": "node",
-      "args": ["/Users/ramseydeal/Documents/GitHub/supabase-mcp-server/dist/index.js"],
-      "env": {
-        "SUPABASE_URL": "https://mwcjtnoqxolplwpkxnfe.supabase.co",
-        "SUPABASE_SERVICE_ROLE_KEY": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im13Y2p0bm9xeG9scGx3cGt4bmZlIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTcyMDI5NTU5NSwiZXhwIjoyMDM1ODcxNTk1fQ.TVGEIKBh0f42LY-GJTmMCg_9xX7QhZ3OOzC2H0cYT-o"
-      }
-    }
-  }
+  "deno.path": "C:\\Users\\Ramsey\\AppData\\Roaming\\netlify\\Config\\deno-cli\\deno.exe"
 }

@@ -5,11 +5,11 @@ import { useState, useEffect } from 'react'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { useSignalAccess } from '@/lib/signal-access'
 import SignalUpgradeCard from './signal/SignalUpgradeCard'
+import SignalIcon from '@/components/ui/SignalIcon'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import {
-  Brain,
   Sparkles,
   Loader2,
   CheckCircle,
@@ -78,8 +78,9 @@ export default function SEOAIInsights({ site, projectId, onSelectPage }) {
     }
   }, [site?.id])
 
-  // Derived data
-  const pendingRecs = aiRecommendations.filter(r => r.status === 'pending')
+  // Derived data - ensure aiRecommendations is an array
+  const recommendations = Array.isArray(aiRecommendations) ? aiRecommendations : []
+  const pendingRecs = recommendations.filter(r => r.status === 'pending')
   const highImpactRecs = pendingRecs.filter(r => r.impact === 'high' || r.impact === 'critical')
   const autoFixableRecs = pendingRecs.filter(r => r.auto_fixable)
 
@@ -166,9 +167,9 @@ export default function SEOAIInsights({ site, projectId, onSelectPage }) {
     return (
       <Card className="border-dashed border-primary/30">
         <CardContent className="py-12 text-center">
-          <Brain className="h-12 w-12 mx-auto mb-4 text-primary" />
+          <SignalIcon className="h-12 w-12 mx-auto mb-4 text-primary" />
           <h3 className="text-lg font-semibold mb-2 text-foreground">
-            Train AI on Your Website
+            Train Signal on Your Website
           </h3>
           <p className="text-muted-foreground mb-6 max-w-md mx-auto">
             Before the AI can provide intelligent recommendations, it needs to learn about your business, 
@@ -202,13 +203,13 @@ export default function SEOAIInsights({ site, projectId, onSelectPage }) {
       <Card>
         <CardContent className="py-12 text-center">
           <div className="relative">
-            <Brain className="h-12 w-12 mx-auto mb-4 text-primary" />
+            <SignalIcon className="h-12 w-12 mx-auto mb-4 text-primary" />
             <div className="absolute inset-0 flex items-center justify-center">
               <div className="h-16 w-16 border-2 border-primary/30 border-t-primary rounded-full animate-spin" />
             </div>
           </div>
           <h3 className="text-lg font-semibold mb-2 text-foreground">
-            AI Training in Progress
+            Signal Training in Progress
           </h3>
           <p className="text-muted-foreground max-w-md mx-auto">
             Analyzing your website content, services, locations, and competitive positioning. 
@@ -225,10 +226,10 @@ export default function SEOAIInsights({ site, projectId, onSelectPage }) {
       <div className="flex items-start justify-between">
         <div className="flex items-center gap-3">
           <div className="p-2 rounded-lg bg-gradient-to-br from-primary/20 to-purple-500/20">
-            <Brain className="h-6 w-6 text-primary" />
+            <SignalIcon className="h-6 w-6 text-primary" />
           </div>
           <div>
-            <h2 className="text-xl font-semibold text-foreground">AI SEO Brain</h2>
+            <h2 className="text-xl font-semibold text-foreground">Signal SEO</h2>
             <p className="text-sm text-muted-foreground">
               Intelligent recommendations powered by your business context
             </p>
@@ -570,9 +571,9 @@ export default function SEOAIInsights({ site, projectId, onSelectPage }) {
           ) : (
             <Card>
               <CardContent className="py-12 text-center">
-                <Brain className="h-12 w-12 mx-auto mb-4 text-muted-foreground" />
+                <SignalIcon className="h-12 w-12 mx-auto mb-4 text-muted-foreground" />
                 <p className="text-muted-foreground">
-                  No knowledge base found. Train the AI to get started.
+                  No knowledge base found. Train Signal to get started.
                 </p>
               </CardContent>
             </Card>

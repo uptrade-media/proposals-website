@@ -11,6 +11,7 @@ import { Sheet, SheetContent, SheetTrigger } from '@/components/ui/sheet'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import { useSignalAccess } from '@/lib/signal-access'
+import SignalIcon from '@/components/ui/SignalIcon'
 import { 
   LayoutDashboard,
   Search,
@@ -26,8 +27,6 @@ import {
   Shield,
   MapPin,
   Code,
-  Brain,
-  PenLine,
   ChevronDown,
   ChevronRight,
   Menu,
@@ -94,12 +93,11 @@ const NAV_SECTIONS = [
   },
   {
     id: 'ai',
-    label: 'AI Tools',
+    label: 'Signal Tools',
     signal: true, // Requires Signal
     defaultOpen: true,
     items: [
-      { id: 'ai-insights', label: 'AI Brain', icon: Brain, signal: true, description: 'AI-powered analysis' },
-      { id: 'blog-brain', label: 'Blog Brain', icon: PenLine, signal: true, description: 'Content generation' },
+      { id: 'ai-insights', label: 'Signal SEO', icon: SignalIcon, signal: true, description: 'AI-powered analysis' },
       { id: 'content-briefs', label: 'Content Briefs', icon: FileCheck, signal: true, description: 'Writing briefs' },
     ]
   },

@@ -1,5 +1,5 @@
 // src/components/BlogManagement.jsx
-import React, { useState, useEffect, useCallback } from 'react'
+import React, { useState, useEffect, useCallback, useRef } from 'react'
 import { Button } from './ui/button'
 import { Input } from './ui/input'
 import { Label } from './ui/label'
@@ -11,16 +11,21 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '.
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from './ui/dialog'
 import { Separator } from './ui/separator'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from './ui/tooltip'
+import { Tabs, TabsContent, TabsList, TabsTrigger } from './ui/tabs'
 import { 
   AlertCircle, Loader2, Plus, Trash2, Edit2, Eye, Search, 
   FileText, Calendar, Clock, Tag, Image as ImageIcon, 
   MoreVertical, ExternalLink, Copy, CheckCircle2,
-  Upload, X, Filter, ArrowUpDown, Star, BarChart3
+  Upload, X, Filter, ArrowUpDown, Star, BarChart3,
+  Lightbulb, Sparkles
 } from 'lucide-react'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from './ui/dropdown-menu'
 import useAuthStore from '../lib/auth-store'
 import { blogApi } from '@/lib/portal-api'
 import BlogAIDialog from './BlogAIDialog'
+import BlogBrain from './blog/BlogBrain'
+import SignalIcon from './ui/SignalIcon'
+import { useSignalAccess } from '@/lib/signal-access'
 
 // Tenant-specific category configurations
 const CATEGORY_CONFIGS = {
@@ -326,10 +331,18 @@ function StatsCard({ icon: Icon, label, value, color = 'emerald' }) {
 
 export default function BlogManagement() {
   const { user, currentOrg, currentProject } = useAuthStore()
+  const { hasAccess: hasSignalAccess } = useSignalAccess()
   const isAdmin = user?.role === 'admin'
   // Allow access if user is admin OR if they have a current project context (org member with project access)
   const hasAccess = isAdmin || !!currentProject
   const tenantConfig = getTenantConfig(currentOrg)
+  
+  // Main tab state
+  const [activeTab, setActiveTab] = useState('posts')
+  
+  // For pre-filling BlogAIDialog from topic ideas
+  const [aiDialogOpen, setAiDialogOpen] = useState(false)
+  const [prefillData, setPrefillData] = useState(null)
   
   const [blogs, setBlogs] = useState([])
   const [isLoading, setIsLoading] = useState(false)
@@ -600,6 +613,12 @@ export default function BlogManagement() {
 
   const categories = tenantConfig.categories
 
+  // Handler for creating from Blog Brain topic recommendations
+  const handleCreateFromTopic = (topicData) => {
+    setPrefillData(topicData)
+    setAiDialogOpen(true)
+  }
+
   return (
     <TooltipProvider>
       <div className="min-h-screen bg-[var(--surface-primary)]">
@@ -609,16 +628,21 @@ export default function BlogManagement() {
             <div className="flex items-center justify-between">
               <div>
                 <h1 className="text-2xl font-bold text-[var(--text-primary)] flex items-center gap-2">
-                  <FileText className="w-6 h-6 text-emerald-600" />
-                  Blog Management
+                  <FileText className="w-6 h-6" style={{ color: 'var(--brand-primary)' }} />
+                  Blog
                 </h1>
                 <p className="text-sm text-[var(--text-secondary)] mt-1">Create and manage your blog content</p>
               </div>
               <div className="flex items-center gap-3">
                 <BlogAIDialog 
+                  open={aiDialogOpen}
+                  onOpenChange={setAiDialogOpen}
+                  prefillData={prefillData}
                   onSuccess={(newPost) => {
                     setSuccess('AI blog created!')
+                    setPrefillData(null)
                     fetchBlogs()
+                    setActiveTab('posts')
                     setTimeout(() => setSuccess(''), 3000)
                   }}
                 />
@@ -631,9 +655,35 @@ export default function BlogManagement() {
                 </Button>
               </div>
             </div>
+            
+            {/* Main Tabs */}
+            <div className="mt-4">
+              <Tabs value={activeTab} onValueChange={setActiveTab}>
+                <TabsList className="bg-transparent border-b border-[var(--glass-border)] rounded-none w-full justify-start gap-1 p-0 h-auto">
+                  <TabsTrigger 
+                    value="posts" 
+                    className="data-[state=active]:border-b-2 data-[state=active]:border-[var(--brand-primary)] data-[state=active]:bg-transparent rounded-none px-4 py-2"
+                  >
+                    <FileText className="w-4 h-4 mr-2" />
+                    Posts
+                  </TabsTrigger>
+                  {hasSignalAccess && (
+                    <TabsTrigger 
+                      value="signal-brain" 
+                      className="data-[state=active]:border-b-2 data-[state=active]:border-[var(--brand-primary)] data-[state=active]:bg-transparent rounded-none px-4 py-2"
+                    >
+                      <SignalIcon className="w-4 h-4 mr-2" />
+                      Signal Brain
+                    </TabsTrigger>
+                  )}
+                </TabsList>
+              </Tabs>
+            </div>
           </div>
         </div>
 
+        {/* Tab Content */}
+        {activeTab === 'posts' && (
         <div className="px-6 py-6 space-y-6">
           {/* Stats */}
           <div className="grid grid-cols-5 gap-4">
@@ -774,6 +824,17 @@ export default function BlogManagement() {
             </div>
           )}
         </div>
+        )}
+
+        {/* Signal Brain Tab */}
+        {activeTab === 'signal-brain' && hasSignalAccess && (
+          <div className="px-6 py-6">
+            <BlogBrain 
+              projectId={currentProject?.id}
+              onCreateFromTopic={handleCreateFromTopic}
+            />
+          </div>
+        )}
 
         {/* Editor Dialog */}
         <Dialog open={isEditorOpen} onOpenChange={(open) => { if (!open) resetForm(); setIsEditorOpen(open) }}>

@@ -68,11 +68,15 @@ function getTenantConfig(org) {
   return CATEGORY_CONFIGS.default
 }
 
-export default function BlogAIDialog({ onSuccess }) {
+export default function BlogAIDialog({ onSuccess, open, onOpenChange, prefillData }) {
   const { currentOrg } = useAuthStore()
   const tenantConfig = getTenantConfig(currentOrg)
   
-  const [isOpen, setIsOpen] = useState(false)
+  // Support both controlled and uncontrolled modes
+  const [internalOpen, setInternalOpen] = useState(false)
+  const isOpen = open !== undefined ? open : internalOpen
+  const setIsOpen = onOpenChange ?? setInternalOpen
+  
   const [isGenerating, setIsGenerating] = useState(false)
   const [generationStage, setGenerationStage] = useState(0) // 0: idle, 1: writing content, 2: SEO metadata, 3: saving, 4: complete
   const [isUploading, setIsUploading] = useState(false)
@@ -94,6 +98,19 @@ export default function BlogAIDialog({ onSuccess }) {
     includeExamples: true,
     includeFAQ: false
   })
+  
+  // Apply prefill data when it changes (from Blog Brain topic recommendations)
+  useEffect(() => {
+    if (prefillData && isOpen) {
+      setFormData(prev => ({
+        ...prev,
+        topic: prefillData.topic || '',
+        keywords: prefillData.keywords || '',
+        keyPoints: prefillData.keyPoints || '',
+        category: prefillData.category || prev.category
+      }))
+    }
+  }, [prefillData, isOpen])
   
   const GENERATION_STAGES = [
     { label: 'Starting...', icon: '🚀' },
@@ -311,18 +328,26 @@ export default function BlogAIDialog({ onSuccess }) {
 
   return (
     <Dialog open={isOpen} onOpenChange={setIsOpen}>
-      <DialogTrigger asChild>
-        <Button className="gap-2">
-          <Sparkles className="w-4 h-4" />
-          Create with AI
-        </Button>
-      </DialogTrigger>
+      {/* Only render trigger in uncontrolled mode */}
+      {open === undefined && (
+        <DialogTrigger asChild>
+          <Button className="gap-2">
+            <Sparkles className="w-4 h-4" />
+            Create with AI
+          </Button>
+        </DialogTrigger>
+      )}
       
       <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>Create Blog Post with AI</DialogTitle>
+          <DialogTitle>
+            {prefillData ? 'Create from Signal Recommendation' : 'Create Blog Post with AI'}
+          </DialogTitle>
           <DialogDescription>
-            Provide the topic and key details. AI will generate a complete, SEO-optimized blog post in Uptrade's brand voice.
+            {prefillData 
+              ? 'Signal has recommended this topic based on your SEO data. Customize the details below.'
+              : "Provide the topic and key details. AI will generate a complete, SEO-optimized blog post in Uptrade's brand voice."
+            }
           </DialogDescription>
         </DialogHeader>
 

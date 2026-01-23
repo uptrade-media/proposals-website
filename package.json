@@ -6,7 +6,7 @@
   "packageManager": "pnpm@10.26.0",
   "scripts": {
     "dev": "netlify dev",
-    "dev:all": "concurrently -n \"signal,portal,frontend\" -c \"cyan,magenta,green\" --kill-others-on-fail \"cd ../SignalAI && pnpm start:dev\" \"cd ../portal-api && pnpm start:dev\" \"vite\"",
+    "dev:all": "concurrently -n \"signal,portal,frontend\" -c \"cyan,magenta,green\" --kill-others-on-fail \"cd ../signal-api-nestjs && pnpm start:dev\" \"cd ../portal-api-nestjs && pnpm start:dev\" \"vite\"",
     "dev:fe": "vite",
     "dev:functions": "netlify functions:serve --port 9999",
     "dev:manual": "concurrently \"pnpm dev:fe\" \"pnpm dev:functions\"",

@@ -1,12 +1,12 @@
 // src/components/seo/dashboard/DashboardHeader.jsx
 // Header component with site info, last scan time, and action buttons
 import { Button } from '@/components/ui/button'
+import SignalIcon from '@/components/ui/SignalIcon'
 import { 
   Globe, 
   ExternalLink, 
   RefreshCw, 
   Loader2, 
-  Brain,
   Clock 
 } from 'lucide-react'
 
@@ -60,8 +60,8 @@ export default function DashboardHeader({
           onClick={onAIInsights}
           className="border-purple-500/30 text-purple-400 hover:bg-purple-500/10"
         >
-          <Brain className="h-4 w-4 mr-2" />
-          AI Insights
+          <SignalIcon className="h-4 w-4 mr-2" />
+          Signal Insights
         </Button>
       </div>
     </div>

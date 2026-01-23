@@ -40,6 +40,7 @@ import useProjectsStore from '@/lib/projects-store'
 import useAuthStore from '@/lib/auth-store'
 import useReportsStore from '@/lib/reports-store'
 import InvoicePaymentDialog from './InvoicePaymentDialog'
+import SignalUsageBillingCard from './billing/SignalUsageBillingCard'
 import { adminApi, billingApi } from '@/lib/portal-api'
 
 const Billing = () => {

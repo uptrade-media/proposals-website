@@ -126,7 +126,7 @@ export async function fetchUpcomingEvents(
   const result = await apiPost<{ events: CommerceOffering[]; total: number }>(
     '/api/public/commerce/events',
     {
-      type: options.type || 'event',
+      type: 'event',
       category: options.category,
       limit: options.limit,
       includePast: options.past,

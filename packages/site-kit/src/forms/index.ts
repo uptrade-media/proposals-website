@@ -72,7 +72,7 @@
  */
 
 // Forms API - for creating/updating forms programmatically
-export { formsApi, configureFormsApi, field } from './formsApi'
+export { formsApi, configureFormsApi, field, defineForm, initializeForms } from './formsApi'
 export type { 
   Form, 
   FormField, 
@@ -81,7 +81,8 @@ export type {
   FieldType, 
   CreateFormInput, 
   UpdateFormInput,
-  FormsListOptions 
+  FormsListOptions,
+  FormDefinition
 } from './formsApi'
 
 // Headless hook - for complete UI control

@@ -8,8 +8,8 @@ import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Skeleton } from '@/components/ui/skeleton'
 import { ScrollArea } from '@/components/ui/scroll-area'
+import SignalIcon from '@/components/ui/SignalIcon'
 import {
-  Brain,
   Sparkles,
   TrendingUp,
   TrendingDown,
@@ -170,7 +170,7 @@ export default function AIInsightsPanel({ path, onClose, fullPage = false }) {
             "rounded-lg flex items-center justify-center",
             fullPage ? "w-10 h-10 bg-gradient-to-br from-emerald-500 to-teal-600" : ""
           )}>
-            <Brain className={cn(
+            <SignalIcon className={cn(
               fullPage ? "h-5 w-5 text-white" : "h-4 w-4 text-emerald-500"
             )} />
           </div>
@@ -329,7 +329,7 @@ export default function AIInsightsPanel({ path, onClose, fullPage = false }) {
           }}
         >
           <span className="flex items-center gap-2">
-            <Brain className="h-4 w-4" />
+            <SignalIcon className="h-4 w-4" />
             Ask Echo about this data
           </span>
           <ChevronRight className="h-4 w-4 group-hover:translate-x-0.5 transition-transform" />

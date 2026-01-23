@@ -45,11 +45,11 @@ import {
   PanelLeftOpen,
   RefreshCw,
   Loader2,
-  Brain,
   BarChart3,
   Calendar,
   Route,
 } from 'lucide-react'
+import SignalIcon from '@/components/ui/SignalIcon'
 import { cn } from '@/lib/utils'
 import Analytics from '@/components/Analytics'
 
@@ -313,7 +313,7 @@ function AnalyticsSidebar({ collapsed, onToggle, signalEnabled, onSignalInsights
                 collapsed ? "p-1" : "p-2"
               )}>
                 <SidebarItem
-                  icon={Brain}
+                  icon={SignalIcon}
                   label="Signal Insights"
                   active={currentView === 'signal-insights'}
                   onClick={onSignalInsightsClick}

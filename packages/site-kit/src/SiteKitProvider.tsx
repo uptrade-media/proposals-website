@@ -15,9 +15,19 @@ import { AnalyticsProvider } from './analytics/AnalyticsProvider'
 import { EngageWidget } from './engage/EngageWidget'
 import { configureFormsApi } from './forms/formsApi'
 import { SitemapSync } from './seo/SitemapSync'
+import { SignalBridge } from './signal/SignalBridge'
+
+interface SignalConfig {
+  enabled: boolean
+  realtime?: boolean
+  experiments?: boolean
+  behaviorTracking?: boolean
+}
 
 interface SiteKitContextValue extends SiteKitConfig {
   isReady: boolean
+  signal?: SignalConfig
+  signalUrl?: string
 }
 
 const SiteKitContext = createContext<SiteKitContextValue | null>(null)
@@ -32,21 +42,25 @@ export function useSiteKit(): SiteKitContextValue {
 
 interface SiteKitProviderProps extends SiteKitConfig {
   children: ReactNode
+  signalUrl?: string
 }
 
 export function SiteKitProvider({
   children,
   apiUrl = 'https://api.uptrademedia.com',
+  signalUrl = 'https://signal.uptrademedia.com',
   apiKey,
   analytics,
   engage,
   forms,
+  signal,
   debug = false,
-}: SiteKitProviderProps) {
+}: SiteKitProviderProps & { signal?: SignalConfig }) {
   // Set window globals for Portal API access
   useEffect(() => {
     if (typeof window !== 'undefined') {
       ;(window as any).__SITE_KIT_API_URL__ = apiUrl
+      ;(window as any).__SITE_KIT_SIGNAL_URL__ = signalUrl
       ;(window as any).__SITE_KIT_API_KEY__ = apiKey
       ;(window as any).__SITE_KIT_DEBUG__ = debug
     }
@@ -56,23 +70,39 @@ export function SiteKitProvider({
       baseUrl: apiUrl,
       apiKey,
     })
-  }, [apiUrl, apiKey, debug])
+  }, [apiUrl, signalUrl, apiKey, debug])
 
   const contextValue = useMemo<SiteKitContextValue>(
     () => ({
       apiUrl,
+      signalUrl,
       apiKey,
       analytics,
       engage,
       forms,
+      signal,
       debug,
       isReady: true,
     }),
-    [apiUrl, apiKey, analytics, engage, forms, debug]
+    [apiUrl, signalUrl, apiKey, analytics, engage, forms, signal, debug]
   )
 
   // Build the provider tree based on enabled modules
   let content = <>{children}</>
+
+  // Wrap with SignalBridge if enabled (must be outermost for context access)
+  if (signal?.enabled) {
+    content = (
+      <SignalBridge
+        enabled={signal.enabled}
+        realtime={signal.realtime !== false}
+        experiments={signal.experiments !== false}
+        behaviorTracking={signal.behaviorTracking !== false}
+      >
+        {content}
+      </SignalBridge>
+    )
+  }
 
   // Wrap with Analytics if enabled
   if (analytics?.enabled) {
@@ -98,7 +128,12 @@ export function SiteKitProvider({
     content = (
       <>
         {content}
-        <EngageWidget apiUrl={apiUrl} apiKey={apiKey} />
+        <EngageWidget 
+          apiUrl={apiUrl} 
+          apiKey={apiKey}
+          position={engage.position || 'bottom-right'}
+          chatEnabled={engage.chatEnabled !== false}
+        />
       </>
     )
   }

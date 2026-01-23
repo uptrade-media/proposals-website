@@ -311,7 +311,7 @@ export function FormField({ field, value, error, onChange, classPrefix = 'uptrad
             onChange={(e) => onChange(Number(e.target.value))}
             style={{ width: '100%' }}
           />
-          <div className={`${classPrefix}__slider-value`} style={{ textAlign: 'center', marginTop: 4 }}>{value || 50}</div>
+          <div className={`${classPrefix}__slider-value`} style={{ textAlign: 'center', marginTop: 4 }}>{String(value || 50)}</div>
         </div>
       )}
       

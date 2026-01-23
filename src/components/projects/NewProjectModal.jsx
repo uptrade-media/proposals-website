@@ -251,11 +251,12 @@ export function NewProjectModal({
       case 'details':
         return formData.title.trim().length > 0
       case 'contact':
+        // Contact is optional - can create project without a contact
         if (formData.createNewContact) {
           return formData.newContactName.trim().length > 0 && 
                  formData.newContactEmail.trim().length > 0
         }
-        return !!formData.contactId
+        return true // Allow skipping contact selection
       case 'modules':
         return true // No validation needed
       default:
@@ -314,10 +315,11 @@ export function NewProjectModal({
 
       // Step 3: Create the project
       const projectData = {
-        contactId,
         title: formData.title,
         description: formData.description || undefined,
         organizationId: orgId,
+        // Only include contactId if it's a valid UUID
+        ...(contactId ? { contactId } : {}),
       }
 
       const newProject = await createProject(projectData)

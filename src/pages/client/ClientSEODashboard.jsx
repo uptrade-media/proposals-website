@@ -174,7 +174,7 @@ export default function ClientSEODashboard() {
           {aiEnabled && (
             <Badge variant="outline" className="gap-1">
               <Sparkles className="h-3 w-3" />
-              AI Insights Enabled
+              Signal Insights Enabled
             </Badge>
           )}
         </div>
@@ -384,8 +384,8 @@ export default function ClientSEODashboard() {
                 </CardTitle>
                 <CardDescription>
                   {aiEnabled 
-                    ? "AI-powered suggestions to improve your rankings"
-                    : "Upgrade to AI Insights to unlock personalized recommendations"
+                    ? "Signal-powered suggestions to improve your rankings"
+                    : "Upgrade to Signal Insights to unlock personalized recommendations"
                   }
                 </CardDescription>
               </CardHeader>
@@ -395,14 +395,14 @@ export default function ClientSEODashboard() {
                     <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-primary/10">
                       <Crown className="h-8 w-8 text-primary" />
                     </div>
-                    <h3 className="text-lg font-semibold">Unlock AI-Powered SEO Insights</h3>
+                    <h3 className="text-lg font-semibold">Unlock Signal-Powered SEO Insights</h3>
                     <p className="text-muted-foreground max-w-md mx-auto">
                       Get personalized recommendations powered by AI that analyzes your specific site, 
                       competitors, and industry to find the best opportunities for growth.
                     </p>
                     <Button>
                       <Sparkles className="h-4 w-4 mr-2" />
-                      Learn About AI Insights
+                      Learn About Signal Insights
                     </Button>
                   </div>
                 ) : loading ? (

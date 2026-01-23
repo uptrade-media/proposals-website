@@ -8,17 +8,17 @@ import useBrandColors from '@/hooks/useBrandColors'
 
 const FEATURE_BENEFITS = {
   'ai-insights': {
-    title: 'AI SEO Insights',
-    description: 'Get AI-powered analysis of your pages with actionable recommendations.',
-    benefits: ['Page-level AI analysis', 'Automated recommendations', 'Priority scoring']
+    title: 'Signal SEO Insights',
+    description: 'Get Signal-powered analysis of your pages with actionable recommendations.',
+    benefits: ['Page-level Signal analysis', 'Automated recommendations', 'Priority scoring']
   },
   'blog-brain': {
-    title: 'Blog Brain',
-    description: 'AI that understands your content strategy and generates high-impact blog ideas.',
-    benefits: ['AI content ideation', 'Topic clustering', 'SEO-optimized outlines']
+    title: 'Blog Signal Brain',
+    description: 'Signal that understands your content strategy and generates high-impact blog ideas.',
+    benefits: ['Signal content ideation', 'Topic clustering', 'SEO-optimized outlines']
   },
   'content-briefs': {
-    title: 'AI Content Briefs',
+    title: 'Signal Content Briefs',
     description: 'Generate comprehensive content briefs that writers can follow to create SEO-optimized content.',
     benefits: ['Keyword targeting', 'Competitor analysis', 'Outline generation']
   },

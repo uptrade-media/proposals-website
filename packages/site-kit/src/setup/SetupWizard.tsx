@@ -602,6 +602,41 @@ export function SetupWizard({ config }: SetupWizardProps = {}) {
   // ============================================
 
   function BrandStep() {
+    const [isExtracting, setIsExtracting] = useState(false)
+    const [extractUrl, setExtractUrl] = useState('')
+    const [showExtract, setShowExtract] = useState(false)
+    
+    async function handleExtractBrand() {
+      if (!extractUrl.trim()) return
+      
+      setIsExtracting(true)
+      setError(null)
+      
+      try {
+        const response = await callPortalApi('/site-scrape/brand-only', {
+          method: 'POST',
+          body: JSON.stringify({ domain: extractUrl.replace(/^https?:\/\//, '').split('/')[0] }),
+        }) as { business_name?: string; tagline?: string; primary_color?: string; secondary_color?: string; logo_url?: string }
+        
+        // Update brand config with extracted values
+        setBrandConfig(prev => ({
+          ...prev,
+          businessName: response.business_name || prev.businessName,
+          tagline: response.tagline || prev.tagline,
+          primaryColor: response.primary_color || prev.primaryColor,
+          secondaryColor: response.secondary_color || prev.secondaryColor,
+          logoUrl: response.logo_url || prev.logoUrl,
+        }))
+        
+        setShowExtract(false)
+        setExtractUrl('')
+      } catch (err) {
+        setError(`Failed to extract brand: ${(err as Error).message}`)
+      } finally {
+        setIsExtracting(false)
+      }
+    }
+
     function handleContinue() {
       if (!brandConfig.businessName.trim()) return
       setStep('modules')
@@ -613,6 +648,48 @@ export function SetupWizard({ config }: SetupWizardProps = {}) {
           <h2 className="text-2xl font-bold mb-2">Define Your Brand</h2>
           <p className="text-gray-400">Set up the basic brand identity for this project</p>
         </div>
+
+        {/* Brand Extraction Option */}
+        {!showExtract ? (
+          <div className="max-w-lg mx-auto">
+            <button
+              onClick={() => setShowExtract(true)}
+              className="w-full flex items-center justify-center gap-3 p-4 bg-gradient-to-r from-purple-500/10 to-blue-500/10 border border-purple-500/30 rounded-lg hover:border-purple-500/50 transition-all"
+            >
+              <span className="text-2xl">🔍</span>
+              <div className="text-left">
+                <div className="font-medium">Extract from existing website</div>
+                <div className="text-sm text-gray-400">Auto-detect colors, name, and logo from a live site</div>
+              </div>
+            </button>
+          </div>
+        ) : (
+          <div className="max-w-lg mx-auto bg-gray-800/50 rounded-lg border border-gray-700 p-4">
+            <div className="flex items-center gap-2 mb-3">
+              <span className="text-xl">🔍</span>
+              <span className="font-medium">Extract Brand from Website</span>
+            </div>
+            <div className="flex gap-2">
+              <input
+                type="text"
+                value={extractUrl}
+                onChange={(e) => setExtractUrl(e.target.value)}
+                placeholder="example.com"
+                className="flex-1 px-4 py-2 bg-gray-900 border border-gray-700 rounded-lg"
+                onKeyDown={(e) => e.key === 'Enter' && handleExtractBrand()}
+              />
+              <Button onClick={handleExtractBrand} disabled={isExtracting || !extractUrl.trim()}>
+                {isExtracting ? 'Extracting...' : 'Extract'}
+              </Button>
+            </div>
+            <button
+              onClick={() => setShowExtract(false)}
+              className="text-sm text-gray-500 hover:text-gray-400 mt-2"
+            >
+              Cancel
+            </button>
+          </div>
+        )}
 
         <div className="max-w-lg mx-auto space-y-4">
           <div>
@@ -1313,6 +1390,7 @@ export default function RootLayout({ children }) {
 
     function generateFallbackTemplate() {
       const brand = setupType === 'new' ? brandConfig : scrapeStatus?.brand
+      const brandName = (brand as any)?.businessName || (brand as any)?.business_name || 'TBD'
       return `# ${selectedProject?.name} - Copilot Instructions
 
 **Project:** ${selectedProject?.name}
@@ -1321,7 +1399,7 @@ export default function RootLayout({ children }) {
 **Setup Type:** ${setupType}
 
 ## Brand
-- **Name:** ${brand?.businessName || brand?.business_name || 'TBD'}
+- **Name:** ${brandName}
 - **Primary Color:** ${brandConfig?.primaryColor || 'TBD'}
 - **Secondary Color:** ${brandConfig?.secondaryColor || 'TBD'}
 

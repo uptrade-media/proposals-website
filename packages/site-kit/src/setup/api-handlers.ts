@@ -205,25 +205,37 @@ export async function handleScan(): Promise<NextResponse> {
     
     return NextResponse.json({
       forms: results.forms.map(f => ({
-        type: f.type,
-        file: f.file,
-        line: f.line,
-        details: {
-          fields: f.fields
-        }
+        type: 'form',
+        form_library: f.formLibrary,
+        file: f.filePath,
+        component_name: f.componentName,
+        line: f.startLine,
+        fields: f.fields,
+        complexity: f.complexity,
+        suggested_action: f.suggestedAction,
+        has_validation: f.hasValidation,
+        submits_to: f.submitsTo,
       })),
       widgets: results.widgets.map(w => ({
-        type: w.type,
-        file: w.file,
-        line: w.line,
-        details: {}
+        type: 'widget',
+        widget_type: w.widgetType,
+        file: w.filePath,
+        line: w.startLine,
       })),
       metadata: results.metadata.map(m => ({
-        type: m.type,
-        file: m.file,
-        line: m.line,
-        details: {}
-      }))
+        type: 'metadata',
+        metadata_type: m.type,
+        file: m.filePath,
+        title: m.title,
+        description: m.description,
+      })),
+      sitemaps: results.sitemaps.map(s => ({
+        type: 'sitemap',
+        sitemap_type: s.type,
+        file: s.filePath,
+        line: s.startLine,
+        generator: s.generator,
+      })),
     })
   } catch (err) {
     return NextResponse.json({ error: (err as Error).message }, { status: 500 })

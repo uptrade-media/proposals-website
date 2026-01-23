@@ -1,7 +1,7 @@
 /**
  * @uptrade/site-kit/engage - Engage Widget
  * 
- * Loads and renders engagement widgets (popups, nudges, bars) via Portal API
+ * Loads and renders engagement widgets (popups, nudges, bars, chat) via Portal API
  */
 
 'use client'
@@ -9,6 +9,7 @@
 import React, { useEffect, useState, useCallback } from 'react'
 import { usePathname } from 'next/navigation'
 import type { EngageElement } from './types'
+import { ChatWidget } from './ChatWidget'
 
 interface EngageWidgetProps {
   apiUrl?: string
@@ -146,10 +147,10 @@ export function EngageWidget({
           }
         }
         document.addEventListener('mouseleave', handleMouseLeave)
-      } else if (trigger?.type === 'scroll' && trigger.scrollPercent) {
+      } else if (trigger?.type === 'scroll' && trigger.scrollPercentage) {
         const handleScroll = () => {
           const scrollPercent = (window.scrollY / (document.body.scrollHeight - window.innerHeight)) * 100
-          if (scrollPercent >= (trigger.scrollPercent || 50)) {
+          if (scrollPercent >= (trigger.scrollPercentage || 50)) {
             setActiveElements(prev => [...prev, element.id])
             window.removeEventListener('scroll', handleScroll)
           }
@@ -175,7 +176,7 @@ export function EngageWidget({
     }
   }, [elements])
   
-  // Render active elements
+  // Render active elements + chat widget
   return (
     <>
       {activeElements.map(elementId => {
@@ -191,6 +192,17 @@ export function EngageWidget({
           />
         )
       })}
+      
+      {/* Chat Widget - always rendered when chatEnabled */}
+      {chatEnabled && (
+        <ChatWidget
+          projectId={propApiKey || ''}
+          config={{
+            position,
+            buttonColor: '#00afab', // Default teal, can be customized later
+          }}
+        />
+      )}
     </>
   )
 }
@@ -247,8 +259,8 @@ function EngageElementRenderer({
           >
             ×
           </button>
-          {element.content?.title && <h2>{element.content.title}</h2>}
-          {element.content?.body && <p>{element.content.body}</p>}
+          {element.config?.title && <h2>{element.config.title}</h2>}
+          {element.config?.message && <p>{element.config.message}</p>}
         </div>
       </div>
     )
@@ -263,8 +275,8 @@ function EngageElementRenderer({
           top: 0,
           left: 0,
           right: 0,
-          backgroundColor: element.styles?.backgroundColor || '#3b82f6',
-          color: element.styles?.textColor || 'white',
+          backgroundColor: element.config?.backgroundColor || '#3b82f6',
+          color: element.config?.textColor || 'white',
           padding: '12px 24px',
           display: 'flex',
           alignItems: 'center',
@@ -273,7 +285,7 @@ function EngageElementRenderer({
           zIndex,
         }}
       >
-        <span>{element.content?.body}</span>
+        <span>{element.config?.message}</span>
         <button
           onClick={onDismiss}
           style={{

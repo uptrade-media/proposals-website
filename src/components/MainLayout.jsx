@@ -58,6 +58,8 @@ const CustomersModuleWrapper = lazy(() => import('./customers/CustomersModuleWra
 // Projects V2 Module - Three-view system
 const ProjectsV2 = lazy(() => import('./projects/ProjectsV2'))
 const Settings = lazy(() => import('./Settings'))
+// Organization Settings - for org-level client users
+const OrgSettings = lazy(() => import('@/pages/OrgSettings'))
 // Tenants management moved to Projects.jsx
 
 const MainLayout = () => {
@@ -233,13 +235,13 @@ const MainLayout = () => {
         )}
 
         {/* Main Content - Uses React Router for nested routes */}
-        <main className={`flex-1 ${isFullHeight ? 'overflow-hidden' : 'overflow-y-auto'}`}>
+        <main className={`flex-1 min-w-0 ${isFullHeight ? 'overflow-hidden' : 'overflow-y-auto'}`}>
           <Suspense fallback={
             <div className="flex items-center justify-center h-full">
               <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary" />
             </div>
           }>
-            <div className={isFullHeight ? 'h-full' : 'p-6 lg:p-8'}>
+            <div className={isFullHeight ? 'h-full w-full' : 'p-6 lg:p-8'}>
               <Routes>
                 {/* Dashboard */}
                 <Route index element={isSalesRep ? <RepDashboard onNavigate={navigateTo} /> : <Dashboard onNavigate={navigateTo} />} />
@@ -304,6 +306,7 @@ const MainLayout = () => {
                 <Route path="my-sales" element={<TenantSales />} />
                 <Route path="sales/*" element={<SalesDashboard />} />
                 <Route path="settings" element={<Settings />} />
+                <Route path="organization" element={<OrgSettings />} />
                 
                 {/* Proposal Editor (special case) */}
                 <Route path="proposal-editor/:proposalId?" element={<ProposalEditor onBack={() => navigateTo('proposals')} />} />

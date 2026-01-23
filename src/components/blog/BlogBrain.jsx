@@ -1,18 +1,16 @@
-// src/components/seo/SEOBlogBrain.jsx
-// AI-powered blog content intelligence integrated with SEO knowledge base
+// src/components/blog/BlogBrain.jsx
+// AI-powered blog content intelligence - uses SEO data for topic recommendations
+// Integrated into Blog module (moved from SEO module for better workflow)
 
 import { useState, useEffect } from 'react'
 import { useSeoStore } from '@/lib/seo-store'
 import { useSignalAccess } from '@/lib/signal-access'
-import SignalUpgradeCard from './signal/SignalUpgradeCard'
+import SignalUpgradeCard from '@/components/seo/signal/SignalUpgradeCard'
 import SignalIcon from '@/components/ui/SignalIcon'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
-import { Input } from '@/components/ui/input'
-import { Textarea } from '@/components/ui/textarea'
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { 
   Lightbulb,
   FileText,
@@ -26,60 +24,64 @@ import {
   TrendingUp,
   Target,
   BookOpen,
-  Settings,
   Play,
-  ChevronRight,
-  ExternalLink,
   Copy,
   Check
 } from 'lucide-react'
 
-export default function SEOBlogBrain({ projectId }) {
+/**
+ * BlogBrain - AI Content Intelligence for Blog Module
+ * 
+ * Features:
+ * - Topic Ideas: SEO-driven recommendations based on keyword gaps & competitor analysis
+ * - Content Audit: Scan posts for style issues (em dashes, citations, etc.)
+ * - Optimize: AI post optimizer with quality scores
+ * - Guidelines: Writing style rules
+ * 
+ * @param {string} projectId - Current project ID
+ * @param {function} onCreateFromTopic - Callback when user clicks "Create" on a topic
+ * @param {string} activeTab - Controlled active tab (optional)
+ * @param {function} onTabChange - Tab change callback (optional)
+ */
+export default function BlogBrain({ 
+  projectId, 
+  onCreateFromTopic,
+  activeTab: controlledTab,
+  onTabChange 
+}) {
   const { hasAccess: hasSignalAccess } = useSignalAccess()
-
-  // Show upgrade prompt if no Signal access
-  if (!hasSignalAccess) {
-    return (
-      <div className="p-6">
-        <SignalUpgradeCard feature="default" variant="default" />
-      </div>
-    )
-  }
-
-  const [activeTab, setActiveTab] = useState('topics')
-  const [selectedPost, setSelectedPost] = useState(null)
+  const [internalTab, setInternalTab] = useState('topics')
+  const activeTab = controlledTab ?? internalTab
+  const setActiveTab = onTabChange ?? setInternalTab
+  
   const [copiedId, setCopiedId] = useState(null)
+  const [allPostsAnalysis, setAllPostsAnalysis] = useState(null)
+  const [fixingEmDashes, setFixingEmDashes] = useState(false)
   
   const {
     blogTopicRecommendations,
     blogPostAnalysis,
-    blogOptimizationResults,
     blogBrainLoading,
     blogBrainError,
     fetchBlogTopicRecommendations,
-    analyzeBlogPost,
     analyzeAllBlogPosts,
     fixAllBlogPostEmDashes,
-    optimizeBlogPost,
-    addBlogPostCitations
+    optimizeBlogPost
   } = useSeoStore()
-
-  const [allPostsAnalysis, setAllPostsAnalysis] = useState(null)
-  const [fixingEmDashes, setFixingEmDashes] = useState(false)
 
   // Load topic recommendations on mount
   useEffect(() => {
-    if (projectId && activeTab === 'topics') {
+    if (projectId && activeTab === 'topics' && hasSignalAccess) {
       fetchBlogTopicRecommendations(projectId)
     }
-  }, [projectId, activeTab])
+  }, [projectId, activeTab, hasSignalAccess])
 
   // Load all posts analysis when switching to audit tab
   useEffect(() => {
-    if (activeTab === 'audit' && !allPostsAnalysis) {
+    if (activeTab === 'audit' && !allPostsAnalysis && hasSignalAccess) {
       loadAllPostsAnalysis()
     }
-  }, [activeTab])
+  }, [activeTab, hasSignalAccess])
 
   const loadAllPostsAnalysis = async () => {
     try {
@@ -94,7 +96,6 @@ export default function SEOBlogBrain({ projectId }) {
     setFixingEmDashes(true)
     try {
       const result = await fixAllBlogPostEmDashes()
-      // Reload analysis after fix
       await loadAllPostsAnalysis()
       alert(`Fixed ${result.fixed} posts with em dashes!`)
     } catch (error) {
@@ -106,7 +107,7 @@ export default function SEOBlogBrain({ projectId }) {
 
   const handleOptimizePost = async (postId) => {
     try {
-      await optimizeBlogPost(postId, { applyChanges: false })
+      await optimizeBlogPost(postId, projectId, { applyChanges: false })
     } catch (error) {
       console.error('Failed to optimize post:', error)
     }
@@ -118,12 +119,35 @@ export default function SEOBlogBrain({ projectId }) {
     setTimeout(() => setCopiedId(null), 2000)
   }
 
+  const handleCreateFromTopic = (topic) => {
+    if (onCreateFromTopic) {
+      onCreateFromTopic({
+        topic: topic.title,
+        keywords: topic.primaryKeyword,
+        keyPoints: topic.contentAngle || topic.angle,
+        category: topic.suggestedCategory
+      })
+    }
+  }
+
+  // Show upgrade prompt if no Signal access
+  if (!hasSignalAccess) {
+    return (
+      <div className="p-6">
+        <SignalUpgradeCard feature="default" variant="default" />
+      </div>
+    )
+  }
+
   return (
     <div className="space-y-6">
       {/* Header */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-3">
-          <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center">
+          <div 
+            className="w-12 h-12 rounded-xl flex items-center justify-center"
+            style={{ background: 'linear-gradient(135deg, var(--brand-primary), var(--brand-secondary))' }}
+          >
             <SignalIcon className="w-6 h-6 text-white" />
           </div>
           <div>
@@ -163,8 +187,8 @@ export default function SEOBlogBrain({ projectId }) {
               <div className="flex items-center justify-between">
                 <div>
                   <CardTitle className="flex items-center gap-2">
-                    <Target className="w-5 h-5 text-purple-500" />
-                    AI Topic Recommendations
+                    <Target className="w-5 h-5" style={{ color: 'var(--brand-primary)' }} />
+                    Signal Topic Recommendations
                   </CardTitle>
                   <CardDescription>
                     Blog topics based on your keyword gaps, search trends, and competitor analysis
@@ -191,7 +215,7 @@ export default function SEOBlogBrain({ projectId }) {
                   {blogTopicRecommendations.map((topic, index) => (
                     <div 
                       key={index}
-                      className="p-4 rounded-xl border border-border hover:border-purple-500/50 transition-colors"
+                      className="p-4 rounded-xl border border-border hover:border-[var(--brand-primary)]/50 transition-colors"
                     >
                       <div className="flex items-start justify-between gap-4">
                         <div className="flex-1">
@@ -240,14 +264,21 @@ export default function SEOBlogBrain({ projectId }) {
                               <Copy className="w-4 h-4" />
                             )}
                           </Button>
-                          <Button size="sm" variant="outline">
+                          <Button 
+                            size="sm" 
+                            variant="outline"
+                            onClick={() => handleCreateFromTopic(topic)}
+                          >
                             <Play className="w-4 h-4 mr-1" />
                             Create
                           </Button>
                         </div>
                       </div>
                       {topic.whyItMatters && (
-                        <p className="mt-3 text-xs text-muted-foreground bg-purple-50 dark:bg-purple-900/20 p-2 rounded">
+                        <p 
+                          className="mt-3 text-xs text-muted-foreground p-2 rounded"
+                          style={{ backgroundColor: 'color-mix(in srgb, var(--brand-primary) 10%, transparent)' }}
+                        >
                           <strong>Why now:</strong> {topic.whyItMatters}
                         </p>
                       )}
@@ -292,7 +323,8 @@ export default function SEOBlogBrain({ projectId }) {
                     <Button 
                       onClick={handleFixAllEmDashes}
                       disabled={fixingEmDashes}
-                      className="bg-gradient-to-r from-purple-500 to-pink-500 text-white"
+                      style={{ background: 'linear-gradient(135deg, var(--brand-primary), var(--brand-secondary))' }}
+                      className="text-white"
                     >
                       <Wand2 className={`w-4 h-4 mr-2 ${fixingEmDashes ? 'animate-spin' : ''}`} />
                       Fix All Em Dashes
@@ -391,8 +423,8 @@ export default function SEOBlogBrain({ projectId }) {
           <Card>
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
-                <Wand2 className="w-5 h-5 text-purple-500" />
-                AI Post Optimizer
+                <Wand2 className="w-5 h-5" style={{ color: 'var(--brand-primary)' }} />
+                Signal Post Optimizer
               </CardTitle>
               <CardDescription>
                 Select a post to analyze and optimize with AI assistance
@@ -509,11 +541,11 @@ export default function SEOBlogBrain({ projectId }) {
           <Card>
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
-                <BookOpen className="w-5 h-5 text-purple-500" />
+                <BookOpen className="w-5 h-5" style={{ color: 'var(--brand-primary)' }} />
                 Writing Guidelines
               </CardTitle>
               <CardDescription>
-                Style rules enforced by the AI Blog Brain
+                Style rules enforced by Blog Signal Brain
               </CardDescription>
             </CardHeader>
             <CardContent>
@@ -601,22 +633,6 @@ export default function SEOBlogBrain({ projectId }) {
                         "Here's the truth about digital marketing in 2025: the businesses winning aren't doing more. They're doing less, but doing it better. Let me show you exactly how."
                       </p>
                     </div>
-                  </div>
-                </div>
-
-                {/* Citation Format */}
-                <div>
-                  <h4 className="font-semibold text-foreground mb-3 flex items-center gap-2">
-                    <ExternalLink className="w-4 h-4" />
-                    Citation Format
-                  </h4>
-                  <div className="p-3 rounded-lg bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800">
-                    <ul className="space-y-2 text-sm text-blue-700 dark:text-blue-300">
-                      <li>• "According to HubSpot's 2024 State of Marketing Report..."</li>
-                      <li>• "A Stanford study found that 75% of users..."</li>
-                      <li>• "Research from Moz shows that..."</li>
-                      <li>• "Google processes 8.5 billion searches daily (Search Engine Land, 2024)"</li>
-                    </ul>
                   </div>
                 </div>
               </div>

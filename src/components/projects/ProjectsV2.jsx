@@ -375,6 +375,8 @@ export default function ProjectsV2({ onNavigate }) {
       }
     } else {
       setShowLeftSidebar(false)
+      // When leaving website or tasks view, reopen right sidebar
+      setShowRightSidebar(true)
     }
   }, [activeTab])
   
@@ -740,7 +742,7 @@ export default function ProjectsV2({ onNavigate }) {
 
   return (
     <TooltipProvider>
-      <div className="h-[calc(100vh-120px)] flex flex-col bg-background overflow-hidden">
+      <div className="h-full w-full flex flex-col bg-background overflow-hidden">
         {/* ===== TOP HEADER BAR ===== */}
         <div className="flex-shrink-0 h-14 border-b flex items-center justify-between px-4 bg-card/50">
           {/* Left: Toggle + Title */}
@@ -819,17 +821,18 @@ export default function ProjectsV2({ onNavigate }) {
         </div>
         
         {/* ===== MAIN CONTENT AREA (3-column) ===== */}
-        <div className="flex-1 flex overflow-hidden">
+        <div className="flex-1 flex overflow-hidden min-w-0">
           
           {/* ===== LEFT SIDEBAR: Task Navigation / Site Navigation ===== */}
           <AnimatePresence>
             {showLeftSidebar && (
               <motion.div
-                initial={{ width: 0, opacity: 0 }}
-                animate={{ width: 240, opacity: 1 }}
-                exit={{ width: 0, opacity: 0 }}
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
                 transition={{ duration: 0.15, ease: 'easeOut' }}
-                className="flex-shrink-0 border-r overflow-hidden bg-muted/30"
+                className="border-r overflow-hidden bg-muted/30"
+                style={{ flexShrink: 0, width: 240 }}
               >
                 <ScrollArea className="h-full">
                   {activeTab === 'website' ? (
@@ -930,7 +933,7 @@ export default function ProjectsV2({ onNavigate }) {
           </AnimatePresence>
           
           {/* ===== CENTER: Main Content with Tabs ===== */}
-          <div className="flex-1 overflow-hidden flex flex-col">
+          <div className="flex-1 overflow-hidden flex flex-col" style={{ minWidth: 0 }}>
             {/* Tabs Header */}
             <div className="border-b shrink-0 bg-background/50">
               <Tabs value={activeTab} onValueChange={setActiveTab}>
@@ -1113,12 +1116,12 @@ export default function ProjectsV2({ onNavigate }) {
             {showRightSidebar && (
               <motion.div
                 initial={{ width: 0, opacity: 0 }}
-                animate={{ width: 300, opacity: 1 }}
+                animate={{ width: 360, opacity: 1 }}
                 exit={{ width: 0, opacity: 0 }}
                 transition={{ duration: 0.15, ease: 'easeOut' }}
-                className="flex-shrink-0 border-l overflow-hidden bg-muted/30 h-full"
+                className="border-l bg-muted/30 h-full shrink-0 overflow-hidden"
               >
-                <div className="h-full flex flex-col overflow-hidden">
+                <div className="h-full w-full flex flex-col overflow-hidden">
                   {/* Search */}
                   <div className="p-3 border-b shrink-0">
                     <div className="relative">
@@ -1132,10 +1135,10 @@ export default function ProjectsV2({ onNavigate }) {
                     </div>
                   </div>
                   
-                  <ScrollArea className="flex-1">
-                    <div className="p-3 space-y-3">
-                      {/* Favorites Section */}
-                      {favorites.length > 0 && (
+                <ScrollArea className="flex-1 w-full overflow-hidden">
+                  <div className="p-3 space-y-3 overflow-hidden">
+                    {/* Favorites Section */}
+                    {favorites.length > 0 && (
                         <div className="space-y-2">
                           <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider flex items-center gap-1.5">
                             <Star className="h-3 w-3 fill-yellow-400 text-yellow-400" />
@@ -1172,7 +1175,7 @@ export default function ProjectsV2({ onNavigate }) {
                       
                       {/* Organizations & Projects */}
                       {viewType === 'uptrade-admin' && (
-                        <div className="space-y-2">
+                        <div className="space-y-2 overflow-hidden">
                           <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
                             Organizations
                           </p>
@@ -1186,12 +1189,13 @@ export default function ProjectsV2({ onNavigate }) {
                                 key={org.id}
                                 open={isExpanded}
                                 onOpenChange={() => toggleOrg(org.id)}
+                                className="overflow-hidden"
                               >
-                                <div className="flex items-center gap-1">
+                                <div className="flex items-center gap-1 min-w-0 overflow-hidden w-full pr-1">
                                   <CollapsibleTrigger asChild>
                                     <button
                                       className={cn(
-                                        "flex-1 flex items-center gap-2 px-2 py-2 text-sm rounded-md hover:bg-muted transition-colors text-left",
+                                        "flex-1 flex items-center gap-2 px-2 py-2 text-sm rounded-md hover:bg-muted transition-colors text-left min-w-0 overflow-hidden",
                                         selectedOrg?.id === org.id && "bg-primary/10 font-medium"
                                       )}
                                     >
@@ -1201,7 +1205,7 @@ export default function ProjectsV2({ onNavigate }) {
                                         <ChevronRight className="h-4 w-4 text-muted-foreground shrink-0" />
                                       )}
                                       <Building2 className="h-4 w-4 text-muted-foreground shrink-0" />
-                                      <span className="truncate flex-1">{org.name}</span>
+                                      <span className="truncate min-w-0 flex-1">{org.name}</span>
                                       <Badge variant="secondary" className="h-5 px-1.5 text-xs shrink-0">
                                         {orgProjects.length}
                                       </Badge>
@@ -1225,7 +1229,7 @@ export default function ProjectsV2({ onNavigate }) {
                                 </div>
 
                                 <CollapsibleContent>
-                                  <div className="pl-2 pt-2 space-y-2">
+                                  <div className="pl-2 pr-2.5 pt-2 space-y-2">
                                     {orgProjects.map((project) => (
                                       <ProjectTile
                                         key={project.id}

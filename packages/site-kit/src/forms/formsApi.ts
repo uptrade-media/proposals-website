@@ -388,6 +388,43 @@ export const formsApi = {
   async setActive(formId: string, isActive: boolean): Promise<Form> {
     return formsApi.update(formId, { isActive })
   },
+
+  /**
+   * Sync a form definition to the backend
+   * Creates the form if it doesn't exist, updates if it does
+   * Perfect for defining forms in code during development
+   * 
+   * @example
+   * ```tsx
+   * // In your app initialization or form component
+   * await formsApi.sync({
+   *   slug: 'contact',
+   *   name: 'Contact Form',
+   *   formType: 'prospect',
+   *   fields: [
+   *     field.text('name', 'Your Name', { isRequired: true }),
+   *     field.email('email', 'Email Address'),
+   *     field.phone('phone', 'Phone Number'),
+   *     field.textarea('message', 'Message'),
+   *   ]
+   * })
+   * ```
+   */
+  async sync(input: Omit<CreateFormInput, 'projectId'>): Promise<Form & { synced: boolean; created: boolean; updated: boolean }> {
+    return apiRequest<Form & { synced: boolean; created: boolean; updated: boolean }>(
+      'POST',
+      '/api/public/forms/sync',
+      input
+    )
+  },
+
+  /**
+   * Sync multiple forms at once
+   * Useful for initializing all forms in your app
+   */
+  async syncAll(forms: Array<Omit<CreateFormInput, 'projectId'>>): Promise<Array<Form & { synced: boolean; created: boolean; updated: boolean }>> {
+    return Promise.all(forms.map(form => formsApi.sync(form)))
+  },
 }
 
 // ============================================
@@ -496,4 +533,96 @@ export const field = {
     label,
     fieldType: 'paragraph',
   }),
+}
+
+// ============================================
+// Form Definition Helper
+// ============================================
+
+export interface FormDefinition extends Omit<CreateFormInput, 'projectId'> {
+  slug: string
+  name: string
+  fields: FormField[]
+}
+
+/**
+ * Define a form declaratively
+ * Returns a form definition that can be synced to the backend
+ * 
+ * @example
+ * ```tsx
+ * // forms/contact.ts
+ * import { defineForm, field } from '@uptrade/site-kit/forms'
+ * 
+ * export const contactForm = defineForm({
+ *   slug: 'contact',
+ *   name: 'Contact Us',
+ *   formType: 'prospect',
+ *   successMessage: 'Thanks! We\'ll be in touch soon.',
+ *   fields: [
+ *     field.text('name', 'Your Name', { isRequired: true }),
+ *     field.email('email', 'Email Address'),
+ *     field.phone('phone', 'Phone Number'),
+ *     field.select('service', 'Service Needed', [
+ *       { value: 'consultation', label: 'Free Consultation' },
+ *       { value: 'representation', label: 'Legal Representation' },
+ *     ]),
+ *     field.textarea('message', 'Tell us about your case'),
+ *   ]
+ * })
+ * 
+ * // Then in your app:
+ * await formsApi.sync(contactForm)
+ * ```
+ */
+export function defineForm(definition: FormDefinition): FormDefinition {
+  // Ensure fields have sort order
+  const fieldsWithOrder = definition.fields.map((f, index) => ({
+    ...f,
+    sortOrder: f.sortOrder ?? index,
+  }))
+  
+  return {
+    ...definition,
+    fields: fieldsWithOrder,
+    formType: definition.formType || 'contact',
+    successMessage: definition.successMessage || 'Thank you for your submission!',
+    submitButtonText: definition.submitButtonText || 'Submit',
+    layout: definition.layout || 'stacked',
+    isActive: definition.isActive ?? true,
+  }
+}
+
+/**
+ * Initialize multiple forms and sync them to the backend
+ * Call this once during app initialization (e.g., in layout.tsx or _app.tsx)
+ * 
+ * @example
+ * ```tsx
+ * // app/layout.tsx
+ * import { initializeForms } from '@uptrade/site-kit/forms'
+ * import { contactForm } from './forms/contact'
+ * import { consultationForm } from './forms/consultation'
+ * 
+ * // Initialize forms (runs once per build/server start in dev)
+ * if (process.env.NODE_ENV === 'development') {
+ *   initializeForms([contactForm, consultationForm])
+ * }
+ * ```
+ */
+export async function initializeForms(forms: FormDefinition[]): Promise<void> {
+  if (typeof window === 'undefined') {
+    // Server-side: log that forms need to be synced
+    console.log(`[Site-Kit] ${forms.length} form(s) ready to sync: ${forms.map(f => f.slug).join(', ')}`)
+    return
+  }
+  
+  try {
+    const results = await formsApi.syncAll(forms)
+    const created = results.filter(r => r.created).length
+    const updated = results.filter(r => r.updated).length
+    console.log(`[Site-Kit] Forms synced: ${created} created, ${updated} updated`)
+  } catch (error) {
+    console.error('[Site-Kit] Failed to sync forms:', error)
+  }
 }

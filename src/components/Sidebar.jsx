@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useLocation } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -113,6 +113,7 @@ const Sidebar = ({
   // - 'hover': expanded when hovered
   const isExpanded = sidebarMode === 'expanded' || (sidebarMode === 'hover' && isHovered)
   const navigate = useNavigate()
+  const location = useLocation()
   const { user, logout, isSuperAdmin, currentOrg, currentProject, accessLevel } = useAuthStore()
   const { hasFeatureRaw } = useOrgFeatures()
   const { primary: brandPrimary, rgba } = useBrandColors()
@@ -275,7 +276,6 @@ const Sidebar = ({
         { id: 'dashboard', label: 'Dashboard', icon: Home },
         { id: 'projects', label: 'Projects', icon: FileText },
         { id: 'sync', label: 'Sync', icon: Calendar },
-        { id: 'team', label: 'Team', icon: Shield },
         { id: 'messages', label: 'Messages', icon: MessageSquare, badge: unreadMessages > 0 ? unreadMessages.toString() : null },
       ]
       
@@ -324,8 +324,6 @@ const Sidebar = ({
       allNavigationItems.push({ id: 'projects', label: 'Projects', icon: FileText })
       allNavigationItems.push({ id: 'sync', label: 'Sync', icon: Calendar })
       allNavigationItems.push({ id: 'files', label: 'Files', icon: FolderOpen })
-      // Team is a per-project module but placed under Files
-      allNavigationItems.push({ id: 'team', label: 'Team', icon: Shield })
       
       // Uptrade Media services - collapsible dropdown for Uptrade clients (not Sonor white-label)
       // Uses a special marker that will be rendered as a collapsible section
@@ -589,6 +587,26 @@ const Sidebar = ({
           )
         })}
       </nav>
+
+      {/* Organization Settings - only for org-level users in client orgs */}
+      {hasOrgLevelAccess && isClientOrg && (
+        <div className="py-2 border-t border-border/50">
+          <Button
+            variant="ghost"
+            className={`w-full h-10 justify-start px-0 ${
+              location.pathname === '/organization'
+                ? 'text-foreground bg-muted/80'
+                : 'text-muted-foreground hover:text-foreground hover:bg-muted/50'
+            }`}
+            onClick={() => navigate('/organization')}
+          >
+            <span className="flex items-center justify-center w-14 flex-shrink-0">
+              <Settings className="h-[18px] w-[18px]" />
+            </span>
+            {isExpanded && <span className="text-sm pr-3">Organization</span>}
+          </Button>
+        </div>
+      )}
 
       {/* Footer - Sidebar control dropdown */}
       <div className="py-2 border-t border-border/50">

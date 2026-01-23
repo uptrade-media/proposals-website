@@ -1,31 +1,21 @@
 /**
  * Signal Access Hooks
  * 
- * Unified hooks for checking Signal AI feature access across the portal.
- * Replaces deprecated seo_sites.signal_enabled pattern with projects.features pattern.
+ * Signal AI must be explicitly enabled at the organization level.
+ * Usage is tracked and billed.
  * 
- * TWO-TIER SIGNAL MODEL:
+ * Access is restricted if:
+ * - Signal is not enabled for the organization
+ * - Org has an unpaid Signal invoice > 15 days overdue
  * 
- * 1. ORG-LEVEL SIGNAL (organizations.signal_enabled = true):
- *    - Echo chat visible for ALL users in the org
- *    - Sync Signal integration enabled (AI in calendar/scheduling)
- *    - Signal enabled for ALL projects within that org
- *    - Full AI capabilities across the entire organization
- * 
- * 2. PROJECT-LEVEL SIGNAL (project.features.includes('signal')):
- *    - Signal functions within project-specific modules ONLY (SEO, Engage, CRM skills)
- *    - Echo chat is NOT visible for users
- *    - Sync Signal integration is NOT available
- *    - AI features scoped to that specific project only
- * 
- * @see /docs/SIGNAL-MULTI-TENANT-ARCHITECTURE.md
+ * @see supabase/migrations/20260122_signal_usage_invoicing.sql
  */
 
 import useAuthStore from './auth-store'
 
 /**
  * Get the current user's Signal access context.
- * This is the primary hook for determining Signal capabilities.
+ * Checks org-level signal_enabled setting first.
  * 
  * @returns {SignalAccessContext}
  */
@@ -38,54 +28,38 @@ export const useSignalAccess = () => {
   const user = useAuthStore(state => state.user)
   
   // Check if user is an admin (superAdmin or admin role)
-  // Admins always have full Signal access for testing/management purposes
   const isAdmin = isSuperAdmin || user?.role === 'admin'
   
-  // Check org-level Signal (covers all projects, enables Echo + Sync Signal)
-  const orgSignalEnabled = currentOrg?.signal_enabled === true
+  // Check if Signal is enabled at org level
+  const orgSignalEnabled = currentOrg?.signal_enabled || currentOrg?.signalEnabled || false
   
-  // Check current project's Signal (project-level only, no Echo/Sync)
-  const currentProjectHasSignal = hasSignalFeature(currentProject)
+  // Check if org is restricted due to unpaid invoice
+  const isRestricted = currentOrg?.is_access_restricted === true
   
-  // Get all Signal-enabled projects the user can access
-  const signalEnabledProjects = (availableProjects || []).filter(hasSignalFeature)
-  
-  // User has Signal access if:
-  // 1. They are an admin (always has access), OR
-  // 2. Org has Signal enabled, OR
-  // 3. Any project has Signal enabled
-  const hasAccess = isAdmin || orgSignalEnabled || signalEnabledProjects.length > 0
-  
-  // Determine scope
-  let scope = 'none'
-  if (isAdmin) {
-    scope = 'admin' // Admin override - full access
-  } else if (orgSignalEnabled) {
-    scope = 'org'
-  } else if (signalEnabledProjects.length > 0) {
-    scope = 'project'
-  }
+  // Access granted only if Signal is enabled AND not restricted
+  const hasAccess = orgSignalEnabled && !isRestricted
   
   return {
-    // Core access flags
-    hasAccess,                      // User has any Signal access
-    hasOrgSignal: isAdmin || orgSignalEnabled, // Org-level Signal (enables Echo + Sync Signal)
-    hasCurrentProjectSignal: isAdmin || orgSignalEnabled || currentProjectHasSignal, // Signal for current project
+    // Core access flags - Based on org signal_enabled setting
+    hasAccess,                      // User has Signal access (org enabled + not restricted)
+    hasOrgSignal: orgSignalEnabled, // Signal enabled at org level
+    hasCurrentProjectSignal: orgSignalEnabled, // Signal for current project (inherits from org)
     isAdmin,                        // Is admin with override access
+    isRestricted,                   // Org is restricted for unpaid invoice
     
-    // Actual subscription status (without admin override)
-    orgActuallyHasSignal: orgSignalEnabled, // True only if org is actually subscribed
-    projectActuallyHasSignal: currentProjectHasSignal, // True only if project has signal feature
+    // Legacy flags - now properly check org settings
+    orgActuallyHasSignal: orgSignalEnabled,
+    projectActuallyHasSignal: orgSignalEnabled,
     
-    // Feature-specific access
-    canUseEcho: isAdmin || orgSignalEnabled,     // Echo requires org-level Signal
-    canUseSyncSignal: isAdmin || orgSignalEnabled, // Sync Signal requires org-level Signal
-    canUseProjectSignal: isAdmin || orgSignalEnabled || currentProjectHasSignal, // Project module AI features
+    // Feature-specific access - all depend on org signal_enabled
+    canUseEcho: hasAccess,          // Echo available if Signal enabled
+    canUseSyncSignal: hasAccess,    // Sync Signal available if Signal enabled
+    canUseProjectSignal: hasAccess, // Project module AI features available if Signal enabled
     
     // Scope information
-    scope,                          // 'none' | 'project' | 'org' | 'admin'
-    signalEnabledProjects,          // Array of projects with Signal
-    signalProjectIds: signalEnabledProjects.map(p => p.id),
+    scope: isRestricted ? 'restricted' : (orgSignalEnabled ? 'full' : 'disabled'),
+    signalEnabledProjects: orgSignalEnabled ? (availableProjects || []) : [],
+    signalProjectIds: orgSignalEnabled ? (availableProjects || []).map(p => p.id) : [],
     
     // Context
     isOrgLevel: accessLevel === 'organization',
@@ -97,134 +71,65 @@ export const useSignalAccess = () => {
 
 /**
  * Check if a project has the Signal feature enabled.
- * Handles both array and object feature formats.
+ * Now checks org-level signal_enabled setting.
+ * Kept for backward compatibility.
  * 
  * @param {Object} project - Project object with features
- * @returns {boolean}
+ * @returns {boolean} - True if org has Signal enabled
  */
 export const hasSignalFeature = (project) => {
-  if (!project) return false
-  
-  const features = project.features
-  
-  // Array format: ['seo', 'signal', 'engage']
-  if (Array.isArray(features)) {
-    return features.includes('signal')
-  }
-  
-  // Object format: { seo: true, signal: true }
-  if (features && typeof features === 'object') {
-    return features.signal === true
-  }
-  
-  return false
+  const currentOrg = useAuthStore.getState().currentOrg
+  return currentOrg?.signal_enabled || currentOrg?.signalEnabled || false
 }
 
 /**
  * Get detailed Signal status for UI display.
- * Use this for showing Signal status badges, upgrade prompts, etc.
+ * Now primarily used to show billing/restriction status.
  * 
  * @returns {SignalStatus}
  */
 export const useSignalStatus = () => {
-  const { 
-    hasAccess, 
-    hasOrgSignal, 
-    hasCurrentProjectSignal,
-    scope,
-    signalEnabledProjects,
-    currentProjectId,
-    isOrgLevel,
-  } = useSignalAccess()
-  
+  const { hasAccess, isRestricted, orgId } = useSignalAccess()
   const currentOrg = useAuthStore(state => state.currentOrg)
   const currentProject = useAuthStore(state => state.currentProject)
   
-  // No access at all
-  if (!hasAccess) {
+  // Org is restricted due to unpaid invoice
+  if (isRestricted) {
     return {
       enabled: false,
-      reason: 'not_subscribed',
-      scope: 'none',
-      canUpgrade: true,
-      message: 'Signal AI is not enabled. Upgrade to unlock AI-powered insights.',
+      reason: 'unpaid_invoice',
+      scope: 'restricted',
+      canUpgrade: false,
+      message: 'Portal access is restricted due to an unpaid Signal invoice. Please pay to restore access.',
+      invoiceUrl: `/billing?org=${orgId}`, // Link to billing page
     }
   }
   
-  // Org-level Signal
-  if (hasOrgSignal) {
-    return {
-      enabled: true,
-      reason: 'org_signal',
-      scope: 'org',
-      tier: currentOrg?.signal_tier || 'org',
-      enabledAt: currentOrg?.signal_enabled_at,
-      message: 'Full Signal AI access across all projects.',
-    }
-  }
-  
-  // Project-level Signal - check current project
-  if (hasCurrentProjectSignal) {
-    return {
-      enabled: true,
-      reason: 'project_signal',
-      scope: 'project',
-      tier: 'project',
-      projectId: currentProjectId,
-      projectName: currentProject?.title,
-      message: `Signal AI enabled for ${currentProject?.title || 'this project'}.`,
-    }
-  }
-  
-  // Has Signal on other projects but not current one
-  if (signalEnabledProjects.length > 0) {
-    const projectNames = signalEnabledProjects.map(p => p.title).join(', ')
-    return {
-      enabled: false,
-      reason: 'not_enabled_for_current_project',
-      scope: 'project',
-      hasOtherProjects: true,
-      signalProjects: signalEnabledProjects,
-      canUpgrade: true,
-      message: isOrgLevel 
-        ? `Signal AI is available for: ${projectNames}. Enable it for this project or upgrade to Org Signal.`
-        : `Signal AI is not enabled for this project.`,
-    }
-  }
-  
-  // Fallback
+  // Normal access - Signal enabled for all
   return {
-    enabled: false,
-    reason: 'unknown',
-    scope: 'none',
-    message: 'Unable to determine Signal status.',
+    enabled: true,
+    reason: 'enabled_for_all',
+    scope: 'full',
+    tier: 'usage_based',
+    message: 'Signal AI is active. Usage is tracked and billed monthly.',
   }
 }
 
 /**
  * Get list of project IDs that have Signal enabled.
- * Useful for API calls that need to scope queries.
+ * Now returns all projects since Signal is enabled for all.
  * 
  * @returns {string[]} Array of project IDs with Signal access
  */
 export const useSignalEnabledProjectIds = () => {
-  const { signalProjectIds, hasOrgSignal } = useSignalAccess()
   const availableProjects = useAuthStore(state => state.availableProjects)
-  
-  // Org Signal = all projects enabled
-  if (hasOrgSignal) {
-    return (availableProjects || []).map(p => p.id)
-  }
-  
-  return signalProjectIds
+  // All projects have Signal now
+  return (availableProjects || []).map(p => p.id)
 }
 
 /**
  * Check if Echo AI should be visible in the current context.
- * Echo requires ORG-LEVEL Signal access (not project-level).
- * 
- * Project-level Signal only enables AI features within project modules,
- * not the Echo chat interface.
+ * Echo is now available for everyone (unless restricted for unpaid invoice).
  * 
  * @returns {boolean}
  */
@@ -235,7 +140,7 @@ export const useEchoAccess = () => {
 
 /**
  * Check if Sync Signal integration should be available.
- * Sync Signal requires ORG-LEVEL Signal access (not project-level).
+ * Sync Signal is now available for everyone (unless restricted for unpaid invoice).
  * 
  * @returns {boolean}
  */
@@ -253,9 +158,7 @@ export const useSyncSignalAccess = () => {
 export const useEchoConfig = () => {
   const { 
     hasAccess,
-    hasOrgSignal,
-    scope,
-    signalProjectIds,
+    isRestricted,
     currentProjectId,
     orgId,
   } = useSignalAccess()
@@ -263,63 +166,78 @@ export const useEchoConfig = () => {
   if (!hasAccess) {
     return {
       available: false,
-      scope: 'none',
+      scope: isRestricted ? 'restricted' : 'none',
       projectIds: [],
+      restrictedReason: isRestricted ? 'unpaid_invoice' : undefined,
     }
   }
   
   return {
     available: true,
-    scope,
+    scope: 'full',
     orgId,
     currentProjectId,
-    projectIds: hasOrgSignal 
-      ? null // null = all projects (org-level)
-      : signalProjectIds,
+    projectIds: null, // null = all projects
   }
 }
 
 /**
  * Higher-order component wrapper for Signal-gated features.
- * Wraps a component to only render if user has Signal access.
+ * Now primarily checks for billing restrictions rather than feature access.
  * 
  * @param {React.Component} WrappedComponent 
- * @param {Object} options - { requireCurrentProject: boolean, fallback: React.Component }
+ * @param {Object} options - { fallback: React.Component }
  */
 export const withSignalAccess = (WrappedComponent, options = {}) => {
-  const { requireCurrentProject = false, fallback: Fallback = null } = options
+  const { fallback: Fallback = null } = options
   
   return function SignalGatedComponent(props) {
-    const { hasAccess, hasCurrentProjectSignal } = useSignalAccess()
+    const { hasAccess, isRestricted } = useSignalAccess()
     const React = require('react')
     const { createElement } = React
     
     if (!hasAccess) {
-      return Fallback ? createElement(Fallback, props) : null
-    }
-    
-    if (requireCurrentProject && !hasCurrentProjectSignal) {
-      return Fallback ? createElement(Fallback, { ...props, notEnabledForProject: true }) : null
+      return Fallback 
+        ? createElement(Fallback, { ...props, isRestricted }) 
+        : null
     }
     
     return createElement(WrappedComponent, props)
   }
 }
 
+/**
+ * Hook to check if the org has any billing restrictions.
+ * Used to show payment prompts in the UI.
+ * 
+ * @returns {BillingRestriction}
+ */
+export const useSignalBillingStatus = () => {
+  const currentOrg = useAuthStore(state => state.currentOrg)
+  
+  return {
+    isRestricted: currentOrg?.is_access_restricted === true,
+    restrictionReason: currentOrg?.restriction_reason || null,
+    invoiceId: currentOrg?.overdue_invoice_id || null,
+    daysOverdue: currentOrg?.days_overdue || null,
+  }
+}
+
 // Type definitions for documentation
 /**
  * @typedef {Object} SignalAccessContext
- * @property {boolean} hasAccess - User has any Signal access (org or project level)
- * @property {boolean} hasOrgSignal - Org-level Signal subscription (enables Echo + Sync Signal)
- * @property {boolean} hasCurrentProjectSignal - Current project has Signal (org-level or project-level)
- * @property {boolean} isAdmin - Is admin with override access
- * @property {boolean} canUseEcho - Can use Echo chat (requires org-level Signal)
- * @property {boolean} canUseSyncSignal - Can use Sync Signal integration (requires org-level Signal)
- * @property {boolean} canUseProjectSignal - Can use Signal in project modules (SEO, Engage, CRM)
- * @property {'none'|'project'|'org'|'admin'} scope - Access scope level
- * @property {Object[]} signalEnabledProjects - Projects with Signal access
- * @property {string[]} signalProjectIds - IDs of projects with Signal
- * @property {boolean} isOrgLevel - User is org-level (not project-scoped)
+ * @property {boolean} hasAccess - User has Signal access (false only if restricted for unpaid invoice)
+ * @property {boolean} hasOrgSignal - Always true now (Signal enabled for all)
+ * @property {boolean} hasCurrentProjectSignal - Always true now
+ * @property {boolean} isAdmin - Is admin
+ * @property {boolean} isRestricted - Org is restricted for unpaid invoice
+ * @property {boolean} canUseEcho - Can use Echo chat
+ * @property {boolean} canUseSyncSignal - Can use Sync Signal integration
+ * @property {boolean} canUseProjectSignal - Can use Signal in project modules
+ * @property {'restricted'|'full'} scope - Access scope level
+ * @property {Object[]} signalEnabledProjects - All projects (Signal enabled for all)
+ * @property {string[]} signalProjectIds - All project IDs
+ * @property {boolean} isOrgLevel - User is org-level
  * @property {boolean} isProjectLevel - User is project-level only
  * @property {string|null} currentProjectId
  * @property {string|null} orgId
@@ -327,24 +245,29 @@ export const withSignalAccess = (WrappedComponent, options = {}) => {
 
 /**
  * @typedef {Object} SignalStatus
- * @property {boolean} enabled - Signal is enabled in current context
+ * @property {boolean} enabled - Signal is enabled
  * @property {string} reason - Why enabled/disabled
- * @property {'none'|'project'|'org'} scope
- * @property {string} [tier] - 'project' or 'org'
- * @property {string} [enabledAt] - ISO date when enabled
- * @property {string} [projectId] - If project-level
- * @property {string} [projectName]
- * @property {boolean} [hasOtherProjects] - Has Signal on other projects
- * @property {Object[]} [signalProjects] - Other projects with Signal
- * @property {boolean} [canUpgrade] - Can upgrade to get access
+ * @property {'restricted'|'full'} scope
+ * @property {string} [tier] - 'usage_based'
+ * @property {boolean} [canUpgrade] - N/A now
  * @property {string} message - Human-readable status message
+ * @property {string} [invoiceUrl] - Link to pay invoice if restricted
  */
 
 /**
  * @typedef {Object} EchoConfig
  * @property {boolean} available - Echo is available
- * @property {'none'|'project'|'org'} scope
+ * @property {'restricted'|'full'|'none'} scope
  * @property {string} [orgId]
  * @property {string} [currentProjectId]
  * @property {string[]|null} projectIds - null = all projects
+ * @property {string} [restrictedReason] - If restricted
+ */
+
+/**
+ * @typedef {Object} BillingRestriction
+ * @property {boolean} isRestricted - Org is restricted
+ * @property {string|null} restrictionReason - Why restricted
+ * @property {string|null} invoiceId - Overdue invoice ID
+ * @property {number|null} daysOverdue - How many days overdue
  */

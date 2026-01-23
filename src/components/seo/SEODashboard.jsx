@@ -24,11 +24,11 @@ import {
   MousePointerClick,
   Eye,
   BarChart3,
-  Brain,
   Shield,
   Calendar,
   Clock
 } from 'lucide-react'
+import SignalIcon from '@/components/ui/SignalIcon'
 import { useSeoStore } from '@/lib/seo-store'
 import useAuthStore from '@/lib/auth-store'
 
@@ -601,8 +601,8 @@ export default function SEODashboard({ onNavigate }) {
             onClick={() => setView('ai-insights')}
             className="border-purple-500/30 text-purple-400 hover:bg-purple-500/10"
           >
-            <Brain className="h-4 w-4 mr-2" />
-            AI Insights
+            <SignalIcon className="h-4 w-4 mr-2" />
+            Signal Insights
           </Button>
         </div>
       </div>

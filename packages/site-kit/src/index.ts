@@ -123,3 +123,34 @@ export type {
 
 // Note: Pages are auto-discovered via site-kit page views
 // No manual registration needed - SEO metadata is extracted and sent on every page load
+
+// Signal AI module exports
+export {
+  SignalBridge,
+  useSignal,
+  useSignalConfig,
+  useSignalEvent,
+  useSignalOutcome,
+  useSignalExperiment,
+  SignalExperiment,
+  useExperimentVariant,
+  ExperimentConversion,
+} from './signal'
+export type {
+  SignalConfig,
+  SignalEvent,
+  SignalOutcome,
+  SignalContextValue,
+  SignalBridgeProps,
+  ExperimentConfig,
+  ExperimentVariant,
+  ExperimentAssignment,
+  EngageOverride,
+  MetaOverride,
+  PriceOverride,
+} from './signal'
+
+// Setup module exports
+export { SetupWizard } from './setup/SetupWizard'
+export { SetupAssistant } from './setup/SetupAssistant'
+

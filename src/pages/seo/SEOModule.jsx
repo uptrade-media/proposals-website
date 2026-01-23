@@ -18,10 +18,10 @@ import {
   TooltipTrigger,
 } from '@/components/ui/tooltip'
 import { cn } from '@/lib/utils'
+import SignalIcon from '@/components/ui/SignalIcon'
 import { 
   Search,
   Settings,
-  Brain,
   RefreshCw,
   ChevronRight,
   PanelLeftClose,
@@ -50,7 +50,6 @@ import SEOSchemaMarkup from '@/components/seo/SEOSchemaMarkup'
 import SEOManagedFAQs from '@/components/seo/SEOManagedFAQs'
 import SEOContentBriefs from '@/components/seo/SEOContentBriefs'
 import SEOAlerts from '@/components/seo/SEOAlerts'
-import SEOBlogBrain from '@/components/seo/SEOBlogBrain'
 import SEOSetupGate from '@/components/seo/SEOSetupGate'
 import SEOChangeHistory from '@/components/seo/SEOChangeHistory'
 import SEOIndexingIssues from '@/components/seo/SEOIndexingIssues'
@@ -65,7 +64,7 @@ const SEOCollaboration = lazy(() => import('@/components/seo/SEOCollaboration').
 function ComingSoon({ feature }) {
   return (
     <div className="rounded-lg border border-border/50 bg-muted/30 py-12 text-center">
-      <Brain className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
+      <SignalIcon className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
       <h3 className="text-lg font-semibold text-foreground mb-2">{feature} Coming Soon</h3>
       <p className="text-muted-foreground">This feature is currently in development.</p>
     </div>
@@ -99,7 +98,6 @@ const TAB_COMPONENTS_OLD = {
   'local-seo': SEOLocalSeo,
   'competitors': SEOCompetitors,
   'ai-insights': SEOAIInsights,
-  'blog-brain': SEOBlogBrain,
   'content-briefs': SEOContentBriefs,
   'sprints': SEOSprints,
   'autopilot': SEOAutopilot,
@@ -245,7 +243,7 @@ export default function SEOModule() {
                   </>
                 ) : (
                   <>
-                    <Brain className="mr-2 h-4 w-4" />
+                    <SignalIcon className="mr-2 h-4 w-4" />
                     Auto-Optimize
                   </>
                 )}
@@ -329,7 +327,6 @@ export default function SEOModule() {
                     <Route path="local-seo" element={<SEOLocalSeo projectId={projectId} />} />
                     <Route path="competitors" element={<SEOCompetitors projectId={projectId} />} />
                     <Route path="ai-insights" element={<SEOAIInsights projectId={projectId} />} />
-                    <Route path="blog-brain" element={<SEOBlogBrain projectId={projectId} />} />
                     <Route path="content-briefs" element={<SEOContentBriefs projectId={projectId} />} />
                     
                     {/* Lazy loaded routes */}

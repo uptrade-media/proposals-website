@@ -39,9 +39,13 @@ async function fetchRelatedPosts(
   }
 }
 
-interface RelatedPostsServerProps extends Omit<RelatedPostsProps, 'projectId'> {
+interface RelatedPostsServerProps {
   apiUrl?: string
   apiKey?: string
+  currentPostId: string
+  limit?: number
+  className?: string
+  renderItem?: (post: BlogPost) => React.ReactNode
 }
 
 export async function RelatedPosts({

@@ -24,9 +24,17 @@ import { supabase } from './supabase-auth'
 // Signal API URL - AI brain for Echo, skills, knowledge
 const SIGNAL_API_URL = import.meta.env.VITE_SIGNAL_API_URL || 'https://signal.uptrademedia.com'
 
+// Signal API Key for service-to-service auth (local dev)
+const SIGNAL_API_KEY = import.meta.env.VITE_SIGNAL_API_KEY || ''
+
 // Helper to get Signal API URL (used by SSE connections)
 export function getSignalApiUrl() {
   return SIGNAL_API_URL
+}
+
+// Helper to get Signal API Key (for SSE connections)
+export function getSignalApiKey() {
+  return SIGNAL_API_KEY
 }
 
 // Create axios instance for Signal API (non-streaming requests)
@@ -34,7 +42,8 @@ const signalApi = axios.create({
   baseURL: SIGNAL_API_URL,
   withCredentials: true,
   headers: {
-    'Content-Type': 'application/json'
+    'Content-Type': 'application/json',
+    ...(SIGNAL_API_KEY && { 'X-API-Key': SIGNAL_API_KEY })
   }
 })
 
@@ -1139,6 +1148,173 @@ export const budgetApi = {
   canMakeCall: async (orgId) => {
     const response = await signalApi.get(`/budget/check/${orgId}`)
     return response.data.canProceed
+  },
+
+  // ==========================================================================
+  // SIGNAL SETUP & MANAGEMENT
+  // ==========================================================================
+
+  /**
+   * Enable Signal and start autonomous setup
+   * @param {string} projectId - Project ID
+   * @param {string} orgId - Organization ID
+   * @returns {Promise<Object>} Setup progress
+   */
+  enableSignal: async (projectId, orgId) => {
+    const response = await signalApi.post('/setup/enable', { project_id: projectId, org_id: orgId })
+    return response.data
+  },
+
+  /**
+   * Get setup progress for a project
+   * @param {string} projectId - Project ID
+   * @returns {Promise<Object>} Setup progress
+   */
+  getSetupProgress: async (projectId) => {
+    const response = await signalApi.get(`/setup/progress/${projectId}`)
+    return response.data
+  },
+
+  /**
+   * Retry failed setup steps
+   * @param {string} projectId - Project ID
+   * @returns {Promise<Object>} Retry result
+   */
+  retrySetup: async (projectId) => {
+    const response = await signalApi.post(`/setup/retry/${projectId}`)
+    return response.data
+  },
+
+  /**
+   * Get detailed setup logs
+   * @param {string} projectId - Project ID
+   * @returns {Promise<Array>} Setup logs
+   */
+  getSetupLogs: async (projectId) => {
+    const response = await signalApi.get(`/setup/logs/${projectId}`)
+    return response.data
+  },
+
+  // ==========================================================================
+  // AUTONOMOUS ACTIONS
+  // ==========================================================================
+
+  /**
+   * Get pending actions needing approval
+   * @param {string} projectId - Project ID
+   * @param {number} [tier] - Filter by tier (optional)
+   * @returns {Promise<Array>} Pending actions
+   */
+  getPendingActions: async (projectId, tier) => {
+    const params = tier ? { tier } : {}
+    const response = await signalApi.get(`/actions/pending/${projectId}`, { params })
+    return response.data
+  },
+
+  /**
+   * Approve an action
+   * @param {string} actionId - Action ID
+   * @param {string} userId - User ID
+   * @returns {Promise<Object>} Updated action
+   */
+  approveAction: async (actionId, userId) => {
+    const response = await signalApi.post(`/actions/${actionId}/approve`, { user_id: userId })
+    return response.data
+  },
+
+  /**
+   * Reject an action
+   * @param {string} actionId - Action ID
+   * @param {string} userId - User ID
+   * @param {string} reason - Rejection reason
+   * @returns {Promise<Object>} Updated action
+   */
+  rejectAction: async (actionId, userId, reason) => {
+    const response = await signalApi.post(`/actions/${actionId}/reject`, { user_id: userId, reason })
+    return response.data
+  },
+
+  /**
+   * Rollback an action
+   * @param {string} actionId - Action ID
+   * @param {string} userId - User ID
+   * @returns {Promise<Object>} Updated action
+   */
+  rollbackAction: async (actionId, userId) => {
+    const response = await signalApi.post(`/actions/${actionId}/rollback`, { user_id: userId })
+    return response.data
+  },
+
+  /**
+   * Get action history for a project
+   * @param {string} projectId - Project ID
+   * @param {number} [limit] - Number of actions to return (default 50)
+   * @returns {Promise<Array>} Action history
+   */
+  getActionHistory: async (projectId, limit) => {
+    const params = limit ? { limit } : {}
+    const response = await signalApi.get(`/actions/history/${projectId}`, { params })
+    return response.data
+  },
+
+  /**
+   * Get all actions for a project (grouped by status)
+   * @param {string} projectId - Project ID
+   * @returns {Promise<Array>} All actions
+   */
+  getActions: async (projectId) => {
+    const response = await signalApi.get(`/actions/history/${projectId}`, { params: { limit: 100 } })
+    return response.data
+  },
+
+  /**
+   * Get monitors for a project
+   * @param {string} projectId - Project ID
+   * @returns {Promise<Array>} Monitors
+   */
+  getMonitors: async (projectId) => {
+    const response = await signalApi.get(`/monitors/${projectId}`)
+    return response.data
+  },
+
+  /**
+   * Get Signal stats for a project
+   * @param {string} projectId - Project ID
+   * @returns {Promise<Object>} Stats
+   */
+  getStats: async (projectId) => {
+    const response = await signalApi.get(`/actions/stats/${projectId}`)
+    return response.data
+  },
+
+  /**
+   * Retry a failed action
+   * @param {string} actionId - Action ID
+   * @returns {Promise<Object>} Updated action
+   */
+  retryAction: async (actionId) => {
+    const response = await signalApi.post(`/actions/${actionId}/retry`)
+    return response.data
+  },
+
+  /**
+   * Pause a monitor
+   * @param {string} monitorId - Monitor ID
+   * @returns {Promise<Object>} Updated monitor
+   */
+  pauseMonitor: async (monitorId) => {
+    const response = await signalApi.post(`/monitors/${monitorId}/pause`)
+    return response.data
+  },
+
+  /**
+   * Resume a monitor
+   * @param {string} monitorId - Monitor ID
+   * @returns {Promise<Object>} Updated monitor
+   */
+  resumeMonitor: async (monitorId) => {
+    const response = await signalApi.post(`/monitors/${monitorId}/resume`)
+    return response.data
   },
 }
 

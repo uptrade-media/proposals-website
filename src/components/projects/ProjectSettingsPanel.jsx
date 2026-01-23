@@ -1015,6 +1015,17 @@ export default function ProjectSettingsPanel({ project, isAdmin, onProjectUpdate
                 />
               </div>
               
+              {/* Forms */}
+              <div className="p-3 rounded-lg border bg-card">
+                <FeatureToggle
+                  feature="Forms"
+                  enabled={formData.features.includes('forms')}
+                  onChange={() => toggleFeature('forms')}
+                  description="Lead capture forms & submissions"
+                  isAdmin={isAdmin}
+                />
+              </div>
+              
               {/* Engage */}
               <div className="p-3 rounded-lg border bg-card">
                 <FeatureToggle
