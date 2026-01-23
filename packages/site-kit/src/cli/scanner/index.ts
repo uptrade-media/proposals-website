@@ -16,6 +16,7 @@ export interface ScanResults {
   forms: DetectedForm[]
   metadata: DetectedMetadata[]
   widgets: DetectedWidget[]
+  sitemaps: DetectedSitemap[]
 }
 
 export interface DetectedForm {
@@ -56,6 +57,15 @@ export interface DetectedWidget {
   endLine: number
 }
 
+export interface DetectedSitemap {
+  filePath: string
+  type: 'next-sitemap' | 'next-sitemap-config' | 'custom-sitemap' | 'sitemap-plugin' | 'static-xml'
+  generator?: string  // e.g., 'next-sitemap', 'custom', 'site-kit'
+  startLine: number
+  endLine: number
+  details?: Record<string, unknown>
+}
+
 // ============================================
 // Main Scanner
 // ============================================
@@ -65,6 +75,7 @@ export async function scanCodebase(rootDir: string): Promise<ScanResults> {
     forms: [],
     metadata: [],
     widgets: [],
+    sitemaps: [],
   }
 
   // Find all TSX/JSX files
@@ -93,11 +104,19 @@ export async function scanCodebase(rootDir: string): Promise<ScanResults> {
       const widgets = scanForWidgets(ast, content, relPath)
       results.widgets.push(...widgets)
 
+      // Scan for sitemaps
+      const sitemaps = scanForSitemaps(content, relPath)
+      results.sitemaps.push(...sitemaps)
+
     } catch (error) {
       // Skip files that can't be parsed
       continue
     }
   }
+
+  // Also scan for sitemap config files and static sitemaps
+  const sitemapFiles = await scanForSitemapFiles(rootDir)
+  results.sitemaps.push(...sitemapFiles)
 
   return results
 }
@@ -598,7 +617,169 @@ function scanForWidgets(ast: any, content: string, filePath: string): DetectedWi
 }
 
 // ============================================
+// Sitemap Scanner
+// ============================================
+
+/**
+ * Scan file content for sitemap-related code
+ */
+function scanForSitemaps(content: string, filePath: string): DetectedSitemap[] {
+  const sitemaps: DetectedSitemap[] = []
+
+  // Check for next-sitemap package usage
+  if (content.includes('next-sitemap') && !content.includes('@uptrade/site-kit')) {
+    sitemaps.push({
+      filePath,
+      type: 'next-sitemap',
+      generator: 'next-sitemap',
+      startLine: findLineNumber(content, 'next-sitemap'),
+      endLine: findLineNumber(content, 'next-sitemap') + 10,
+    })
+  }
+
+  // Check for custom sitemap exports (app/sitemap.ts pattern)
+  if (
+    (filePath.endsWith('sitemap.ts') || filePath.endsWith('sitemap.js')) &&
+    !content.includes('@uptrade/site-kit')
+  ) {
+    const isNextPattern = content.includes('MetadataRoute.Sitemap') || 
+                          content.includes('export default') ||
+                          content.includes('export async function')
+    
+    if (isNextPattern) {
+      sitemaps.push({
+        filePath,
+        type: 'custom-sitemap',
+        generator: 'custom',
+        startLine: 1,
+        endLine: content.split('\n').length,
+        details: {
+          hasAsyncFunction: content.includes('async'),
+          hasDatabaseQuery: content.includes('supabase') || content.includes('prisma') || content.includes('sql'),
+        },
+      })
+    }
+  }
+
+  // Check if already using site-kit sitemap
+  if (content.includes('@uptrade/site-kit/sitemap') || content.includes('createSitemap')) {
+    sitemaps.push({
+      filePath,
+      type: 'custom-sitemap',
+      generator: 'site-kit',
+      startLine: findLineNumber(content, 'createSitemap'),
+      endLine: findLineNumber(content, 'createSitemap') + 10,
+    })
+  }
+
+  return sitemaps
+}
+
+/**
+ * Find line number of a string in content
+ */
+function findLineNumber(content: string, search: string): number {
+  const lines = content.split('\n')
+  for (let i = 0; i < lines.length; i++) {
+    if (lines[i].includes(search)) {
+      return i + 1
+    }
+  }
+  return 1
+}
+
+/**
+ * Scan for sitemap config files and static sitemap files
+ */
+async function scanForSitemapFiles(rootDir: string): Promise<DetectedSitemap[]> {
+  const sitemaps: DetectedSitemap[] = []
+
+  // Check for next-sitemap.config.js
+  const configPaths = [
+    'next-sitemap.config.js',
+    'next-sitemap.config.mjs',
+    'next-sitemap.config.ts',
+  ]
+
+  for (const configPath of configPaths) {
+    const fullPath = path.join(rootDir, configPath)
+    try {
+      await fs.access(fullPath)
+      const content = await fs.readFile(fullPath, 'utf-8')
+      sitemaps.push({
+        filePath: configPath,
+        type: 'next-sitemap-config',
+        generator: 'next-sitemap',
+        startLine: 1,
+        endLine: content.split('\n').length,
+        details: {
+          hasRobotsTxt: content.includes('generateRobotsTxt'),
+          excludePaths: extractExcludePaths(content),
+        },
+      })
+    } catch {
+      // File doesn't exist
+    }
+  }
+
+  // Check for static sitemap.xml in public folder
+  const staticSitemapPath = path.join(rootDir, 'public', 'sitemap.xml')
+  try {
+    await fs.access(staticSitemapPath)
+    const content = await fs.readFile(staticSitemapPath, 'utf-8')
+    const urlCount = (content.match(/<url>/g) || []).length
+    sitemaps.push({
+      filePath: 'public/sitemap.xml',
+      type: 'static-xml',
+      generator: 'static',
+      startLine: 1,
+      endLine: content.split('\n').length,
+      details: {
+        urlCount,
+        isIndex: content.includes('<sitemapindex'),
+      },
+    })
+  } catch {
+    // File doesn't exist
+  }
+
+  // Check for generated sitemaps in .next/server/app
+  const generatedPaths = [
+    '.next/server/app/sitemap.xml',
+    'out/sitemap.xml',
+  ]
+
+  for (const genPath of generatedPaths) {
+    const fullPath = path.join(rootDir, genPath)
+    try {
+      await fs.access(fullPath)
+      // Don't include in results, but note that build output exists
+    } catch {
+      // File doesn't exist
+    }
+  }
+
+  return sitemaps
+}
+
+/**
+ * Extract exclude paths from next-sitemap config
+ */
+function extractExcludePaths(content: string): string[] {
+  const excludeMatch = content.match(/exclude:\s*\[([\s\S]*?)\]/)
+  if (!excludeMatch) return []
+  
+  const paths: string[] = []
+  const matches = excludeMatch[1].matchAll(/['"]([^'"]+)['"]/g)
+  for (const match of matches) {
+    paths.push(match[1])
+  }
+  return paths
+}
+
+// ============================================
 // Exports
 // ============================================
 
-export { scanForForms, scanForMetadata, scanForWidgets }
+export { scanForForms, scanForMetadata, scanForWidgets, scanForSitemaps, scanForSitemapFiles }
+export type { DetectedSitemap }

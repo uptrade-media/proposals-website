@@ -19,7 +19,7 @@ import {
   LayoutDashboard, ListTodo, Palette, Link2, Settings2,
   Building2, ChevronDown, FolderKanban, Star, MoreVertical,
   PanelLeftClose, PanelRightClose, Eye, EyeOff, Users, Camera,
-  Check, ExternalLink, Globe, Loader2
+  Check, ExternalLink, Globe, Globe2, Loader2
 } from 'lucide-react'
 import { toast } from 'sonner'
 import { cn } from '@/lib/utils'
@@ -63,6 +63,9 @@ import ProjectSettingsPanel from './ProjectSettingsPanel'
 import ConnectionWizard from './ConnectionWizard'
 import OrgSettingsModal from './OrgSettingsModal'
 import NewProjectModal from './NewProjectModal'
+import SiteNavigation from './site/SiteNavigation'
+import SiteManagementPanel from './site/SiteManagementPanel'
+import { useSiteManagementStore, SITE_VIEWS } from '@/lib/site-management-store'
 
 // Stores & API
 import useAuthStore from '@/lib/auth-store'
@@ -345,6 +348,9 @@ export default function ProjectsV2({ onNavigate }) {
   const uptradeTasksStore = useUptradeTasksStore()
   const userTasksStore = useUserTasksStore()
   const deliverablesStore = useDeliverablesStore()
+  
+  // Site management store
+  const siteManagementStore = useSiteManagementStore()
 
   // UI State
   const [selectedOrg, setSelectedOrg] = useState(null)
@@ -359,14 +365,25 @@ export default function ProjectsV2({ onNavigate }) {
   const [showRightSidebar, setShowRightSidebar] = useState(true)
   const [searchQuery, setSearchQuery] = useState('')
 
-  // Auto-collapse left sidebar when NOT on Tasks tab
+  // Auto-manage sidebars based on active tab
   useEffect(() => {
-    if (activeTab !== 'tasks') {
-      setShowLeftSidebar(false)
-    } else {
+    if (activeTab === 'tasks' || activeTab === 'website') {
       setShowLeftSidebar(true)
+      // On Website tab, collapse right sidebar for more space
+      if (activeTab === 'website') {
+        setShowRightSidebar(false)
+      }
+    } else {
+      setShowLeftSidebar(false)
     }
   }, [activeTab])
+  
+  // Initialize site management store when project changes
+  useEffect(() => {
+    if (selectedProject?.id && activeTab === 'website') {
+      siteManagementStore.setProject(selectedProject.id)
+    }
+  }, [selectedProject?.id, activeTab])
 
   // Org settings modal
   const [orgSettingsOpen, setOrgSettingsOpen] = useState(false)
@@ -804,7 +821,7 @@ export default function ProjectsV2({ onNavigate }) {
         {/* ===== MAIN CONTENT AREA (3-column) ===== */}
         <div className="flex-1 flex overflow-hidden">
           
-          {/* ===== LEFT SIDEBAR: Task Navigation ===== */}
+          {/* ===== LEFT SIDEBAR: Task Navigation / Site Navigation ===== */}
           <AnimatePresence>
             {showLeftSidebar && (
               <motion.div
@@ -815,6 +832,19 @@ export default function ProjectsV2({ onNavigate }) {
                 className="flex-shrink-0 border-r overflow-hidden bg-muted/30"
               >
                 <ScrollArea className="h-full">
+                  {activeTab === 'website' ? (
+                    // Site Navigation for Website tab
+                    <SiteNavigation
+                      activeView={siteManagementStore.activeView}
+                      stats={siteManagementStore.stats}
+                      onViewChange={(view) => siteManagementStore.setActiveView(view)}
+                      onRefresh={() => {
+                        siteManagementStore.fetchStats()
+                        siteManagementStore.fetchActiveViewData()
+                      }}
+                      isRefreshing={siteManagementStore.loadingView !== null}
+                    />
+                  ) : (
                   <div className="p-4 space-y-4">
                     {/* Task Navigation */}
                     {viewType === 'uptrade-admin' ? (
@@ -893,6 +923,7 @@ export default function ProjectsV2({ onNavigate }) {
                       </div>
                     </div>
                   </div>
+                  )}
                 </ScrollArea>
               </motion.div>
             )}
@@ -920,6 +951,12 @@ export default function ProjectsV2({ onNavigate }) {
                     <TabsTrigger value="connections" className="gap-1.5">
                       <Link2 className="h-4 w-4" />
                       Connections
+                    </TabsTrigger>
+                  )}
+                  {viewType === 'uptrade-admin' && selectedProject?.domain && (
+                    <TabsTrigger value="website" className="gap-1.5">
+                      <Globe2 className="h-4 w-4" />
+                      Website
                     </TabsTrigger>
                   )}
                   {viewType === 'uptrade-admin' && selectedProject && (
@@ -1036,6 +1073,35 @@ export default function ProjectsV2({ onNavigate }) {
                         viewType === 'uptrade-admin' ? loadAdminData() : fetchProjects()
                       }}
                     />
+                  )}
+                </TabsContent>
+                
+                <TabsContent value="website" className="h-full m-0 overflow-auto">
+                  {selectedProject ? (
+                    <SiteManagementPanel 
+                      project={selectedProject}
+                      activeView={siteManagementStore.activeView}
+                      data={{
+                        pages: siteManagementStore.pages,
+                        images: siteManagementStore.images,
+                        redirects: siteManagementStore.redirects,
+                        faqs: siteManagementStore.faqs,
+                        content: siteManagementStore.content,
+                        links: siteManagementStore.links,
+                        scripts: siteManagementStore.scripts,
+                        schema: siteManagementStore.schema,
+                      }}
+                      isLoading={siteManagementStore.loadingView !== null}
+                      onRefresh={() => siteManagementStore.fetchActiveViewData()}
+                    />
+                  ) : (
+                    <div className="h-full flex items-center justify-center text-muted-foreground">
+                      <div className="text-center">
+                        <Globe2 className="h-12 w-12 mx-auto mb-4 opacity-50" />
+                        <p className="text-lg font-medium">Select a Project</p>
+                        <p className="text-sm">Choose a project with a domain to manage its website</p>
+                      </div>
+                    </div>
                   )}
                 </TabsContent>
               </Tabs>

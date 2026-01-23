@@ -19,4 +19,10 @@
 
 export { SetupWizard, SetupWizard as UptradeSetup } from './SetupWizard'
 export { handleRequest } from './api-handlers'
-export type { } from './SetupWizard'
+export { 
+  generateIntegrationCode, 
+  getSnippetsByModule,
+} from './integration-generator'
+export { IntegrationCodeView } from './IntegrationCodeView'
+export type { IntegrationSnippet, GeneratorContext } from './integration-generator'
+export type { IntegrationCodeViewProps } from './IntegrationCodeView'

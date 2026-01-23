@@ -84,6 +84,9 @@ import CommerceSettings from '@/components/commerce/CommerceSettings'
 import CategoriesManagement from '@/components/commerce/CategoriesManagement'
 import InventoryManagement from '@/components/commerce/InventoryManagement'
 import DiscountCodesManagement from '@/components/commerce/DiscountCodesManagement'
+import ShopifySetupDialog from '@/components/commerce/ShopifySetupDialog'
+import StripeSetupDialog from '@/components/commerce/StripeSetupDialog'
+import SquareSetupDialog from '@/components/commerce/SquareSetupDialog'
 import OfferingCreate from './OfferingCreate'
 import ProjectIntegrationsDialog from '@/components/projects/ProjectIntegrationsDialog'
 import OfferingDetail from './OfferingDetail'
@@ -154,6 +157,9 @@ export default function CommerceDashboard({ onNavigate }) {
   const [isInventoryOpen, setIsInventoryOpen] = useState(false)
   const [isDiscountsOpen, setIsDiscountsOpen] = useState(false)
   const [isIntegrationsDialogOpen, setIsIntegrationsDialogOpen] = useState(false)
+  const [isShopifyDialogOpen, setIsShopifyDialogOpen] = useState(false)
+  const [isStripeDialogOpen, setIsStripeDialogOpen] = useState(false)
+  const [isSquareDialogOpen, setIsSquareDialogOpen] = useState(false)
   const [isCreatingContract, setIsCreatingContract] = useState(false)
   const [categories, setCategories] = useState([])
   // Create mode state - which offering type is being created (null = not creating)
@@ -1035,11 +1041,14 @@ export default function CommerceDashboard({ onNavigate }) {
                     Synced
                   </Badge>
                 ) : (
-                  <Link to="/settings/integrations" className="ml-auto">
-                    <Button variant="ghost" size="sm" className="h-6 text-xs text-[var(--text-tertiary)] hover:text-[var(--text-primary)]">
-                      Connect
-                    </Button>
-                  </Link>
+                  <Button 
+                    variant="ghost" 
+                    size="sm" 
+                    className="h-6 text-xs text-[var(--text-tertiary)] hover:text-[var(--text-primary)] ml-auto"
+                    onClick={() => setIsShopifyDialogOpen(true)}
+                  >
+                    Connect
+                  </Button>
                 )}
               </div>
               {integrations.shopify.connected && integrations.shopify.lastSync && (
@@ -1063,11 +1072,14 @@ export default function CommerceDashboard({ onNavigate }) {
                       Active
                     </Badge>
                   ) : (
-                    <Link to="/settings/integrations" className="ml-auto">
-                      <Button variant="ghost" size="sm" className="h-6 text-xs text-[var(--text-tertiary)] hover:text-[var(--text-primary)]">
-                        Connect
-                      </Button>
-                    </Link>
+                    <Button 
+                      variant="ghost" 
+                      size="sm" 
+                      className="h-6 text-xs text-[var(--text-tertiary)] hover:text-[var(--text-primary)] ml-auto"
+                      onClick={() => setIsStripeDialogOpen(true)}
+                    >
+                      Connect
+                    </Button>
                   )}
                 </div>
               </div>
@@ -1087,11 +1099,14 @@ export default function CommerceDashboard({ onNavigate }) {
                       Active
                     </Badge>
                   ) : (
-                    <Link to="/settings/integrations" className="ml-auto">
-                      <Button variant="ghost" size="sm" className="h-6 text-xs text-[var(--text-tertiary)] hover:text-[var(--text-primary)]">
-                        Connect
-                      </Button>
-                    </Link>
+                    <Button 
+                      variant="ghost" 
+                      size="sm" 
+                      className="h-6 text-xs text-[var(--text-tertiary)] hover:text-[var(--text-primary)] ml-auto"
+                      onClick={() => setIsSquareDialogOpen(true)}
+                    >
+                      Connect
+                    </Button>
                   )}
                 </div>
               </div>
@@ -1647,6 +1662,38 @@ export default function CommerceDashboard({ onNavigate }) {
         open={isIntegrationsDialogOpen}
         onOpenChange={setIsIntegrationsDialogOpen}
         project={currentProject}
+      />
+
+      {/* Individual Integration Dialogs */}
+      <ShopifySetupDialog
+        open={isShopifyDialogOpen}
+        onOpenChange={setIsShopifyDialogOpen}
+        projectId={projectId}
+        onSuccess={() => {
+          setIsShopifyDialogOpen(false)
+          // Refresh settings to update integration status
+          window.location.reload()
+        }}
+      />
+
+      <StripeSetupDialog
+        open={isStripeDialogOpen}
+        onOpenChange={setIsStripeDialogOpen}
+        projectId={projectId}
+        onSuccess={() => {
+          setIsStripeDialogOpen(false)
+          window.location.reload()
+        }}
+      />
+
+      <SquareSetupDialog
+        open={isSquareDialogOpen}
+        onOpenChange={setIsSquareDialogOpen}
+        projectId={projectId}
+        onSuccess={() => {
+          setIsSquareDialogOpen(false)
+          window.location.reload()
+        }}
       />
       </div>
     </TooltipProvider>

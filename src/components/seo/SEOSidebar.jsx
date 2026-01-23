@@ -43,7 +43,8 @@ import {
   Users2,
   FileCheck,
   History,
-  FileSearch
+  FileSearch,
+  HelpCircle
 } from 'lucide-react'
 
 // Navigation sections configuration
@@ -78,6 +79,7 @@ const NAV_SECTIONS = [
       { id: 'indexing', label: 'Indexing', icon: FileSearch, description: 'GSC index status' },
       { id: 'internal-links', label: 'Internal Links', icon: Link2, description: 'Link structure' },
       { id: 'schema', label: 'Schema', icon: Code, description: 'Structured data' },
+      { id: 'faqs', label: 'Managed FAQs', icon: HelpCircle, description: 'FAQ sections + schema' },
       { id: 'backlinks', label: 'Backlinks', icon: GitBranch, description: 'External links' },
     ]
   },

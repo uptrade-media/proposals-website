@@ -21,6 +21,7 @@ const Audits = lazy(() => import('./pages/Audits'))
 const AuditDetail = lazy(() => import('./pages/AuditDetail'))
 const UserProfile = lazy(() => import('./pages/UserProfile'))
 const AuthCallback = lazy(() => import('./pages/AuthCallback'))
+const SiteKitAuth = lazy(() => import('./pages/SiteKitAuth'))
 const InvoicePayment = lazy(() => import('./pages/InvoicePayment'))
 
 // SEO Module
@@ -108,6 +109,7 @@ export default function App() {
               />
               <Route path="/login" element={<LoginPage />} />
               <Route path="/auth/callback" element={<AuthCallback />} />
+              <Route path="/auth/site-kit" element={<SiteKitAuth />} />
               <Route path="/auth/magic" element={<MagicLogin />} />
               <Route path="/setup" element={<AccountSetup />} />
               <Route path="/reset-password" element={<ResetPassword />} />

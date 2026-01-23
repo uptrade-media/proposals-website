@@ -25,14 +25,22 @@ export default defineConfig({
     'commerce/index': 'src/commerce/index.ts',
     'commerce/server': 'src/commerce/server.ts',
     
-    // Setup wizard
+    // Setup wizard - split client/server
     'setup/index': 'src/setup/index.ts',
+    'setup/client': 'src/setup/client.ts',
+    'setup/server': 'src/setup/server.ts',
     
     // Sitemap generator
     'sitemap/index': 'src/sitemap/index.ts',
+    
+    // Redirects middleware
+    'redirects/index': 'src/redirects/index.ts',
+    
+    // Images module
+    'images/index': 'src/images/index.ts',
   },
   format: ['cjs', 'esm'],
-  dts: false, // Skip type declarations for now
+  dts: false, // Skip auto-generation, use manual declarations
   splitting: true,
   sourcemap: true,
   clean: true,

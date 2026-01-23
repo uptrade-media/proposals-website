@@ -47,6 +47,7 @@ import SEOBacklinks from '@/components/seo/SEOBacklinks'
 import SEOLocalSeo from '@/components/seo/SEOLocalSeo'
 import SEOInternalLinks from '@/components/seo/SEOInternalLinks'
 import SEOSchemaMarkup from '@/components/seo/SEOSchemaMarkup'
+import SEOManagedFAQs from '@/components/seo/SEOManagedFAQs'
 import SEOContentBriefs from '@/components/seo/SEOContentBriefs'
 import SEOAlerts from '@/components/seo/SEOAlerts'
 import SEOBlogBrain from '@/components/seo/SEOBlogBrain'
@@ -323,6 +324,7 @@ export default function SEOModule() {
                     <Route path="indexing" element={<SEOIndexingIssues projectId={projectId} />} />
                     <Route path="internal-links" element={<SEOInternalLinks projectId={projectId} />} />
                     <Route path="schema" element={<SEOSchemaMarkup projectId={projectId} />} />
+                    <Route path="faqs" element={<SEOManagedFAQs projectId={projectId} />} />
                     <Route path="backlinks" element={<SEOBacklinks projectId={projectId} />} />
                     <Route path="local-seo" element={<SEOLocalSeo projectId={projectId} />} />
                     <Route path="competitors" element={<SEOCompetitors projectId={projectId} />} />

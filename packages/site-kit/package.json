@@ -62,10 +62,30 @@
       "require": "./dist/setup/index.js",
       "types": "./dist/setup/index.d.ts"
     },
+    "./setup/client": {
+      "import": "./dist/setup/client.mjs",
+      "require": "./dist/setup/client.js",
+      "types": "./dist/setup/client.d.ts"
+    },
+    "./setup/server": {
+      "import": "./dist/setup/server.mjs",
+      "require": "./dist/setup/server.js",
+      "types": "./dist/setup/server.d.ts"
+    },
     "./sitemap": {
       "import": "./dist/sitemap/index.mjs",
       "require": "./dist/sitemap/index.js",
       "types": "./dist/sitemap/index.d.ts"
+    },
+    "./redirects": {
+      "import": "./dist/redirects/index.mjs",
+      "require": "./dist/redirects/index.js",
+      "types": "./dist/redirects/index.d.ts"
+    },
+    "./images": {
+      "import": "./dist/images/index.mjs",
+      "require": "./dist/images/index.js",
+      "types": "./dist/images/index.d.ts"
     }
   },
   "files": [

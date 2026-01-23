@@ -284,14 +284,19 @@ export async function handleConfigure(req: NextRequest): Promise<NextResponse> {
       body: JSON.stringify({ name: 'Site-Kit Setup' })
     })
 
-    const { api_key } = keyResponse.ok ? await keyResponse.json() : { api_key: 'ut_xxx' }
+    let apiKey = 'ut_xxx'
+    if (keyResponse.ok) {
+      const keyData = await keyResponse.json()
+      // Portal API returns { key: string, apiKey: {...} }
+      apiKey = keyData.key
+    }
 
     // Generate env file
     await generateEnvFile({
       projectId,
       supabaseUrl: config.supabase_url,
       supabaseAnonKey: config.supabase_anon_key,
-      apiKey: api_key
+      apiKey
     })
 
     // Generate provider in layout

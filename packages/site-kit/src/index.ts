@@ -95,5 +95,31 @@ export type {
   UseAffiliatesResult,
 } from './affiliates'
 
+// Redirects module exports
+export {
+  handleManagedRedirects,
+  fetchRedirectRules,
+  generateNextRedirects,
+  clearRedirectCache,
+} from './redirects'
+export type { RedirectRule, RedirectConfig } from './redirects'
+
+// Images module exports
+export {
+  ManagedImage,
+  fetchManagedImage,
+  fetchManagedImages,
+  listImageFiles,
+  uploadImage,
+  assignImageToSlot,
+  clearImageSlot,
+} from './images'
+export type { 
+  ManagedImageProps, 
+  ManagedImageData, 
+  ImageFile,
+  ImageApiConfig,
+} from './images'
+
 // Note: Pages are auto-discovered via site-kit page views
 // No manual registration needed - SEO metadata is extracted and sent on every page load
