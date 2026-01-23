@@ -211,7 +211,7 @@ export async function fetchCategories(): Promise<{ id: string; name: string; slu
 
 export async function registerForEvent(
   eventId: string,
-  scheduleId: string,
+  scheduleId: string | undefined,
   customer: CheckoutCustomer
 ): Promise<CheckoutResult> {
   const { apiUrl, apiKey } = getApiConfig()

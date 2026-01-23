@@ -40,7 +40,7 @@ export default defineConfig({
     'images/index': 'src/images/index.ts',
   },
   format: ['cjs', 'esm'],
-  dts: false, // Skip dts until TypeScript errors are fixed - forms still work at runtime
+  dts: true,
   splitting: true,
   sourcemap: true,
   clean: true,

@@ -7,7 +7,7 @@
 'use client'
 
 import React, { useState } from 'react'
-import type { RegistrationFormProps, CheckoutCustomer } from './types'
+import type { RegistrationFormProps, CheckoutCustomer, AdditionalField, AdditionalFieldOption } from './types'
 import { registerForEvent } from './api'
 
 export function RegistrationForm({
@@ -155,7 +155,7 @@ export function RegistrationForm({
             </div>
           )}
           
-          {additionalFields.map(field => (
+          {additionalFields.map((field: AdditionalField) => (
             <div key={field.name}>
               <label style={{ display: 'block', fontSize: '0.875rem', fontWeight: 500, marginBottom: '0.25rem' }}>
                 {field.label} {field.required && '*'}
@@ -192,7 +192,7 @@ export function RegistrationForm({
                   }}
                 >
                   <option value="">Select...</option>
-                  {field.options.map(opt => (
+                  {field.options.map((opt: AdditionalFieldOption) => (
                     <option key={opt.value} value={opt.value}>{opt.label}</option>
                   ))}
                 </select>

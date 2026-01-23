@@ -255,7 +255,10 @@ export async function handleMigrate(req: NextRequest): Promise<NextResponse> {
   const { migrateFiles } = await import('../cli/migrator')
 
   try {
-    await migrateFiles([item], projectId, authSession.accessToken)
+    // Wrap item into ScanResults format
+    const scanResults = { forms: [item], metadata: [], widgets: [], sitemaps: [] }
+    const options = { projectId, apiKey: authSession.accessToken || '' }
+    await migrateFiles(scanResults, options)
     return NextResponse.json({ success: true })
   } catch (err) {
     return NextResponse.json({ error: (err as Error).message }, { status: 500 })

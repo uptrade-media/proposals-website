@@ -42,7 +42,9 @@
 
 **Connection String (for psql migrations):**
 ```bash
-psql "postgresql://postgres.mwcjtnoqxolplwpkxnfe:8xhNRByhiIrqiBjD@aws-1-us-east-2.pooler.supabase.com:6543/postgres" -f migration.sql
+# Get connection string from Supabase Dashboard > Settings > Database
+# DO NOT commit credentials to Git!
+psql "$SUPABASE_DB_URL" -f migration.sql
 ```
 
 **Recommended Workflow:**
@@ -60,7 +62,7 @@ mcp_supabase_describe_table('signal_actions')
 # supabase/migrations/YYYYMMDDHHMMSS_description.sql
 
 # 3. Deploy migration (direct connection)
-psql "postgresql://postgres.mwcjtnoqxolplwpkxnfe:..." -f migration.sql
+psql "$SUPABASE_DB_URL" -f migration.sql
 
 # 4. Verify (MCP server)
 mcp_supabase_describe_table('signal_actions')

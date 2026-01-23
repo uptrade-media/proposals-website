@@ -157,7 +157,7 @@ export interface CheckoutResult {
 
 export interface OfferingCardProps {
   offering: CommerceOffering
-  variant?: 'card' | 'horizontal' | 'minimal'
+  variant?: 'card' | 'horizontal' | 'minimal' | 'featured'
   showImage?: boolean
   showPrice?: boolean
   showDescription?: boolean
@@ -174,16 +174,40 @@ export interface OfferingCardProps {
 }
 
 export interface OfferingListProps {
-  projectId: string
+  // Data options
+  projectId?: string
+  offerings?: CommerceOffering[]
   type?: OfferingType | OfferingType[]
   category?: string
   limit?: number
+  status?: OfferingStatus
+  
+  // Display options
   layout?: 'grid' | 'list' | 'carousel'
+  columns?: 2 | 3 | 4
+  cardVariant?: 'card' | 'minimal' | 'featured'
   showFilters?: boolean
+  emptyMessage?: string
+  
+  // Card options
+  showImage?: boolean
+  showPrice?: boolean
+  showDescription?: boolean
+  showCta?: boolean
+  ctaText?: string
+  onCtaClick?: (offering: CommerceOffering) => void
+  
+  // Events
   onSelect?: (offering: CommerceOffering) => void
+  
+  // Styling
   className?: string
   cardClassName?: string
-  emptyMessage?: string
+  filterClassName?: string
+  
+  // Custom render
+  renderCard?: (offering: CommerceOffering) => React.ReactNode
+  renderEmpty?: () => React.ReactNode
 }
 
 export interface OfferingDetailProps {
@@ -198,60 +222,136 @@ export interface OfferingDetailProps {
 export interface EventTileProps {
   event: CommerceOffering
   schedule?: CommerceSchedule
+  variant?: 'standard' | 'compact' | 'featured'
+  showDate?: boolean
+  showTime?: boolean
+  showLocation?: boolean
+  showCapacity?: boolean
+  showPrice?: boolean
+  showCta?: boolean
+  ctaText?: string
   showRegistration?: boolean
   compact?: boolean
   onRegister?: (event: CommerceOffering, schedule: CommerceSchedule) => void
+  onCtaClick?: (event: CommerceOffering) => void
   className?: string
+  dateClassName?: string
+  titleClassName?: string
+  ctaClassName?: string
 }
 
 export interface UpcomingEventsProps {
-  projectId: string
+  projectId?: string
+  events?: CommerceOffering[]
   limit?: number
+  category?: string
+  variant?: 'standard' | 'compact'
   showPast?: boolean
-  layout?: 'list' | 'grid' | 'calendar'
+  layout?: 'list' | 'grid' | 'calendar' | 'vertical' | 'horizontal'
+  showViewAll?: boolean
+  viewAllUrl?: string
+  viewAllText?: string
+  emptyMessage?: string
+  title?: string
   onSelect?: (event: CommerceOffering, schedule: CommerceSchedule) => void
+  onRegister?: (event: CommerceOffering) => void
+  onCtaClick?: (event: CommerceOffering) => void
   className?: string
+  titleClassName?: string
+  eventClassName?: string
 }
 
 export interface ProductEmbedProps {
-  projectId: string
+  projectId?: string
+  product?: CommerceOffering
   /** Specific product slug, or 'latest' for most recent */
   slug?: string | 'latest'
+  mode?: 'specific' | 'latest' | 'featured'
   /** Category to filter by (used with 'latest') */
   category?: string
+  variant?: 'card' | 'horizontal' | 'minimal' | 'featured'
+  showImage?: boolean
+  showPrice?: boolean
+  showDescription?: boolean
   showBuyButton?: boolean
+  showCta?: boolean
+  ctaText?: string
+  onCtaClick?: (offering: CommerceOffering) => void
   className?: string
 }
 
 export interface EventEmbedProps {
-  projectId: string
+  projectId?: string
+  event?: CommerceOffering
   /** Specific event slug, or 'next' for upcoming */
   slug?: string | 'next'
+  mode?: 'specific' | 'next'
   /** Category to filter by */
   category?: string
+  variant?: 'standard' | 'compact' | 'featured'
+  showDate?: boolean
+  showTime?: boolean
+  showLocation?: boolean
+  showCapacity?: boolean
+  showPrice?: boolean
+  showCta?: boolean
+  ctaText?: string
   showRegistration?: boolean
   compact?: boolean
+  onRegister?: (event: CommerceOffering) => void
+  onCtaClick?: (event: CommerceOffering) => void
   className?: string
 }
 
 export interface CheckoutFormProps {
-  projectId: string
+  projectId?: string
   offering: CommerceOffering
   variant?: CommerceVariant
   schedule?: CommerceSchedule
+  scheduleId?: string
+  variantId?: string
   quantity?: number
+  mode?: 'checkout' | 'register'
+  showQuantity?: boolean
+  submitText?: string
   onSuccess?: (result: CheckoutResult) => void
   onError?: (error: string) => void
   className?: string
+  formClassName?: string
+  inputClassName?: string
+  buttonClassName?: string
+}
+
+export interface AdditionalFieldOption {
+  value: string
+  label: string
+}
+
+export interface AdditionalField {
+  name: string
+  label: string
+  type?: 'text' | 'email' | 'tel' | 'select' | 'textarea'
+  required?: boolean
+  options?: AdditionalFieldOption[]
+  placeholder?: string
 }
 
 export interface RegistrationFormProps {
-  projectId: string
+  projectId?: string
   event: CommerceOffering
-  schedule: CommerceSchedule
+  schedule?: CommerceSchedule
+  scheduleId?: string
+  title?: string
+  submitText?: string
+  successMessage?: string
+  collectPhone?: boolean
+  additionalFields?: AdditionalField[]
   onSuccess?: (result: CheckoutResult) => void
   onError?: (error: string) => void
   className?: string
+  formClassName?: string
+  inputClassName?: string
+  buttonClassName?: string
 }
 
 // ============================================

@@ -107,7 +107,7 @@ export function ManagedImage({
   style,
   forceDevMode,
 }: ManagedImageProps) {
-  const { config } = useSiteKit()
+  const context = useSiteKit()
   const [imageData, setImageData] = useState<ManagedImageData | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<Error | null>(null)
@@ -119,7 +119,7 @@ export function ManagedImage({
 
   // Fetch image data from Portal API
   const fetchImage = useCallback(async () => {
-    if (!config?.apiKey || !config?.apiUrl) {
+    if (!context?.apiKey || !context?.apiUrl) {
       setLoading(false)
       return
     }
@@ -127,11 +127,11 @@ export function ManagedImage({
     try {
       const params = new URLSearchParams({ page_path: currentPath })
       const res = await fetch(
-        `${config.apiUrl}/public/images/slot/${encodeURIComponent(slotId)}?${params}`,
+        `${context.apiUrl}/public/images/slot/${encodeURIComponent(slotId)}?${params}`,
         {
           headers: {
             'Content-Type': 'application/json',
-            'x-api-key': config.apiKey,
+            'x-api-key': context.apiKey,
           },
         }
       )
@@ -150,7 +150,7 @@ export function ManagedImage({
     } finally {
       setLoading(false)
     }
-  }, [config?.apiKey, config?.apiUrl, slotId, currentPath, onError])
+  }, [context?.apiKey, context?.apiUrl, slotId, currentPath, onError])
 
   useEffect(() => {
     fetchImage()
@@ -233,7 +233,7 @@ export function ManagedImage({
           <ImagePickerModal
             slotId={slotId}
             pagePath={currentPath}
-            config={config}
+            config={context}
             onClose={() => setShowPicker(false)}
             onSelect={() => {
               setShowPicker(false)
@@ -282,7 +282,7 @@ export function ManagedImage({
         <ImagePickerModal
           slotId={slotId}
           pagePath={currentPath}
-          config={config}
+          config={context}
           currentImage={imageData}
           onClose={() => setShowPicker(false)}
           onSelect={() => {
