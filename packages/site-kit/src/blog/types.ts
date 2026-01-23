@@ -15,6 +15,7 @@ export interface BlogPost {
   
   /** Content */
   title: string
+  subtitle?: string
   excerpt?: string
   content: string
   content_html?: string
@@ -22,21 +23,32 @@ export interface BlogPost {
   /** Featured image */
   featured_image?: string
   featured_image_alt?: string
+  featured_image_width?: number
+  featured_image_height?: number
   
-  /** Author */
+  /** Author - can be string or object depending on API response */
   author_id?: string
-  author?: BlogAuthor
+  author?: BlogAuthor | string
   
-  /** Categorization */
+  /** Categorization - can be string slug or object */
   category_id?: string
-  category?: BlogCategory
-  tags?: BlogTag[]
+  category?: BlogCategory | string
+  tags?: string[] | BlogTag[]
   
   /** SEO */
   meta_title?: string
   meta_description?: string
+  og_title?: string
+  og_description?: string
   og_image?: string
   canonical_url?: string
+  focus_keyphrase?: string
+  keywords?: string
+  
+  /** Rich content */
+  table_of_contents?: TocItem[]
+  faq_items?: { question: string; answer: string }[]
+  service_callouts?: { title: string; description?: string; url?: string }[]
   
   /** Publishing */
   status: 'draft' | 'published' | 'scheduled' | 'archived'
@@ -44,12 +56,15 @@ export interface BlogPost {
   scheduled_at?: string
   
   /** Settings */
-  allow_comments: boolean
-  is_featured: boolean
+  allow_comments?: boolean
+  is_featured?: boolean
+  featured?: boolean
   
   /** Computed */
   reading_time_minutes?: number
+  reading_time?: number
   view_count?: number
+  word_count?: number
   
   /** Timestamps */
   created_at: string

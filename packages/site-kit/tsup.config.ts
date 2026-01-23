@@ -20,6 +20,7 @@ export default defineConfig({
     
     // Blog module
     'blog/index': 'src/blog/index.ts',
+    'blog/server': 'src/blog/server.ts',
     
     // Commerce module
     'commerce/index': 'src/commerce/index.ts',
@@ -38,6 +39,9 @@ export default defineConfig({
     
     // Images module
     'images/index': 'src/images/index.ts',
+    
+    // Reputation module
+    'reputation/index': 'src/reputation/index.ts',
   },
   format: ['cjs', 'esm'],
   dts: true,

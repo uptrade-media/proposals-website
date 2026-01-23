@@ -9,7 +9,7 @@
 import { create } from 'zustand'
 import portalApi from './portal-api'
 import { signalApi } from './signal-api'
-import useProjectsStore from './projects-store'
+import useAuthStore from './auth-store'
 
 // Types
 const ReviewStatus = {
@@ -93,8 +93,8 @@ export const useReputationStore = create((set, get) => ({
   // ============================================================================
 
   getProjectId: () => {
-    const projectsStore = useProjectsStore.getState()
-    return projectsStore.currentProject?.id
+    const authStore = useAuthStore.getState()
+    return authStore.currentProject?.id
   },
 
   setError: (error) => set({ error: error?.message || error }),
@@ -110,8 +110,8 @@ export const useReputationStore = create((set, get) => ({
 
     set({ overviewLoading: true, error: null })
     try {
-      const overview = await portalApi.get(`/reputation/projects/${projectId}/overview`)
-      set({ overview, overviewLoading: false })
+      const response = await portalApi.get(`/reputation/projects/${projectId}/overview`)
+      set({ overview: response.data, overviewLoading: false })
     } catch (error) {
       set({ error: error.message, overviewLoading: false })
     }
@@ -123,13 +123,19 @@ export const useReputationStore = create((set, get) => ({
 
   fetchPlatforms: async () => {
     const projectId = get().getProjectId()
-    if (!projectId) return
+    console.log('[reputation-store] fetchPlatforms called, projectId:', projectId)
+    if (!projectId) {
+      console.log('[reputation-store] No projectId, skipping fetchPlatforms')
+      return
+    }
 
     set({ platformsLoading: true })
     try {
-      const platforms = await portalApi.get(`/reputation/projects/${projectId}/platforms`)
-      set({ platforms, platformsLoading: false })
+      const response = await portalApi.get(`/reputation/projects/${projectId}/platforms`)
+      console.log('[reputation-store] fetchPlatforms response:', response.data)
+      set({ platforms: response.data || [], platformsLoading: false })
     } catch (error) {
+      console.error('[reputation-store] fetchPlatforms error:', error)
       set({ error: error.message, platformsLoading: false })
     }
   },
@@ -139,10 +145,7 @@ export const useReputationStore = create((set, get) => ({
     if (!projectId) return
 
     try {
-      const platform = await portalApi.post(`/reputation/platforms/connect`, {
-        ...platformData,
-        projectId,
-      })
+      const { data: platform } = await portalApi.post(`/reputation/projects/${projectId}/platforms`, platformData)
       set((state) => ({ platforms: [...state.platforms, platform] }))
       return platform
     } catch (error) {
@@ -223,10 +226,10 @@ export const useReputationStore = create((set, get) => ({
 
   syncPlatform: async (platformId) => {
     try {
-      const result = await portalApi.post(`/reputation/platforms/${platformId}/sync`)
+      const response = await portalApi.post(`/reputation/platforms/${platformId}/sync`)
       // Refresh platforms to get updated stats
       get().fetchPlatforms()
-      return result
+      return response.data
     } catch (error) {
       set({ error: error.message })
       throw error
@@ -245,7 +248,8 @@ export const useReputationStore = create((set, get) => ({
     if (!projectId) throw new Error('No project selected')
 
     try {
-      return await portalApi.get(`/reputation/platforms/credentials/source/${projectId}/${platform}`)
+      const response = await portalApi.get(`/reputation/platforms/credentials/source/${projectId}/${platform}`)
+      return response.data
     } catch (error) {
       set({ error: error.message })
       throw error
@@ -316,10 +320,11 @@ export const useReputationStore = create((set, get) => ({
       if (reviewFilters.unanswered) params.append('unanswered', true)
       if (reviewFilters.search) params.append('search', reviewFilters.search)
 
-      const result = await portalApi.get(`/reputation/projects/${projectId}/reviews?${params}`)
+      const response = await portalApi.get(`/reputation/projects/${projectId}/reviews?${params}`)
+      const result = response.data
       set({
-        reviews: result.reviews,
-        reviewsTotal: result.total,
+        reviews: result.reviews || [],
+        reviewsTotal: result.total || 0,
         reviewsLoading: false,
       })
     } catch (error) {
@@ -341,8 +346,8 @@ export const useReputationStore = create((set, get) => ({
     }
     
     try {
-      const review = await portalApi.get(`/reputation/reviews/${reviewId}`)
-      set({ selectedReview: review })
+      const response = await portalApi.get(`/reputation/reviews/${reviewId}`)
+      set({ selectedReview: response.data })
     } catch (error) {
       set({ error: error.message })
     }
@@ -350,7 +355,8 @@ export const useReputationStore = create((set, get) => ({
 
   updateReview: async (reviewId, updates) => {
     try {
-      const review = await portalApi.put(`/reputation/reviews/${reviewId}`, updates)
+      const response = await portalApi.put(`/reputation/reviews/${reviewId}`, updates)
+      const review = response.data
       set((state) => ({
         reviews: state.reviews.map((r) => (r.id === reviewId ? review : r)),
         selectedReview: state.selectedReview?.id === reviewId ? review : state.selectedReview,
@@ -364,11 +370,12 @@ export const useReputationStore = create((set, get) => ({
 
   respondToReview: async (reviewId, responseText, options = {}) => {
     try {
-      const review = await portalApi.post(`/reputation/reviews/${reviewId}/respond`, {
+      const response = await portalApi.post(`/reputation/reviews/${reviewId}/respond`, {
         responseText,
         responseSource: options.source || 'manual',
         postToPlatform: options.postToPlatform || false,
       })
+      const review = response.data
       set((state) => ({
         reviews: state.reviews.map((r) => (r.id === reviewId ? review : r)),
         selectedReview: state.selectedReview?.id === reviewId ? review : state.selectedReview,
@@ -424,6 +431,178 @@ export const useReputationStore = create((set, get) => ({
       return response.responseText
     } catch (error) {
       set({ generatingResponse: false, error: error.message })
+      throw error
+    }
+  },
+
+  /**
+   * Generate a Signal response for a review (new unified method)
+   */
+  generateResponse: async (reviewId) => {
+    const projectId = get().getProjectId()
+    if (!projectId) throw new Error('No project selected')
+
+    set({ generatingResponse: true })
+    try {
+      const result = await portalApi.post(`/reputation/reviews/${reviewId}/generate-response`)
+      
+      // Update the review in state with the pending response
+      set((state) => ({
+        reviews: state.reviews.map((r) => 
+          r.id === reviewId 
+            ? { ...r, pending_response: result.response_text }
+            : r
+        ),
+        selectedReview: state.selectedReview?.id === reviewId 
+          ? { ...state.selectedReview, pending_response: result.response_text }
+          : state.selectedReview,
+        generatingResponse: false,
+      }))
+      
+      return result.response_text
+    } catch (error) {
+      set({ generatingResponse: false, error: error.message })
+      throw error
+    }
+  },
+
+  /**
+   * Approve a pending Signal response and post to platform
+   */
+  approveResponse: async (reviewId) => {
+    const projectId = get().getProjectId()
+    if (!projectId) throw new Error('No project selected')
+
+    try {
+      const result = await portalApi.post(`/reputation/reviews/${reviewId}/approve-response`)
+      
+      // Update the review in state
+      set((state) => ({
+        reviews: state.reviews.map((r) => 
+          r.id === reviewId ? result : r
+        ),
+        selectedReview: state.selectedReview?.id === reviewId ? result : state.selectedReview,
+      }))
+      
+      // Refresh overview for updated stats
+      get().fetchOverview()
+      
+      return result
+    } catch (error) {
+      set({ error: error.message })
+      throw error
+    }
+  },
+
+  /**
+   * Reject a pending Signal response
+   */
+  rejectResponse: async (reviewId) => {
+    const projectId = get().getProjectId()
+    if (!projectId) throw new Error('No project selected')
+
+    try {
+      const result = await portalApi.post(`/reputation/reviews/${reviewId}/reject-response`)
+      
+      // Update the review in state - clear pending response
+      set((state) => ({
+        reviews: state.reviews.map((r) => 
+          r.id === reviewId 
+            ? { ...r, pending_response: null }
+            : r
+        ),
+        selectedReview: state.selectedReview?.id === reviewId 
+          ? { ...state.selectedReview, pending_response: null }
+          : state.selectedReview,
+      }))
+      
+      return result
+    } catch (error) {
+      set({ error: error.message })
+      throw error
+    }
+  },
+
+  /**
+   * Post a manual response to a review
+   */
+  postResponse: async (reviewId, responseText) => {
+    const projectId = get().getProjectId()
+    if (!projectId) throw new Error('No project selected')
+
+    try {
+      const result = await portalApi.post(`/reputation/reviews/${reviewId}/respond`, {
+        responseText,
+        responseSource: 'manual',
+        postToPlatform: true,
+      })
+      
+      // Update the review in state
+      set((state) => ({
+        reviews: state.reviews.map((r) => 
+          r.id === reviewId ? result : r
+        ),
+        selectedReview: state.selectedReview?.id === reviewId ? result : state.selectedReview,
+      }))
+      
+      // Refresh overview for updated stats
+      get().fetchOverview()
+      
+      return result
+    } catch (error) {
+      set({ error: error.message })
+      throw error
+    }
+  },
+
+  // ============================================================================
+  // PAGE MATCHING (SEO Correlation)
+  // ============================================================================
+
+  /**
+   * Fetch page matches - reviews correlated to SEO pages
+   */
+  fetchPageMatches: async () => {
+    const projectId = get().getProjectId()
+    if (!projectId) return null
+
+    try {
+      const result = await portalApi.get(`/reputation/projects/${projectId}/page-matches`)
+      return result.matches || []
+    } catch (error) {
+      set({ error: error.message })
+      throw error
+    }
+  },
+
+  /**
+   * Re-analyze all reviews to update page matching using Signal
+   */
+  reanalyzePageMatches: async () => {
+    const projectId = get().getProjectId()
+    if (!projectId) throw new Error('No project selected')
+
+    try {
+      const result = await portalApi.post(`/reputation/projects/${projectId}/page-matches/reanalyze`)
+      return result
+    } catch (error) {
+      set({ error: error.message })
+      throw error
+    }
+  },
+
+  /**
+   * Get reviews for a specific page
+   */
+  getPageReviews: async (pageId) => {
+    const projectId = get().getProjectId()
+    if (!projectId) throw new Error('No project selected')
+
+    try {
+      const result = await portalApi.get(`/reputation/projects/${projectId}/pages/${pageId}/reviews`)
+      return result.reviews || []
+    } catch (error) {
+      set({ error: error.message })
       throw error
     }
   },

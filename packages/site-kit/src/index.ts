@@ -154,3 +154,14 @@ export type {
 export { SetupWizard } from './setup/SetupWizard'
 export { SetupAssistant } from './setup/SetupAssistant'
 
+// Reputation module exports
+export {
+  TestimonialSection,
+  fetchReviews,
+  fetchReviewStats,
+} from './reputation'
+export type {
+  Review,
+  ReviewStats,
+  TestimonialSectionProps,
+} from './reputation'

@@ -1645,6 +1645,65 @@ export const crmApi = {
 }
 
 // ============================================================================
+// Reputation API
+// ============================================================================
+
+export const reputationApi = {
+  // Platforms
+  listPlatforms: (projectId) =>
+    portalApi.get(`/reputation/projects/${projectId}/platforms`),
+  
+  getPlatform: (id) =>
+    portalApi.get(`/reputation/platforms/${id}`),
+  
+  connectPlatform: (projectId, data) =>
+    portalApi.post(`/reputation/projects/${projectId}/platforms`, data),
+  
+  updatePlatform: (id, data) =>
+    portalApi.put(`/reputation/platforms/${id}`, data),
+  
+  disconnectPlatform: (id) =>
+    portalApi.delete(`/reputation/platforms/${id}`),
+  
+  syncPlatform: (id) =>
+    portalApi.post(`/reputation/platforms/${id}/sync`),
+  
+  // Reviews
+  listReviews: (params = {}) =>
+    portalApi.get('/reputation/reviews', { params }),
+  
+  getReview: (id) =>
+    portalApi.get(`/reputation/reviews/${id}`),
+  
+  respondToReview: (id, data) =>
+    portalApi.post(`/reputation/reviews/${id}/respond`, data),
+  
+  updateReview: (id, data) =>
+    portalApi.put(`/reputation/reviews/${id}`, data),
+  
+  // Auto-response settings
+  getSettings: (projectId) =>
+    portalApi.get('/reputation/settings', { params: { projectId } }),
+  
+  updateSettings: (projectId, data) =>
+    portalApi.put('/reputation/settings', { projectId, ...data }),
+  
+  // Analytics
+  getOverview: (projectId, params = {}) =>
+    portalApi.get('/reputation/overview', { params: { projectId, ...params } }),
+  
+  getSentimentTrends: (projectId, params = {}) =>
+    portalApi.get('/reputation/sentiment-trends', { params: { projectId, ...params } }),
+  
+  getTopKeywords: (projectId, params = {}) =>
+    portalApi.get('/reputation/keywords', { params: { projectId, ...params } }),
+  
+  // Page matching (SEO integration)
+  matchReviewsToPages: (projectId) =>
+    portalApi.post('/reputation/match-pages', { projectId }),
+}
+
+// ============================================================================
 // Unified Contacts API
 // New unified contacts system that consolidates prospects, contacts, and customers
 // ============================================================================

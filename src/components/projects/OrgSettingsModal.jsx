@@ -205,6 +205,26 @@ export default function OrgSettingsModal({
       }
       
       await adminApi.updateOrgSettings(organization.id, payload)
+      
+      // If we're editing the current org in auth store, update it there too
+      // so Signal access hooks pick up the change immediately
+      if (currentOrg?.id === organization.id) {
+        const updatedOrg = {
+          ...currentOrg,
+          signal_enabled: settings.signalEnabled,
+          signal_enabled_at: settings.signalEnabled && !organization?.signal_enabled
+            ? new Date().toISOString()
+            : currentOrg.signal_enabled_at,
+          logo_url: settings.logoUrl,
+          theme: {
+            ...currentOrg.theme,
+            ...payload.theme,
+          },
+        }
+        useAuthStore.getState().setOrganization(updatedOrg)
+        localStorage.setItem('currentOrganization', JSON.stringify(updatedOrg))
+      }
+      
       toast.success('Organization settings saved')
       onSettingsSaved?.()
       onOpenChange(false)

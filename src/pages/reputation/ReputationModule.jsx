@@ -3,21 +3,28 @@
  * ══════════════════════════════════════════════════════════════════════════════════════
  * 
  * Routes for the Reputation management module.
+ * Updated to use the new unified dashboard with collapsible sidebar.
  */
 
-import { Routes, Route, Navigate } from 'react-router-dom'
-import ReputationDashboard from './ReputationDashboard'
-import ReviewInbox from './ReviewInbox'
-import Campaigns from './Campaigns'
-import ReputationSettings from './ReputationSettings'
+import { Routes, Route, Navigate, useNavigate } from 'react-router-dom'
+import NewReputationDashboard from './NewReputationDashboard'
 
 export default function ReputationModule() {
+  const navigate = useNavigate()
+
+  const handleNavigate = (path) => {
+    navigate(path)
+  }
+
   return (
     <Routes>
-      <Route index element={<ReputationDashboard />} />
-      <Route path="reviews" element={<ReviewInbox />} />
-      <Route path="campaigns" element={<Campaigns />} />
-      <Route path="settings" element={<ReputationSettings />} />
+      {/* New unified dashboard handles all views internally via sidebar */}
+      <Route index element={<NewReputationDashboard onNavigate={handleNavigate} />} />
+      
+      {/* Redirect old routes to the unified dashboard */}
+      <Route path="reviews" element={<Navigate to="/reputation" replace />} />
+      <Route path="campaigns" element={<Navigate to="/reputation" replace />} />
+      <Route path="settings" element={<Navigate to="/reputation" replace />} />
       <Route path="*" element={<Navigate to="/reputation" replace />} />
     </Routes>
   )

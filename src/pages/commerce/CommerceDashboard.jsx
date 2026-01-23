@@ -1028,7 +1028,8 @@ export default function CommerceDashboard({ onNavigate }) {
               </Button>
             </div>
             
-            {/* Shopify */}
+            {/* Shopify - only show when Products are enabled */}
+            {isProductsEnabled && (
             <div className="px-3 py-2">
               <div className="flex items-center gap-2">
                 <div className={cn(
@@ -1057,6 +1058,7 @@ export default function CommerceDashboard({ onNavigate }) {
                 </p>
               )}
             </div>
+            )}
             
             {/* Stripe - only show when Shopify not connected */}
             {!integrations.shopify.connected && (

@@ -26,7 +26,7 @@ const CRMDashboard = lazy(() => import('./crm/CRMDashboard'))
 const TeamTab = lazy(() => import('./crm/TeamTab'))
 const TeamModule = lazy(() => import('./team/TeamModule'))
 const Outreach = lazy(() => import('@/pages/Outreach'))
-const BlogManagement = lazy(() => import('./BlogManagement'))
+const BlogDashboard = lazy(() => import('@/pages/blog/BlogDashboard'))
 const PortfolioManagement = lazy(() => import('./PortfolioManagement'))
 const Audits = lazy(() => import('@/pages/Audits'))
 const ProposalEditor = lazy(() => import('./ProposalEditor'))
@@ -301,7 +301,7 @@ const MainLayout = () => {
                 <Route path="messages/*" element={<Messages />} />
                 <Route path="billing" element={<Billing />} />
                 <Route path="email/*" element={<Outreach />} />
-                <Route path="blog" element={<BlogManagement />} />
+                <Route path="blog" element={<BlogDashboard />} />
                 <Route path="portfolio" element={<PortfolioManagement />} />
                 <Route path="my-sales" element={<TenantSales />} />
                 <Route path="sales/*" element={<SalesDashboard />} />

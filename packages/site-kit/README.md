@@ -158,41 +158,112 @@ export default function CustomContactPage() {
 
 ### Blog (`@uptrade/site-kit/blog`)
 
-Blog components with built-in SEO and related post suggestions.
+Complete Portal-managed blog system with beautiful layouts, dynamic routing, categories, and SEO.
+
+**Create posts in Portal → Automatically appear on your site.**
 
 ```tsx
-import { BlogPost, BlogList, RelatedPosts, TableOfContents, AuthorCard } from '@uptrade/site-kit/blog'
+// app/blog/page.tsx - Blog Index
+import { BlogList, BlogLayout } from '@uptrade/site-kit/blog'
+import { generateBlogIndexMetadata } from '@uptrade/site-kit/blog/server'
 
-// Blog listing page
-export default function BlogPage() {
+export const metadata = generateBlogIndexMetadata({
+  title: 'Blog',
+  siteName: 'My Company',
+  siteUrl: 'https://example.com',
+})
+
+export default function BlogPage({ searchParams }) {
   return (
-    <BlogList 
-      projectId="..."
-      options={{ 
-        limit: 10, 
-        category: 'news',
-        orderBy: 'published_at',
-        order: 'desc'
-      }}
-    />
+    <BlogLayout
+      hero={{ title: 'Blog', subtitle: 'Latest insights and articles' }}
+      layout="sidebar-right"
+    >
+      <BlogList
+        category={searchParams.category}
+        page={parseInt(searchParams.page || '1')}
+        showCategoryFilter
+        showPagination
+      />
+    </BlogLayout>
   )
 }
+```
 
-// Blog post page
-export default function BlogPostPage({ params }) {
+```tsx
+// app/blog/[slug]/page.tsx - Individual Post
+import { BlogPost } from '@uptrade/site-kit/blog'
+import { 
+  generateBlogPostMetadata, 
+  generateBlogStaticParams,
+  getBlogPost,
+  generateBlogPostSchema 
+} from '@uptrade/site-kit/blog/server'
+
+// Pre-generate all post pages at build time
+export const generateStaticParams = generateBlogStaticParams
+
+// Dynamic metadata for SEO
+export async function generateMetadata({ params }) {
+  return generateBlogPostMetadata(params.slug, {
+    siteName: 'My Company',
+    siteUrl: 'https://example.com',
+  })
+}
+
+export default async function PostPage({ params }) {
+  const post = await getBlogPost(params.slug)
+  
   return (
-    <div className="flex">
-      <aside className="w-64">
-        <TableOfContents content={post.content_html} />
-      </aside>
-      <main>
-        <BlogPost projectId="..." slug={params.slug} />
-        <AuthorCard author={post.author} />
-        <RelatedPosts projectId="..." currentPostId={post.id} limit={3} />
-      </main>
-    </div>
+    <>
+      {/* JSON-LD Schema */}
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{
+          __html: JSON.stringify(generateBlogPostSchema(post, {
+            siteUrl: 'https://example.com',
+            siteName: 'My Company',
+          })),
+        }}
+      />
+      
+      {/* Blog Post with TOC and Related Posts */}
+      <BlogPost 
+        slug={params.slug} 
+        showToc 
+        showRelated 
+        showAuthor 
+      />
+    </>
   )
 }
+```
+
+#### Available Components
+
+| Component | Purpose |
+|-----------|---------|
+| `BlogList` | Grid of posts with pagination & category filter |
+| `BlogPost` | Full post with TOC, author, related posts |
+| `BlogLayout` | Complete layout with sidebar |
+| `BlogSidebar` | Categories, recent posts, tags, search |
+| `TableOfContents` | Sticky TOC from headings |
+| `AuthorCard` | Author info with social links |
+| `RelatedPosts` | Related posts by category |
+
+#### Server Functions
+
+```tsx
+import {
+  getBlogPost,           // Fetch single post
+  getAllBlogSlugs,       // For generateStaticParams
+  getBlogCategories,     // All categories
+  generateBlogPostMetadata,    // Post page metadata
+  generateBlogIndexMetadata,   // Index page metadata
+  generateBlogStaticParams,    // SSG params
+  generateBlogSitemap,         // Sitemap entries
+  generateBlogPostSchema,      // JSON-LD
+} from '@uptrade/site-kit/blog/server'
 ```
 
 ## Configuration
